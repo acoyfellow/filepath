@@ -1,26 +1,5 @@
-import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
-
-async function callWorker(
-  platform: App.Platform | undefined,
-  endpoint: string,
-  request: Request
-): Promise<Response> {
-  if (dev) {
-    const url = new URL(request.url);
-    const body = request.body ? await request.text() : null;
-    return fetch(`http://localhost:1337${endpoint}`, {
-      method: request.method,
-      headers: request.headers,
-      body: body,
-    });
-  }
-  return platform!.env!.WORKER.fetch(new Request(`http://worker${endpoint}`, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  }));
-}
+import { callWorker } from '$lib/api-utils';
 
 export const POST: RequestHandler = async ({ params, request, platform }) => {
   try {

@@ -5,27 +5,22 @@ export async function callWorker(
   endpoint: string,
   request?: Request
 ): Promise<Response> {
-  if (dev) {
-    if (request) {
-      // Clone request to avoid consuming the body
-      const body = request.body ? await request.clone().arrayBuffer() : null;
-      return fetch(`http://localhost:1337${endpoint}`, {
-        method: request.method,
-        headers: request.headers,
-        body: body,
-      });
-    }
-    return fetch(`http://localhost:1337${endpoint}`);
+  if (!request) {
+    if (dev) return fetch(`http://localhost:1337${endpoint}`);
+    return platform!.env!.WORKER.fetch(new Request(`http://worker${endpoint}`));
   }
+
+  // Clone and buffer the body to avoid "can't read from request stream after response" errors
+  const body = request.body ? await request.clone().arrayBuffer() : null;
+  const url = dev ? `http://localhost:1337${endpoint}` : `http://worker${endpoint}`;
   
-  // For production, pass the request directly to the worker
-  if (request) {
-    return platform!.env!.WORKER.fetch(new Request(`http://worker${endpoint}`, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-    }));
-  }
-  return platform!.env!.WORKER.fetch(new Request(`http://worker${endpoint}`));
+  const newRequest = new Request(url, {
+    method: request.method,
+    headers: request.headers,
+    body,
+  });
+
+  if (dev) return fetch(newRequest);
+  return platform!.env!.WORKER.fetch(newRequest);
 }
 

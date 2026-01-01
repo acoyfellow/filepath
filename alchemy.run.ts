@@ -55,8 +55,9 @@ export const WORKER = await Worker(`${projectName}-worker`, {
 // Create the SvelteKit app
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
+  domains: ["myfilepath.com"],
   bindings: {
-    WORKER, // Service binding to worker
+    WORKER
   },
   url: true,
   adopt: true,

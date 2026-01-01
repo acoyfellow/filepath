@@ -12,6 +12,7 @@
   import { goto } from "$app/navigation";
   import { cn } from "$lib/utils";
   import { Github } from "@lucide/svelte";
+  import SEO from "$lib/components/SEO.svelte";
 
   let selectedAgents = $state<Set<AgentId>>(new Set());
   let loading = $state(false);
@@ -83,6 +84,16 @@
     }
   }
 </script>
+
+<SEO
+  title="filepath - AI Terminal Sessions"
+  description="Launch terminal sessions with AI agents like Claude, Cursor, and OpenCode. Share your workflow and collaborate in real-time."
+  keywords="AI terminal, Claude, Cursor, OpenCode, terminal sessions, AI agents, developer tools"
+  path="/"
+  type="website"
+  section="Home"
+  tags="terminal, AI, agents, developer tools"
+/>
 
 <div class="min-h-screen bg-background p-8">
   <div class="mx-auto max-w-4xl">
