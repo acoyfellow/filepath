@@ -1,61 +1,69 @@
 import alchemy from "alchemy";
+import { SvelteKit, Worker, Container, DurableObjectNamespace } from "alchemy/cloudflare";
 
-import { 
-  SvelteKit, 
-  Worker, 
-  DurableObjectNamespace,
-  D1Database
-} from "alchemy/cloudflare";
-
-// TODO: Import your Durable Object class here
-// import type { MyDO } from "./worker/index.ts";
-
-const projectName = "test-local-template";
+const projectName = "filepath";
 
 const project = await alchemy(projectName, {
   password: process.env.ALCHEMY_PASSWORD || "default-password"
 });
 
-// TODO: Create your Durable Object namespace
-// Replace "MyDO" with your actual Durable Object class name
-const MY_DO = DurableObjectNamespace(`${projectName}-do`, {
-  className: "MyDO", // Change this to your DO class name
+// Sandbox Container (uses base cloudflare/sandbox image)
+const Sandbox = await Container(`${projectName}-sandbox`, {
+  className: "Sandbox",
   scriptName: `${projectName}-worker`,
-  sqlite: true
+  build: {
+    dockerfile: "Dockerfile",
+    context: process.cwd(),
+    platform: "linux/amd64",
+  },
 });
 
-// Create D1 database for auth (required for Better Auth)
-const DB = await D1Database(`${projectName}-db`, {
-  name: `${projectName}-db`,
-  migrationsDir: "migrations",
-  adopt: true,
+// SessionState Durable Object for tab state management
+const SessionState = DurableObjectNamespace(`${projectName}-session-state`, {
+  className: "SessionStateDO",
+  scriptName: `${projectName}-worker`,
+  sqlite: true,
 });
 
-// Create the worker that hosts your Durable Objects
+// TabState Durable Object for per-tab state management
+const TabState = DurableObjectNamespace(`${projectName}-tab-state`, {
+  className: "TabStateDO",
+  scriptName: `${projectName}-worker`,
+  sqlite: true,
+});
+
+// Create the worker with Hono API
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
   adopt: true,
   bindings: {
-    MY_DO, // Add your DO bindings here
+    Sandbox,
+    SessionState,
+    TabState,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
+    CURSOR_API_KEY: process.env.CURSOR_API_KEY || "",
+    FACTORY_API_KEY: process.env.FACTORY_API_KEY || "",
   },
-  url: false
+  url: false,
+  env: {
+
+  }
 });
 
 // Create the SvelteKit app
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
   bindings: {
-    MY_DO,   // Make your DO available to SvelteKit
-    WORKER,  // Make worker available for service bindings
-    DB,      // Database for Better Auth
+    WORKER, // Service binding to worker
   },
   url: true,
   adopt: true,
-  env: {
-    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "85000968f86b5d30510b5b73186b914c430f8e1573614a6d75ed4cc53383517a",
-    BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || "http://localhost:5173",
-  }
 });
 
 await project.finalize();
+
+console.log(`🚀 Worker deployed at: ${WORKER.url}`);
+console.log(`🚀 App deployed at: ${APP.url}`);
+console.log(`🚀 Sandbox deployed at: ${Sandbox.scriptName}`);

@@ -1,162 +1,177 @@
-# test-local-template
+# filepath
 
-Barebones SvelteKit + Better Auth + Durable Objects starter.
+**Terminal session sharing platform with AI coding agents**
 
-## Quick Start
+Create, share, and collaborate on isolated terminal sessions with Claude, Codex, Cursor, OpenCode, and Droid.
 
-```bash
-# 1. Set your Alchemy password
-echo 'ALCHEMY_PASSWORD=your-secure-password' > .env
+## What It Does
 
-# 2. Start development (migrations run automatically)
-bun run dev
-```
-
-## What's Included
-
-- **SvelteKit** with Svelte 5 and remote functions
-- **Better Auth** with email/password authentication
-- **Cloudflare D1** database (SQLite) for user data
-- **Durable Objects** for persistent edge state
-- **Alchemy** for zero-config deployment
-
-## Project Structure
-
-```
-src/
-├── lib/
-│   ├── auth.ts              # Better Auth configuration
-│   ├── auth-client.ts       # Auth client setup
-│   ├── auth-store.svelte.ts # Auth state management
-│   └── schema.ts            # Database schema
-├── routes/
-│   ├── api/auth/[...all]/   # Better Auth API routes
-│   ├── data.remote.ts       # Your remote functions go here
-│   └── +page.svelte         # Main page with auth demo
-└── hooks.server.ts          # Server hooks for auth
-
-worker/
-└── index.ts                 # Your Durable Objects go here
-
-alchemy.run.ts               # Deployment configuration
-```
-
-## Development Workflow
-
-### 1. Customize Your Durable Object
-
-Edit `worker/index.ts` and replace `MyDO` with your actual class:
-
-```typescript
-export class UserDataDO extends DurableObject {
-  // Your persistent logic here
-}
-```
-
-### 2. Update Alchemy Configuration
-
-Edit `alchemy.run.ts` to match your Durable Object names:
-
-```typescript
-const USER_DATA_DO = DurableObjectNamespace(`${projectName}-user-data`, {
-  className: "UserDataDO",
-  scriptName: `${projectName}-worker`,
-});
-```
-
-### 3. Add Remote Functions
-
-Edit `src/routes/data.remote.ts` to add your server functions:
-
-```typescript
-export const getUserData = query('unchecked', async (userId: string) => {
-  // Call your Durable Object
-  return callWorkerJSON(platform, `/user/${userId}`);
-});
-
-export const updateUserData = command('unchecked', async (data: any) => {
-  // Requires authentication
-  if (!event.locals.session) throw new Error('Auth required');
-  
-  return callWorkerJSON(platform, '/user/update', {
-    method: 'POST',
-    body: JSON.stringify(data)
-  });
-});
-```
-
-### 4. Call From Components
-
-Use your remote functions directly in Svelte components:
-
-```svelte
-<script>
-  import { getUserData, updateUserData } from './data.remote';
-  
-  let userData = $state(null);
-  
-  async function loadData() {
-    userData = await getUserData('user123');
-  }
-</script>
-```
-
-## Environment Variables
-
-Required:
-- `ALCHEMY_PASSWORD` - Your Alchemy deployment password
-- `BETTER_AUTH_SECRET` - Auto-generated secure secret for auth
-
-Optional:
-- `BETTER_AUTH_URL` - Your app URL (defaults to localhost:5173)
-
-## Scripts
-
-- `bun run dev` - Start development server (runs migrations automatically)
-- `bun run build` - Build for production
-- `bun run deploy` - Deploy to Cloudflare
-- `bun run db:studio` - Open Drizzle Studio (for local development)
-
-## Deployment
-
-```bash
-# Deploy to Cloudflare
-bun run deploy
-
-# Destroy infrastructure
-bun run destroy
-```
-
-Alchemy handles:
-- D1 database creation and migrations
-- Durable Object namespace setup
-- Worker deployment with bindings
-- SvelteKit app deployment
-- Service binding configuration
-
-## Next Steps
-
-1. **Design your data model** - What will your Durable Objects store?
-2. **Add remote functions** - What server operations do you need?
-3. **Build your UI** - Replace the demo auth page with your app
-4. **Deploy** - Push to production with `bun run deploy`
+1. **Multi-agent selection** → Pick one or more AI coding agents
+2. **Persistent sessions** → Terminal sessions with multiple isolated tabs
+3. **Real-time sharing** → Collaborate via URL, state syncs across clients
+4. **Isolated tabs** → Each tab has independent shell, working dir, env vars
+5. **Dump & fork** → Save tab state, clone to new sessions
 
 ## Architecture
 
+- **Frontend**: SvelteKit + Svelte 5 + Tailwind CSS
+- **Backend**: Cloudflare Workers (Hono) + Sandbox SDK
+- **Terminal**: xterm.js + ttyd (per-connection isolation)
+- **State**: Durable Objects (SessionStateDO, TabStateDO)
+- **Deploy**: Alchemy (infrastructure as code)
+
+## Setup
+
+### Prerequisites
+- Node.js / Bun
+- Cloudflare account (for Sandbox)
+- Alchemy CLI
+
+### Install
+
+```bash
+bun install
 ```
-SvelteKit Component → Remote Function → Auth Check → Cloudflare Worker → Durable Object
-                                    ↓
-                              Better Auth + D1 Database
+
+### Environment
+
+Create `.env` with your API keys (optional, defaults to empty):
+
+```
+ANTHROPIC_API_KEY=sk-...
+OPENAI_API_KEY=sk-...
+CURSOR_API_KEY=...
+FACTORY_API_KEY=...
 ```
 
-The key innovation is that remote functions work seamlessly in both development and production:
-- **Development**: HTTP calls to `localhost:1337`
-- **Production**: Service bindings (no network latency)
-- **No code changes** between environments
+### Run Dev
 
-## Resources
+```bash
+bun run dev
+```
 
-- [SvelteKit Docs](https://kit.svelte.dev/)
-- [Better Auth Docs](https://www.better-auth.com/)
-- [Durable Objects Docs](https://developers.cloudflare.com/durable-objects/)
-- [Alchemy Docs](https://alchemy.run/)
+Visit `http://localhost:5173`
+
+## Usage
+
+1. Select agents from landing page
+2. Click "Launch Terminal"
+3. Type agent commands:
+   ```bash
+   claude    # Start Claude Code
+   codex     # Start OpenAI Codex
+   cursor-agent  # Start Cursor
+   opencode  # Start OpenCode
+   droid     # Start Factory Droid
+   ```
+4. Create new tabs with `+` button
+5. Share session via URL
+6. Dump/fork tabs to save state
+
+## Key Features
+
+✅ **Multi-agent support** - Claude, Codex, Cursor, OpenCode, Droid
+✅ **Isolated tabs** - Each tab has independent shell
+✅ **Persistent state** - Tabs/sessions survive refreshes
+✅ **Real-time sync** - WebSocket-based cross-client updates
+✅ **URL sharing** - No auth needed, share via link
+✅ **Dump/fork** - Export tab state, clone to new sessions
+
+## Architecture Details
+
+### Session Lifecycle
+
+```
+User selects agents
+    ↓
+POST /session → Create SessionStateDO
+    ↓
+Create Cloudflare Sandbox instance
+    ↓
+Install agents (Claude, Codex, etc)
+    ↓
+User creates tabs
+    ↓
+Each tab → Create TabStateDO + WebSocket to ttyd
+    ↓
+Each WebSocket = independent bash shell
+```
+
+### State Management
+
+- **SessionStateDO**: Tab list, active tab, agents, metadata
+- **TabStateDO**: Tab-specific state (can be dumped/forked)
+- **Sandbox**: Actual shell instances + agent installations
+
+### Terminal Isolation
+
+Each WebSocket connection to ttyd gets its own shell instance. No tmux window management needed—ttyd handles per-connection isolation natively.
+
+## Development
+
+### File Structure
+
+```
+src/
+├── routes/
+│   ├── +page.svelte          # Agent selection
+│   ├── terminal/[id]/+page.svelte  # Terminal UI
+│   └── api/
+│       └── terminal/          # Terminal endpoints
+├── lib/
+│   ├── agents.ts             # Agent definitions
+│   ├── types.ts              # Shared types
+│   └── components/           # Reusable components
+worker/
+├── index.ts                  # Hono app + endpoints
+├── session-state.ts          # SessionStateDO
+└── tab-state.ts              # TabStateDO
+```
+
+### Key Endpoints
+
+- `POST /session` - Create session
+- `POST /terminal/:id/start` - Initialize session
+- `GET /terminal/:sessionId/:tabId/ws` - WebSocket (ttyd)
+- `POST /terminal/:sessionId/dump` - Export session state
+- `POST /terminal/fork` - Clone session
+
+## Constraints
+
+- **Single port**: Cloudflare Sandbox exposes only 7681 (ttyd server)
+- **No auth yet**: URL-based sharing (password protection code ready)
+- **Session TTL**: 10 minutes (configurable)
+
+## Design Principles
+
+- **Simple > clever** - Minimal abstractions
+- **Terminal-first** - The terminal is the primary interface
+- **Shareable by default** - Sessions designed for collaboration
+- **Agent-agnostic** - Support multiple AI agents
+
+## Deployment
+
+### Local Development
+
+```bash
+bun run dev
+```
+
+### Production (myfilepath.com)
+
+```bash
+bun run deploy
+```
+
+Uses Alchemy for infrastructure. Configure in `alchemy.run.ts`.
+
+## Contributing
+
+- Svelte 5 with runes (`$state`, `$derived`)
+- Minimal code, avoid unnecessary abstractions
+- Terminal sessions are the core product
+- Sharing is a first-class feature
+
+## License
+
+MIT

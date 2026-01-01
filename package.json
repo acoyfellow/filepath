@@ -1,9 +1,8 @@
 {
-  "name": "test-local-template",
+  "name": "filepath",
   "version": "0.0.1",
-  "private": true,
   "scripts": {
-    "dev": "alchemy dev",
+    "dev": "bun run clean && alchemy dev",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "build": "vite build",
@@ -11,28 +10,34 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "db:better-auth": "bunx @better-auth/cli generate",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
-    "db:local": "wrangler d1 migrations apply test-local-template-db --local",
-    "db:remote": "wrangler d1 migrations apply test-local-template-db --remote"
+    "clean": "clear && docker rm -f $(docker ps -aq --filter 'name=filepath') 2>/dev/null || true",
+    "clean:all": "bun run clean && docker volume prune -f && rm -rf .alchemy"
   },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "^7.2.4",
-    "@sveltejs/kit": "^2.48.5",
+    "@sveltejs/kit": "^2.49.2",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
-    "@tailwindcss/vite": "^4.1.17",
-    "drizzle-kit": "^0.31.7",
-    "svelte": "^5.43.10",
-    "tailwindcss": "^4.1.17",
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/xterm": "^3.0.0",
+    "bits-ui": "^2.14.4",
+    "clsx": "^2.1.1",
+    "svelte": "^5.46.1",
+    "tailwind-merge": "^3.4.0",
+    "tailwind-variants": "^3.2.2",
+    "tailwindcss": "^4.1.18",
+    "tw-animate-css": "^1.4.0",
     "typescript": "^5.9.3",
-    "vite": "^7.2.2"
+    "vite": "^7.3.0"
   },
   "dependencies": {
-    "alchemy": "^0.77.5",
-    "better-auth": "1.3.34",
-    "drizzle-orm": "^0.44.7"
+    "@cloudflare/sandbox": "^0.6.7",
+    "@lucide/svelte": "^0.562.0",
+    "@types/node": "^25.0.3",
+    "@xterm/addon-attach": "^0.12.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "alchemy": "^0.82.2",
+    "hono": "^4.11.3"
   },
   "type": "module"
 }

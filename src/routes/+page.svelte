@@ -1,138 +1,236 @@
 <script lang="ts">
-  import { authStore } from "$lib/auth-store.svelte";
+  import { browser } from "$app/environment";
+  import { AGENT_LIST, type AgentId } from "$lib/agents";
+  import { Button } from "$lib/components/ui/button";
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+  } from "$lib/components/ui/card";
+  import { goto } from "$app/navigation";
+  import { cn } from "$lib/utils";
+  import { Github } from "@lucide/svelte";
 
-  let email = $state("");
+  let selectedAgents = $state<Set<AgentId>>(new Set());
+  let loading = $state(false);
+  let useCustomSessionId = $state(false);
+  let customSessionId = $state("");
+  let usePassword = $state(false);
   let password = $state("");
 
-  async function handleSignIn() {
-    if (!email.trim() || !password.trim()) {
-      alert("Email and password are required");
-      return;
+  function toggleAgent(id: AgentId) {
+    if (selectedAgents.has(id)) {
+      selectedAgents.delete(id);
+    } else {
+      selectedAgents.add(id);
     }
-
-    try {
-      await authStore.signIn(email, password);
-      email = "";
-      password = "";
-    } catch (error) {
-      alert("Sign in failed: " + (error as Error).message);
-    }
+    selectedAgents = new Set(selectedAgents);
   }
 
-  async function handleSignUp() {
-    if (!email.trim() || !password.trim()) {
-      alert("Email and password are required");
+  function selectAll() {
+    selectedAgents = new Set(AGENT_LIST.map((a) => a.id));
+  }
+
+  function deselectAll() {
+    selectedAgents = new Set();
+  }
+
+  async function launchTerminal() {
+    if (!browser) {
+      alert("Please use a browser to launch a terminal");
+      return;
+    }
+    if (selectedAgents.size === 0) {
+      alert("Please select at least one agent");
       return;
     }
 
-    if (password.length < 6) {
-      alert("Password must be at least 6 characters");
-      return;
-    }
-
+    loading = true;
     try {
-      await authStore.signUp(email, password);
-      email = "";
-      password = "";
+      const body: { agents: string[]; sessionId?: string; password?: string } =
+        {
+          agents: Array.from(selectedAgents),
+        };
+      if (useCustomSessionId && customSessionId.trim()) {
+        body.sessionId = customSessionId.trim();
+      }
+      if (usePassword && password) {
+        body.password = password;
+      }
+
+      const response = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const err = (await response.json()) as { error?: string };
+        throw new Error(err.error || "Failed to create session");
+      }
+
+      const { sessionId } = (await response.json()) as { sessionId: string };
+      goto(`/terminal/${sessionId}`);
     } catch (error) {
-      alert("Sign up failed: " + (error as Error).message);
+      console.error("Failed to launch terminal:", error);
+      alert(
+        error instanceof Error ? error.message : "Failed to launch terminal"
+      );
+    } finally {
+      loading = false;
     }
   }
 </script>
 
-<svelte:head>
-  <title>Remote App</title>
-</svelte:head>
-
-<div class="min-h-screen bg-gray-50 py-12">
-  <div class="max-w-md mx-auto bg-white rounded-lg shadow p-6">
-    <h1 class="text-2xl font-bold text-center mb-6">
-      SvelteKit + Better Auth + Durable Objects
-    </h1>
-
-    {#if authStore.user}
-      <!-- Authenticated state -->
-      <div class="text-center">
-        <p class="text-gray-600 mb-4">
-          Welcome, {authStore.user.email}!
-        </p>
-
-        <div class="bg-green-50 border border-green-200 rounded p-4 mb-4">
-          <h2 class="font-semibold text-green-800 mb-2">✅ Setup Complete!</h2>
-          <p class="text-sm text-green-700">
-            Your app is working with authentication. Now you can:
-          </p>
-          <ul class="text-sm text-green-700 mt-2 text-left">
-            <li>
-              • Add remote functions in <code>src/routes/data.remote.ts</code>
-            </li>
-            <li>
-              • Customize your Durable Object in <code>worker/index.ts</code>
-            </li>
-            <li>• Update <code>alchemy.run.ts</code> with your DO names</li>
-          </ul>
-        </div>
-
-        <button
-          onclick={() => authStore.signOut()}
-          class="w-full bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700"
+<div class="min-h-screen bg-background p-8">
+  <div class="mx-auto max-w-4xl">
+    <div class="mb-8 text-center">
+      <div class="mb-4 flex items-center justify-center gap-4">
+        <h1 class="text-4xl font-bold font-mono">filepath</h1>
+        <a
+          href="https://github.com/acoyfellow/filepath"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-muted-foreground hover:text-foreground transition-colors"
+          title="View on GitHub"
         >
-          Sign Out
-        </button>
+          <Github class="size-5" />
+        </a>
       </div>
-    {:else}
-      <!-- Unauthenticated state -->
-      <form class="space-y-4" onsubmit={(e) => e.preventDefault()}>
-        <div>
-          <label for="email" class="block text-sm font-medium text-gray-700"
-            >Email</label
-          >
-          <input
-            id="email"
-            type="email"
-            bind:value={email}
-            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            placeholder="you@example.com"
-          />
-        </div>
+      <p class="text-muted-foreground">
+        Terminal sessions with AI agents. Share your workflow.
+      </p>
+    </div>
 
-        <div>
-          <label for="password" class="block text-sm font-medium text-gray-700"
-            >Password</label
-          >
-          <input
-            id="password"
-            type="password"
-            bind:value={password}
-            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            placeholder="••••••••"
-          />
-        </div>
+    <div class="mb-4 flex justify-end gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onclick={selectAll}
+        disabled={selectedAgents.size === AGENT_LIST.length}
+      >
+        Select All
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onclick={deselectAll}
+        disabled={selectedAgents.size === 0}
+      >
+        Deselect All
+      </Button>
+    </div>
 
-        <div class="flex space-x-2">
-          <button
-            type="button"
-            onclick={handleSignIn}
-            disabled={authStore.isLoading}
-            class="flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {authStore.isLoading ? "Loading..." : "Sign In"}
-          </button>
+    <div class="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {#each AGENT_LIST as agent}
+        <Card
+          class={cn(
+            "cursor-pointer transition-all hover:border-primary",
+            selectedAgents.has(agent.id) && "border-primary"
+          )}
+          onclick={() => toggleAgent(agent.id)}
+        >
+          <CardHeader>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <img
+                  src={agent.logoUrl}
+                  alt={`${agent.name} logo`}
+                  class={cn(
+                    "size-12 object-contain rounded-full overflow-hidden border-2 border-foreground-muted",
+                    agent.id === "codex" && "invert"
+                  )}
+                />
+                <CardTitle class="text-lg">{agent.name}</CardTitle>
+              </div>
+              <input
+                type="checkbox"
+                checked={selectedAgents.has(agent.id)}
+                onchange={() => toggleAgent(agent.id)}
+                onclick={(e) => e.stopPropagation()}
+                class="size-4 rounded border-border"
+              />
+            </div>
+            <CardDescription>{agent.description}</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-2">
+            <code class="text-xs text-muted-foreground">{agent.command}</code>
+            <div>
+              <a
+                href={agent.docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-xs text-primary hover:underline"
+                onclick={(e) => e.stopPropagation()}
+              >
+                Documentation →
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      {/each}
+    </div>
 
-          <button
-            type="button"
-            onclick={handleSignUp}
-            disabled={authStore.isLoading}
-            class="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 disabled:opacity-50"
-          >
-            {authStore.isLoading ? "Loading..." : "Sign Up"}
-          </button>
-        </div>
-      </form>
-
-      <div class="mt-6 text-center text-sm text-gray-500">
-        <p>Create an account or sign in to test authentication</p>
+    <div class="mb-6 space-y-4">
+      <div class="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="use-custom-id"
+          checked={useCustomSessionId}
+          onchange={(e) => (useCustomSessionId = e.currentTarget.checked)}
+          class="size-4 rounded border-border"
+        />
+        <label
+          for="use-custom-id"
+          class="text-sm text-muted-foreground cursor-pointer"
+        >
+          Use custom session ID
+        </label>
       </div>
-    {/if}
+      {#if useCustomSessionId}
+        <input
+          type="text"
+          placeholder="my-session-id"
+          bind:value={customSessionId}
+          class="w-full px-3 py-2 text-sm border border-border rounded-md bg-background text-foreground"
+        />
+      {/if}
+
+      <div class="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="use-password"
+          checked={usePassword}
+          onchange={(e) => (usePassword = e.currentTarget.checked)}
+          class="size-4 rounded border-border"
+        />
+        <label
+          for="use-password"
+          class="text-sm text-muted-foreground cursor-pointer"
+        >
+          Protect with password
+        </label>
+      </div>
+      {#if usePassword}
+        <input
+          type="password"
+          placeholder="Password"
+          bind:value={password}
+          class="w-full px-3 py-2 text-sm border border-border rounded-md bg-background text-foreground"
+        />
+      {/if}
+    </div>
+
+    <div class="flex justify-center">
+      <Button
+        size="lg"
+        disabled={selectedAgents.size === 0 || loading}
+        onclick={launchTerminal}
+      >
+        {loading ? "Launching..." : "Launch Terminal"}
+      </Button>
+    </div>
   </div>
 </div>
