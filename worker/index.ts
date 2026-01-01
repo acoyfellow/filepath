@@ -452,16 +452,6 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   try {
     // All tabs use port 7681 (single ttyd instance)
     const port = 7681;
-    const tabKey = `${sessionId}:${tabId}`;
-
-    // Ensure the tab's tmux window exists
-    if (!startedSessions.has(tabKey)) {
-      // Tab window should have been created by /start endpoint, but handle race condition
-      const windowIndex = tabWindows.get(tabKey);
-      if (windowIndex === undefined) {
-        return c.json({ error: 'Tab not initialized. Call /start first.' }, 400);
-      }
-    }
 
     // Rewrite URL to just /ws for ttyd
     const originalUrl = new URL(c.req.url);

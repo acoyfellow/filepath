@@ -5,15 +5,26 @@ export async function callWorker(
   endpoint: string,
   request?: Request
 ): Promise<Response> {
+  const url = dev ? `http://localhost:1337${endpoint}` : `http://worker${endpoint}`;
+
   if (!request) {
-    if (dev) return fetch(`http://localhost:1337${endpoint}`);
-    return platform!.env!.WORKER.fetch(new Request(`http://worker${endpoint}`));
+    if (dev) return fetch(url);
+    return platform!.env!.WORKER.fetch(new Request(url));
   }
 
-  // Clone and buffer the body to avoid "can't read from request stream after response" errors
+  // WebSocket upgrades: don't touch the body, just forward headers
+  const isWebSocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
+  if (isWebSocket) {
+    const newRequest = new Request(url, {
+      method: request.method,
+      headers: request.headers,
+    });
+    if (dev) return fetch(newRequest);
+    return platform!.env!.WORKER.fetch(newRequest);
+  }
+
+  // Regular requests: buffer body to avoid stream consumption issues
   const body = request.body ? await request.clone().arrayBuffer() : null;
-  const url = dev ? `http://localhost:1337${endpoint}` : `http://worker${endpoint}`;
-  
   const newRequest = new Request(url, {
     method: request.method,
     headers: request.headers,
