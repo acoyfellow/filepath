@@ -36,6 +36,7 @@ const TabState = DurableObjectNamespace(`${projectName}-tab-state`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
+  domains: ["api.myfilepath.com"],
   adopt: true,
   bindings: {
     Sandbox,
