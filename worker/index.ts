@@ -249,25 +249,19 @@ app.post('/terminal/:id/start', async (c) => {
       if (c.env.FACTORY_API_KEY) envVars.FACTORY_API_KEY = c.env.FACTORY_API_KEY;
       await sandbox.setEnvVars(envVars);
 
-      // Install agents (block until installed so terminal is usable immediately)
-      if (agents.includes('claude')) {
-        await ensureCmd(sandbox, 'claude', 'bun add -g @anthropic-ai/claude-code');
-      }
-      if (agents.includes('codex')) {
-        await ensureCmd(sandbox, 'codex', 'bun add -g @openai/codex');
-      }
+      // Install agents in parallel (claude & codex are pre-baked in Docker image)
+      const installs: Promise<void>[] = [];
+      // cursor, opencode, droid need runtime install (not pre-baked)
       if (agents.includes('cursor')) {
-        // Cursor installs to ~/.cursor/bin, ensure PATH includes it
-        await ensureCmd(sandbox, 'cursor-agent', 'curl -fsS https://cursor.com/install | bash');
+        installs.push(ensureCmd(sandbox, 'cursor-agent', 'curl -fsS https://cursor.com/install | bash'));
       }
       if (agents.includes('opencode')) {
-        // OpenCode installs via curl script
-        await ensureCmd(sandbox, 'opencode', 'curl -fsSL https://opencode.ai/install | bash');
+        installs.push(ensureCmd(sandbox, 'opencode', 'curl -fsSL https://opencode.ai/install | bash'));
       }
       if (agents.includes('droid')) {
-        // Factory Droid installs via curl script
-        await ensureCmd(sandbox, 'droid', 'curl -fsSL https://app.factory.ai/cli | sh');
+        installs.push(ensureCmd(sandbox, 'droid', 'curl -fsSL https://app.factory.ai/cli | sh'));
       }
+      if (installs.length > 0) await Promise.all(installs);
 
       // Main session initialization: install agents and set env vars
       // Each tab will start its own ttyd instance, so we don't start one here
