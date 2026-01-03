@@ -11,6 +11,7 @@ interface TabScrollback {
 export class TabBroadcastDO extends DurableObject {
   private clients: Set<WebSocket> = new Set();
   private ttyd: WebSocket | null = null;
+  private messageQueue: ArrayBuffer[] = []; // Queue messages until ttyd is ready
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') === 'websocket') {
@@ -43,10 +44,10 @@ export class TabBroadcastDO extends DurableObject {
     const sandboxId = `${sessionId}:${tabId}`;
     console.log('[TabBroadcastDO] Extracted:', { sessionId, tabId, sandboxId, pathname: url.pathname });
 
-    // Accept WebSocket and set up handlers immediately
+    // Accept WebSocket using Durable Object hibernation API
     try {
-      console.log('[TabBroadcastDO] Accepting WebSocket connection');
-      server.accept();
+      console.log('[TabBroadcastDO] Accepting WebSocket connection with hibernation API');
+      this.ctx.acceptWebSocket(server);
       this.clients.add(server);
       console.log('[TabBroadcastDO] WebSocket accepted, clients:', this.clients.size);
     } catch (error) {
@@ -55,12 +56,20 @@ export class TabBroadcastDO extends DurableObject {
     }
 
     // Set up message forwarding and cleanup handlers
+    // ttyd uses the same protocol: INPUT='0', OUTPUT='0', RESIZE='1'
+    // Queue messages if ttyd isn't ready yet (e.g., initial terminal size message)
     server.addEventListener('message', (event) => {
       if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
         try {
           this.ttyd.send(event.data);
         } catch (err) {
           console.error('[TabBroadcastDO] Error forwarding client message to ttyd:', err);
+        }
+      } else {
+        // Queue message until ttyd is ready
+        console.log('[TabBroadcastDO] Queueing message - ttyd not ready yet');
+        if (event.data instanceof ArrayBuffer) {
+          this.messageQueue.push(event.data);
         }
       }
     });
@@ -90,25 +99,35 @@ export class TabBroadcastDO extends DurableObject {
     // Durable Objects automatically stay active during async work
     (async () => {
       try {
-        // Restore scrollback to new client before connecting to ttyd
-        await this.sendScrollbackToClient(server, sandboxId);
-
-        // Connect to ttyd if not already connected
+        // Connect to ttyd FIRST - client expects data immediately
         if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
           console.log('[TabBroadcastDO] Connecting to ttyd for:', sandboxId);
           await this.connectTtyd(request, sandboxId);
           console.log('[TabBroadcastDO] ttyd connection state:', this.ttyd?.readyState);
         } else {
           console.log('[TabBroadcastDO] ttyd already connected');
+          // Flush any queued messages (e.g., from this new client)
+          if (this.messageQueue.length > 0) {
+            console.log(`[TabBroadcastDO] Flushing ${this.messageQueue.length} queued messages to existing ttyd connection`);
+            for (const msg of this.messageQueue) {
+              try {
+                this.ttyd.send(msg);
+              } catch (err) {
+                console.error('[TabBroadcastDO] Error sending queued message to ttyd:', err);
+              }
+            }
+            this.messageQueue = [];
+          }
         }
+
+        // Send scrollback AFTER ttyd is connected and sending data
+        // This ensures ttyd is ready and the client is receiving data
+        await this.sendScrollbackToClient(server, sandboxId);
       } catch (error) {
         console.error('[TabBroadcastDO] Error in async setup:', error);
-        // Close the client connection if setup fails
-        try {
-          server.close(1011, 'Internal server error during setup');
-        } catch (err) {
-          // Ignore
-        }
+        // Don't close the connection - log the error but keep it open
+        // The connection is already established, closing it causes 1006 errors
+        // Errors in setup (like scrollback or ttyd connection) shouldn't kill the client connection
       }
     })();
 
@@ -188,7 +207,21 @@ export class TabBroadcastDO extends DurableObject {
       this.ttyd.accept();
       console.log('[TabBroadcastDO] ttyd WebSocket accepted, readyState:', this.ttyd.readyState);
 
+      // Flush queued messages to ttyd (e.g., initial terminal size)
+      if (this.messageQueue.length > 0) {
+        console.log(`[TabBroadcastDO] Flushing ${this.messageQueue.length} queued messages to ttyd`);
+        for (const msg of this.messageQueue) {
+          try {
+            this.ttyd.send(msg);
+          } catch (err) {
+            console.error('[TabBroadcastDO] Error sending queued message to ttyd:', err);
+          }
+        }
+        this.messageQueue = [];
+      }
+
       // Broadcast ttyd messages to all clients and capture scrollback
+      // ttyd sends OUTPUT='0' prefix, which matches client's CMD_OUTPUT='0'
       this.ttyd.addEventListener('message', async (event) => {
         // Broadcast to all clients
         for (const client of this.clients) {
@@ -196,18 +229,21 @@ export class TabBroadcastDO extends DurableObject {
             try {
               client.send(event.data);
             } catch (err) {
+              console.error('[TabBroadcastDO] Error broadcasting to client:', err);
               // Remove dead connections
               this.clients.delete(client);
             }
+          } else {
+            this.clients.delete(client);
           }
         }
 
-        // Capture scrollback
+        // Capture scrollback (ttyd sends OUTPUT='0' prefix)
         if (event.data instanceof ArrayBuffer) {
           const u8 = new Uint8Array(event.data);
           if (u8.length > 0) {
             const cmd = String.fromCharCode(u8[0]);
-            if (cmd === '0') {  // CMD_OUTPUT
+            if (cmd === '0') {  // OUTPUT/CMD_OUTPUT
               const output = new TextDecoder().decode(u8.slice(1));
               await this.appendScrollback(sandboxId, output);
             }
@@ -260,20 +296,33 @@ export class TabBroadcastDO extends DurableObject {
   }
 
   private async sendScrollbackToClient(client: WebSocket, sandboxId: string): Promise<void> {
+    console.log('[TabBroadcastDO] Attempting to send scrollback to client.');
+    if (client.readyState !== WebSocket.OPEN) {
+      console.warn('[TabBroadcastDO] Client WebSocket not open, cannot send scrollback.');
+      return;
+    }
     try {
       const stored = await this.ctx.storage.get<TabScrollback>('scrollback');
       if (stored?.chunks && stored.chunks.length > 0) {
+        console.log(`[TabBroadcastDO] Sending ${stored.chunks.length} scrollback chunks to client.`);
         const textEncoder = new TextEncoder();
         for (const chunk of stored.chunks) {
+          if (client.readyState !== WebSocket.OPEN) {
+            console.warn('[TabBroadcastDO] Client closed during scrollback send, stopping.');
+            break;
+          }
           const payload = new Uint8Array(chunk.length + 1);
           payload[0] = '0'.charCodeAt(0);  // CMD_OUTPUT
           const encoded = textEncoder.encode(chunk);
           payload.set(encoded, 1);
           client.send(payload);
         }
+        console.log('[TabBroadcastDO] Scrollback sent successfully.');
+      } else {
+        console.log('[TabBroadcastDO] No scrollback to send.');
       }
     } catch (err) {
-      console.error('Failed to send scrollback:', err);
+      console.error('[TabBroadcastDO] Failed to send scrollback:', err);
     }
   }
 }

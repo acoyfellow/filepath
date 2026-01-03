@@ -509,48 +509,26 @@ app.get('/terminal/:id/ws', async (c) => {
 
 // WebSocket terminal connection for specific tab
 // Delegates to TabBroadcastDO which manages connections and broadcasts ttyd output
+// Use raw fetch to bypass Hono's response processing for WebSocket upgrades
 app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
-  const origin = c.req.header('Origin');
-  const protocol = c.req.header('Sec-WebSocket-Protocol');
-  const url = c.req.url;
-
-  console.log('[Worker] WebSocket upgrade request:', {
-    upgrade,
-    origin,
-    protocol,
-    url,
-    headers: Object.fromEntries(c.req.raw.headers.entries())
-  });
-
   if (upgrade?.toLowerCase() !== 'websocket') {
-    console.error('[Worker] Missing or invalid Upgrade header:', upgrade);
     return c.text('Expected WebSocket upgrade', 400);
   }
 
   const sessionId = c.req.param('sessionId');
   const tabId = c.req.param('tabId');
   const sandboxId = `${sessionId}:${tabId}`; // Same ID as used in /start
-  console.log('[Worker] Forwarding WS to TabBroadcastDO:', { sessionId, tabId, sandboxId });
 
-  // Don't do async password checks here - they block the WebSocket upgrade
-  // Password can be verified by ttyd or handled after connection
-
-  // Forward WebSocket upgrade to TabBroadcastDO
+  // Forward WebSocket upgrade directly to TabBroadcastDO
   // DO will handle: client connections, ttyd connection, broadcasting
+  // Use raw Request to preserve all headers and WebSocket upgrade headers
   const tabBroadcast = getTabBroadcast(c.env, sandboxId);
-  try {
-    const response = await tabBroadcast.fetch(c.req.raw);
-    console.log('[Worker] TabBroadcastDO response:', {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-    return response;
-  } catch (error) {
-    console.error('[Worker] Error forwarding to TabBroadcastDO:', error);
-    throw error;
-  }
+  const doResponse = await tabBroadcast.fetch(c.req.raw);
+
+  // Return the DO's response directly - don't let Hono process it
+  // This preserves the WebSocket upgrade response
+  return doResponse;
 });
 
 // Get session tab state
