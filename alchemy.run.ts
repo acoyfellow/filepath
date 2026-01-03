@@ -36,6 +36,12 @@ const TabState = DurableObjectNamespace(`${projectName}-tab-state`, {
   sqlite: true,
 });
 
+// TabBroadcast Durable Object for WebSocket broadcasting per tab
+const TabBroadcast = DurableObjectNamespace(`${projectName}-tab-broadcast`, {
+  className: "TabBroadcastDO",
+  scriptName: `${projectName}-worker`,
+});
+
 // Create the worker with Hono API
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
@@ -48,6 +54,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     Sandbox,
     SessionState,
     TabState,
+    TabBroadcast,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
     CURSOR_API_KEY: process.env.CURSOR_API_KEY || "",

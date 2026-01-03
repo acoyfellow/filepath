@@ -3,14 +3,16 @@ import { cors } from 'hono/cors';
 import { getSandbox, Sandbox as SandboxDO } from '@cloudflare/sandbox';
 import { SessionStateDO } from './session-state';
 import { TabStateDO } from './tab-state';
+import { TabBroadcastDO } from './tab-broadcast';
 import type { CreateSessionRequest, SessionId, SessionInfo } from './types';
 
-export { SandboxDO as Sandbox, SessionStateDO, TabStateDO };
+export { SandboxDO as Sandbox, SessionStateDO, TabStateDO, TabBroadcastDO };
 
 type Env = {
   Sandbox: DurableObjectNamespace<SandboxDO>;
   SessionState: DurableObjectNamespace;
   TabState: DurableObjectNamespace<TabStateDO>;
+  TabBroadcast: DurableObjectNamespace<TabBroadcastDO>;
   ANTHROPIC_API_KEY: string;
   OPENAI_API_KEY: string;
   CURSOR_API_KEY: string;
@@ -83,6 +85,12 @@ function getSessionState(env: Env, sessionId: string) {
   return env.SessionState.get(id);
 }
 
+// Helper to get TabBroadcast DO for a tab
+function getTabBroadcast(env: Env, sandboxId: string) {
+  const id = env.TabBroadcast.idFromName(sandboxId);
+  return env.TabBroadcast.get(id);
+}
+
 
 // Create session - store agents in SessionStateDO instead of URL params
 app.post('/session', async (c) => {
@@ -153,6 +161,10 @@ app.post('/session', async (c) => {
 // Key: sandboxId (sessionId:tabId for tabs, sessionId for main session)
 const startedSessions = new Set<string>();
 const startingSessions = new Map<string, Promise<void>>();
+
+// Track WebSocket connections per tab for broadcasting
+// Key: sandboxId (sessionId:tabId), Value: Set of client WebSockets
+const tabConnections = new Map<string, Set<WebSocket>>();
 
 async function ensureCmd(
   sandbox: ReturnType<typeof getSandbox>,
@@ -364,6 +376,62 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
   }
 });
 
+// Wake sleeping container for a tab
+app.post('/terminal/:sessionId/:tabId/wake', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const tabId = c.req.param('tabId');
+  const sandboxId = `${sessionId}:${tabId}`;
+  console.log('Waking container for tab:', sandboxId);
+
+  // If already started, return success
+  if (startedSessions.has(sandboxId)) {
+    return c.json({ awake: true });
+  }
+
+  // Reuse start logic - wake by starting ttyd
+  const sandbox = getSandbox(c.env.Sandbox, sandboxId);
+
+  try {
+    // Get agents from session state
+    const sessionState = getSessionState(c.env, sessionId);
+    const infoRes = await sessionState.fetch(new Request('http://do/info'));
+    let agents: string[] = [];
+    if (infoRes.ok) {
+      const info = await infoRes.json() as { agents?: string[] };
+      agents = info.agents || [];
+    }
+
+    // Set env vars
+    const envVars: Record<string, string> = {
+      PATH: '/root/.bun/bin:/root/.cursor/bin:/root/.factory/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin',
+    };
+    if (agents.includes('claude') && !c.env.ANTHROPIC_API_KEY) {
+      throw new Error('Missing ANTHROPIC_API_KEY');
+    }
+    if (c.env.ANTHROPIC_API_KEY) envVars.ANTHROPIC_API_KEY = c.env.ANTHROPIC_API_KEY;
+    if (c.env.OPENAI_API_KEY) envVars.OPENAI_API_KEY = c.env.OPENAI_API_KEY;
+    if (c.env.CURSOR_API_KEY) envVars.CURSOR_API_KEY = c.env.CURSOR_API_KEY;
+    if (c.env.FACTORY_API_KEY) envVars.FACTORY_API_KEY = c.env.FACTORY_API_KEY;
+    await sandbox.setEnvVars(envVars);
+
+    // Start ttyd to wake container
+    console.log('Waking ttyd for sandbox:', sandboxId);
+    const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+    await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
+    console.log('ttyd woken on port 7681 for sandbox:', sandboxId);
+
+    startedSessions.add(sandboxId);
+
+    return c.json({ awake: true });
+  } catch (error) {
+    console.error('Wake error:', error);
+    return c.json({
+      error: 'Failed to wake container',
+      details: error instanceof Error ? error.message : String(error)
+    }, 500);
+  }
+});
+
 // WebSocket terminal connection - legacy endpoint for backwards compatibility
 // New tabs should use /terminal/:sessionId/:tabId/ws
 app.get('/terminal/:id/ws', async (c) => {
@@ -399,8 +467,7 @@ app.get('/terminal/:id/ws', async (c) => {
 });
 
 // WebSocket terminal connection for specific tab
-// Each tab has its own sandbox with ttyd on port 7681
-// ttyd natively broadcasts to all connected WebSocket clients (cross-browser sync)
+// Delegates to TabBroadcastDO which manages connections and broadcasts ttyd output
 app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
   if (upgrade?.toLowerCase() !== 'websocket') {
@@ -415,27 +482,10 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   // Don't do async password checks here - they block the WebSocket upgrade
   // Password can be verified by ttyd or handled after connection
 
-  // Get sandbox for THIS TAB
-  const sandbox = getSandbox(c.env.Sandbox, sandboxId);
-
-  try {
-    // Rewrite URL to /ws for ttyd
-    const originalUrl = new URL(c.req.url);
-    const ttydUrl = new URL('/ws' + originalUrl.search, originalUrl.origin);
-    const wsRequest = new Request(ttydUrl.toString(), {
-      method: c.req.raw.method,
-      headers: c.req.raw.headers,
-    });
-
-    console.log('Calling wsConnect for sandbox:', sandboxId, 'port: 7681');
-    const response = await sandbox.wsConnect(wsRequest, 7681);
-    console.log('wsConnect response status:', response.status);
-    return response;
-  } catch (error) {
-    console.error('WebSocket connection error:', error);
-    // Can't return JSON for WebSocket upgrade - close connection
-    return new Response(null, { status: 500, statusText: String(error) });
-  }
+  // Forward WebSocket upgrade to TabBroadcastDO
+  // DO will handle: client connections, ttyd connection, broadcasting
+  const tabBroadcast = getTabBroadcast(c.env, sandboxId);
+  return tabBroadcast.fetch(c.req.raw);
 });
 
 // Get session tab state

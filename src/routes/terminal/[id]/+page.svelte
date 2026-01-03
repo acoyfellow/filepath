@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
-  import { House, Share2, Check, X, Plus } from "@lucide/svelte";
+  import { Share2, Check, X, Plus } from "@lucide/svelte";
   import { AGENT_LIST } from "$lib/agents";
   import { cn } from "$lib/utils";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount } from "svelte";
   import { browser, dev } from "$app/environment";
 
   // Action to focus input when editing starts
@@ -110,7 +111,7 @@
 
   const activeAgents = $derived(AGENT_LIST);
 
-  const activeTab = $derived(tabs.find((t) => t.id === activeTabId) || null);
+  // const activeTab = $derived(tabs.find((t) => t.id === activeTabId) || null);
 
   const shareUrl = $derived.by(() => {
     if (!browser) return "";
@@ -480,15 +481,12 @@
     class="flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-900 p-2"
   >
     <div class="flex items-center gap-4">
-      <Button href="/" title="Home" variant="ghost">
-        <House class="w-4 h-4" />
-      </Button>
-      <span class="font-mono text-sm text-gray-400">{sessionId}</span>
       <Button
         onclick={copyShareUrl}
         title="Share this terminal session"
         variant="ghost"
       >
+        <span class="font-mono text-sm text-gray-400">{sessionId}</span>
         {#if copied}
           <Check class="w-4 h-4 text-green-400" />
         {:else}
@@ -516,6 +514,17 @@
         {/each}
       </div>
     </div>
+    <Button
+      onclick={async () => {
+        let c = await confirm("Are you sure you want to leave this session?");
+        if (!c) return;
+        goto("/");
+      }}
+      title="Home"
+      variant="ghost"
+    >
+      <X class="w-4 h-4" />
+    </Button>
   </div>
 
   <div class="flex flex-1 flex-col bg-black">

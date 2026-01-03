@@ -85,7 +85,7 @@
       );
 
       if (!tabStartRes.ok) {
-        const data = await tabStartRes.json();
+        const data = (await tabStartRes.json()) as { error?: string };
         throw new Error(data.error || "Failed to start tab");
       }
 
@@ -153,31 +153,80 @@
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = async () => {
         error = "Connection error";
         connected = false;
+
+        // Try to wake container
+        try {
+          const wakeRes = await fetch(
+            `/api/terminal/${sessionId}/${tabId}/wake`,
+            {
+              method: "POST",
+            }
+          );
+          if (wakeRes.ok && !connected) {
+            setTimeout(() => {
+              if (!connected) {
+                initializeTerminal();
+              }
+            }, 1000);
+          }
+        } catch (wakeErr) {
+          console.error("Wake attempt failed:", wakeErr);
+        }
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = async (event) => {
         connected = false;
         if (event.code !== 1000 && event.code !== 1001) {
           error = "Connection closed";
+
+          // Try to wake container on unexpected close
+          try {
+            const wakeRes = await fetch(
+              `/api/terminal/${sessionId}/${tabId}/wake`,
+              {
+                method: "POST",
+              }
+            );
+            if (wakeRes.ok && !connected) {
+              setTimeout(() => initializeTerminal(), 1000);
+            }
+          } catch (wakeErr) {
+            // Ignore wake errors on close
+          }
         }
       };
 
-      // Resize handler
-      resizeHandler = () => {
-        if (terminal && fitAddon && ws && ws.readyState === WebSocket.OPEN) {
-          fitAddon.fit();
+      // Helper to send resize message to ttyd (must match initial handshake format)
+      const sendResize = () => {
+        if (terminal && ws && ws.readyState === WebSocket.OPEN) {
+          // Must use same encoded format as initial handshake
           ws.send(
-            JSON.stringify({
-              columns: terminal.cols,
-              rows: terminal.rows,
-            })
+            textEncoder.encode(
+              JSON.stringify({
+                columns: terminal.cols,
+                rows: terminal.rows,
+              })
+            )
           );
         }
       };
+
+      // Resize handler for window resize
+      resizeHandler = () => {
+        if (terminal && fitAddon && ws && ws.readyState === WebSocket.OPEN) {
+          fitAddon.fit();
+          sendResize();
+        }
+      };
       window.addEventListener("resize", resizeHandler);
+
+      // Also listen to terminal resize events (catches terminal size changes)
+      terminal.onResize(() => {
+        sendResize();
+      });
     } catch (err) {
       console.error("Terminal initialization error:", err);
       error = err instanceof Error ? err.message : String(err);

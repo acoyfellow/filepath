@@ -139,7 +139,7 @@ export class SessionStateDO extends DurableObject {
         await this.ctx.storage.put('lastActivity', this.lastActivity);
 
         const age = now - (this.createdAt || now);
-        const ttl = 10 * 60 * 1000; // 10 minutes default (sandbox sleepAfter)
+        const ttl = 5 * 60 * 1000; // 5 minutes (reduced from 10min with resumability)
         // Calculate time until sleep based on last activity, not creation time
         const timeSinceActivity = now - (this.lastActivity || now);
         const timeUntilSleep = Math.max(0, ttl - timeSinceActivity);
