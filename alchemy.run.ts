@@ -1,5 +1,5 @@
 import alchemy from "alchemy";
-import { SvelteKit, Worker, Container, DurableObjectNamespace } from "alchemy/cloudflare";
+import { SvelteKit, Worker, Container, DurableObjectNamespace, CustomDomain } from "alchemy/cloudflare";
 
 import { CloudflareStateStore } from "alchemy/state";
 
@@ -58,10 +58,9 @@ const TabBroadcast = DurableObjectNamespace(`${projectName}-tab-broadcast`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
-  domains: ["api.myfilepath.com"],
-  routes: [{ pattern: "api.myfilepath.com/*", adopt: true }],
+  domains: [{ name: "api.myfilepath.com", adopt: true }],
   adopt: true,
-  url: true,
+  url: false,
   apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
   email: process.env.CLOUDFLARE_EMAIL,
   accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
@@ -80,12 +79,11 @@ export const WORKER = await Worker(`${projectName}-worker`, {
 // Create the SvelteKit app
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
-  domains: ["myfilepath.com"],
   routes: [{ pattern: "myfilepath.com/*", adopt: true }],
   bindings: {
     WORKER
   },
-  url: true,
+  url: false,
   adopt: true,
 });
 
