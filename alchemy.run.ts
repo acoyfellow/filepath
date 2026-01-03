@@ -22,10 +22,7 @@ const project = await alchemy(projectName, {
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   scriptName: `${projectName}-worker`,
-  // adopt: true, // REMOVED - may be causing container lifecycle issues
-  // apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
-  // email: process.env.CLOUDFLARE_EMAIL,
-  // accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+  adopt: true, // REQUIRED - adopt existing container application instead of creating new one
   build: {
     dockerfile: "Dockerfile",
     context: process.cwd(),
