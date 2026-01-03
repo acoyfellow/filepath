@@ -52,13 +52,15 @@
 <div
   class="min-h-screen flex items-center justify-center px-8 py-20 text-center gap-4 flex-col"
 >
-  <h1 class="text-6xl font-bold text-primary-600">{page.status}</h1>
+  <h1 class="text-6xl font-extrabold text-primary-600">{page.status}</h1>
 
-  <p class="text-2xl font-semibold text-zinc-900">
+  <p class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
     {errorMessage}
   </p>
 
-  <p class="text-xl text-zinc-800 text-balance max-w-lg mx-auto">
+  <p
+    class="text-xl text-zinc-800 dark:text-zinc-100 text-balance max-w-lg mx-auto"
+  >
     {errorDescription}
   </p>
 

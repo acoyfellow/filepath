@@ -2,7 +2,6 @@
   import { House, Share2, Check, X, Plus } from "@lucide/svelte";
   import { AGENTS } from "$lib/agents";
   import { cn } from "$lib/utils";
-  import "@xterm/xterm/css/xterm.css";
   import { onMount, onDestroy } from "svelte";
   import { browser, dev } from "$app/environment";
 
@@ -14,25 +13,10 @@
   }
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import type { Terminal as TerminalType } from "@xterm/xterm";
-  import type { FitAddon as FitAddonType } from "@xterm/addon-fit";
-
-  // ttyd protocol commands
-  const CMD_OUTPUT = "0";
-  const CMD_SET_TITLE = "1";
-  const CMD_SET_PREFS = "2";
-  const CMD_RESIZE = "1";
 
   interface Tab {
     id: string;
     name: string;
-    terminal: TerminalType | null;
-    fitAddon: FitAddonType | null;
-    ws: WebSocket | null;
-    container: HTMLDivElement | null;
-    connected: boolean;
-    error: string | null;
-    tmuxWindowIndex?: number;
   }
 
   let tabs = $state<Tab[]>([]);
@@ -40,21 +24,14 @@
   let editingTabId = $state<string | null>(null);
   let editedTabName = $state<string>("");
   let copied = $state(false);
-  let textEncoder = new TextEncoder();
-  let textDecoder = new TextDecoder();
-  let recvDebug = 0;
-  const startedSessions = new Set<string>();
   let tabStateWs: WebSocket | null = null;
+  let tabStateSyncAttempts = 0;
+  const MAX_TAB_STATE_SYNC_ATTEMPTS = 10;
 
   const sessionId = $derived(page.params.id);
 
   // Load agents from SessionStateDO (persistent) or fallback to URL params (backward compatibility)
   let selectedAgents = $state<string[]>([]);
-  let sessionCreatedAt = $state<number | null>(null);
-  let sessionLastActivity = $state<number | null>(null);
-  let sessionTtl = $state<number>(10 * 60 * 1000); // Default 10 minutes
-  let sessionAge = $state<number>(0);
-  let sessionTimeUntilSleep = $state<number>(10 * 60 * 1000);
   let sessionHasPassword = $state(false);
   let showPasswordPrompt = $state(false);
   let passwordInput = $state("");
@@ -98,18 +75,6 @@
           hasPassword?: boolean;
         };
         sessionHasPassword = info.hasPassword || false;
-        // Store server values for calculation
-        if (info.createdAt && !sessionCreatedAt) {
-          sessionCreatedAt = info.createdAt;
-        }
-        if (info.lastActivity) {
-          sessionLastActivity = info.lastActivity;
-        } else if (info.createdAt && !sessionLastActivity) {
-          sessionLastActivity = info.createdAt;
-        }
-        if (info.ttl) {
-          sessionTtl = info.ttl;
-        }
         if (info.agents && info.agents.length > 0) {
           selectedAgents = info.agents;
         }
@@ -149,42 +114,11 @@
     }
   }
 
-  // Calculate age and time until sleep in real-time
-  // Use lastActivity for countdown (TTL is idle timeout, resets on activity)
-  $effect(() => {
-    if (!browser || !sessionCreatedAt || !sessionLastActivity) return;
-
-    const updateTimes = () => {
-      const now = Date.now();
-      const ttl = sessionTtl; // Capture current value
-      sessionAge = now - sessionCreatedAt!;
-      // Calculate based on last activity, not creation time
-      const timeSinceActivity = now - sessionLastActivity!;
-      sessionTimeUntilSleep = Math.max(0, ttl - timeSinceActivity);
-    };
-
-    // Update immediately
-    updateTimes();
-
-    // Update every second for smooth countdown
-    const interval = setInterval(updateTimes, 1000);
-
-    return () => clearInterval(interval);
-  });
-
   const activeAgents = $derived(
     selectedAgents
       .map((id) => AGENTS[id as keyof typeof AGENTS])
       .filter(Boolean)
   );
-
-  // Format time for display
-  function formatTime(ms: number): string {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  }
 
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) || null);
 
@@ -279,7 +213,7 @@
     return [];
   }
 
-  // Restore tabs from storage (without terminal instances)
+  // Restore tabs from storage
   async function restoreTabs() {
     if (!browser || !sessionId) return;
     const storedTabs = await loadTabsFromStorage();
@@ -287,12 +221,6 @@
       tabs = storedTabs.map((stored) => ({
         id: stored.id,
         name: stored.name,
-        terminal: null,
-        fitAddon: null,
-        ws: null,
-        container: null,
-        connected: false,
-        error: null,
       }));
       // Active tab is set in loadTabsFromStorage
       if (!activeTabId && tabs.length > 0) {
@@ -313,12 +241,6 @@
     const tab: Tab = {
       id: tabId,
       name: name || `${tabs.length + 1}`,
-      terminal: null,
-      fitAddon: null,
-      ws: null,
-      container: null,
-      connected: false,
-      error: null,
     };
     tabs = [...tabs, tab];
     activeTabId = tabId;
@@ -327,11 +249,6 @@
   }
 
   async function closeTab(tabId: string) {
-    const tab = tabs.find((t) => t.id === tabId);
-    if (tab) {
-      if (tab.ws) tab.ws.close();
-      if (tab.terminal) tab.terminal.dispose();
-    }
     tabs = tabs.filter((t) => t.id !== tabId);
     if (activeTabId === tabId) {
       activeTabId = tabs.length > 0 ? tabs[tabs.length - 1].id : null;
@@ -341,7 +258,6 @@
 
   async function switchTab(tabId: string) {
     activeTabId = tabId;
-    // Each tab has its own independent WebSocket connection - no coordination needed
     await saveTabsToStorage();
   }
 
@@ -366,298 +282,15 @@
     editedTabName = "";
   }
 
-  async function initializeTab(tab: Tab) {
-    if (!browser || !sessionId || !tab.container) return;
-
-    try {
-      // Dynamic import for browser-only xterm
-      const { Terminal } = await import("@xterm/xterm");
-      const { FitAddon } = await import("@xterm/addon-fit");
-
-      tab.terminal = new Terminal({
-        cursorBlink: true,
-        fontSize: 14,
-        fontFamily: "monospace",
-        theme: {
-          background: "#000000",
-          foreground: "#ffffff",
-          cursor: "#ffffff",
-        },
-      }) as TerminalType;
-
-      tab.fitAddon = new FitAddon() as FitAddonType;
-      tab.terminal?.loadAddon(tab.fitAddon);
-
-      if (!tab.terminal || !tab.container || !tab.fitAddon) {
-        console.error("Terminal not initialized");
-        return;
-      }
-
-      tab.terminal.open(tab.container);
-      tab.fitAddon.fit();
-
-      // Show loading screen with agents
-      const agentNames = activeAgents.map((a) => a.name).join(", ");
-      tab.terminal.write("\x1b[2J\x1b[H"); // Clear screen
-      tab.terminal.writeln("\r\n");
-
-      // Agent logos (simple spinner + text)
-      const agents = activeAgents.slice(0, 3); // Show first 3
-      const agentEmojis = agents
-        .map((a) => {
-          switch (a.id) {
-            case "claude":
-              return "🤖";
-            case "codex":
-              return "⚡";
-            case "cursor":
-              return "💻";
-            case "opencode":
-              return "🔓";
-            case "droid":
-              return "🤖";
-            default:
-              return "•";
-          }
-        })
-        .join(" ");
-
-      tab.terminal.writeln(`  ${agentEmojis}\r\n`);
-      tab.terminal.writeln(`  Loading environment with ${agentNames}...\r\n`);
-      tab.terminal.writeln("\r\n");
-
-      // Ensure main session is initialized first (agents installed, env vars set)
-      if (!startedSessions.has(sessionId)) {
-        const headers = {
-          "Content-Type": "application/json",
-          ...getPasswordHeader(),
-        };
-        const mainStartRes = await fetch(`/api/terminal/${sessionId}/start`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ agents: selectedAgents }),
-        });
-        if (mainStartRes.status === 401) {
-          sessionStorage.removeItem(`session:${sessionId}:password`);
-          showPasswordPrompt = true;
-          throw new Error("Password required");
-        }
-        const mainStartData = (await mainStartRes.json()) as {
-          ready?: boolean;
-          error?: string;
-        };
-        if (!mainStartRes.ok || !mainStartData.ready) {
-          throw new Error(
-            mainStartData.error || "Failed to initialize session"
-          );
-        }
-        startedSessions.add(sessionId);
-      }
-
-      // Start the terminal session for this specific tab
-      // Each tab gets its own independent terminal session
-      const headers = {
-        "Content-Type": "application/json",
-        ...getPasswordHeader(),
-      };
-      const startRes = await fetch(
-        `/api/terminal/${sessionId}/${tab.id}/start`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ agents: selectedAgents }),
-        }
-      );
-      if (startRes.status === 401) {
-        sessionStorage.removeItem(`session:${sessionId}:password`);
-        showPasswordPrompt = true;
-        throw new Error("Password required");
-      }
-      const startData = (await startRes.json()) as {
-        ready?: boolean;
-        error?: string;
-        port?: number;
-        windowIndex?: number;
-      };
-
-      if (!startRes.ok || !startData.ready) {
-        throw new Error(startData.error || "Failed to start terminal");
-      }
-
-      // Store the tmux window index for this tab
-      if (startData.windowIndex !== undefined) {
-        tab.tmuxWindowIndex = startData.windowIndex;
-      }
-
-      // WebSocket URL - each tab uses its own tab-specific endpoint
-      let wsUrl: string;
-      const password = sessionStorage.getItem(`session:${sessionId}:password`);
-      const passwordParam = password
-        ? `?password=${encodeURIComponent(password)}`
-        : "";
-      if (dev) {
-        wsUrl = `ws://localhost:1337/terminal/${sessionId}/${tab.id}/ws${passwordParam}`;
-      } else {
-        wsUrl = `wss://${window.location.host}/api/terminal/${sessionId}/${tab.id}/ws${passwordParam}`;
-      }
-
-      console.log("wsUrl", wsUrl);
-
-      // ttyd requires 'tty' subprotocol
-      tab.ws = new WebSocket(wsUrl, ["tty"]) as unknown as WebSocket;
-      tab.ws.binaryType = "arraybuffer";
-
-      tab.ws.onopen = () => {
-        if (!tab.terminal || !tab.ws) return;
-        tab.connected = true;
-
-        // Clear terminal before tmux sends its buffer
-        // This ensures we get a clean slate with tmux's actual screen state
-        tab.terminal.clear();
-
-        // ttyd handshake - send terminal size, then tmux will send its screen buffer
-        tab.ws!.send(
-          textEncoder.encode(
-            JSON.stringify({
-              columns: tab.terminal!.cols,
-              rows: tab.terminal!.rows,
-            })
-          )
-        );
-
-        // Note: Each WebSocket connection to ttyd is already independent
-        // No need for tmux multiplexing - ttyd handles it automatically
-
-        // ttyd input framing - send keystrokes to the shared tmux session
-        // All connected browsers receive output directly from ttyd (no broadcast needed)
-        tab.terminal!.onData((data) => {
-          if (!tab.ws || tab.ws.readyState !== WebSocket.OPEN) return;
-          const payload = new Uint8Array(data.length * 3 + 1);
-          payload[0] = "0".charCodeAt(0);
-          const stats = textEncoder.encodeInto(data, payload.subarray(1));
-          tab.ws!.send(payload.subarray(0, (stats.written as number) + 1));
-        });
-
-        // Focus terminal after window selection completes
-        setTimeout(() => {
-          if (tab.terminal && activeTabId === tab.id) {
-            tab.terminal.focus();
-          }
-        }, 600);
-      };
-
-      tab.ws.onmessage = (e) => {
-        if (!tab.terminal) return;
-        if (dev && recvDebug < 5) {
-          console.log("[ttyd] onmessage typeof:", typeof e.data);
-        }
-
-        if (typeof e.data === "string") {
-          if (dev && recvDebug < 5) console.log("[ttyd] string frame:", e.data);
-          recvDebug++;
-          return;
-        }
-
-        const handle = (raw: ArrayBuffer) => {
-          const u8 = new Uint8Array(raw);
-          const cmd = String.fromCharCode(u8[0]);
-          const data = raw.slice(1);
-
-          if (dev && recvDebug < 5)
-            console.log("[ttyd] frame", cmd, "len", u8.byteLength);
-          recvDebug++;
-
-          switch (cmd) {
-            case CMD_OUTPUT:
-              // Write output to terminal - all browsers connected to same tmux session
-              // receive this directly from ttyd, no broadcast needed
-              (tab.terminal as any).write(new Uint8Array(data));
-              break;
-            case CMD_SET_TITLE:
-              const title = textDecoder.decode(data);
-              document.title = title;
-              // Update tab name from title if it's just a number (default name)
-              // But ignore generic titles like "tmux", "bash", "sh", etc.
-              if (/^\d+$/.test(tab.name)) {
-                const genericTitles = [
-                  "tmux",
-                  "bash",
-                  "sh",
-                  "zsh",
-                  "fish",
-                  "cmd",
-                  "powershell",
-                ];
-                const firstWord = title.split(" ")[0]?.toLowerCase() || "";
-                if (!genericTitles.includes(firstWord)) {
-                  // Extract a short name from title (first word or first 8 chars)
-                  const shortName =
-                    title.split(" ")[0]?.slice(0, 8) || tab.name;
-                  tab.name = shortName;
-                  tabs = [...tabs]; // Trigger reactivity
-                  saveTabsToStorage();
-                }
-              }
-              break;
-            case CMD_SET_PREFS:
-              // ignore
-              break;
-          }
-        };
-
-        if (e.data instanceof ArrayBuffer) return handle(e.data);
-        if (e.data instanceof Blob) {
-          e.data.arrayBuffer().then(handle);
-        }
-      };
-
-      tab.ws.onerror = (err) => {
-        console.error(`Tab ${tab.id} WebSocket error:`, err);
-        // Don't set error immediately - allow retry
-        // Only set error if we've tried multiple times
-        if (!tab.error) {
-          tab.error = "Connection error - retrying...";
-          tab.terminal?.writeln(
-            `\x1b[33mConnection error, retrying...\x1b[0m\r\n`
-          );
-        }
-      };
-
-      tab.ws.onclose = (event) => {
-        tab.connected = false;
-        // If closed unexpectedly (not a clean close), try to reconnect after a delay
-        if (event.code !== 1000 && !tab.error) {
-          console.log(
-            `Tab ${tab.id} WebSocket closed unexpectedly, code: ${event.code}`
-          );
-          // Don't auto-reconnect - let the user see the error or manually retry
-          if (tab.terminal) {
-            tab.terminal.writeln("\r\n\x1b[33mConnection closed\x1b[0m\r\n");
-          }
-        } else if (!tab.error && tab.terminal) {
-          tab.terminal.writeln("\r\n\x1b[33mConnection closed\x1b[0m\r\n");
-        }
-      };
-
-      // Handle window resize
-      const handleResize = () => {
-        if (!tab.fitAddon || !tab.terminal || !tab.ws) return;
-        tab.fitAddon.fit();
-        const { cols, rows } = tab.terminal;
-        if (tab.ws.readyState === WebSocket.OPEN) {
-          tab.ws.send(
-            textEncoder.encode(
-              CMD_RESIZE + JSON.stringify({ columns: cols, rows })
-            )
-          );
-        }
-      };
-      window.addEventListener("resize", handleResize);
-    } catch (err) {
-      tab.error =
-        err instanceof Error ? err.message : "Failed to initialize terminal";
-      console.error("Terminal initialization error:", err);
-    }
+  // Get iframe src for a tab
+  function getIframeSrc(tabId: string): string {
+    const password = browser
+      ? sessionStorage.getItem(`session:${sessionId}:password`)
+      : null;
+    const passwordParam = password
+      ? `&password=${encodeURIComponent(password)}`
+      : "";
+    return `/terminal/${sessionId}/tab?tab=${tabId}${passwordParam}`;
   }
 
   let infoInterval: ReturnType<typeof setInterval> | null = null;
@@ -710,20 +343,21 @@
       if (dev) {
         wsUrl = `ws://localhost:1337/session/${sessionId}/tabs/ws${passwordParam}`;
       } else {
-        wsUrl = `wss://${window.location.host}/api/session/${sessionId}/tabs/ws${passwordParam}`;
+        wsUrl = `wss://api.myfilepath.com/session/${sessionId}/tabs/ws${passwordParam}`;
       }
 
       tabStateWs = new WebSocket(wsUrl);
 
       tabStateWs.onopen = () => {
         console.log("Tab state WebSocket connected");
+        tabStateSyncAttempts = 0;
       };
 
       tabStateWs.onmessage = (e) => {
         try {
           const message = JSON.parse(e.data);
 
-          // Handle tab state updates (terminal sync happens via shared tmux session)
+          // Handle tab state updates
           const data = message as {
             tabs: Array<{ id: string; name: string }>;
             activeTab?: string;
@@ -743,23 +377,10 @@
               currentNames !== serverNames
             ) {
               // Server has different tabs - update from server
-              const existingTabs = new Map(tabs.map((t) => [t.id, t]));
-              tabs = data.tabs.map((stored) => {
-                const existing = existingTabs.get(stored.id);
-                if (existing) {
-                  return { ...existing, name: stored.name };
-                }
-                return {
-                  id: stored.id,
-                  name: stored.name,
-                  terminal: null,
-                  fitAddon: null,
-                  ws: null,
-                  container: null,
-                  connected: false,
-                  error: null,
-                };
-              });
+              tabs = data.tabs.map((stored) => ({
+                id: stored.id,
+                name: stored.name,
+              }));
             }
 
             // Update active tab if different
@@ -778,14 +399,28 @@
 
       tabStateWs.onerror = (err) => {
         console.error("Tab state WebSocket error:", err);
-        // Try to reconnect on error
-        setTimeout(connectTabStateSync, 1000);
+        tabStateSyncAttempts++;
+        if (tabStateSyncAttempts < MAX_TAB_STATE_SYNC_ATTEMPTS) {
+          const delay = Math.min(
+            1000 * Math.pow(2, tabStateSyncAttempts),
+            30000
+          );
+          setTimeout(connectTabStateSync, delay);
+        }
       };
 
       tabStateWs.onclose = (event) => {
         console.log("Tab state WebSocket closed", event.code, event.reason);
-        // Always reconnect (tab state sync is critical)
-        setTimeout(connectTabStateSync, 1000);
+        if (event.code !== 1000 && event.code !== 1001) {
+          tabStateSyncAttempts++;
+          if (tabStateSyncAttempts < MAX_TAB_STATE_SYNC_ATTEMPTS) {
+            const delay = Math.min(
+              1000 * Math.pow(2, tabStateSyncAttempts),
+              30000
+            );
+            setTimeout(connectTabStateSync, delay);
+          }
+        }
       };
     };
 
@@ -809,52 +444,16 @@
             name: string;
           }>;
 
-          // Create a map of existing tabs by ID to preserve terminal instances
-          const existingTabs = new Map(tabs.map((t) => [t.id, t]));
-
-          // Update tabs: merge stored data with existing terminal instances
-          const updatedTabs = storedTabs.map((stored) => {
-            const existing = existingTabs.get(stored.id);
-            if (existing) {
-              // Create new object to trigger reactivity if name changed
-              if (existing.name !== stored.name) {
-                return {
-                  ...existing,
-                  name: stored.name,
-                };
-              }
-              return existing;
-            }
-            // New tab - create without terminal instance
-            return {
-              id: stored.id,
-              name: stored.name,
-              terminal: null,
-              fitAddon: null,
-              ws: null,
-              container: null,
-              connected: false,
-              error: null,
-            };
-          });
-
-          // Always update to match storage (preserve order from storage)
-          // Storage is the source of truth for tab state across windows
           const currentTabIds = tabs.map((t) => t.id).join(",");
-          const newTabIds = updatedTabs.map((t) => t.id).join(",");
+          const newTabIds = storedTabs.map((t) => t.id).join(",");
           const currentNames = tabs.map((t) => `${t.id}:${t.name}`).join(",");
-          const newNames = updatedTabs
-            .map((t) => `${t.id}:${t.name}`)
-            .join(",");
+          const newNames = storedTabs.map((t) => `${t.id}:${t.name}`).join(",");
 
-          // Update if anything changed (order, IDs, or names)
           if (currentTabIds !== newTabIds || currentNames !== newNames) {
-            // Preserve exact order from storage - this is the source of truth
-            tabs = [...updatedTabs];
-            // If active tab was removed, switch to first tab
+            tabs = storedTabs.map((t) => ({ id: t.id, name: t.name }));
             if (activeTabId && !tabs.some((t) => t.id === activeTabId)) {
               activeTabId = tabs.length > 0 ? tabs[0].id : null;
-              saveTabsToStorage(); // Save the new active tab
+              saveTabsToStorage();
             }
           }
         } catch (err) {
@@ -863,7 +462,6 @@
       }
 
       if (e.key === `activeTab:${sessionId}` && e.newValue) {
-        // Only update if it's a valid tab ID
         if (
           tabs.some((t) => t.id === e.newValue) &&
           activeTabId !== e.newValue
@@ -884,45 +482,6 @@
         clearInterval(infoInterval);
       }
     };
-  });
-
-  // Initialize only the active tab when container is available
-  // This prevents creating multiple WebSocket connections on refresh
-  $effect(() => {
-    if (!browser) return;
-    const tab = activeTab;
-    // Only initialize the currently active tab, and only if it's not already initialized
-    if (
-      tab &&
-      tab.container &&
-      !tab.terminal &&
-      !tab.ws &&
-      activeTabId === tab.id
-    ) {
-      initializeTab(tab);
-    }
-  });
-
-  // Focus terminal when switching tabs
-  $effect(() => {
-    if (!browser) return;
-    const tab = activeTab;
-    if (tab && tab.terminal) {
-      // Small delay to ensure DOM is updated and terminal is visible
-      setTimeout(() => {
-        if (tab.terminal && activeTabId === tab.id) {
-          tab.terminal.focus();
-        }
-      }, 50);
-    }
-  });
-
-  onDestroy(() => {
-    if (!browser) return;
-    tabs.forEach((tab) => {
-      if (tab.ws) tab.ws.close();
-      if (tab.terminal) tab.terminal.dispose();
-    });
   });
 </script>
 
@@ -1047,7 +606,7 @@
       </button>
     </div>
 
-    <!-- Terminal Container -->
+    <!-- Terminal Container - now renders iframes -->
     <div class="flex-1 overflow-hidden p-4">
       {#each tabs as tab (tab.id)}
         <div
@@ -1056,19 +615,13 @@
             activeTabId === tab.id ? "block" : "hidden"
           )}
         >
-          {#if tab.error}
-            <div class="flex h-full items-center justify-center">
-              <div class="text-center">
-                <p class="mb-4 text-red-400">{tab.error}</p>
-              </div>
-            </div>
-          {:else}
-            <div
-              class="h-full rounded-lg overflow-hidden ring ring-gray-800 p-2"
-            >
-              <div bind:this={tab.container} class="h-full w-full"></div>
-            </div>
-          {/if}
+          <div class="h-full rounded-lg overflow-hidden ring ring-gray-800">
+            <iframe
+              src={getIframeSrc(tab.id)}
+              title="Terminal tab {tab.name}"
+              class="h-full w-full border-0"
+            ></iframe>
+          </div>
         </div>
       {/each}
     </div>
@@ -1123,9 +676,3 @@
     </div>
   {/if}
 </div>
-
-<style>
-  :global(.xterm) {
-    height: 100%;
-  }
-</style>

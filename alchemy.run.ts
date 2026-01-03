@@ -8,6 +8,8 @@ const project = await alchemy(projectName, {
 });
 
 // Sandbox Container (uses base cloudflare/sandbox image)
+// Using 'basic' instance type (1 GiB memory) instead of default 'lite' (256 MiB)
+// to support ttyd + bash + all pre-installed agents
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   scriptName: `${projectName}-worker`,
@@ -16,6 +18,7 @@ const Sandbox = await Container(`${projectName}-sandbox`, {
     context: process.cwd(),
     platform: "linux/amd64",
   },
+  instanceType: "basic", // 1 GiB memory, 1/4 vCPU, 4 GB disk
 });
 
 // SessionState Durable Object for tab state management
@@ -25,7 +28,7 @@ const SessionState = DurableObjectNamespace(`${projectName}-session-state`, {
   sqlite: true,
 });
 
-// TabState Durable Object for per-tab state management
+// TabState Durable Object for per-tab state
 const TabState = DurableObjectNamespace(`${projectName}-tab-state`, {
   className: "TabStateDO",
   scriptName: `${projectName}-worker`,

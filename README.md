@@ -16,7 +16,7 @@ Create, share, and collaborate on isolated terminal sessions with Claude, Codex,
 
 - **Frontend**: SvelteKit + Svelte 5 + Tailwind CSS
 - **Backend**: Cloudflare Workers (Hono) + Sandbox SDK
-- **Terminal**: xterm.js + ttyd (per-connection isolation)
+- **Terminal**: xterm.js + WebSocket proxy + ttyd (one instance per tab)
 - **State**: Durable Objects (SessionStateDO, TabStateDO)
 - **Deploy**: Alchemy (infrastructure as code)
 
@@ -105,7 +105,20 @@ Each WebSocket = independent bash shell
 
 ### Terminal Isolation
 
-Each WebSocket connection to ttyd gets its own shell instance. No tmux window management needed—ttyd handles per-connection isolation natively.
+**Critical Constraint**: Cloudflare Sandbox only allows connections to ports declared via `EXPOSE` in the Dockerfile. We have `EXPOSE 7681` - that's the only port available.
+
+**Architecture**: A Bun WebSocket proxy runs on port 7681 and routes connections to per-tab ttyd instances on internal ports (7682+). Each tab gets its own ttyd/bash process for complete independence, while multiple browsers connecting to the same tab share the same ttyd instance (cross-browser sync).
+
+```
+Browser → Worker → Proxy:7681 → ttyd:7682 (tab 1)
+                      ↓
+                   ttyd:7683 (tab 2)
+```
+
+**Why Previous Approaches Failed**:
+- Multiple ttyd instances on different ports (7682, 7683...) - Can't connect, only 7681 exposed
+- Single ttyd + tmux windows + server-side switching - ttyd already attached to one window; switching doesn't affect existing connections
+- Client-side tmux switching (Ctrl+b) - Unreliable, affects all connected clients
 
 ## Development
 
@@ -138,7 +151,7 @@ worker/
 
 ## Constraints
 
-- **Single port**: Cloudflare Sandbox exposes only 7681 (ttyd server)
+- **Single exposed port**: Cloudflare Sandbox only allows connections to ports declared via `EXPOSE` in the Dockerfile. We expose only port 7681. All other ports (7682+) are internal-only and cannot be accessed directly from the worker. This is why we use a WebSocket proxy on 7681 to route to internal ttyd instances.
 - **No auth yet**: URL-based sharing (password protection code ready)
 - **Session TTL**: 10 minutes (configurable)
 

@@ -23,28 +23,38 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({ origin: '*' }));
 
 // Password validation middleware
-async function requirePassword(c: any, next: () => Promise<Response>) {
+async function requirePassword(c: any, next: () => Promise<void>): Promise<Response> {
   // Skip WebSocket upgrades - they handle password via query params in the route handler
   if (c.req.header('Upgrade') === 'websocket') {
-    return next();
+    await next();
+    return c.res;
   }
-  
+
   const sessionId = c.req.param('id') || c.req.param('sessionId');
-  if (!sessionId) return next();
-  
+  if (!sessionId) {
+    await next();
+    return c.res;
+  }
+
   const sessionState = getSessionState(c.env, sessionId);
   const infoRes = await sessionState.fetch(new Request('http://do/info'));
-  if (!infoRes.ok) return next();
-  
+  if (!infoRes.ok) {
+    await next();
+    return c.res;
+  }
+
   const info = await infoRes.json() as SessionInfo;
-  if (!info.hasPassword) return next();  // No password required
-  
+  if (!info.hasPassword) {
+    await next();
+    return c.res;
+  }
+
   // Check for password (header for HTTP)
   const password = c.req.header('X-Session-Password');
   if (!password) {
     return c.json({ error: 'Password required', hasPassword: true }, 401);
   }
-  
+
   // Verify password via DO endpoint
   const verifyRes = await sessionState.fetch(new Request('http://do/verify-password', {
     method: 'POST',
@@ -54,8 +64,9 @@ async function requirePassword(c: any, next: () => Promise<Response>) {
   if (!verifyRes.ok) {
     return c.json({ error: 'Invalid password' }, 401);
   }
-  
-  return next();
+
+  await next();
+  return c.res;
 }
 
 // In-memory storage for session agents (in production, use Durable Object storage)
@@ -67,11 +78,6 @@ function getSessionState(env: Env, sessionId: string) {
   return env.SessionState.get(id);
 }
 
-// Helper to get TabState DO for a specific tab
-function getTabState(env: Env, sessionId: string, tabId: string) {
-  const id = env.TabState.idFromName(`${sessionId}:${tabId}`);
-  return env.TabState.get(id);
-}
 
 // Create session - store agents in SessionStateDO instead of URL params
 app.post('/session', async (c) => {
@@ -138,14 +144,10 @@ app.post('/session', async (c) => {
   }
 });
 
-// Track started sessions to avoid duplicate ttyd starts
+// Track started sandboxes to avoid duplicate ttyd starts
+// Key: sandboxId (sessionId:tabId for tabs, sessionId for main session)
 const startedSessions = new Set<string>();
 const startingSessions = new Map<string, Promise<void>>();
-// Track tmux windows for each tab (tabKey -> window index)
-const tabWindows = new Map<string, number>();
-let nextWindowIndex = 0;
-// Track ttyd startup promises per session to prevent race conditions
-const ttydStartPromises = new Map<string, Promise<void>>();
 
 async function ensureCmd(
   sandbox: ReturnType<typeof getSandbox>,
@@ -290,113 +292,68 @@ app.post('/terminal/:id/start', async (c) => {
 });
 
 // Start terminal tab (new endpoint with tabId)
-// Uses a single ttyd instance with tmux windows (Cloudflare Sandbox only exposes port 7681)
+// Each tab gets its own sandbox with direct ttyd (no tmux, no proxy)
+// Cross-browser sync happens because ttyd broadcasts to all connected WebSocket clients
 app.post('/terminal/:sessionId/:tabId/start', async (c) => {
   const sessionId = c.req.param('sessionId');
   const tabId = c.req.param('tabId');
-  console.log('Starting terminal tab for session:', sessionId, 'tab:', tabId);
+  const sandboxId = `${sessionId}:${tabId}`; // One sandbox per tab
+  console.log('Starting terminal tab:', sandboxId);
 
-  const tabKey = `${sessionId}:${tabId}`;
-
-  // Skip if this specific tab is already started
-  if (startedSessions.has(tabKey)) {
-    // Return stored window index
-    const tabState = getTabState(c.env, sessionId, tabId);
-    const stateRes = await tabState.fetch(new Request('http://do/state'));
-    const state = await stateRes.json();
-    return c.json({ ready: true, port: 7681, windowIndex: state.tmuxWindowIndex });
+  // Skip if already started
+  if (startedSessions.has(sandboxId)) {
+    return c.json({ ready: true, port: 7681 });
   }
-  const inflight = startingSessions.get(tabKey);
+  const inflight = startingSessions.get(sandboxId);
   if (inflight) {
     await inflight;
-    // Return stored window index
-    const tabState = getTabState(c.env, sessionId, tabId);
-    const stateRes = await tabState.fetch(new Request('http://do/state'));
-    const state = await stateRes.json();
-    return c.json({ ready: true, port: 7681, windowIndex: state.tmuxWindowIndex });
+    return c.json({ ready: true, port: 7681 });
   }
 
-  const sandbox = getSandbox(c.env.Sandbox, sessionId);
+  // Get sandbox for THIS TAB (not session)
+  const sandbox = getSandbox(c.env.Sandbox, sandboxId);
 
   try {
     const startPromise = (async () => {
-      // Ensure main session is initialized (agents installed, env vars set)
-      if (!startedSessions.has(sessionId)) {
-        const mainInflight = startingSessions.get(sessionId);
-        if (mainInflight) {
-          await mainInflight;
-        } else {
-          throw new Error('Main session must be initialized first. Call /terminal/:id/start before starting tabs.');
-        }
-      }
-
-      // Start single ttyd instance for the session if not already started
-      // Use tmux so all WebSocket connections share the same terminal session
-      const ttydKey = `${sessionId}:ttyd`;
-      if (!startedSessions.has(ttydKey)) {
-        let ttydStartPromise = ttydStartPromises.get(sessionId);
-        if (!ttydStartPromise) {
-          ttydStartPromise = (async () => {
-            // Create a detached tmux session first
-            await sandbox.exec('tmux new-session -d -s shared');
-            // Start ttyd attached to the tmux session
-            // All WebSocket connections will share this same tmux session
-            const ttyd = await sandbox.startProcess(
-              `ttyd -W -p 7681 tmux attach-session -t shared`
-            );
-            await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 20000 });
-            startedSessions.add(ttydKey);
-            ttydStartPromises.delete(sessionId);
-          })();
-          ttydStartPromises.set(sessionId, ttydStartPromise);
-        }
-        await ttydStartPromise;
-      }
-
-      // Allocate window index
-      // Query all existing tabs in this session to find max window index
+      // Get agents from session state
       const sessionState = getSessionState(c.env, sessionId);
-      const tabsRes = await sessionState.fetch(new Request('http://do/tabs'));
-      // ALL tabs in a session share the same tmux window (window 0)
-      // This ensures terminal output and history are synced across all tabs/browsers
-      const windowIndex = 0;
+      const infoRes = await sessionState.fetch(new Request('http://do/info'));
+      let agents: string[] = [];
+      if (infoRes.ok) {
+        const info = await infoRes.json() as { agents?: string[] };
+        agents = info.agents || [];
+      }
 
-      // NOTE: Window will be created by frontend via WebSocket tmux command
-      // (sandbox.exec runs in different context and can't access tmux socket)
-      console.log(`Allocated tmux window ${windowIndex} for tab ${tabId}`);
+      // Set env vars for this sandbox
+      const envVars: Record<string, string> = {
+        PATH: '/root/.bun/bin:/root/.cursor/bin:/root/.factory/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin',
+      };
+      if (agents.includes('claude') && !c.env.ANTHROPIC_API_KEY) {
+        throw new Error('Missing ANTHROPIC_API_KEY');
+      }
+      if (c.env.ANTHROPIC_API_KEY) envVars.ANTHROPIC_API_KEY = c.env.ANTHROPIC_API_KEY;
+      if (c.env.OPENAI_API_KEY) envVars.OPENAI_API_KEY = c.env.OPENAI_API_KEY;
+      if (c.env.CURSOR_API_KEY) envVars.CURSOR_API_KEY = c.env.CURSOR_API_KEY;
+      if (c.env.FACTORY_API_KEY) envVars.FACTORY_API_KEY = c.env.FACTORY_API_KEY;
+      await sandbox.setEnvVars(envVars);
 
-      // Store in TabStateDO
-      const tabState = getTabState(c.env, sessionId, tabId);
-      await tabState.fetch(new Request('http://do/state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tabId,
-          sessionId,
-          tmuxWindowIndex: windowIndex,
-          workingDir: '/root',
-          history: [],
-          customEnvVars: {},
-          createdAt: Date.now(),
-          lastActivity: Date.now(),
-        }),
-      }));
+      // Start ttyd directly on port 7681 (no tmux, no proxy)
+      // ttyd natively supports multiple WebSocket clients and broadcasts to all
+      console.log('Starting ttyd for sandbox:', sandboxId);
+      const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+      await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 20000 });
+      console.log('ttyd ready on port 7681 for sandbox:', sandboxId);
 
-      startedSessions.add(tabKey);
+      startedSessions.add(sandboxId);
     })();
 
-    startingSessions.set(tabKey, startPromise);
+    startingSessions.set(sandboxId, startPromise);
     await startPromise;
-    startingSessions.delete(tabKey);
+    startingSessions.delete(sandboxId);
 
-    // Get the window index from TabStateDO to return it
-    const tabState = getTabState(c.env, sessionId, tabId);
-    const stateRes = await tabState.fetch(new Request('http://do/state'));
-    const state = await stateRes.json() as { tmuxWindowIndex?: number };
-
-    return c.json({ ready: true, port: 7681, windowIndex: state.tmuxWindowIndex });
+    return c.json({ ready: true, port: 7681 });
   } catch (error) {
-    startingSessions.delete(tabKey);
+    startingSessions.delete(sandboxId);
     console.error('Terminal tab start error:', error);
     return c.json({ error: String(error) }, 500);
   }
@@ -436,7 +393,8 @@ app.get('/terminal/:id/ws', async (c) => {
 });
 
 // WebSocket terminal connection for specific tab
-// All tabs use the same ttyd instance on port 7681, but connect to different tmux windows
+// Each tab has its own sandbox with ttyd on port 7681
+// ttyd natively broadcasts to all connected WebSocket clients (cross-browser sync)
 app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
   if (upgrade?.toLowerCase() !== 'websocket') {
@@ -445,25 +403,35 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
 
   const sessionId = c.req.param('sessionId');
   const tabId = c.req.param('tabId');
-  console.log('WS connecting to sandbox for session:', sessionId, 'tab:', tabId);
-  console.log('WS subprotocol header:', c.req.header('Sec-WebSocket-Protocol'));
-  const sandbox = getSandbox(c.env.Sandbox, sessionId);
+  const sandboxId = `${sessionId}:${tabId}`; // Same ID as used in /start
+  console.log('WS connecting to sandbox:', sandboxId);
 
-  try {
-    // All tabs use port 7681 (single ttyd instance)
-    const port = 7681;
-    const tabKey = `${sessionId}:${tabId}`;
-
-    // Ensure the tab's tmux window exists
-    if (!startedSessions.has(tabKey)) {
-      // Tab window should have been created by /start endpoint, but handle race condition
-      const windowIndex = tabWindows.get(tabKey);
-      if (windowIndex === undefined) {
-        return c.json({ error: 'Tab not initialized. Call /start first.' }, 400);
+  // Verify password if session has one
+  const sessionState = getSessionState(c.env, sessionId);
+  const infoRes = await sessionState.fetch(new Request('http://do/info'));
+  if (infoRes.ok) {
+    const info = await infoRes.json() as SessionInfo;
+    if (info.hasPassword) {
+      const password = c.req.query('password');
+      if (!password) {
+        return c.json({ error: 'Password required', hasPassword: true }, 401);
+      }
+      const verifyRes = await sessionState.fetch(new Request('http://do/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      }));
+      if (!verifyRes.ok) {
+        return c.json({ error: 'Invalid password' }, 401);
       }
     }
+  }
 
-    // Rewrite URL to just /ws for ttyd
+  // Get sandbox for THIS TAB
+  const sandbox = getSandbox(c.env.Sandbox, sandboxId);
+
+  try {
+    // Rewrite URL to /ws for ttyd
     const originalUrl = new URL(c.req.url);
     const ttydUrl = new URL('/ws' + originalUrl.search, originalUrl.origin);
     const wsRequest = new Request(ttydUrl.toString(), {
@@ -471,8 +439,8 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
       headers: c.req.raw.headers,
     });
 
-    console.log('Calling wsConnect with URL:', ttydUrl.toString(), 'port:', port);
-    const response = await sandbox.wsConnect(wsRequest, port);
+    console.log('Calling wsConnect for sandbox:', sandboxId, 'port: 7681');
+    const response = await sandbox.wsConnect(wsRequest, 7681);
     console.log('wsConnect response status:', response.status);
     return response;
   } catch (error) {
@@ -524,7 +492,7 @@ app.get('/session/:id/tabs/ws', async (c) => {
 
   const sessionId = c.req.param('id');
   const sessionState = getSessionState(c.env, sessionId);
-  
+
   // Check if password is required (but don't block - let DO handle it)
   // We verify password here but still forward the upgrade request
   // The DO will handle the WebSocket connection regardless
@@ -550,7 +518,7 @@ app.get('/session/:id/tabs/ws', async (c) => {
       }
     }
   }
-  
+
   // Forward the WebSocket upgrade to the DO (with original request including query params)
   return sessionState.fetch(c.req.raw);
 });
