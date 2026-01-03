@@ -22,7 +22,7 @@ const project = await alchemy(projectName, {
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   scriptName: `${projectName}-worker`,
-  adopt: true, // REQUIRED - adopt existing container application instead of creating new one
+  adopt: true,
   build: {
     dockerfile: "Dockerfile",
     context: process.cwd(),
