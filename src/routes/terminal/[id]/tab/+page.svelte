@@ -20,6 +20,10 @@
   let connected = $state(false);
   let error = $state<string | null>(null);
   let resizeHandler: (() => void) | null = null;
+  let isRetrying = $state(false);
+  let lastRetryTime = $state(0);
+  const RETRY_COOLDOWN = 10000; // 10 seconds between retries
+  const MAX_RETRIES = 3; // Max 3 retry attempts
 
   const textEncoder = new TextEncoder();
 
@@ -35,6 +39,7 @@
   async function initializeTerminal() {
     if (!browser || !sessionId || !tabId || !container) return;
     if (terminal && connected) return;
+    if (isRetrying) return; // Already retrying, don't duplicate
 
     // Clean up existing
     if (ws) {
@@ -154,50 +159,38 @@
         }
       };
 
-      ws.onerror = async () => {
+      ws.onerror = () => {
         error = "Connection error";
         connected = false;
-
-        // Try to wake container
-        try {
-          const wakeRes = await fetch(
-            getApiUrl(`/terminal/${sessionId}/${tabId}/wake`),
-            {
-              method: "POST",
-            }
-          );
-          if (wakeRes.ok && !connected) {
-            setTimeout(() => {
-              if (!connected) {
-                initializeTerminal();
-              }
-            }, 1000);
-          }
-        } catch (wakeErr) {
-          console.error("Wake attempt failed:", wakeErr);
-        }
+        // Don't retry on error - let onclose handle it
       };
 
-      ws.onclose = async (event) => {
+      ws.onclose = (event) => {
         connected = false;
-        if (event.code !== 1000 && event.code !== 1001) {
-          error = "Connection closed";
 
-          // Try to wake container on unexpected close
-          try {
-            const wakeRes = await fetch(
-              getApiUrl(`/terminal/${sessionId}/${tabId}/wake`),
-              {
-                method: "POST",
-              }
-            );
-            if (wakeRes.ok && !connected) {
-              setTimeout(() => initializeTerminal(), 1000);
-            }
-          } catch (wakeErr) {
-            // Ignore wake errors on close
-          }
+        // Normal close codes - don't retry
+        if (event.code === 1000 || event.code === 1001) {
+          return;
         }
+
+        error = "Connection closed";
+
+        // Prevent duplicate retries
+        const now = Date.now();
+        if (isRetrying || now - lastRetryTime < RETRY_COOLDOWN) {
+          return;
+        }
+
+        // Only retry once, with long delay
+        isRetrying = true;
+        lastRetryTime = now;
+
+        setTimeout(() => {
+          isRetrying = false;
+          if (!connected) {
+            initializeTerminal();
+          }
+        }, 5000); // 5 second delay
       };
 
       // Helper to send resize message to ttyd (must match initial handshake format)
@@ -245,14 +238,15 @@
         container.offsetHeight > 0
       ) {
         initializeTerminal();
-      } else if (attempt < 20) {
-        setTimeout(() => initWithRetry(attempt + 1), 100);
+      } else if (attempt < 10) {
+        // Reduced from 20 to 10
+        setTimeout(() => initWithRetry(attempt + 1), 200); // Increased from 100ms to 200ms
       } else {
         error = "Failed to initialize terminal container";
       }
     };
 
-    setTimeout(() => initWithRetry(), 50);
+    setTimeout(() => initWithRetry(), 100); // Increased from 50ms to 100ms
   });
 
   onDestroy(() => {

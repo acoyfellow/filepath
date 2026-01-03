@@ -16,7 +16,7 @@ export class TabBroadcastDO extends DurableObject {
     if (request.headers.get('Upgrade') === 'websocket') {
       return this.handleWebSocket(request);
     }
-    
+
     return new Response('Not found', { status: 404 });
   }
 
@@ -108,7 +108,7 @@ export class TabBroadcastDO extends DurableObject {
       });
 
       console.log('TabBroadcast: Connecting to ttyd for sandbox:', sandboxId);
-      
+
       let ttydResponse;
       try {
         ttydResponse = await sandbox.wsConnect(wsRequest, 7681);

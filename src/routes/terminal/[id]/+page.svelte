@@ -28,7 +28,8 @@
   let copied = $state(false);
   let tabStateWs: WebSocket | null = null;
   let tabStateSyncAttempts = 0;
-  const MAX_TAB_STATE_SYNC_ATTEMPTS = 10;
+  let tabStateRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+  const MAX_TAB_STATE_SYNC_ATTEMPTS = 3; // Reduced from 10 to 3
 
   const sessionId = $derived(page.params.id);
 
@@ -306,8 +307,8 @@
         showPasswordPrompt = true;
       }
     });
-    // Refresh session info every 30 seconds to sync with server (age calculated locally)
-    infoInterval = setInterval(loadSessionInfo, 30000);
+    // Refresh session info every 60 seconds to sync with server (age calculated locally)
+    infoInterval = setInterval(loadSessionInfo, 60000); // Reduced frequency from 30s to 60s
 
     // Restore tabs from server (shared across browsers)
     (async () => {
@@ -397,27 +398,29 @@
 
       tabStateWs.onerror = (err) => {
         console.error("Tab state WebSocket error:", err);
-        tabStateSyncAttempts++;
-        if (tabStateSyncAttempts < MAX_TAB_STATE_SYNC_ATTEMPTS) {
-          const delay = Math.min(
-            1000 * Math.pow(2, tabStateSyncAttempts),
-            30000
-          );
-          setTimeout(connectTabStateSync, delay);
-        }
+        // Don't retry on error - let onclose handle it
       };
 
       tabStateWs.onclose = (event) => {
         console.log("Tab state WebSocket closed", event.code, event.reason);
-        if (event.code !== 1000 && event.code !== 1001) {
-          tabStateSyncAttempts++;
-          if (tabStateSyncAttempts < MAX_TAB_STATE_SYNC_ATTEMPTS) {
-            const delay = Math.min(
-              1000 * Math.pow(2, tabStateSyncAttempts),
-              30000
-            );
-            setTimeout(connectTabStateSync, delay);
-          }
+
+        // Normal close codes - don't retry
+        if (event.code === 1000 || event.code === 1001) {
+          return;
+        }
+
+        // Prevent duplicate retries
+        if (tabStateRetryTimeout) {
+          clearTimeout(tabStateRetryTimeout);
+        }
+
+        tabStateSyncAttempts++;
+        if (tabStateSyncAttempts < MAX_TAB_STATE_SYNC_ATTEMPTS) {
+          const delay = Math.min(
+            5000 * Math.pow(2, tabStateSyncAttempts), // Start at 5s instead of 1s
+            60000 // Max 60s instead of 30s
+          );
+          tabStateRetryTimeout = setTimeout(connectTabStateSync, delay);
         }
       };
     };
@@ -478,6 +481,9 @@
       }
       if (infoInterval) {
         clearInterval(infoInterval);
+      }
+      if (tabStateRetryTimeout) {
+        clearTimeout(tabStateRetryTimeout);
       }
     };
   });
