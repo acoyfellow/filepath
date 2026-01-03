@@ -59,7 +59,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
   domains: ["api.myfilepath.com"],
-  routes: ["api.myfilepath.com/*"],
+  routes: [{ pattern: "api.myfilepath.com/*", adopt: true }],
   adopt: true,
   url: false,
   apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
@@ -81,7 +81,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
   domains: ["myfilepath.com"],
-  routes: ["myfilepath.com/*"],
+  routes: [{ pattern: "myfilepath.com/*", adopt: true }],
   bindings: {
     WORKER
   },
