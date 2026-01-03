@@ -343,7 +343,7 @@
       if (dev) {
         wsUrl = `ws://localhost:1337/session/${sessionId}/tabs/ws${passwordParam}`;
       } else {
-        wsUrl = `wss://api.myfilepath.com/session/${sessionId}/tabs/ws${passwordParam}`;
+        wsUrl = `wss://${window.location.host}/api/session/${sessionId}/tabs/ws${passwordParam}`;
       }
 
       tabStateWs = new WebSocket(wsUrl);

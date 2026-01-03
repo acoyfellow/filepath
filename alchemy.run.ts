@@ -1,7 +1,7 @@
 import alchemy from "alchemy";
 import { SvelteKit, Worker, Container, DurableObjectNamespace } from "alchemy/cloudflare";
 
-const projectName = "filepath";
+const projectName = "myfilepath";
 
 const project = await alchemy(projectName, {
   password: process.env.ALCHEMY_PASSWORD || "default-password"
@@ -13,6 +13,7 @@ const project = await alchemy(projectName, {
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   scriptName: `${projectName}-worker`,
+  adopt: true,
   build: {
     dockerfile: "Dockerfile",
     context: process.cwd(),
@@ -39,8 +40,10 @@ const TabState = DurableObjectNamespace(`${projectName}-tab-state`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
-  domains: ["api.myfilepath.com"],
-  adopt: true,
+  // domains: ["api.myfilepath.com"],
+  routes: ["api.myfilepath.com/*"],
+  adopt: false,
+  url: false,
   bindings: {
     Sandbox,
     SessionState,
@@ -49,10 +52,6 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
     CURSOR_API_KEY: process.env.CURSOR_API_KEY || "",
     FACTORY_API_KEY: process.env.FACTORY_API_KEY || "",
-  },
-  url: false,
-  env: {
-
   }
 });
 
@@ -60,11 +59,12 @@ export const WORKER = await Worker(`${projectName}-worker`, {
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
   domains: ["myfilepath.com"],
+  routes: ["myfilepath.com/*"],
   bindings: {
     WORKER
   },
-  url: true,
-  adopt: true,
+  url: false,
+  adopt: false,
 });
 
 await project.finalize();

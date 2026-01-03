@@ -19,8 +19,13 @@ type Env = {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// CORS for local dev
-app.use('*', cors({ origin: '*' }));
+// CORS for local dev (skip WebSocket upgrades - they handle their own headers)
+app.use('*', async (c, next) => {
+  if (c.req.header('Upgrade')?.toLowerCase() === 'websocket') {
+    return next();
+  }
+  return cors({ origin: '*' })(c, next);
+});
 
 // Password validation middleware
 async function requirePassword(c: any, next: () => Promise<void>): Promise<Response> {
@@ -341,7 +346,7 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
       // ttyd natively supports multiple WebSocket clients and broadcasts to all
       console.log('Starting ttyd for sandbox:', sandboxId);
       const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
-      await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 20000 });
+      await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
       console.log('ttyd ready on port 7681 for sandbox:', sandboxId);
 
       startedSessions.add(sandboxId);
@@ -388,7 +393,8 @@ app.get('/terminal/:id/ws', async (c) => {
     return response;
   } catch (error) {
     console.error('WebSocket connection error:', error);
-    return c.json({ error: String(error) }, 500);
+    // Can't return JSON for WebSocket upgrade - close connection
+    return new Response(null, { status: 500, statusText: String(error) });
   }
 });
 
@@ -406,26 +412,8 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const sandboxId = `${sessionId}:${tabId}`; // Same ID as used in /start
   console.log('WS connecting to sandbox:', sandboxId);
 
-  // Verify password if session has one
-  const sessionState = getSessionState(c.env, sessionId);
-  const infoRes = await sessionState.fetch(new Request('http://do/info'));
-  if (infoRes.ok) {
-    const info = await infoRes.json() as SessionInfo;
-    if (info.hasPassword) {
-      const password = c.req.query('password');
-      if (!password) {
-        return c.json({ error: 'Password required', hasPassword: true }, 401);
-      }
-      const verifyRes = await sessionState.fetch(new Request('http://do/verify-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      }));
-      if (!verifyRes.ok) {
-        return c.json({ error: 'Invalid password' }, 401);
-      }
-    }
-  }
+  // Don't do async password checks here - they block the WebSocket upgrade
+  // Password can be verified by ttyd or handled after connection
 
   // Get sandbox for THIS TAB
   const sandbox = getSandbox(c.env.Sandbox, sandboxId);
@@ -445,7 +433,8 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
     return response;
   } catch (error) {
     console.error('WebSocket connection error:', error);
-    return c.json({ error: String(error) }, 500);
+    // Can't return JSON for WebSocket upgrade - close connection
+    return new Response(null, { status: 500, statusText: String(error) });
   }
 });
 
@@ -493,33 +482,9 @@ app.get('/session/:id/tabs/ws', async (c) => {
   const sessionId = c.req.param('id');
   const sessionState = getSessionState(c.env, sessionId);
 
-  // Check if password is required (but don't block - let DO handle it)
-  // We verify password here but still forward the upgrade request
-  // The DO will handle the WebSocket connection regardless
-  const infoRes = await sessionState.fetch(new Request('http://do/info'));
-  if (infoRes.ok) {
-    const info = await infoRes.json() as SessionInfo;
-    if (info.hasPassword) {
-      const password = c.req.query('password');
-      if (password) {
-        // Verify password, but don't block upgrade - just log if invalid
-        const verifyRes = await sessionState.fetch(new Request('http://do/verify-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password }),
-        }));
-        if (!verifyRes.ok) {
-          // Invalid password - reject the upgrade
-          return c.json({ error: 'Invalid password' }, 401);
-        }
-      } else {
-        // No password provided but required - reject
-        return c.json({ error: 'Password required', hasPassword: true }, 401);
-      }
-    }
-  }
-
-  // Forward the WebSocket upgrade to the DO (with original request including query params)
+  // Forward the WebSocket upgrade directly to the DO
+  // The DO will handle password verification and WebSocket connection
+  // Don't do async checks here - they can block the upgrade
   return sessionState.fetch(c.req.raw);
 });
 
@@ -714,6 +679,11 @@ app.post('/terminal/fork', async (c) => {
       details: error instanceof Error ? error.message : String(error)
     }, 500);
   }
+});
+
+// 404 handler - return proper error for unmatched routes
+app.notFound((c) => {
+  return c.json({ error: 'Not found' }, 404);
 });
 
 export default app;

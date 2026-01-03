@@ -72,19 +72,7 @@
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (password) headers["X-Session-Password"] = password;
 
-      // First, ensure main session is initialized
-      const mainStartRes = await fetch(`/api/terminal/${sessionId}/start`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ agents: [] }), // Agents already set on session creation
-      });
-
-      if (!mainStartRes.ok) {
-        const data = await mainStartRes.json();
-        throw new Error(data.error || "Failed to initialize session");
-      }
-
-      // Then start this specific tab
+      // Start this specific tab's sandbox
       const tabStartRes = await fetch(`/api/terminal/${sessionId}/${tabId}/start`, {
         method: "POST",
         headers,
@@ -96,11 +84,11 @@
         throw new Error(data.error || "Failed to start tab");
       }
 
-      // Connect WebSocket directly to ttyd (no proxy!)
+      // Connect WebSocket through SvelteKit (uses service binding to Worker)
       const passwordParam = password ? `?password=${encodeURIComponent(password)}` : "";
       const wsUrl = dev
         ? `ws://localhost:1337/terminal/${sessionId}/${tabId}/ws${passwordParam}`
-        : `wss://api.myfilepath.com/terminal/${sessionId}/${tabId}/ws${passwordParam}`;
+        : `wss://${window.location.host}/api/terminal/${sessionId}/${tabId}/ws${passwordParam}`;
 
       ws = new WebSocket(wsUrl, ["tty"]);
       ws.binaryType = "arraybuffer";
@@ -113,11 +101,11 @@
         // Clear loading message
         terminal.clear();
 
-        // ttyd handshake - send terminal size
-        ws.send(JSON.stringify({
+        // ttyd handshake - send terminal size (must be encoded)
+        ws.send(textEncoder.encode(JSON.stringify({
           columns: terminal.cols,
           rows: terminal.rows,
-        }));
+        })));
 
         // Handle input
         terminal.onData((data) => {
