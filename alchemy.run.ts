@@ -1,10 +1,19 @@
 import alchemy from "alchemy";
 import { SvelteKit, Worker, Container, DurableObjectNamespace } from "alchemy/cloudflare";
 
+import { CloudflareStateStore } from "alchemy/state";
+
 const projectName = "filepath";
 
 const project = await alchemy(projectName, {
-  password: process.env.ALCHEMY_PASSWORD || "default-password"
+  password: process.env.ALCHEMY_PASSWORD || "default-password",
+  stateStore: !process.env.CI ? undefined : (scope) => new CloudflareStateStore(scope, {
+    scriptName: `${projectName}-state`,
+    email: process.env.CLOUDFLARE_EMAIL || "default-email",
+    apiToken: alchemy.secret(process.env.CLOUDFLARE_API_TOKEN || "default-api-key"),
+    stateToken: alchemy.secret(process.env.ALCHEMY_STATE_TOKEN || "default-state-token"),
+    forceUpdate: true
+  })
 });
 
 // Sandbox Container (uses base cloudflare/sandbox image)
