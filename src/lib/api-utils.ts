@@ -23,28 +23,6 @@ export async function callWorker(
     return platform!.env!.WORKER.fetch(new Request(url));
   }
 
-  // WebSocket upgrades: don't touch the body, just forward headers
-  const isWebSocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
-  // if (isWebSocket) {
-  //   // Preserve search params from original URL
-  //   const originalUrl = new URL(request.url);
-  //   const workerUrl = url + originalUrl.search;
-  //   const newRequest = new Request(workerUrl, {
-  //     method: request.method,
-  //     headers: request.headers,
-  //   });
-  //   if (dev) return fetch(newRequest);
-  //   return platform!.env!.WORKER.fetch(newRequest);
-  // }
-
-  // // Regular requests: buffer body to avoid stream consumption issues
-  // const body = request.body ? await request.clone().arrayBuffer() : null;
-  // const newRequest = new Request(url, {
-  //   method: request.method,
-  //   headers: request.headers,
-  //   body,
-  // });
-
   if (dev) return fetch(request);
   return platform!.env!.WORKER.fetch(request);
 }

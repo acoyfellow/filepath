@@ -21,11 +21,25 @@ type Env = {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// CORS for local dev (skip WebSocket upgrades - they handle their own headers)
+// CORS middleware - handle OPTIONS preflight requests
 app.use('*', async (c, next) => {
   if (c.req.header('Upgrade')?.toLowerCase() === 'websocket') {
     return next();
   }
+
+  // Handle OPTIONS preflight requests
+  if (c.req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-Session-Password',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
+  }
+
   return cors({ origin: '*' })(c, next);
 });
 
