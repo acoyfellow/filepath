@@ -21,6 +21,12 @@ type Env = {
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Log all incoming requests for debugging
+app.use('*', async (c, next) => {
+  console.log('[Worker] Incoming request:', c.req.method, c.req.path);
+  await next();
+});
+
 // CORS middleware - handle OPTIONS preflight requests
 app.use('*', async (c, next) => {
   if (c.req.header('Upgrade')?.toLowerCase() === 'websocket') {
@@ -60,6 +66,7 @@ async function requirePassword(c: any, next: () => Promise<void>): Promise<Respo
   const sessionState = getSessionState(c.env, sessionId);
   const infoRes = await sessionState.fetch(new Request('http://do/info'));
   if (!infoRes.ok) {
+    // If session doesn't exist (404), let the route handler deal with it
     await next();
     return c.res;
   }
@@ -549,19 +556,24 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
 // Get session tab state
 app.get('/session/:id/tabs', async (c) => {
   const sessionId = c.req.param('id');
+  console.log('[Worker] GET /session/:id/tabs called:', sessionId);
   const sessionState = getSessionState(c.env, sessionId);
   // Forward to DO with just /tabs path
-  return sessionState.fetch(new Request(new URL('/tabs', c.req.url).toString(), {
+  const res = await sessionState.fetch(new Request(new URL('/tabs', c.req.url).toString(), {
     method: 'GET',
     headers: c.req.raw.headers,
   }));
+  console.log('[Worker] SessionStateDO /tabs response:', res.status, res.statusText);
+  return res;
 });
 
 // Get session info (age, TTL, agents)
 app.get('/session/:id/info', async (c) => {
   const sessionId = c.req.param('id');
+  console.log('[Worker] GET /session/:id/info called:', sessionId);
   const sessionState = getSessionState(c.env, sessionId);
   const res = await sessionState.fetch(new Request('http://do/info'));
+  console.log('[Worker] SessionStateDO /info response:', res.status, res.statusText);
   if (!res.ok) return res;
   const info = await res.json() as SessionInfo;
   return c.json({ ...info, sessionId: sessionId as SessionId });
@@ -791,7 +803,8 @@ app.post('/terminal/fork', async (c) => {
 
 // 404 handler - return proper error for unmatched routes
 app.notFound((c) => {
-  return c.json({ error: 'Not found' }, 404);
+  console.log('[Worker] 404 Not Found:', c.req.method, c.req.path);
+  return c.json({ error: 'Not found', path: c.req.path, method: c.req.method }, 404);
 });
 
 export default app;
