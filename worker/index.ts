@@ -359,41 +359,8 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
       // Start ttyd directly on port 7681 (no tmux, no proxy)
       // ttyd natively supports multiple WebSocket clients and broadcasts to all
       console.log('[Worker] Starting ttyd for sandbox:', sandboxId);
-      let ttyd;
-      let retries = 0;
-      const maxRetries = 3;
-
-      while (retries < maxRetries) {
-        try {
-          ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
-          console.log('[Worker] ttyd process started, waiting for port 7681...');
-          break; // Success, exit retry loop
-        } catch (startError) {
-          retries++;
-          const errorMsg = startError instanceof Error ? startError.message : String(startError);
-          console.error(`[Worker] Failed to start ttyd process (attempt ${retries}/${maxRetries}):`, {
-            error: startError,
-            message: errorMsg,
-            sandboxId
-          });
-
-          // If container is hibernating/shutting down, wait and retry
-          if (errorMsg.includes('500') || errorMsg.includes('Container') || errorMsg.includes('hibernate') || errorMsg.includes('sleep')) {
-            if (retries < maxRetries) {
-              console.log(`[Worker] Container may be hibernating, waiting 2s before retry ${retries + 1}...`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              continue;
-            }
-          }
-
-          // If we've exhausted retries or it's not a hibernation error, throw
-          throw startError;
-        }
-      }
-
-      if (!ttyd) {
-        throw new Error('Failed to start ttyd process after retries');
-      }
+      const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+      console.log('[Worker] ttyd process started, waiting for port 7681...');
 
       try {
         await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
