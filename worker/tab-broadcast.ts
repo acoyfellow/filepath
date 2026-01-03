@@ -88,50 +88,42 @@ export class TabBroadcastDO extends DurableObject {
       }
     });
 
-    // Return WebSocket response IMMEDIATELY - don't await async work
-    console.log('[TabBroadcastDO] Returning WebSocket response (101) immediately');
-    const response = new Response(null, {
+    // Connect to ttyd BEFORE returning 101 - like ironalarm example
+    // This ensures ttyd is ready to send data immediately
+    try {
+      if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
+        console.log('[TabBroadcastDO] Connecting to ttyd synchronously before returning 101');
+        await this.connectTtyd(request, sandboxId);
+        console.log('[TabBroadcastDO] ttyd connected, readyState:', this.ttyd?.readyState);
+      } else {
+        console.log('[TabBroadcastDO] ttyd already connected');
+        // Flush any queued messages
+        if (this.messageQueue.length > 0) {
+          console.log(`[TabBroadcastDO] Flushing ${this.messageQueue.length} queued messages`);
+          for (const msg of this.messageQueue) {
+            try {
+              this.ttyd.send(msg);
+            } catch (err) {
+              console.error('[TabBroadcastDO] Error sending queued message:', err);
+            }
+          }
+          this.messageQueue = [];
+        }
+      }
+
+      // Send scrollback immediately (like ironalarm sends initial state)
+      await this.sendScrollbackToClient(server, sandboxId);
+    } catch (error) {
+      console.error('[TabBroadcastDO] Error connecting to ttyd before 101:', error);
+      // Still return 101 - connection is established, ttyd can connect later
+    }
+
+    // Return WebSocket response AFTER ttyd is connected (like ironalarm pattern)
+    console.log('[TabBroadcastDO] Returning WebSocket response (101)');
+    return new Response(null, {
       status: 101,
       webSocket: client,
     });
-
-    // Do async work AFTER returning the response (non-blocking)
-    // Durable Objects automatically stay active during async work
-    (async () => {
-      try {
-        // Connect to ttyd FIRST - client expects data immediately
-        if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
-          console.log('[TabBroadcastDO] Connecting to ttyd for:', sandboxId);
-          await this.connectTtyd(request, sandboxId);
-          console.log('[TabBroadcastDO] ttyd connection state:', this.ttyd?.readyState);
-        } else {
-          console.log('[TabBroadcastDO] ttyd already connected');
-          // Flush any queued messages (e.g., from this new client)
-          if (this.messageQueue.length > 0) {
-            console.log(`[TabBroadcastDO] Flushing ${this.messageQueue.length} queued messages to existing ttyd connection`);
-            for (const msg of this.messageQueue) {
-              try {
-                this.ttyd.send(msg);
-              } catch (err) {
-                console.error('[TabBroadcastDO] Error sending queued message to ttyd:', err);
-              }
-            }
-            this.messageQueue = [];
-          }
-        }
-
-        // Send scrollback AFTER ttyd is connected and sending data
-        // This ensures ttyd is ready and the client is receiving data
-        await this.sendScrollbackToClient(server, sandboxId);
-      } catch (error) {
-        console.error('[TabBroadcastDO] Error in async setup:', error);
-        // Don't close the connection - log the error but keep it open
-        // The connection is already established, closing it causes 1006 errors
-        // Errors in setup (like scrollback or ttyd connection) shouldn't kill the client connection
-      }
-    })();
-
-    return response;
   }
 
   private async connectTtyd(request: Request, sandboxId: string): Promise<void> {
