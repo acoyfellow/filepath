@@ -1,4 +1,4 @@
-import { DurableObject, waitUntil } from 'cloudflare:workers';
+import { DurableObject } from 'cloudflare:workers';
 import { getSandbox, Sandbox as SandboxDO } from '@cloudflare/sandbox';
 
 interface TabScrollback {
@@ -22,8 +22,17 @@ export class TabBroadcastDO extends DurableObject {
 
   private async handleWebSocket(request: Request): Promise<Response> {
     console.log('[TabBroadcastDO] handleWebSocket called:', { url: request.url });
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
+
+    let client: WebSocket;
+    let server: WebSocket;
+
+    try {
+      const pair = new WebSocketPair();
+      [client, server] = Object.values(pair);
+    } catch (error) {
+      console.error('[TabBroadcastDO] Failed to create WebSocketPair:', error);
+      return new Response('Failed to create WebSocket', { status: 500 });
+    }
 
     // Extract sandboxId from request URL (format: /terminal/:sessionId/:tabId/ws)
     const url = new URL(request.url);
@@ -35,10 +44,15 @@ export class TabBroadcastDO extends DurableObject {
     console.log('[TabBroadcastDO] Extracted:', { sessionId, tabId, sandboxId, pathname: url.pathname });
 
     // Accept WebSocket and set up handlers immediately
-    console.log('[TabBroadcastDO] Accepting WebSocket connection');
-    server.accept();
-    this.clients.add(server);
-    console.log('[TabBroadcastDO] WebSocket accepted, clients:', this.clients.size);
+    try {
+      console.log('[TabBroadcastDO] Accepting WebSocket connection');
+      server.accept();
+      this.clients.add(server);
+      console.log('[TabBroadcastDO] WebSocket accepted, clients:', this.clients.size);
+    } catch (error) {
+      console.error('[TabBroadcastDO] Failed to accept WebSocket:', error);
+      return new Response('Failed to accept WebSocket', { status: 500 });
+    }
 
     // Set up message forwarding and cleanup handlers
     server.addEventListener('message', (event) => {
@@ -72,9 +86,9 @@ export class TabBroadcastDO extends DurableObject {
       webSocket: client,
     });
 
-    // Do async work AFTER returning the response using waitUntil
-    // This ensures the work completes but doesn't block the response
-    const setupPromise = (async () => {
+    // Do async work AFTER returning the response (non-blocking)
+    // Durable Objects automatically stay active during async work
+    (async () => {
       try {
         // Restore scrollback to new client before connecting to ttyd
         await this.sendScrollbackToClient(server, sandboxId);
@@ -97,9 +111,6 @@ export class TabBroadcastDO extends DurableObject {
         }
       }
     })();
-
-    // Use waitUntil to ensure async work completes without blocking response
-    waitUntil(setupPromise);
 
     return response;
   }

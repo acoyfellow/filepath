@@ -206,9 +206,11 @@ async function ensureCmd(
   }
 }
 
-// Apply password middleware to protected routes (skip WebSocket upgrades)
+// Apply password middleware to protected routes
+// NOTE: WebSocket routes handle password validation themselves (via query params)
+// Do NOT apply middleware to WebSocket routes - it breaks the upgrade response
 app.use('/terminal/:id/start', requirePassword);
-app.use('/terminal/:sessionId/:tabId/ws', requirePassword);
+// app.use('/terminal/:sessionId/:tabId/ws', requirePassword); // WebSocket - no middleware
 app.use('/session/:id/info', requirePassword);
 app.use('/session/:id/tabs', requirePassword);
 // Note: /session/:id/tabs/ws is handled separately below (WebSocket upgrade)
