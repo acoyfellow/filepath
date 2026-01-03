@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from "svelte";
   import { browser, dev } from "$app/environment";
   import { page } from "$app/state";
+  import { getApiUrl } from "$lib/api-utils";
   import type { Terminal as TerminalType } from "@xterm/xterm";
   import type { FitAddon as FitAddonType } from "@xterm/addon-fit";
 
@@ -76,7 +77,7 @@
 
       // Start this specific tab's sandbox
       const tabStartRes = await fetch(
-        `/api/terminal/${sessionId}/${tabId}/start`,
+        getApiUrl(`/terminal/${sessionId}/${tabId}/start`),
         {
           method: "POST",
           headers,
@@ -89,13 +90,13 @@
         throw new Error(data.error || "Failed to start tab");
       }
 
-      // Connect WebSocket through SvelteKit (uses service binding to Worker)
+      // Connect WebSocket directly to Worker
       const passwordParam = password
         ? `?password=${encodeURIComponent(password)}`
         : "";
       const wsUrl = dev
         ? `ws://localhost:1337/terminal/${sessionId}/${tabId}/ws${passwordParam}`
-        : `wss://${window.location.host}/api/terminal/${sessionId}/${tabId}/ws${passwordParam}`;
+        : `wss://api.myfilepath.com/terminal/${sessionId}/${tabId}/ws${passwordParam}`;
 
       ws = new WebSocket(wsUrl, ["tty"]);
       ws.binaryType = "arraybuffer";
@@ -160,7 +161,7 @@
         // Try to wake container
         try {
           const wakeRes = await fetch(
-            `/api/terminal/${sessionId}/${tabId}/wake`,
+            getApiUrl(`/terminal/${sessionId}/${tabId}/wake`),
             {
               method: "POST",
             }
@@ -185,7 +186,7 @@
           // Try to wake container on unexpected close
           try {
             const wakeRes = await fetch(
-              `/api/terminal/${sessionId}/${tabId}/wake`,
+              getApiUrl(`/terminal/${sessionId}/${tabId}/wake`),
               {
                 method: "POST",
               }

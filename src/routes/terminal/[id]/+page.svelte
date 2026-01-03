@@ -6,6 +6,7 @@
   import { cn } from "$lib/utils";
   import { onMount } from "svelte";
   import { browser, dev } from "$app/environment";
+  import { getApiUrl } from "$lib/api-utils";
 
   // Action to focus input when editing starts
   function autofocus(node: HTMLInputElement) {
@@ -52,7 +53,9 @@
     if (!browser || !sessionId) return;
     try {
       const headers = getPasswordHeader();
-      const res = await fetch(`/api/session/${sessionId}/info`, { headers });
+      const res = await fetch(getApiUrl(`/session/${sessionId}/info`), {
+        headers,
+      });
       if (res.status === 401) {
         // Password required or invalid
         sessionStorage.removeItem(`session:${sessionId}:password`);
@@ -89,7 +92,9 @@
 
     // Test password by fetching session info
     const headers = getPasswordHeader();
-    const res = await fetch(`/api/session/${sessionId}/info`, { headers });
+    const res = await fetch(getApiUrl(`/session/${sessionId}/info`), {
+      headers,
+    });
 
     if (res.status === 401) {
       passwordError = "Invalid password";
@@ -145,7 +150,7 @@
         "Content-Type": "application/json",
         ...getPasswordHeader(),
       };
-      const res = await fetch(`/api/session/${sessionId}/tabs`, {
+      const res = await fetch(getApiUrl(`/session/${sessionId}/tabs`), {
         method: "POST",
         headers,
         body: JSON.stringify({ tabs: tabData, activeTab: activeTabId }),
@@ -170,7 +175,9 @@
     if (!browser || !sessionId) return [];
     try {
       const headers = getPasswordHeader();
-      const res = await fetch(`/api/session/${sessionId}/tabs`, { headers });
+      const res = await fetch(getApiUrl(`/session/${sessionId}/tabs`), {
+        headers,
+      });
       if (res.status === 401) {
         sessionStorage.removeItem(`session:${sessionId}:password`);
         showPasswordPrompt = true;
@@ -334,7 +341,7 @@
       if (dev) {
         wsUrl = `ws://localhost:1337/session/${sessionId}/tabs/ws${passwordParam}`;
       } else {
-        wsUrl = `wss://${window.location.host}/api/session/${sessionId}/tabs/ws${passwordParam}`;
+        wsUrl = `wss://api.myfilepath.com/session/${sessionId}/tabs/ws${passwordParam}`;
       }
 
       tabStateWs = new WebSocket(wsUrl);

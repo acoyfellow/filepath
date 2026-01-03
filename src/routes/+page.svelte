@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
+  import { browser, dev } from "$app/environment";
   import { AGENT_LIST } from "$lib/agents";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -14,6 +14,7 @@
   import { cn } from "$lib/utils";
   import { ExternalLink, Github } from "@lucide/svelte";
   import SEO from "$lib/components/SEO.svelte";
+  import { getApiUrl } from "$lib/api-utils";
 
   let loading = $state(false);
   let useCustomSessionId = $state(false);
@@ -43,7 +44,7 @@
         body.password = password;
       }
 
-      const response = await fetch("/api/session", {
+      const response = await fetch(getApiUrl("/session"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

@@ -58,8 +58,7 @@ const TabBroadcast = DurableObjectNamespace(`${projectName}-tab-broadcast`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
-  // domains: ["api.myfilepath.com"],
-  // routes: [{ pattern: "api.myfilepath.com/*", adopt: true }],
+  routes: [{ pattern: "api.myfilepath.com/*", adopt: true }],
   url: false,
   adopt: true,
   apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
