@@ -94,10 +94,15 @@ export class TabBroadcastDO extends DurableObject {
         await this.sendScrollbackToClient(server, sandboxId);
 
         // Connect to ttyd if not already connected
-        if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
-          console.log('[TabBroadcastDO] Connecting to ttyd for:', sandboxId);
+        // Check for OPEN (1) state - CLOSING (2) or CLOSED (3) means we need to reconnect
+        const needsReconnect = !this.ttyd || this.ttyd.readyState !== WebSocket.OPEN;
+        if (needsReconnect) {
+          const oldState = this.ttyd?.readyState;
+          console.log('[TabBroadcastDO] Connecting to ttyd for:', sandboxId, 'current state:', oldState);
+          // Clear old ttyd before connecting to prevent stale close handlers
+          this.ttyd = null;
           await this.connectTtyd(request, sandboxId);
-          console.log('[TabBroadcastDO] ttyd connection state:', this.ttyd?.readyState);
+          console.log('[TabBroadcastDO] ttyd connection completed');
         } else {
           console.log('[TabBroadcastDO] ttyd already connected');
         }
@@ -183,6 +188,18 @@ export class TabBroadcastDO extends DurableObject {
       }
 
       console.log('[TabBroadcastDO] Accepting ttyd WebSocket');
+
+      // Close old ttyd connection if it exists before replacing it
+      if (this.ttyd) {
+        try {
+          this.ttyd.removeEventListener('message', () => { });
+          this.ttyd.removeEventListener('close', () => { });
+          this.ttyd.removeEventListener('error', () => { });
+          this.ttyd.close();
+        } catch (err) {
+          // Ignore errors
+        }
+      }
 
       this.ttyd = ttydResponse.webSocket;
       this.ttyd.accept();

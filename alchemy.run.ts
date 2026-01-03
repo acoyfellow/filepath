@@ -77,7 +77,6 @@ export const WORKER = await Worker(`${projectName}-worker`, {
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
   domains: ["myfilepath.com"],
-  // routes: [{ pattern: "myfilepath.com/*", adopt: true }],
   bindings: {
     WORKER
   },
