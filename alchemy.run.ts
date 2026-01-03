@@ -58,7 +58,6 @@ const TabBroadcast = DurableObjectNamespace(`${projectName}-tab-broadcast`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
-  domains: ["api.myfilepath.com"],
   routes: [{ pattern: "api.myfilepath.com/*", adopt: true }],
   adopt: true,
   url: false,
@@ -80,7 +79,6 @@ export const WORKER = await Worker(`${projectName}-worker`, {
 // Create the SvelteKit app
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${projectName}-app`,
-  domains: ["myfilepath.com"],
   routes: [{ pattern: "myfilepath.com/*", adopt: true }],
   bindings: {
     WORKER
