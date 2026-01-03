@@ -45,7 +45,7 @@ export async function callWorker(
   //   body,
   // });
 
-  if (dev) return fetch(newRequest);
-  return platform!.env!.WORKER.fetch(newRequest);
+  if (dev) return fetch(request);
+  return platform!.env!.WORKER.fetch(request);
 }
 
