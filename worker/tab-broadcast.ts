@@ -1,4 +1,4 @@
-import { DurableObject } from 'cloudflare:workers';
+import { DurableObject, waitUntil } from 'cloudflare:workers';
 import { getSandbox, Sandbox as SandboxDO } from '@cloudflare/sandbox';
 
 interface TabScrollback {
@@ -25,85 +25,83 @@ export class TabBroadcastDO extends DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    try {
-      console.log('[TabBroadcastDO] Accepting WebSocket connection');
-      server.accept();
-      this.clients.add(server);
-      console.log('[TabBroadcastDO] WebSocket accepted, clients:', this.clients.size);
+    // Extract sandboxId from request URL (format: /terminal/:sessionId/:tabId/ws)
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    // Path format: /terminal/:sessionId/:tabId/ws
+    const sessionId = pathParts[2];
+    const tabId = pathParts[3];
+    const sandboxId = `${sessionId}:${tabId}`;
+    console.log('[TabBroadcastDO] Extracted:', { sessionId, tabId, sandboxId, pathname: url.pathname });
 
-      // Extract sandboxId from request URL (format: /terminal/:sessionId/:tabId/ws)
-      const url = new URL(request.url);
-      const pathParts = url.pathname.split('/');
-      // Path format: /terminal/:sessionId/:tabId/ws
-      const sessionId = pathParts[2];
-      const tabId = pathParts[3];
-      const sandboxId = `${sessionId}:${tabId}`;
-      console.log('[TabBroadcastDO] Extracted:', { sessionId, tabId, sandboxId, pathname: url.pathname });
+    // Accept WebSocket and set up handlers immediately
+    console.log('[TabBroadcastDO] Accepting WebSocket connection');
+    server.accept();
+    this.clients.add(server);
+    console.log('[TabBroadcastDO] WebSocket accepted, clients:', this.clients.size);
 
-      // Restore scrollback to new client before connecting to ttyd
-      await this.sendScrollbackToClient(server, sandboxId);
-
-      // Connect to ttyd if not already connected
-      if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
-        console.log('[TabBroadcastDO] Connecting to ttyd for:', sandboxId);
-        await this.connectTtyd(request, sandboxId);
-        console.log('[TabBroadcastDO] ttyd connection state:', this.ttyd?.readyState);
-      } else {
-        console.log('[TabBroadcastDO] ttyd already connected');
+    // Set up message forwarding and cleanup handlers
+    server.addEventListener('message', (event) => {
+      if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
+        try {
+          this.ttyd.send(event.data);
+        } catch (err) {
+          console.error('[TabBroadcastDO] Error forwarding client message to ttyd:', err);
+        }
       }
+    });
 
-      // Forward messages from client to ttyd
-      server.addEventListener('message', (event) => {
-        if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
-          try {
-            this.ttyd.send(event.data);
-          } catch (err) {
-            console.error('Error forwarding client message to ttyd:', err);
-          }
+    server.addEventListener('close', () => {
+      console.log('[TabBroadcastDO] Client WebSocket closed');
+      this.clients.delete(server);
+      // If no clients left, close ttyd connection
+      if (this.clients.size === 0 && this.ttyd) {
+        try {
+          this.ttyd.close();
+        } catch (err) {
+          // Ignore errors on close
         }
-      });
+        this.ttyd = null;
+      }
+    });
 
-      // Clean up on client disconnect
-      server.addEventListener('close', () => {
-        this.clients.delete(server);
-        // If no clients left, close ttyd connection
-        if (this.clients.size === 0 && this.ttyd) {
-          try {
-            this.ttyd.close();
-          } catch (err) {
-            // Ignore errors on close
-          }
-          this.ttyd = null;
-        }
-      });
+    // Return WebSocket response IMMEDIATELY - don't await async work
+    console.log('[TabBroadcastDO] Returning WebSocket response (101) immediately');
+    const response = new Response(null, {
+      status: 101,
+      webSocket: client,
+    });
 
-      console.log('[TabBroadcastDO] Returning WebSocket response (101)');
-      return new Response(null, {
-        status: 101,
-        webSocket: client,
-      });
-    } catch (error) {
-      console.error('[TabBroadcastDO] WebSocket handler error:', error, {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      // Still return WebSocket - connection established
+    // Do async work AFTER returning the response using waitUntil
+    // This ensures the work completes but doesn't block the response
+    const setupPromise = (async () => {
       try {
-        server.accept();
-        this.clients.add(server);
-        server.addEventListener('close', () => {
-          this.clients.delete(server);
-        });
-      } catch (fallbackError) {
-        console.error('Failed to establish fallback WebSocket:', fallbackError);
-        this.clients.delete(server);
-      }
+        // Restore scrollback to new client before connecting to ttyd
+        await this.sendScrollbackToClient(server, sandboxId);
 
-      return new Response(null, {
-        status: 101,
-        webSocket: client,
-      });
-    }
+        // Connect to ttyd if not already connected
+        if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
+          console.log('[TabBroadcastDO] Connecting to ttyd for:', sandboxId);
+          await this.connectTtyd(request, sandboxId);
+          console.log('[TabBroadcastDO] ttyd connection state:', this.ttyd?.readyState);
+        } else {
+          console.log('[TabBroadcastDO] ttyd already connected');
+        }
+      } catch (error) {
+        console.error('[TabBroadcastDO] Error in async setup:', error);
+        // Close the client connection if setup fails
+        try {
+          server.close(1011, 'Internal server error during setup');
+        } catch (err) {
+          // Ignore
+        }
+      }
+    })();
+
+    // Use waitUntil to ensure async work completes without blocking response
+    waitUntil(setupPromise);
+
+    return response;
   }
 
   private async connectTtyd(request: Request, sandboxId: string): Promise<void> {
