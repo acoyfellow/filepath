@@ -26,12 +26,15 @@ export async function callWorker(
   // WebSocket upgrades: don't touch the body, just forward headers
   const isWebSocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
   if (isWebSocket) {
-    if (dev) {
-      return fetch(new Request(url, request));
-    }
-    // For service bindings, update the URL but keep everything else
-    const workerRequest = new Request(url + new URL(request.url).search, request);
-    return platform!.env!.WORKER.fetch(workerRequest);
+    // Preserve search params from original URL
+    const originalUrl = new URL(request.url);
+    const workerUrl = url + originalUrl.search;
+    const newRequest = new Request(workerUrl, {
+      method: request.method,
+      headers: request.headers,
+    });
+    if (dev) return fetch(newRequest);
+    return platform!.env!.WORKER.fetch(newRequest);
   }
 
   // Regular requests: buffer body to avoid stream consumption issues

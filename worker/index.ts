@@ -470,14 +470,27 @@ app.get('/terminal/:id/ws', async (c) => {
 // Delegates to TabBroadcastDO which manages connections and broadcasts ttyd output
 app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
+  const origin = c.req.header('Origin');
+  const protocol = c.req.header('Sec-WebSocket-Protocol');
+  const url = c.req.url;
+
+  console.log('[Worker] WebSocket upgrade request:', {
+    upgrade,
+    origin,
+    protocol,
+    url,
+    headers: Object.fromEntries(c.req.raw.headers.entries())
+  });
+
   if (upgrade?.toLowerCase() !== 'websocket') {
+    console.error('[Worker] Missing or invalid Upgrade header:', upgrade);
     return c.text('Expected WebSocket upgrade', 400);
   }
 
   const sessionId = c.req.param('sessionId');
   const tabId = c.req.param('tabId');
   const sandboxId = `${sessionId}:${tabId}`; // Same ID as used in /start
-  console.log('WS connecting to sandbox:', sandboxId);
+  console.log('[Worker] Forwarding WS to TabBroadcastDO:', { sessionId, tabId, sandboxId });
 
   // Don't do async password checks here - they block the WebSocket upgrade
   // Password can be verified by ttyd or handled after connection
@@ -485,7 +498,18 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   // Forward WebSocket upgrade to TabBroadcastDO
   // DO will handle: client connections, ttyd connection, broadcasting
   const tabBroadcast = getTabBroadcast(c.env, sandboxId);
-  return tabBroadcast.fetch(c.req.raw);
+  try {
+    const response = await tabBroadcast.fetch(c.req.raw);
+    console.log('[Worker] TabBroadcastDO response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    return response;
+  } catch (error) {
+    console.error('[Worker] Error forwarding to TabBroadcastDO:', error);
+    throw error;
+  }
 });
 
 // Get session tab state

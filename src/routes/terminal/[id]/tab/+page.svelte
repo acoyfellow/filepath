@@ -103,10 +103,21 @@
         ? `ws://localhost:1337/terminal/${sessionId}/${tabId}/ws${passwordParam}`
         : `wss://api.myfilepath.com/terminal/${sessionId}/${tabId}/ws${passwordParam}`;
 
+      console.log("[WS] Creating WebSocket connection:", {
+        wsUrl,
+        sessionId,
+        tabId,
+        hasPassword: !!password,
+      });
       ws = new WebSocket(wsUrl, ["tty"]);
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
+        console.log("[WS] WebSocket opened successfully:", {
+          sessionId,
+          tabId,
+          readyState: ws?.readyState,
+        });
         if (!terminal || !ws) return;
         connected = true;
         error = null;
@@ -159,17 +170,34 @@
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (event) => {
+        console.error("[WS] WebSocket error:", {
+          sessionId,
+          tabId,
+          readyState: ws?.readyState,
+          url: wsUrl,
+          error: event,
+          type: event.type,
+        });
         error = "Connection error";
         connected = false;
         // Don't retry on error - let onclose handle it
       };
 
       ws.onclose = (event) => {
+        console.log("[WS] WebSocket closed:", {
+          sessionId,
+          tabId,
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          url: wsUrl,
+        });
         connected = false;
 
         // Normal close codes - don't retry
         if (event.code === 1000 || event.code === 1001) {
+          console.log("[WS] Normal close, not retrying");
           return;
         }
 
