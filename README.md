@@ -70,12 +70,12 @@ Visit `http://localhost:5173`
 
 ## Key Features
 
-✅ **Multi-agent support** - Claude, Codex, Cursor, OpenCode, Droid
-✅ **Isolated tabs** - Each tab has independent shell
-✅ **Persistent state** - Tabs/sessions survive refreshes
-✅ **Real-time sync** - WebSocket-based cross-client updates
-✅ **URL sharing** - No auth needed, share via link
-✅ **Dump/fork** - Export tab state, clone to new sessions
+- **Multi-agent support** - Claude, Codex, Cursor, OpenCode, Droid
+- **Isolated tabs** - Each tab has independent shell
+- **Persistent state** - Tabs/sessions survive refreshes
+- **Real-time sync** - WebSocket-based cross-client updates
+- **URL sharing** - No auth needed, share via link
+- **Dump/fork** - Export tab state, clone to new sessions
 
 ## Architecture Details
 

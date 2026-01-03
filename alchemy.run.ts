@@ -1,7 +1,7 @@
 import alchemy from "alchemy";
 import { SvelteKit, Worker, Container, DurableObjectNamespace } from "alchemy/cloudflare";
 
-const projectName = "myfilepath";
+const projectName = "filepath";
 
 const project = await alchemy(projectName, {
   password: process.env.ALCHEMY_PASSWORD || "default-password"
@@ -40,9 +40,9 @@ const TabState = DurableObjectNamespace(`${projectName}-tab-state`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${projectName}-worker`,
   entrypoint: "./worker/index.ts",
-  // domains: ["api.myfilepath.com"],
+  domains: ["api.myfilepath.com"],
   routes: ["api.myfilepath.com/*"],
-  adopt: false,
+  adopt: true,
   url: false,
   bindings: {
     Sandbox,
@@ -64,7 +64,7 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     WORKER
   },
   url: false,
-  adopt: false,
+  adopt: true,
 });
 
 await project.finalize();

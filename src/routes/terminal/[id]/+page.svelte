@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button";
   import { House, Share2, Check, X, Plus } from "@lucide/svelte";
-  import { AGENTS } from "$lib/agents";
+  import { AGENT_LIST } from "$lib/agents";
   import { cn } from "$lib/utils";
   import { onMount, onDestroy } from "svelte";
   import { browser, dev } from "$app/environment";
@@ -12,7 +13,6 @@
     return {};
   }
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
 
   interface Tab {
     id: string;
@@ -30,8 +30,6 @@
 
   const sessionId = $derived(page.params.id);
 
-  // Load agents from SessionStateDO (persistent) or fallback to URL params (backward compatibility)
-  let selectedAgents = $state<string[]>([]);
   let sessionHasPassword = $state(false);
   let showPasswordPrompt = $state(false);
   let passwordInput = $state("");
@@ -71,13 +69,9 @@
           age: number;
           ttl: number;
           timeUntilSleep: number;
-          agents: string[];
           hasPassword?: boolean;
         };
         sessionHasPassword = info.hasPassword || false;
-        if (info.agents && info.agents.length > 0) {
-          selectedAgents = info.agents;
-        }
       }
     } catch (err) {
       console.error("Failed to load session info:", err);
@@ -114,11 +108,7 @@
     }
   }
 
-  const activeAgents = $derived(
-    selectedAgents
-      .map((id) => AGENTS[id as keyof typeof AGENTS])
-      .filter(Boolean)
-  );
+  const activeAgents = $derived(AGENT_LIST);
 
   const activeTab = $derived(tabs.find((t) => t.id === activeTabId) || null);
 
@@ -490,50 +480,42 @@
     class="flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-900 p-2"
   >
     <div class="flex items-center gap-4">
-      <a
-        href="/"
-        class="rounded px-3 py-1 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-        title="Home"
-      >
+      <Button href="/" title="Home" variant="ghost">
         <House class="w-4 h-4" />
-      </a>
-      <span class="font-mono text-sm text-gray-400">Session: {sessionId}</span>
-      {#if activeAgents.length > 0}
-        <div class="flex -space-x-2">
-          {#each activeAgents as agent}
-            <a
-              href={agent.docsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="relative inline-block rounded-full ring-2 ring-gray-900 hover:ring-gray-700 transition-all hover:scale-110"
-              title={`${agent.name} - ${agent.command}`}
-            >
-              <img
-                src={agent.logoUrl}
-                alt={`${agent.name} logo`}
-                class={cn(
-                  "h-8 w-8 rounded-full object-cover bg-gray-800 p-1.5",
-                  agent.id === "codex" && "invert"
-                )}
-              />
-            </a>
-          {/each}
-        </div>
-      {/if}
+      </Button>
+      <span class="font-mono text-sm text-gray-400">{sessionId}</span>
+      <Button
+        onclick={copyShareUrl}
+        title="Share this terminal session"
+        variant="ghost"
+      >
+        {#if copied}
+          <Check class="w-4 h-4 text-green-400" />
+        {:else}
+          <Share2 class="w-4 h-4" />
+        {/if}
+      </Button>
+      <div class="flex -space-x-2">
+        {#each activeAgents as agent}
+          <a
+            href={agent.docsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="relative inline-block rounded-full ring-2 ring-gray-900 hover:ring-gray-700 transition-all hover:scale-110"
+            title={`${agent.name} - ${agent.command}`}
+          >
+            <img
+              src={agent.logoUrl}
+              alt={`${agent.name} logo`}
+              class={cn(
+                "h-8 w-8 rounded-full object-cover bg-gray-800 p-1.5",
+                agent.id === "codex" && "invert"
+              )}
+            />
+          </a>
+        {/each}
+      </div>
     </div>
-    <button
-      onclick={copyShareUrl}
-      class="flex items-center gap-2 rounded px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-      title="Share this terminal session"
-    >
-      {#if copied}
-        <Check class="w-4 h-4 text-green-400" />
-        <span class="text-green-400">Copied!</span>
-      {:else}
-        <Share2 class="w-4 h-4" />
-        <span>Share Session</span>
-      {/if}
-    </button>
   </div>
 
   <div class="flex flex-1 flex-col bg-black">
@@ -599,7 +581,7 @@
       {/each}
       <button
         onclick={() => createTab()}
-        class="rounded-t-lg px-3 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+        class="px-3 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
         title="New Tab"
       >
         <Plus class="w-4 h-4" />
@@ -615,7 +597,7 @@
             activeTabId === tab.id ? "block" : "hidden"
           )}
         >
-          <div class="h-full rounded-lg overflow-hidden ring ring-gray-800">
+          <div class="h-full">
             <iframe
               src={getIframeSrc(tab.id)}
               title="Terminal tab {tab.name}"

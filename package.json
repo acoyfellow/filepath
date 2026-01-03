@@ -2,6 +2,7 @@
   "name": "filepath",
   "version": "0.0.1",
   "scripts": {
+    "kill": "kill -9 $(lsof -ti:1337,5173 -sTCP:LISTEN) 2>/dev/null",
     "dev": "bun run clean && alchemy dev",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",

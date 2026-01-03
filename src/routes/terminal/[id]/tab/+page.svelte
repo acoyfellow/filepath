@@ -69,15 +69,20 @@
 
       // Initialize the sandbox for this tab
       const password = getPassword();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (password) headers["X-Session-Password"] = password;
 
       // Start this specific tab's sandbox
-      const tabStartRes = await fetch(`/api/terminal/${sessionId}/${tabId}/start`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({}),
-      });
+      const tabStartRes = await fetch(
+        `/api/terminal/${sessionId}/${tabId}/start`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        }
+      );
 
       if (!tabStartRes.ok) {
         const data = await tabStartRes.json();
@@ -85,7 +90,9 @@
       }
 
       // Connect WebSocket through SvelteKit (uses service binding to Worker)
-      const passwordParam = password ? `?password=${encodeURIComponent(password)}` : "";
+      const passwordParam = password
+        ? `?password=${encodeURIComponent(password)}`
+        : "";
       const wsUrl = dev
         ? `ws://localhost:1337/terminal/${sessionId}/${tabId}/ws${passwordParam}`
         : `wss://${window.location.host}/api/terminal/${sessionId}/${tabId}/ws${passwordParam}`;
@@ -102,10 +109,14 @@
         terminal.clear();
 
         // ttyd handshake - send terminal size (must be encoded)
-        ws.send(textEncoder.encode(JSON.stringify({
-          columns: terminal.cols,
-          rows: terminal.rows,
-        })));
+        ws.send(
+          textEncoder.encode(
+            JSON.stringify({
+              columns: terminal.cols,
+              rows: terminal.rows,
+            })
+          )
+        );
 
         // Handle input
         terminal.onData((data) => {
@@ -158,14 +169,15 @@
       resizeHandler = () => {
         if (terminal && fitAddon && ws && ws.readyState === WebSocket.OPEN) {
           fitAddon.fit();
-          ws.send(JSON.stringify({
-            columns: terminal.cols,
-            rows: terminal.rows,
-          }));
+          ws.send(
+            JSON.stringify({
+              columns: terminal.cols,
+              rows: terminal.rows,
+            })
+          );
         }
       };
       window.addEventListener("resize", resizeHandler);
-
     } catch (err) {
       console.error("Terminal initialization error:", err);
       error = err instanceof Error ? err.message : String(err);
@@ -177,7 +189,11 @@
 
     // Wait for container
     const initWithRetry = (attempt = 0) => {
-      if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+      if (
+        container &&
+        container.offsetWidth > 0 &&
+        container.offsetHeight > 0
+      ) {
         initializeTerminal();
       } else if (attempt < 20) {
         setTimeout(() => initWithRetry(attempt + 1), 100);
@@ -219,4 +235,3 @@
     background: black;
   }
 </style>
-
