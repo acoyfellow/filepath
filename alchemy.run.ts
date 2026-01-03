@@ -23,6 +23,9 @@ const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   scriptName: `${projectName}-worker`,
   adopt: true,
+  apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
+  email: process.env.CLOUDFLARE_EMAIL,
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
   build: {
     dockerfile: "Dockerfile",
     context: process.cwd(),
@@ -59,6 +62,9 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   routes: ["api.myfilepath.com/*"],
   adopt: true,
   url: false,
+  apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
+  email: process.env.CLOUDFLARE_EMAIL,
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
   bindings: {
     Sandbox,
     SessionState,
