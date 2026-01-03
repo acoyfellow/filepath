@@ -22,7 +22,6 @@ const project = await alchemy(projectName, {
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   scriptName: `${projectName}-worker`,
-  name: `${projectName}-sandbox`,
   adopt: true,
   apiKey: process.env.CLOUDFLARE_API_KEY ? alchemy.secret(process.env.CLOUDFLARE_API_KEY) : undefined,
   email: process.env.CLOUDFLARE_EMAIL,
