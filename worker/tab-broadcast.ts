@@ -55,38 +55,8 @@ export class TabBroadcastDO extends DurableObject {
       return new Response('Failed to accept WebSocket', { status: 500 });
     }
 
-    // Set up message forwarding and cleanup handlers
-    // ttyd uses the same protocol: INPUT='0', OUTPUT='0', RESIZE='1'
-    // Queue messages if ttyd isn't ready yet (e.g., initial terminal size message)
-    server.addEventListener('message', (event) => {
-      if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
-        try {
-          this.ttyd.send(event.data);
-        } catch (err) {
-          console.error('[TabBroadcastDO] Error forwarding client message to ttyd:', err);
-        }
-      } else {
-        // Queue message until ttyd is ready
-        console.log('[TabBroadcastDO] Queueing message - ttyd not ready yet');
-        if (event.data instanceof ArrayBuffer) {
-          this.messageQueue.push(event.data);
-        }
-      }
-    });
-
-    server.addEventListener('close', () => {
-      console.log('[TabBroadcastDO] Client WebSocket closed');
-      this.clients.delete(server);
-      // If no clients left, close ttyd connection
-      if (this.clients.size === 0 && this.ttyd) {
-        try {
-          this.ttyd.close();
-        } catch (err) {
-          // Ignore errors on close
-        }
-        this.ttyd = null;
-      }
-    });
+    // Note: With hibernation API (this.ctx.acceptWebSocket), we use webSocketMessage/webSocketClose handlers
+    // instead of addEventListener. These are defined as class methods below.
 
     // Connect to ttyd BEFORE returning 101 - like ironalarm example
     // This ensures ttyd is ready to send data immediately
@@ -316,6 +286,42 @@ export class TabBroadcastDO extends DurableObject {
     } catch (err) {
       console.error('[TabBroadcastDO] Failed to send scrollback:', err);
     }
+  }
+
+  // Hibernation API handlers (called by Durable Object runtime when using this.ctx.acceptWebSocket)
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    console.log('[TabBroadcastDO] Received message from client via hibernation API');
+    if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
+      try {
+        this.ttyd.send(message);
+      } catch (err) {
+        console.error('[TabBroadcastDO] Error forwarding client message to ttyd:', err);
+      }
+    } else {
+      // Queue message until ttyd is ready
+      console.log('[TabBroadcastDO] Queueing message - ttyd not ready yet');
+      if (message instanceof ArrayBuffer) {
+        this.messageQueue.push(message);
+      }
+    }
+  }
+
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+    console.log('[TabBroadcastDO] Client WebSocket closed via hibernation API');
+    this.clients.delete(ws);
+    // If no clients left, close ttyd connection
+    if (this.clients.size === 0 && this.ttyd) {
+      try {
+        this.ttyd.close();
+      } catch (err) {
+        // Ignore errors on close
+      }
+      this.ttyd = null;
+    }
+  }
+
+  async webSocketError(ws: WebSocket, error: unknown) {
+    console.error('[TabBroadcastDO] WebSocket error via hibernation API:', error);
   }
 }
 
