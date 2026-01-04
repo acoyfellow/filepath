@@ -537,8 +537,7 @@
       variant="ghost"
     >
       <X class="w-4 h-4" />
-    </Button>
-  </div>
+    </Butt  </div>
 
   <div class="flex flex-1 flex-col bg-black">
     <!-- Tab Bar -->

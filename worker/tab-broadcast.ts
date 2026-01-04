@@ -58,38 +58,21 @@ export class TabBroadcastDO extends DurableObject {
     // Note: With hibernation API (this.ctx.acceptWebSocket), we use webSocketMessage/webSocketClose handlers
     // instead of addEventListener. These are defined as class methods below.
 
-    // Connect to ttyd BEFORE returning 101 - like ironalarm example
-    // This ensures ttyd is ready to send data immediately
-    try {
-      if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
-        console.log('[TabBroadcastDO] Connecting to ttyd synchronously before returning 101');
-        await this.connectTtyd(request, sandboxId);
-        console.log('[TabBroadcastDO] ttyd connected, readyState:', this.ttyd?.readyState);
-      } else {
-        console.log('[TabBroadcastDO] ttyd already connected');
-        // Flush any queued messages
-        if (this.messageQueue.length > 0) {
-          console.log(`[TabBroadcastDO] Flushing ${this.messageQueue.length} queued messages`);
-          for (const msg of this.messageQueue) {
-            try {
-              this.ttyd.send(msg);
-            } catch (err) {
-              console.error('[TabBroadcastDO] Error sending queued message:', err);
-            }
-          }
-          this.messageQueue = [];
+    // Connect to ttyd ASYNC after returning 101 (like initial working approach)
+    // This prevents blocking the WebSocket response
+    (async () => {
+      try {
+        if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
+          await this.connectTtyd(request, sandboxId);
         }
+        // Send scrollback after ttyd connects
+        await this.sendScrollbackToClient(server, sandboxId);
+      } catch (error) {
+        console.error('[TabBroadcastDO] Error in async ttyd connection:', error);
       }
+    })();
 
-      // Send scrollback immediately (like ironalarm sends initial state)
-      await this.sendScrollbackToClient(server, sandboxId);
-    } catch (error) {
-      console.error('[TabBroadcastDO] Error connecting to ttyd before 101:', error);
-      // Still return 101 - connection is established, ttyd can connect later
-    }
-
-    // Return WebSocket response AFTER ttyd is connected (like ironalarm pattern)
-    console.log('[TabBroadcastDO] Returning WebSocket response (101)');
+    // Return WebSocket response IMMEDIATELY (like initial working approach)
     return new Response(null, {
       status: 101,
       webSocket: client,
