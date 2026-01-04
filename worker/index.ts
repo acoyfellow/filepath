@@ -21,31 +21,11 @@ type Env = {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Log all incoming requests for debugging
-app.use('*', async (c, next) => {
-  console.log('[Worker] Incoming request:', c.req.method, c.req.path);
-  await next();
-});
-
-// CORS middleware - handle OPTIONS preflight requests
+// CORS for local dev (skip WebSocket upgrades - they handle their own headers)
 app.use('*', async (c, next) => {
   if (c.req.header('Upgrade')?.toLowerCase() === 'websocket') {
     return next();
   }
-
-  // Handle OPTIONS preflight requests
-  if (c.req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Session-Password',
-        'Access-Control-Max-Age': '86400',
-      },
-    });
-  }
-
   return cors({ origin: '*' })(c, next);
 });
 
@@ -66,7 +46,6 @@ async function requirePassword(c: any, next: () => Promise<void>): Promise<Respo
   const sessionState = getSessionState(c.env, sessionId);
   const infoRes = await sessionState.fetch(new Request('http://do/info'));
   if (!infoRes.ok) {
-    // If session doesn't exist (404), let the route handler deal with it
     await next();
     return c.res;
   }
@@ -380,18 +359,17 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
       // Start ttyd directly on port 7681 (no tmux, no proxy)
       // ttyd natively supports multiple WebSocket clients and broadcasts to all
       console.log('[Worker] Starting ttyd for sandbox:', sandboxId);
-
-      // Verify bash exists first
-      const bashCheck = await sandbox.exec('which bash');
-      console.log('[Worker] bash check:', { exitCode: bashCheck.exitCode, stdout: bashCheck.stdout, stderr: bashCheck.stderr });
-
-      const ttyd = await sandbox.startProcess('ttyd -p 7681 bash');
-      console.log('[Worker] ttyd process started, waiting for port 7681...');
+      let ttyd;
+      try {
+        ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+        console.log('[Worker] ttyd process started, waiting for port 7681...');
+      } catch (startError) {
+        console.error('[Worker] Failed to start ttyd process:', startError);
+        throw startError;
+      }
 
       try {
         await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
-        // Give ttyd extra time to fully initialize before connecting
-        await new Promise(resolve => setTimeout(resolve, 1000));
         console.log('[Worker] ttyd ready on port 7681 for sandbox:', sandboxId);
       } catch (portError) {
         console.error('[Worker] ttyd failed to become ready on port 7681:', portError);
@@ -399,8 +377,7 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
           exitCode: ttyd.exitCode,
           status: ttyd.status
         });
-
-        throw new Error(`ttyd failed to start: ${portError instanceof Error ? portError.message : String(portError)} (exitCode: ${ttyd.exitCode}, status: ${ttyd.status})`);
+        throw portError;
       }
 
       startedSessions.add(sandboxId);
@@ -465,10 +442,8 @@ app.post('/terminal/:sessionId/:tabId/wake', async (c) => {
 
     // Start ttyd to wake container
     console.log('Waking ttyd for sandbox:', sandboxId);
-    const ttyd = await sandbox.startProcess('ttyd -p 7681 bash');
+    const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
     await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
-    // Give ttyd extra time to fully initialize before connecting
-    await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('ttyd woken on port 7681 for sandbox:', sandboxId);
 
     startedSessions.add(sandboxId);
@@ -519,65 +494,66 @@ app.get('/terminal/:id/ws', async (c) => {
 
 // WebSocket terminal connection for specific tab
 // Delegates to TabBroadcastDO which manages connections and broadcasts ttyd output
-// Use raw fetch to bypass Hono's response processing for WebSocket upgrades
 app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
+  const origin = c.req.header('Origin');
+  const protocol = c.req.header('Sec-WebSocket-Protocol');
+  const url = c.req.url;
+
   console.log('[Worker] WebSocket upgrade request:', {
-    path: c.req.path,
-    upgrade: upgrade,
+    upgrade,
+    origin,
+    protocol,
+    url,
     headers: Object.fromEntries(c.req.raw.headers.entries())
   });
 
   if (upgrade?.toLowerCase() !== 'websocket') {
-    console.log('[Worker] Not a WebSocket upgrade request');
+    console.error('[Worker] Missing or invalid Upgrade header:', upgrade);
     return c.text('Expected WebSocket upgrade', 400);
   }
 
   const sessionId = c.req.param('sessionId');
   const tabId = c.req.param('tabId');
   const sandboxId = `${sessionId}:${tabId}`; // Same ID as used in /start
+  console.log('[Worker] Forwarding WS to TabBroadcastDO:', { sessionId, tabId, sandboxId });
 
-  console.log('[Worker] Forwarding WebSocket to TabBroadcastDO:', { sessionId, tabId, sandboxId });
+  // Don't do async password checks here - they block the WebSocket upgrade
+  // Password can be verified by ttyd or handled after connection
 
-  // Forward WebSocket upgrade directly to TabBroadcastDO
+  // Forward WebSocket upgrade to TabBroadcastDO
   // DO will handle: client connections, ttyd connection, broadcasting
-  // Use raw Request to preserve all headers and WebSocket upgrade headers
   const tabBroadcast = getTabBroadcast(c.env, sandboxId);
-  const doResponse = await tabBroadcast.fetch(c.req.raw);
-
-  console.log('[Worker] TabBroadcastDO response:', {
-    status: doResponse.status,
-    statusText: doResponse.statusText,
-    hasWebSocket: !!doResponse.webSocket,
-    headers: Object.fromEntries(doResponse.headers.entries())
-  });
-
-  // Return the DO's response directly - don't let Hono process it
-  // This preserves the WebSocket upgrade response
-  return doResponse;
+  try {
+    const response = await tabBroadcast.fetch(c.req.raw);
+    console.log('[Worker] TabBroadcastDO response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    return response;
+  } catch (error) {
+    console.error('[Worker] Error forwarding to TabBroadcastDO:', error);
+    throw error;
+  }
 });
 
 // Get session tab state
 app.get('/session/:id/tabs', async (c) => {
   const sessionId = c.req.param('id');
-  console.log('[Worker] GET /session/:id/tabs called:', sessionId);
   const sessionState = getSessionState(c.env, sessionId);
   // Forward to DO with just /tabs path
-  const res = await sessionState.fetch(new Request(new URL('/tabs', c.req.url).toString(), {
+  return sessionState.fetch(new Request(new URL('/tabs', c.req.url).toString(), {
     method: 'GET',
     headers: c.req.raw.headers,
   }));
-  console.log('[Worker] SessionStateDO /tabs response:', res.status, res.statusText);
-  return res;
 });
 
 // Get session info (age, TTL, agents)
 app.get('/session/:id/info', async (c) => {
   const sessionId = c.req.param('id');
-  console.log('[Worker] GET /session/:id/info called:', sessionId);
   const sessionState = getSessionState(c.env, sessionId);
   const res = await sessionState.fetch(new Request('http://do/info'));
-  console.log('[Worker] SessionStateDO /info response:', res.status, res.statusText);
   if (!res.ok) return res;
   const info = await res.json() as SessionInfo;
   return c.json({ ...info, sessionId: sessionId as SessionId });
@@ -807,8 +783,7 @@ app.post('/terminal/fork', async (c) => {
 
 // 404 handler - return proper error for unmatched routes
 app.notFound((c) => {
-  console.log('[Worker] 404 Not Found:', c.req.method, c.req.path);
-  return c.json({ error: 'Not found', path: c.req.path, method: c.req.method }, 404);
+  return c.json({ error: 'Not found' }, 404);
 });
 
 export default app;
