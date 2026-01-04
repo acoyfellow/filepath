@@ -380,6 +380,11 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
       // Start ttyd directly on port 7681 (no tmux, no proxy)
       // ttyd natively supports multiple WebSocket clients and broadcasts to all
       console.log('[Worker] Starting ttyd for sandbox:', sandboxId);
+
+      // Verify bash exists first
+      const bashCheck = await sandbox.exec('which bash');
+      console.log('[Worker] bash check:', { exitCode: bashCheck.exitCode, stdout: bashCheck.stdout, stderr: bashCheck.stderr });
+
       const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
       console.log('[Worker] ttyd process started, waiting for port 7681...');
 
@@ -392,7 +397,8 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
           exitCode: ttyd.exitCode,
           status: ttyd.status
         });
-        throw portError;
+
+        throw new Error(`ttyd failed to start: ${portError instanceof Error ? portError.message : String(portError)} (exitCode: ${ttyd.exitCode}, status: ${ttyd.status})`);
       }
 
       startedSessions.add(sandboxId);

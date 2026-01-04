@@ -109,7 +109,8 @@
         tabId,
         hasPassword: !!password,
       });
-      ws = new WebSocket(wsUrl, ["tty"]);
+      // Don't request subprotocol - desktop browsers may be stricter about negotiation
+      ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
