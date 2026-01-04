@@ -385,11 +385,13 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
       const bashCheck = await sandbox.exec('which bash');
       console.log('[Worker] bash check:', { exitCode: bashCheck.exitCode, stdout: bashCheck.stdout, stderr: bashCheck.stderr });
 
-      const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+      const ttyd = await sandbox.startProcess('ttyd -p 7681 bash');
       console.log('[Worker] ttyd process started, waiting for port 7681...');
 
       try {
         await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
+        // Give ttyd extra time to fully initialize before connecting
+        await new Promise(resolve => setTimeout(resolve, 1000));
         console.log('[Worker] ttyd ready on port 7681 for sandbox:', sandboxId);
       } catch (portError) {
         console.error('[Worker] ttyd failed to become ready on port 7681:', portError);
