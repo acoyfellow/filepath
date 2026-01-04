@@ -465,8 +465,10 @@ app.post('/terminal/:sessionId/:tabId/wake', async (c) => {
 
     // Start ttyd to wake container
     console.log('Waking ttyd for sandbox:', sandboxId);
-    const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+    const ttyd = await sandbox.startProcess('ttyd -p 7681 bash');
     await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
+    // Give ttyd extra time to fully initialize before connecting
+    await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('ttyd woken on port 7681 for sandbox:', sandboxId);
 
     startedSessions.add(sandboxId);

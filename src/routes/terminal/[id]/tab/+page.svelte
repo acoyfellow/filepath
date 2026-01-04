@@ -22,8 +22,9 @@
   let resizeHandler: (() => void) | null = null;
   let isRetrying = $state(false);
   let lastRetryTime = $state(0);
-  const RETRY_COOLDOWN = 10000; // 10 seconds between retries
-  const MAX_RETRIES = 3; // Max 3 retry attempts
+  let initializing = $state(false);
+  const RETRY_COOLDOWN = 10000;
+  const MAX_RETRIES = 3;
 
   const textEncoder = new TextEncoder();
 
@@ -38,13 +39,33 @@
 
   async function initializeTerminal() {
     if (!browser || !sessionId || !tabId || !container) return;
-    if (terminal && connected) return;
-    if (isRetrying) return; // Already retrying, don't duplicate
+
+    // Strong guard - set flag BEFORE any async work to prevent race conditions
+    if (initializing) {
+      console.log("[WS] Already initializing, skipping");
+      return;
+    }
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log("[WS] Already connected, skipping");
+      return;
+    }
+    if (isRetrying) {
+      console.log("[WS] Already retrying, skipping");
+      return;
+    }
+
+    initializing = true;
 
     // Clean up existing
     if (ws) {
+      console.log("[WS] Closing existing WebSocket");
       ws.close();
       ws = null;
+    }
+    if (terminal) {
+      console.log("[WS] Disposing existing terminal");
+      terminal.dispose();
+      terminal = null;
     }
 
     error = null;
@@ -145,11 +166,15 @@
           ws.send(payload.subarray(0, (stats.written as number) + 1));
         });
 
-        // Focus
-        setTimeout(() => terminal?.focus(), 100);
-      };
+      // Set up heartbeat to prevent hibernation timeout
+      const heartbeat = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send("heartbeat");
+        }
+      }, 30000); // Every 30 seconds
+    };
 
-      ws.onmessage = (e) => {
+    ws.onmessage = (e) => {
         if (!terminal) return;
 
         if (typeof e.data === "string") return;
@@ -199,6 +224,7 @@
         // Normal close codes - don't retry
         if (event.code === 1000 || event.code === 1001) {
           console.log("[WS] Normal close, not retrying");
+          initializing = false;
           return;
         }
 
@@ -209,6 +235,9 @@
         if (isRetrying || now - lastRetryTime < RETRY_COOLDOWN) {
           return;
         }
+
+        // Reset initialization flag so we can retry
+        initializing = false;
 
         // Only retry once, with long delay
         isRetrying = true;
@@ -250,9 +279,13 @@
       terminal.onResize(() => {
         sendResize();
       });
+
+      // Reset flag on successful initialization
+      initializing = false;
     } catch (err) {
       console.error("Terminal initialization error:", err);
       error = err instanceof Error ? err.message : String(err);
+      initializing = false;
     }
   }
 

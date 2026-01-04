@@ -494,52 +494,35 @@
     class="flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-900 p-2"
   >
     <div class="flex items-center gap-4">
-      <Button
-        onclick={async () => {
-          let c = await confirm("Are you sure you want to leave this session?");
-          if (!c) return;
-          goto("/");
-        }}
-        title="Home"
-        variant="ghost"
-        class="dark:text-white text-white hover:text-gray-400 hover:bg-transparent"
-      >
-        <X class="w-4 h-4" />
-      </Button>
+      <div class="p-3">
+        <img src="/logo.svg" alt="filepath logo" class="size-4" />
+      </div>
       <Button
         onclick={copyShareUrl}
         title="Share this terminal session"
         variant="ghost"
         class="dark:text-white text-white hover:text-gray-400 hover:bg-transparent"
       >
-        <span class="font-mono text-sm text-gray-400">{sessionId}</span>
         {#if copied}
           <Check class="w-4 h-4 text-green-400" />
         {:else}
           <Share2 class="w-4 h-4" />
         {/if}
       </Button>
-      <div class="flex -space-x-2">
-        {#each activeAgents as agent}
-          <a
-            href={agent.docsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="relative inline-block rounded-full ring-2 ring-gray-900 hover:ring-gray-700 transition-all hover:scale-110"
-            title={`${agent.name} - ${agent.command}`}
-          >
-            <img
-              src={agent.logoUrl}
-              alt={`${agent.name} logo`}
-              class={cn(
-                "h-8 w-8 rounded-full object-cover bg-gray-800 p-1.5",
-                agent.id === "codex" && "invert"
-              )}
-            />
-          </a>
-        {/each}
-      </div>
     </div>
+
+    <Button
+      onclick={async () => {
+        let c = await confirm("Are you sure you want to leave this session?");
+        if (!c) return;
+        goto("/");
+      }}
+      title="Home"
+      variant="ghost"
+      class="dark:text-white text-white hover:text-gray-400 hover:bg-transparent"
+    >
+      <X class="w-4 h-4" />
+    </Button>
   </div>
 
   <div class="flex flex-1 flex-col bg-black">

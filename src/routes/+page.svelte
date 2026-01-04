@@ -83,6 +83,7 @@
     <section class="max-w-sm mx-auto py-20 text-balance">
       <div class="mb-8 text-center">
         <div class="mb-4 flex items-center justify-center gap-4">
+          <img src="/logo.svg" alct="filepath logo" class="size-10 invert" />
           <h1 class="text-4xl font-bold font-mono">filepath</h1>
           <a
             href="https://github.com/acoyfellow/filepath"

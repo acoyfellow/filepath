@@ -58,21 +58,38 @@ export class TabBroadcastDO extends DurableObject {
     // Note: With hibernation API (this.ctx.acceptWebSocket), we use webSocketMessage/webSocketClose handlers
     // instead of addEventListener. These are defined as class methods below.
 
-    // Connect to ttyd ASYNC after returning 101 (like initial working approach)
-    // This prevents blocking the WebSocket response
-    (async () => {
-      try {
-        if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
-          await this.connectTtyd(request, sandboxId);
+    // Connect to ttyd BEFORE returning 101 - like ironalarm example
+    // This ensures ttyd is ready to send data immediately
+    try {
+      if (!this.ttyd || this.ttyd.readyState !== WebSocket.OPEN) {
+        console.log('[TabBroadcastDO] Connecting to ttyd synchronously before returning 101');
+        await this.connectTtyd(request, sandboxId);
+        console.log('[TabBroadcastDO] ttyd connected, readyState:', this.ttyd?.readyState);
+      } else {
+        console.log('[TabBroadcastDO] ttyd already connected');
+        // Flush any queued messages
+        if (this.messageQueue.length > 0) {
+          console.log(`[TabBroadcastDO] Flushing ${this.messageQueue.length} queued messages`);
+          for (const msg of this.messageQueue) {
+            try {
+              this.ttyd.send(msg);
+            } catch (err) {
+              console.error('[TabBroadcastDO] Error sending queued message:', err);
+            }
+          }
+          this.messageQueue = [];
         }
-        // Send scrollback after ttyd connects
-        await this.sendScrollbackToClient(server, sandboxId);
-      } catch (error) {
-        console.error('[TabBroadcastDO] Error in async ttyd connection:', error);
       }
-    })();
 
-    // Return WebSocket response IMMEDIATELY (like initial working approach)
+      // Send scrollback immediately (like ironalarm sends initial state)
+      await this.sendScrollbackToClient(server, sandboxId);
+    } catch (error) {
+      console.error('[TabBroadcastDO] Error connecting to ttyd before 101:', error);
+      // Still return 101 - connection is established, ttyd can connect later
+    }
+
+    // Return WebSocket response AFTER ttyd is connected (like ironalarm pattern)
+    console.log('[TabBroadcastDO] Returning WebSocket response (101)');
     return new Response(null, {
       status: 101,
       webSocket: client,
@@ -114,7 +131,7 @@ export class TabBroadcastDO extends DurableObject {
         // Container might be sleeping, try to wake by starting ttyd
         console.log('[TabBroadcastDO] Container may be sleeping, attempting wake:', sandboxId);
         try {
-          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+          const ttyd = await sandbox.startProcess('ttyd -p 7681 bash');
           await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
           // Wait a bit for ttyd to be ready
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -165,44 +182,35 @@ export class TabBroadcastDO extends DurableObject {
         this.messageQueue = [];
       }
 
-      // Broadcast ttyd messages to all clients and capture scrollback
+// Broadcast ttyd messages to all clients and capture scrollback
       // ttyd sends OUTPUT='0' prefix, which matches client's CMD_OUTPUT='0'
       this.ttyd.addEventListener('message', async (event) => {
-        const ttydMessageInfo = {
+        console.log('[TabBroadcastDO] Received message from ttyd:', {
           type: typeof event.data,
-          isArrayBuffer: event.data instanceof ArrayBuffer,
-          length: event.data instanceof ArrayBuffer ? event.data.byteLength : (typeof event.data === 'string' ? event.data.length : 0),
-          preview: event.data instanceof ArrayBuffer
-            ? new TextDecoder().decode(new Uint8Array(event.data).slice(0, 100))
-            : (typeof event.data === 'string' ? event.data.slice(0, 100) : String(event.data).slice(0, 100)),
-          firstByte: event.data instanceof ArrayBuffer ? new Uint8Array(event.data)[0] : null
-        };
-        console.log('[TabBroadcastDO] Received message from ttyd:', ttydMessageInfo);
-
+          length: event.data instanceof ArrayBuffer ? new Uint8Array(event.data).length : event.data.length
+        });
+        
         // Broadcast to all clients
-        console.log('[TabBroadcastDO] Broadcasting to', this.clients.size, 'clients');
         for (const client of this.clients) {
           if (client.readyState === WebSocket.OPEN) {
             try {
               client.send(event.data);
             } catch (err) {
-              console.error('[TabBroadcastDO] Error broadcasting to client:', err);
               // Remove dead connections
               this.clients.delete(client);
             }
-          } else {
-            console.log('[TabBroadcastDO] Removing client with readyState:', client.readyState);
-            this.clients.delete(client);
           }
         }
 
-        // Capture scrollback (ttyd sends OUTPUT='0' prefix)
+        // Capture scrollback
         if (event.data instanceof ArrayBuffer) {
           const u8 = new Uint8Array(event.data);
           if (u8.length > 0) {
             const cmd = String.fromCharCode(u8[0]);
-            if (cmd === '0') {  // OUTPUT/CMD_OUTPUT
+            console.log('[TabBroadcastDO] ttyd command:', cmd);
+            if (cmd === '0') {  // CMD_OUTPUT
               const output = new TextDecoder().decode(u8.slice(1));
+              console.log('[TabBroadcastDO] Terminal output received:', output.substring(0, 100));
               await this.appendScrollback(sandboxId, output);
             }
           }
@@ -211,7 +219,7 @@ export class TabBroadcastDO extends DurableObject {
 
       // Handle ttyd disconnect
       this.ttyd.addEventListener('close', () => {
-        console.log('TabBroadcast: ttyd disconnected for sandbox:', sandboxId);
+        console.log('[TabBroadcastDO] ttyd disconnected');
         // Close all client connections
         for (const client of this.clients) {
           if (client.readyState === WebSocket.OPEN) {
@@ -228,10 +236,10 @@ export class TabBroadcastDO extends DurableObject {
 
       // Handle ttyd errors
       this.ttyd.addEventListener('error', (error) => {
-        console.error('TabBroadcast: ttyd error for sandbox:', sandboxId, error);
+        console.error('[TabBroadcastDO] ttyd error:', error);
       });
 
-      console.log('TabBroadcast: ttyd connected for sandbox:', sandboxId);
+      console.log('[TabBroadcastDO] ttyd connected for sandbox:', sandboxId);
     } catch (error) {
       console.error('TabBroadcast: Failed to connect to ttyd:', error);
       throw error;
