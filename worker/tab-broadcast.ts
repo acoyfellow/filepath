@@ -185,7 +185,19 @@ export class TabBroadcastDO extends DurableObject {
       // Broadcast ttyd messages to all clients and capture scrollback
       // ttyd sends OUTPUT='0' prefix, which matches client's CMD_OUTPUT='0'
       this.ttyd.addEventListener('message', async (event) => {
+        const ttydMessageInfo = {
+          type: typeof event.data,
+          isArrayBuffer: event.data instanceof ArrayBuffer,
+          length: event.data instanceof ArrayBuffer ? event.data.byteLength : (typeof event.data === 'string' ? event.data.length : 0),
+          preview: event.data instanceof ArrayBuffer
+            ? new TextDecoder().decode(new Uint8Array(event.data).slice(0, 100))
+            : (typeof event.data === 'string' ? event.data.slice(0, 100) : String(event.data).slice(0, 100)),
+          firstByte: event.data instanceof ArrayBuffer ? new Uint8Array(event.data)[0] : null
+        };
+        console.log('[TabBroadcastDO] Received message from ttyd:', ttydMessageInfo);
+
         // Broadcast to all clients
+        console.log('[TabBroadcastDO] Broadcasting to', this.clients.size, 'clients');
         for (const client of this.clients) {
           if (client.readyState === WebSocket.OPEN) {
             try {
@@ -196,6 +208,7 @@ export class TabBroadcastDO extends DurableObject {
               this.clients.delete(client);
             }
           } else {
+            console.log('[TabBroadcastDO] Removing client with readyState:', client.readyState);
             this.clients.delete(client);
           }
         }
@@ -290,18 +303,30 @@ export class TabBroadcastDO extends DurableObject {
 
   // Hibernation API handlers (called by Durable Object runtime when using this.ctx.acceptWebSocket)
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    console.log('[TabBroadcastDO] Received message from client via hibernation API');
+    const messageInfo = {
+      type: typeof message,
+      isArrayBuffer: message instanceof ArrayBuffer,
+      length: message instanceof ArrayBuffer ? message.byteLength : (typeof message === 'string' ? message.length : 0),
+      preview: message instanceof ArrayBuffer
+        ? new TextDecoder().decode(new Uint8Array(message).slice(0, 100))
+        : (typeof message === 'string' ? message.slice(0, 100) : String(message).slice(0, 100))
+    };
+    console.log('[TabBroadcastDO] Received message from client via hibernation API:', messageInfo);
+
     if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
       try {
+        console.log('[TabBroadcastDO] Forwarding message to ttyd (readyState:', this.ttyd.readyState, ')');
         this.ttyd.send(message);
+        console.log('[TabBroadcastDO] Message forwarded to ttyd successfully');
       } catch (err) {
         console.error('[TabBroadcastDO] Error forwarding client message to ttyd:', err);
       }
     } else {
       // Queue message until ttyd is ready
-      console.log('[TabBroadcastDO] Queueing message - ttyd not ready yet');
+      console.log('[TabBroadcastDO] Queueing message - ttyd not ready yet, readyState:', this.ttyd?.readyState);
       if (message instanceof ArrayBuffer) {
         this.messageQueue.push(message);
+        console.log('[TabBroadcastDO] Message queued, queue length:', this.messageQueue.length);
       }
     }
   }
