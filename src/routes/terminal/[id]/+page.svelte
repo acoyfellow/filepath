@@ -495,9 +495,22 @@
   >
     <div class="flex items-center gap-4">
       <Button
+        onclick={async () => {
+          let c = await confirm("Are you sure you want to leave this session?");
+          if (!c) return;
+          goto("/");
+        }}
+        title="Home"
+        variant="ghost"
+        class="dark:text-white text-white hover:text-gray-400 hover:bg-transparent"
+      >
+        <X class="w-4 h-4" />
+      </Button>
+      <Button
         onclick={copyShareUrl}
         title="Share this terminal session"
         variant="ghost"
+        class="dark:text-white text-white hover:text-gray-400 hover:bg-transparent"
       >
         <span class="font-mono text-sm text-gray-400">{sessionId}</span>
         {#if copied}
@@ -527,17 +540,7 @@
         {/each}
       </div>
     </div>
-    <Button
-      onclick={async () => {
-        let c = await confirm("Are you sure you want to leave this session?");
-        if (!c) return;
-        goto("/");
-      }}
-      title="Home"
-      variant="ghost"
-    >
-      <X class="w-4 h-4" />
-    </Butt  </div>
+  </div>
 
   <div class="flex flex-1 flex-col bg-black">
     <!-- Tab Bar -->
