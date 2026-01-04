@@ -102,6 +102,7 @@
       if (password) headers["X-Session-Password"] = password;
 
       // Start this specific tab's sandbox
+      console.log("[Tab] Starting tab sandbox...", { sessionId, tabId });
       const tabStartRes = await fetch(
         getApiUrl(`/terminal/${sessionId}/${tabId}/start`),
         {
@@ -110,6 +111,7 @@
           body: JSON.stringify({}),
         }
       );
+      console.log("[Tab] Tab start response:", { status: tabStartRes.status, ok: tabStartRes.ok });
 
       if (!tabStartRes.ok) {
         const data = (await tabStartRes.json()) as { error?: string };

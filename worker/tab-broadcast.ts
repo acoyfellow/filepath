@@ -56,12 +56,20 @@ export class TabBroadcastDO extends DurableObject {
 
     // Set up message forwarding and cleanup handlers
     server.addEventListener('message', (event) => {
+      console.log('[TabBroadcastDO] Received message from client, forwarding to ttyd:', {
+        hasTtyd: !!this.ttyd,
+        ttydReadyState: this.ttyd?.readyState,
+        dataLength: event.data instanceof ArrayBuffer ? event.data.byteLength : 'string'
+      });
       if (this.ttyd && this.ttyd.readyState === WebSocket.OPEN) {
         try {
           this.ttyd.send(event.data);
+          console.log('[TabBroadcastDO] Forwarded message to ttyd');
         } catch (err) {
           console.error('[TabBroadcastDO] Error forwarding client message to ttyd:', err);
         }
+      } else {
+        console.log('[TabBroadcastDO] Ttyd not ready, message dropped');
       }
     });
 
@@ -188,8 +196,19 @@ export class TabBroadcastDO extends DurableObject {
       this.ttyd.accept();
       console.log('[TabBroadcastDO] ttyd WebSocket accepted, readyState:', this.ttyd.readyState);
 
+      // Send terminal size to ttyd to trigger bash prompt
+      const sizeMsg = JSON.stringify({ columns: 80, rows: 24 });
+      this.ttyd.send(new TextEncoder().encode(sizeMsg));
+      console.log('[TabBroadcastDO] Sent terminal size to ttyd:', sizeMsg);
+
       // Broadcast ttyd messages to all clients and capture scrollback
       this.ttyd.addEventListener('message', async (event) => {
+        console.log('[TabBroadcastDO] Received message from ttyd:', {
+          dataType: typeof event.data,
+          dataLength: event.data instanceof ArrayBuffer ? event.data.byteLength : event.data.length,
+          firstBytes: event.data instanceof ArrayBuffer ? Array.from(new Uint8Array(event.data).slice(0, 5)) : 'N/A'
+        });
+
         // Broadcast to all clients
         for (const client of this.clients) {
           if (client.readyState === WebSocket.OPEN) {
