@@ -16,8 +16,8 @@ Create, share, and collaborate on isolated terminal sessions with Claude, Codex,
 
 - **Frontend**: SvelteKit + Svelte 5 + Tailwind CSS
 - **Backend**: Cloudflare Workers (Hono) + Sandbox SDK
-- **Terminal**: xterm.js + WebSocket proxy + ttyd (one instance per tab)
-- **State**: Durable Objects (SessionStateDO, TabStateDO)
+- **Terminal**: xterm.js + WebSocket via TabBroadcastDO + ttyd (one instance per tab in separate Sandbox containers)
+- **State**: Durable Objects (SessionStateDO, TabStateDO, TabBroadcastDO)
 - **Deploy**: Alchemy (infrastructure as code)
 
 ## Setup
@@ -86,39 +86,39 @@ User selects agents
     ↓
 POST /session → Create SessionStateDO
     ↓
-Create Cloudflare Sandbox instance
-    ↓
-Install agents (Claude, Codex, etc)
-    ↓
 User creates tabs
     ↓
-Each tab → Create TabStateDO + WebSocket to ttyd
+POST /terminal/:sessionId/:tabId/start → Create Sandbox container for tab
     ↓
-Each WebSocket = independent bash shell
+Each tab → Sandbox container + ttyd on port 7681
+    ↓
+GET /terminal/:sessionId/:tabId/ws → TabBroadcastDO manages WebSocket connections
+    ↓
+TabBroadcastDO connects to ttyd and broadcasts to all clients
 ```
 
 ### State Management
 
-- **SessionStateDO**: Tab list, active tab, agents, metadata
+- **SessionStateDO**: Tab list, active tab, agents, metadata, WebSocket connections for tab state sync
 - **TabStateDO**: Tab-specific state (can be dumped/forked)
-- **Sandbox**: Actual shell instances + agent installations
+- **TabBroadcastDO**: WebSocket connection management per tab, broadcasts ttyd output to all clients
+- **Sandbox**: Container instances (one per tab), each runs ttyd + bash shell
 
 ### Terminal Isolation
 
 **Critical Constraint**: Cloudflare Sandbox only allows connections to ports declared via `EXPOSE` in the Dockerfile. We have `EXPOSE 7681` - that's the only port available.
 
-**Architecture**: A Bun WebSocket proxy runs on port 7681 and routes connections to per-tab ttyd instances on internal ports (7682+). Each tab gets its own ttyd/bash process for complete independence, while multiple browsers connecting to the same tab share the same ttyd instance (cross-browser sync).
+**Architecture**: Each tab gets its own Cloudflare Sandbox container instance (identified by `${sessionId}:${tabId}`). Each container runs a single `ttyd` process on port 7681 with a bash shell. Multiple browsers connecting to the same tab share the same ttyd instance via `TabBroadcastDO`, which broadcasts ttyd output to all connected clients (cross-browser sync).
 
 ```
-Browser → Worker → Proxy:7681 → ttyd:7682 (tab 1)
-                      ↓
-                   ttyd:7683 (tab 2)
+Browser → Worker → TabBroadcastDO → Sandbox Container (tab 1) → ttyd:7681
+Browser → Worker → TabBroadcastDO → Sandbox Container (tab 2) → ttyd:7681
 ```
 
-**Why Previous Approaches Failed**:
-- Multiple ttyd instances on different ports (7682, 7683...) - Can't connect, only 7681 exposed
-- Single ttyd + tmux windows + server-side switching - ttyd already attached to one window; switching doesn't affect existing connections
-- Client-side tmux switching (Ctrl+b) - Unreliable, affects all connected clients
+**Key Points**:
+- Each tab = one Sandbox container = one ttyd process on port 7681
+- TabBroadcastDO manages WebSocket connections and broadcasts ttyd output to all clients
+- Agents are pre-installed in the Docker image, not installed at runtime
 
 ## Development
 
@@ -127,18 +127,19 @@ Browser → Worker → Proxy:7681 → ttyd:7682 (tab 1)
 ```
 src/
 ├── routes/
-│   ├── +page.svelte          # Agent selection
-│   ├── terminal/[id]/+page.svelte  # Terminal UI
-│   └── api/
-│       └── terminal/          # Terminal endpoints
+│   ├── +page.svelte                    # Agent selection
+│   └── terminal/[id]/
+│       ├── +page.svelte                 # Terminal UI with tabs
+│       └── tab/+page.svelte             # Individual tab view
 ├── lib/
-│   ├── agents.ts             # Agent definitions
-│   ├── types.ts              # Shared types
-│   └── components/           # Reusable components
+│   ├── agents.ts                        # Agent definitions
+│   ├── api-utils.ts                     # API helper functions
+│   └── types.ts                         # Shared types
 worker/
-├── index.ts                  # Hono app + endpoints
-├── session-state.ts          # SessionStateDO
-└── tab-state.ts              # TabStateDO
+├── index.ts                              # Hono app + endpoints
+├── session-state.ts                      # SessionStateDO
+├── tab-state.ts                          # TabStateDO
+└── tab-broadcast.ts                      # TabBroadcastDO (WebSocket management)
 ```
 
 ### Key Endpoints

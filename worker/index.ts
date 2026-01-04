@@ -518,7 +518,14 @@ app.get('/terminal/:id/ws', async (c) => {
 // Use raw fetch to bypass Hono's response processing for WebSocket upgrades
 app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
+  console.log('[Worker] WebSocket upgrade request:', {
+    path: c.req.path,
+    upgrade: upgrade,
+    headers: Object.fromEntries(c.req.raw.headers.entries())
+  });
+
   if (upgrade?.toLowerCase() !== 'websocket') {
+    console.log('[Worker] Not a WebSocket upgrade request');
     return c.text('Expected WebSocket upgrade', 400);
   }
 
@@ -526,11 +533,20 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const tabId = c.req.param('tabId');
   const sandboxId = `${sessionId}:${tabId}`; // Same ID as used in /start
 
+  console.log('[Worker] Forwarding WebSocket to TabBroadcastDO:', { sessionId, tabId, sandboxId });
+
   // Forward WebSocket upgrade directly to TabBroadcastDO
   // DO will handle: client connections, ttyd connection, broadcasting
   // Use raw Request to preserve all headers and WebSocket upgrade headers
   const tabBroadcast = getTabBroadcast(c.env, sandboxId);
   const doResponse = await tabBroadcast.fetch(c.req.raw);
+
+  console.log('[Worker] TabBroadcastDO response:', {
+    status: doResponse.status,
+    statusText: doResponse.statusText,
+    hasWebSocket: !!doResponse.webSocket,
+    headers: Object.fromEntries(doResponse.headers.entries())
+  });
 
   // Return the DO's response directly - don't let Hono process it
   // This preserves the WebSocket upgrade response
