@@ -13,11 +13,78 @@ export class TabBroadcastDO extends DurableObject {
   private ttyd: WebSocket | null = null;
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    // APPROACH 7: Direct bash with onOutput (bypasses ttyd WebSocket issue)
+    if (url.pathname.endsWith('/bash-ws') && request.headers.get('Upgrade') === 'websocket') {
+      console.log('[TabBroadcastDO] APPROACH 7: Direct bash WebSocket');
+      return this.handleDirectBash(request);
+    }
+
     if (request.headers.get('Upgrade') === 'websocket') {
       return this.handleWebSocket(request);
     }
 
     return new Response('Not found', { status: 404 });
+  }
+
+  // APPROACH 7: Direct bash process with onOutput callback - bypasses ttyd entirely
+  private async handleDirectBash(request: Request): Promise<Response> {
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    server.accept();
+    this.clients.add(server);
+
+    // Extract sandboxId
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const sessionId = pathParts[2];
+    const tabId = pathParts[3];
+    const sandboxId = `${sessionId}:${tabId}`;
+    console.log('[TabBroadcastDO] Direct bash for:', sandboxId);
+
+    // Start async bash setup
+    this.setupDirectBash(server, sandboxId);
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private async setupDirectBash(clientWs: WebSocket, sandboxId: string): Promise<void> {
+    try {
+      const sandbox = getSandbox((this.env as any).Sandbox, sandboxId);
+
+      console.log('[TabBroadcastDO] Testing onOutput with echo command...');
+
+      // Simple test: run echo and see if onOutput fires
+      await sandbox.startProcess('echo "=== APPROACH 7 TEST ===" && ls -la && echo "=== END TEST ==="', {
+        onOutput: (stream: string, data: string) => {
+          console.log(`[TabBroadcastDO] GOT OUTPUT (${stream}):`, data.substring(0, 100));
+
+          // Send to all connected clients
+          for (const client of this.clients) {
+            if (client.readyState === WebSocket.OPEN) {
+              try {
+                // Send as ttyd-compatible format (prefix with '0' for output)
+                const encoder = new TextEncoder();
+                const payload = new Uint8Array(data.length + 1);
+                payload[0] = '0'.charCodeAt(0);
+                payload.set(encoder.encode(data), 1);
+                client.send(payload);
+              } catch (err) {
+                this.clients.delete(client);
+              }
+            }
+          }
+        },
+        onExit: (code) => {
+          console.log('[TabBroadcastDO] Test command exited with code:', code);
+        }
+      });
+
+      console.log('[TabBroadcastDO] startProcess returned');
+    } catch (error) {
+      console.error('[TabBroadcastDO] Direct bash error:', error);
+    }
   }
 
   private async handleWebSocket(request: Request): Promise<Response> {
