@@ -1,0 +1,24 @@
+{
+  "name": "filepath-terminal",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "alchemy dev",
+    "deploy": "alchemy deploy --stage prod",
+    "destroy": "alchemy destroy"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.0.31",
+    "@cloudflare/sandbox": "^0.6.9",
+    "@xterm/addon-attach": "^0.12.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "alchemy": "^0.83.0",
+    "effect": "^3.19.14",
+    "hono": "^4.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "stories": [
+    {
+      "id": "WS-001",
+      "title": "Verify basic sandbox connectivity",
+      "status": "pending",
+      "priority": "P0",
+      "description": "Confirm we can create a sandbox instance and make HTTP requests to it. No WebSocket yet - just prove the container starts and responds.",
+      "acceptance_criteria": [
+        "GET /test/container returns 200 with response body",
+        "Sandbox instance logs show container started",
+        "No timeout errors"
+      ],
+      "dependencies": [],
+      "files_to_modify": ["worker/index.ts"],
+      "verification_command": "curl http://localhost:1337/test/container"
+    },
+    {
+      "id": "WS-002",
+      "title": "Start ttyd process in sandbox",
+      "status": "pending",
+      "priority": "P0",
+      "description": "Use sandbox.startProcess() to launch ttyd on port 7681. Verify it starts and port becomes available.",
+      "acceptance_criteria": [
+        "POST /terminal/:id/start successfully starts ttyd",
+        "sandbox.startProcess('ttyd -W -p 7681 bash') works",
+        "waitForPort(7681) resolves without timeout"
+      ],
+      "dependencies": ["WS-001"],
+      "files_to_modify": ["worker/index.ts"],
+      "verification_command": "curl -X POST http://localhost:1337/terminal/test123/start"
+    },
+    {
+      "id": "WS-003",
+      "title": "Establish WebSocket to ttyd",
+      "status": "pending",
+      "priority": "P0",
+      "description": "Use sandbox.wsConnect() to establish WebSocket connection to ttyd. Verify 101 upgrade response with webSocket property.",
+      "acceptance_criteria": [
+        "GET /terminal/:id/ws with Upgrade:websocket returns 101",
+        "Response has webSocket property",
+        "ttydWs.accept() succeeds"
+      ],
+      "dependencies": ["WS-002"],
+      "files_to_modify": ["worker/index.ts"],
+      "verification_command": "websocat ws://localhost:1337/terminal/test123/ws"
+    },
+    {
+      "id": "WS-004",
+      "title": "Bidirectional message flow",
+      "status": "pending",
+      "priority": "P0",
+      "description": "Verify messages flow both directions: client→ttyd and ttyd→client. Send terminal size, receive prompt.",
+      "acceptance_criteria": [
+        "Sending {columns:80,rows:24} triggers ttyd response",
+        "Typing input sends to ttyd",
+        "ttyd output arrives at client",
+        "No message loss or corruption"
+      ],
+      "dependencies": ["WS-003"],
+      "files_to_modify": ["worker/index.ts"],
+      "verification_command": "manual test with websocat or browser"
+    },
+    {
+      "id": "WS-005",
+      "title": "Add Effect-based error handling",
+      "status": "pending",
+      "priority": "P1",
+      "description": "Wrap sandbox operations in Effect for typed errors, retries, and timeouts. Reference ~/.vendor/effect patterns.",
+      "acceptance_criteria": [
+        "ContainerError, WebSocketError types defined",
+        "Retry with exponential backoff on transient failures",
+        "Timeout after 30s with clear error",
+        "Effect.runPromise at boundary"
+      ],
+      "dependencies": ["WS-004"],
+      "files_to_modify": ["worker/index.ts", "worker/effects.ts"],
+      "verification_command": "bun run dev && manually trigger error scenarios"
+    },
+    {
+      "id": "WS-006",
+      "title": "Production deploy and verify",
+      "status": "pending",
+      "priority": "P1",
+      "description": "Deploy to prod (api.myfilepath.com) and verify same behavior as local dev.",
+      "acceptance_criteria": [
+        "bun run deploy succeeds",
+        "https://api.myfilepath.com/test/container works",
+        "WebSocket works at wss://api.myfilepath.com/terminal/:id/ws",
+        "Terminal is interactive in browser"
+      ],
+      "dependencies": ["WS-005"],
+      "files_to_modify": [],
+      "verification_command": "bun run deploy && curl https://api.myfilepath.com/test/container"
+    }
+  ]
+}

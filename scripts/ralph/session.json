@@ -1,0 +1,13 @@
+{
+  "session_start": "2025-01-08",
+  "current_story": null,
+  "learnings": [],
+  "blockers": [],
+  "notes": [
+    "JUNK/ has full SvelteKit UI - use as visual reference",
+    "JUNK2/ has Effect patterns - use as code reference",
+    "Effect library at ~/.vendor/effect for types/patterns",
+    "@cloudflare/sandbox is the key binding - getSandbox(), wsConnect()",
+    "ttyd needs size message {columns,rows} to start outputting"
+  ]
+}

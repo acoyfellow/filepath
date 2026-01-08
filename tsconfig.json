@@ -1,19 +1,20 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "lib": ["ES2022"],
-    "moduleResolution": "bundler",
-    "types": ["@cloudflare/workers-types"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
+    "target": "es2021",
+    "lib": ["es2021"],
+    "module": "es2022",
+    "moduleResolution": "Bundler",
+    "types": ["@cloudflare/workers-types/2023-07-01"],
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true
   },
-  "include": ["worker/**/*", "alchemy.run.ts"],
-  "exclude": ["node_modules"]
+  "include": ["worker/**/*.ts"]
 }
 

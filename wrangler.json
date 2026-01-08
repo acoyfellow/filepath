@@ -1,0 +1,25 @@
+{
+  "name": "terminal-app",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-04-03",
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": [
+        "Sandbox"
+      ]
+    }
+  ]
+}
+
