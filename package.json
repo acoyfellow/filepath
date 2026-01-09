@@ -23,6 +23,7 @@
     "@cloudflare/workers-types": "^4.0.0",
     "alchemy": "^0.83.0",
     "effect": "^3.19.14",
-    "hono": "^4.0.0"
+    "hono": "^4.0.0",
+    "ws": "^8.19.0"
   }
 }
