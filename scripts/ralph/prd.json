@@ -94,11 +94,11 @@
       "files_to_modify": [],
       "verification_command": "bun run deploy && curl https://api.myfilepath.com/test/container"
     },
-    {
-      "id": "FE-001",
-      "title": "Minimal frontend - worker-served HTML with xterm.js",
-      "status": "completed",
-      "priority": "P0",
+     {
+       "id": "FE-001",
+       "title": "Minimal frontend - worker-served HTML with xterm.js",
+       "status": "verified",
+       "priority": "P0",
       "description": "Add simple HTML page served from worker (like JUNK2 approach) with xterm.js loaded via CDN. Single terminal, no tabs, no session management.",
       "acceptance_criteria": [
         "GET / returns HTML page with xterm.js terminal",

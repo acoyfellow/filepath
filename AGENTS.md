@@ -19,7 +19,7 @@ No flakiness. No reconnection hacks. Just works.
 7. **Small tests on crucial aspects** - Add test harnesses for critical functionality as you go
 8. **Never commit without passing verification** - All tests must pass, code must build
 9. Use version-controlled files as persistent memory
-10. Reference Effect patterns from `~/.vendor/effect` when applicable
+10. Reference Effect patterns from `/Users/jordan/.vendor/effect` when applicable
 
 ## Tech Stack
 
