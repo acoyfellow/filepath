@@ -78,11 +78,11 @@
       "files_to_modify": ["worker/index.ts", "worker/effects.ts"],
       "verification_command": "bun run dev && manually trigger error scenarios"
     },
-    {
-      "id": "WS-006",
-      "title": "Production deploy and verify",
-      "status": "pending",
-      "priority": "P1",
+     {
+       "id": "WS-006",
+       "title": "Production deploy and verify",
+       "status": "verified",
+       "priority": "P1",
       "description": "Deploy to prod (api.myfilepath.com) and verify same behavior as local dev.",
       "acceptance_criteria": [
         "bun run deploy succeeds",
