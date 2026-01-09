@@ -62,11 +62,11 @@
       "files_to_modify": ["worker/index.ts"],
       "verification_command": "manual test with websocat or browser"
     },
-    {
-      "id": "WS-005",
-      "title": "Add Effect-based error handling",
-      "status": "completed",
-      "priority": "P1",
+     {
+       "id": "WS-005",
+       "title": "Add Effect-based error handling",
+       "status": "verified",
+       "priority": "P1",
       "description": "Wrap sandbox operations in Effect for typed errors, retries, and timeouts. Reference ~/.vendor/effect patterns.",
       "acceptance_criteria": [
         "ContainerError, WebSocketError types defined",
