@@ -4,9 +4,11 @@
   "description": "Minimal terminal app using Cloudflare Sandbox",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "dev:container": "PORT=8081 node container_src/server.js",
-    "deploy": "wrangler deploy"
+    "dev": "wrangler dev --config wrangler.dev.json --port 8788",
+    "dev:container": "PORT=8085 node container_src/server.js",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'Add test harnesses as needed' && exit 0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

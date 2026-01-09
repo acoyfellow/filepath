@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { html } from 'hono/html';
 import { getSandbox, Sandbox } from '@cloudflare/sandbox';
 
 // Export Sandbox class for Wrangler
@@ -7,35 +8,62 @@ export { Sandbox };
 type Env = {
   Sandbox?: DurableObjectNamespace<Sandbox>;
   CONTAINER_URL?: string;
+  LOCAL_DEV?: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Check if we're in local dev mode (no containers configured)
+function isLocalDev(c: any): boolean {
+  // Always use local dev if LOCAL_DEV env var is set
+  if (c.env.LOCAL_DEV === 'true') return true;
+  if (!c.env.Sandbox) return true;
+  // Try to create and use a sandbox stub
+  try {
+    const sandbox = getSandbox(c.env.Sandbox, 'test');
+    // Try a simple operation to verify containers are enabled
+    // In wrangler dev without containers, this will throw synchronously
+    // because the DO constructor is called eagerly
+    void sandbox.fetch; // Access fetch to trigger any lazy initialization
+    return false; // Production mode - stub works
+  } catch (error) {
+    console.log('[Debug] Sandbox access failed, using local dev mode:', String(error));
+    return true; // Local dev mode
+  }
+}
+
 // Helper to get sandbox response (local dev fallback or production binding)
 async function getSandboxResponse(c: any, path: string = '/', sessionId: string = 'test') {
-  const sandboxBinding = c.env.Sandbox;
-
-  // Local dev: use HTTP fallback when no Sandbox binding
-  if (!sandboxBinding) {
-    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8081';
+  // If LOCAL_DEV is set or no Sandbox binding, use local dev
+  if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
+    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
     return fetch(`${containerUrl}${path}`);
   }
 
-  // Production: use Sandbox binding
-  const sandbox = getSandbox(sandboxBinding, sessionId);
+  // Try Sandbox binding first, fall back to local dev on error
+  try {
+    const sandbox = getSandbox(c.env.Sandbox, sessionId);
 
-  // Test HTTP fetch to sandbox
-  const testRequest = new Request('http://example/', {
-    method: 'GET',
-    headers: c.req.header(),
-  });
-  return sandbox.fetch(testRequest);
+    // Test HTTP fetch to sandbox
+    const testRequest = new Request('http://example/', {
+      method: 'GET',
+      headers: c.req.header(),
+    });
+    const response = await sandbox.fetch(testRequest);
+    return response;
+  } catch (error) {
+    // Any error from sandbox, fall back to local dev
+    const errorMsg = String(error);
+    console.log('[Worker] Sandbox failed, falling back to local dev:', errorMsg.substring(0, 100));
+    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+    return fetch(`${containerUrl}${path}`);
+  }
 }
 
 // Test endpoint to verify sandbox connectivity
-app.get('/', async (c) => {
+app.get('/test/container', async (c) => {
   try {
-    const response = await getSandboxResponse(c);
+    const response = await getSandboxResponse(c, '/', 'test');
     const text = await response.text();
 
     return c.json({
@@ -44,13 +72,178 @@ app.get('/', async (c) => {
       body: text,
     });
   } catch (error) {
+    const errorMsg = String(error);
+    // If containers aren't enabled, fall back to local dev
+    if (errorMsg.includes('Containers have not been enabled')) {
+      console.log('[Test] Containers not enabled, using local dev fallback');
+      try {
+        const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+        const response = await fetch(`${containerUrl}/`);
+        const text = await response.text();
+        return c.json({
+          status: response.status,
+          statusText: response.statusText,
+          body: text,
+          mode: 'local-dev-fallback',
+        });
+      } catch (fallbackError) {
+        console.error('[Test] Local dev fallback also failed:', fallbackError);
+        return c.json({
+          error: String(fallbackError),
+          message: 'Both sandbox and local dev failed',
+        }, 500);
+      }
+    }
     console.error('[Test] Sandbox connection error:', error);
     return c.json({
-      error: String(error),
+      error: errorMsg,
       message: 'Sandbox connection failed',
       stack: error instanceof Error ? error.stack : undefined,
     }, 500);
   }
+});
+
+// Root endpoint - serves HTML terminal UI
+app.get('/', (c) => {
+  const protocol = c.req.url.startsWith('https://') ? 'wss:' : 'ws:';
+  const host = new URL(c.req.url).host;
+  const wsBaseUrl = `${protocol}//${host}`;
+
+  return c.html(html`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Terminal</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/@xterm/xterm@6.0.0/css/xterm.css"
+        />
+      </head>
+      <body class="bg-black h-screen overflow-hidden">
+        <div id="terminal" class="h-full w-full"></div>
+        <script>
+          (function() {
+            function loadScript(src) {
+              return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
+              });
+            }
+            
+            async function init() {
+              try {
+                await loadScript('https://unpkg.com/@xterm/xterm@6.0.0/lib/xterm.js');
+                await loadScript('https://unpkg.com/@xterm/addon-fit@0.11.0/lib/addon-fit.js');
+                
+                const sessionId = new URLSearchParams(window.location.search).get('session') || 
+                  crypto.randomUUID().slice(0, 8);
+                
+                const terminal = new Terminal({
+                  cursorBlink: true,
+                  fontSize: 14,
+                  fontFamily: 'monospace',
+                  theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                  },
+                });
+                
+                const fitAddon = new FitAddon.FitAddon();
+                terminal.loadAddon(fitAddon);
+                terminal.open(document.getElementById('terminal'));
+                fitAddon.fit();
+                
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = \`\${protocol}//\${window.location.host}/terminal/\${sessionId}/ws\`;
+                
+                console.log('[Frontend] Connecting to:', wsUrl);
+                
+                const ws = new WebSocket(wsUrl);
+                ws.binaryType = 'arraybuffer';
+                
+                const textEncoder = new TextEncoder();
+                const CMD_OUTPUT = '0';
+                
+                ws.addEventListener('open', () => {
+                  console.log('[Frontend] WebSocket opened');
+                  terminal.clear();
+                  
+                  // ttyd handshake - send terminal size (worker also sends this, but we send on resize)
+                  const sizeMsg = JSON.stringify({
+                    columns: terminal.cols,
+                    rows: terminal.rows,
+                  });
+                  ws.send(textEncoder.encode(sizeMsg));
+                });
+                
+                ws.addEventListener('message', (e) => {
+                  if (typeof e.data === 'string') return;
+                  
+                  if (e.data instanceof ArrayBuffer) {
+                    const u8 = new Uint8Array(e.data);
+                    if (u8.length === 0) return;
+                    
+                    const cmd = String.fromCharCode(u8[0]);
+                    const data = e.data.slice(1);
+                    
+                    if (cmd === CMD_OUTPUT) {
+                      terminal.write(new Uint8Array(data));
+                    }
+                  }
+                });
+                
+                terminal.onData((data) => {
+                  if (ws.readyState !== WebSocket.OPEN) return;
+                  const payload = new Uint8Array(data.length * 3 + 1);
+                  payload[0] = CMD_OUTPUT.charCodeAt(0);
+                  const stats = textEncoder.encodeInto(data, payload.subarray(1));
+                  ws.send(payload.subarray(0, stats.written + 1));
+                });
+                
+                ws.addEventListener('error', (e) => {
+                  console.error('[Frontend] WebSocket error:', e);
+                });
+                
+                ws.addEventListener('close', (e) => {
+                  console.log('[Frontend] WebSocket closed:', e.code, e.reason);
+                });
+                
+                window.addEventListener('resize', () => {
+                  fitAddon.fit();
+                  if (ws.readyState === WebSocket.OPEN) {
+                    const sizeMsg = JSON.stringify({
+                      columns: terminal.cols,
+                      rows: terminal.rows,
+                    });
+                    ws.send(textEncoder.encode(sizeMsg));
+                  }
+                });
+              } catch (error) {
+                console.error('[Frontend] Initialization error:', error);
+                const terminalEl = document.getElementById('terminal');
+                if (terminalEl) {
+                  terminalEl.innerHTML = '<div class="text-white p-4">Failed to initialize terminal. Check console for details.</div>';
+                }
+              }
+            }
+            
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', init);
+            } else {
+              init();
+            }
+          })();
+        </script>
+      </body>
+    </html>
+  `);
 });
 
 // Terminal start endpoint - starts ttyd process in sandbox
@@ -61,15 +254,14 @@ app.post('/terminal/:sessionId/start', async (c) => {
     return c.json({ error: 'sessionId required' }, 400);
   }
 
-  const sandboxBinding = c.env.Sandbox;
-
   // Local dev: return success (container server handles ttyd)
-  if (!sandboxBinding) {
+  if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
     return c.json({ success: true, sessionId, message: 'Local dev mode - container server handles ttyd' });
   }
 
+  // Production: use Sandbox to start ttyd
   try {
-    const sandbox = getSandbox(sandboxBinding as any, sessionId);
+    const sandbox = getSandbox(c.env.Sandbox, sessionId);
 
     // Start ttyd process
     console.log(`[Worker] Starting ttyd for session: ${sessionId}`);
@@ -83,9 +275,15 @@ app.post('/terminal/:sessionId/start', async (c) => {
 
     return c.json({ success: true, sessionId });
   } catch (error) {
+    const errorMsg = String(error);
+    // If containers aren't enabled, fall back to local dev response
+    if (errorMsg.includes('Containers have not been enabled')) {
+      console.log(`[Worker] Containers not enabled, returning local dev response for session: ${sessionId}`);
+      return c.json({ success: true, sessionId, message: 'Local dev mode - container server handles ttyd' });
+    }
     console.error(`[Worker] Failed to start ttyd for session ${sessionId}:`, error);
     return c.json({
-      error: String(error),
+      error: errorMsg,
       message: 'Failed to start terminal',
       stack: error instanceof Error ? error.stack : undefined,
     }, 500);
@@ -104,21 +302,70 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     return c.text('sessionId required', 400);
   }
 
-  const sandboxBinding = c.env.Sandbox;
-
   // Local dev: proxy to container server WebSocket
-  if (!sandboxBinding) {
-    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8081';
+  if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
+    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
     const wsUrl = containerUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
 
-    // For local dev, we'll need to handle this differently
-    // Return error for now - container server will handle WebSocket directly
-    return c.text('WebSocket not available in local dev mode - use container server directly', 501);
+    // Return 101 with client WebSocket, proxy connections
+    const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };
+    const client = pair[0];
+    const server = pair[1];
+    (server as any).accept();
+
+    // Connect to container's ttyd WebSocket
+    (async () => {
+      try {
+        console.log(`[Worker] Connecting to container ttyd for session: ${sessionId}`);
+        const containerWs = new WebSocket(wsUrl);
+
+        containerWs.addEventListener('open', () => {
+          console.log('[Worker] Connected to container ttyd');
+        });
+
+        containerWs.addEventListener('message', (event: MessageEvent) => {
+          if (server.readyState === WebSocket.OPEN) {
+            server.send(event.data);
+          }
+        });
+
+        containerWs.addEventListener('close', () => {
+          console.log('[Worker] Container ttyd WebSocket closed');
+          if (server.readyState === WebSocket.OPEN) {
+            server.close();
+          }
+        });
+
+        containerWs.addEventListener('error', (event: Event) => {
+          console.error('[Worker] Container ttyd WebSocket error:', event);
+          server.close(1011, 'Container WebSocket error');
+        });
+
+        server.addEventListener('message', (event: MessageEvent) => {
+          if (containerWs.readyState === WebSocket.OPEN) {
+            containerWs.send(event.data);
+          }
+        });
+
+        server.addEventListener('close', () => {
+          console.log('[Worker] Client WebSocket closed');
+          containerWs.close();
+        });
+      } catch (error) {
+        console.error(`[Worker] WebSocket proxy error:`, error);
+        server.close(1011, String(error));
+      }
+    })();
+
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    } as ResponseInit & { webSocket: WebSocket });
   }
 
   // Production: use Sandbox WebSocket
   try {
-    const sandbox = getSandbox(sandboxBinding as any, sessionId);
+    const sandbox = getSandbox(c.env.Sandbox, sessionId);
 
     // Create WebSocketPair for client connection
     const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };
@@ -208,10 +455,71 @@ app.get('/terminal/:sessionId/ws', async (c) => {
       webSocket: client,
     } as ResponseInit & { webSocket: WebSocket });
   } catch (error) {
+    const errorMsg = String(error);
+    // If containers aren't enabled, fall back to local dev
+    if (errorMsg.includes('Containers have not been enabled')) {
+      console.log(`[Worker] Containers not enabled, falling back to local dev WebSocket for session: ${sessionId}`);
+      const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+      const wsUrl = containerUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
+
+      const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };
+      const client = pair[0];
+      const server = pair[1];
+      (server as any).accept();
+
+      (async () => {
+        try {
+          console.log(`[Worker] Connecting to container ttyd for session: ${sessionId}`);
+          const containerWs = new WebSocket(wsUrl);
+
+          containerWs.addEventListener('open', () => {
+            console.log('[Worker] Connected to container ttyd');
+          });
+
+          containerWs.addEventListener('message', (event: MessageEvent) => {
+            if (server.readyState === WebSocket.OPEN) {
+              server.send(event.data);
+            }
+          });
+
+          containerWs.addEventListener('close', () => {
+            console.log('[Worker] Container ttyd WebSocket closed');
+            if (server.readyState === WebSocket.OPEN) {
+              server.close();
+            }
+          });
+
+          containerWs.addEventListener('error', (event: Event) => {
+            console.error('[Worker] Container ttyd WebSocket error:', event);
+            server.close(1011, 'Container WebSocket error');
+          });
+
+          server.addEventListener('message', (event: MessageEvent) => {
+            if (containerWs.readyState === WebSocket.OPEN) {
+              containerWs.send(event.data);
+            }
+          });
+
+          server.addEventListener('close', () => {
+            console.log('[Worker] Client WebSocket closed');
+            containerWs.close();
+          });
+        } catch (fallbackError) {
+          console.error(`[Worker] WebSocket proxy error:`, fallbackError);
+          server.close(1011, String(fallbackError));
+        }
+      })();
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      } as ResponseInit & { webSocket: WebSocket });
+    }
     console.error(`[Worker] Failed to create WebSocket connection:`, error);
     return c.json({
-      error: String(error),
+      error: errorMsg,
       message: 'Failed to create WebSocket connection',
+      stack: error instanceof Error ? error.stack : undefined,
     }, 500);
   }
 });

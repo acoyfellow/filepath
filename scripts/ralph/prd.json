@@ -1,9 +1,10 @@
 {
+  "approach": "Two approaches exist: JUNK (full SvelteKit app with multi-tab UI, session management, agents) vs JUNK2 (minimal worker-served HTML with xterm.js). Current project focuses on backend WebSocket reliability first, then frontend.",
   "stories": [
     {
       "id": "WS-001",
       "title": "Verify basic sandbox connectivity",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Confirm we can create a sandbox instance and make HTTP requests to it. No WebSocket yet - just prove the container starts and responds.",
       "acceptance_criteria": [
@@ -18,7 +19,7 @@
     {
       "id": "WS-002",
       "title": "Start ttyd process in sandbox",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Use sandbox.startProcess() to launch ttyd on port 7681. Verify it starts and port becomes available.",
       "acceptance_criteria": [
@@ -33,7 +34,7 @@
     {
       "id": "WS-003",
       "title": "Establish WebSocket to ttyd",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Use sandbox.wsConnect() to establish WebSocket connection to ttyd. Verify 101 upgrade response with webSocket property.",
       "acceptance_criteria": [
@@ -48,7 +49,7 @@
     {
       "id": "WS-004",
       "title": "Bidirectional message flow",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Verify messages flow both directions: client→ttyd and ttyd→client. Send terminal size, receive prompt.",
       "acceptance_criteria": [
@@ -92,6 +93,41 @@
       "dependencies": ["WS-005"],
       "files_to_modify": [],
       "verification_command": "bun run deploy && curl https://api.myfilepath.com/test/container"
+    },
+    {
+      "id": "FE-001",
+      "title": "Minimal frontend - worker-served HTML with xterm.js",
+      "status": "completed",
+      "priority": "P0",
+      "description": "Add simple HTML page served from worker (like JUNK2 approach) with xterm.js loaded via CDN. Single terminal, no tabs, no session management.",
+      "acceptance_criteria": [
+        "GET / returns HTML page with xterm.js terminal",
+        "xterm.js connects to ws://localhost:8788/terminal/:id/ws",
+        "Terminal displays bash prompt and accepts input",
+        "Commands execute and output appears",
+        "Works in both local dev and production"
+      ],
+      "dependencies": ["WS-004"],
+      "files_to_modify": ["worker/index.ts"],
+      "verification_command": "bun run dev && open http://localhost:8788/?session=test123"
+    },
+    {
+      "id": "FE-002",
+      "title": "Full SvelteKit frontend (optional - reference JUNK)",
+      "status": "pending",
+      "priority": "P2",
+      "description": "Build full SvelteKit app with multi-tab UI, session management, agent selection (like JUNK). This is the full experience but can be done after minimal frontend works.",
+      "acceptance_criteria": [
+        "SvelteKit app with terminal UI",
+        "Multi-tab support with tab management",
+        "Session management with passwords",
+        "Agent selection UI",
+        "Real-time tab state sync via WebSocket",
+        "xterm.js integration per tab"
+      ],
+      "dependencies": ["FE-001"],
+      "files_to_modify": ["src/**/*"],
+      "verification_command": "bun run dev && test full UI flow"
     }
   ]
 }

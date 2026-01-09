@@ -5,14 +5,9 @@
   "observability": {
     "enabled": true
   },
-  "containers": [
-    {
-      "name": "Sandbox",
-      "class_name": "Sandbox",
-      "image": "./Dockerfile",
-      "max_instances": 10
-    }
-  ],
+  "vars": {
+    "LOCAL_DEV": "true"
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -20,14 +15,5 @@
         "name": "Sandbox"
       }
     ]
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": [
-        "Sandbox"
-      ]
-    }
-  ]
+  }
 }
-

@@ -2,7 +2,7 @@ import { createServer } from "http";
 import { spawn } from "child_process";
 import { WebSocketServer, WebSocket } from "ws";
 
-const PORT = process.env.PORT || 8081;
+const PORT = process.env.PORT || 8085;
 
 // Store ttyd process (single instance for local dev)
 let ttydProcess = null;
