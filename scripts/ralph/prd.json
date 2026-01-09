@@ -46,11 +46,11 @@
       "files_to_modify": ["worker/index.ts"],
       "verification_command": "websocat ws://localhost:1337/terminal/test123/ws"
     },
-    {
-      "id": "WS-004",
-      "title": "Bidirectional message flow",
-      "status": "completed",
-      "priority": "P0",
+     {
+       "id": "WS-004",
+       "title": "Bidirectional message flow",
+       "status": "verified",
+       "priority": "P0",
       "description": "Verify messages flow both directions: client→ttyd and ttyd→client. Send terminal size, receive prompt.",
       "acceptance_criteria": [
         "Sending {columns:80,rows:24} triggers ttyd response",
