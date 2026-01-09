@@ -8,17 +8,21 @@
     "dev:container": "PORT=8085 node container_src/server.js",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'Add test harnesses as needed' && exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ws-001": "bun run test/ws-001.test.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
     "wrangler": "^4.35.0"
   },
   "dependencies": {
     "@cloudflare/sandbox": "^0.6.9",
     "@cloudflare/workers-types": "^4.0.0",
     "alchemy": "^0.83.0",
+    "effect": "^3.19.14",
     "hono": "^4.0.0"
   }
 }

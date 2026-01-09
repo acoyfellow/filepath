@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { getSandbox, Sandbox } from '@cloudflare/sandbox';
+import { Effect } from 'effect';
+import { ContainerError, WebSocketError, retryWithBackoff, withTimeout } from './effects';
 
 // Export Sandbox class for Wrangler
 export { Sandbox };
@@ -259,20 +261,32 @@ app.post('/terminal/:sessionId/start', async (c) => {
     return c.json({ success: true, sessionId, message: 'Local dev mode - container server handles ttyd' });
   }
 
-  // Production: use Sandbox to start ttyd
+  // Production: use Sandbox to start ttyd with Effect
   try {
     const sandbox = getSandbox(c.env.Sandbox, sessionId);
 
-    // Start ttyd process
-    console.log(`[Worker] Starting ttyd for session: ${sessionId}`);
-    const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+    // Wrap sandbox operations in Effect with retry and timeout
+    const startTtydEffect = Effect.gen(function* () {
+      console.log(`[Worker] Starting ttyd for session: ${sessionId}`);
+      const ttyd = yield* Effect.tryPromise({
+        try: () => sandbox.startProcess('ttyd -W -p 7681 bash'),
+        catch: (error) => new ContainerError(`Failed to start ttyd process: ${String(error)}`, error),
+      });
 
-    // Wait for port 7681 to be ready
-    console.log(`[Worker] Waiting for port 7681...`);
-    await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 30000 });
+      console.log(`[Worker] Waiting for port 7681...`);
+      yield* Effect.tryPromise({
+        try: () => ttyd.waitForPort(7681, { mode: 'tcp', timeout: 30000 }),
+        catch: (error) => new ContainerError(`Port 7681 not ready: ${String(error)}`, error),
+      });
 
-    console.log(`[Worker] ttyd ready on port 7681 for session: ${sessionId}`);
+      console.log(`[Worker] ttyd ready on port 7681 for session: ${sessionId}`);
+      return ttyd;
+    }).pipe(
+      (effect) => retryWithBackoff(effect, 3),
+      (effect) => withTimeout(effect, 30000)
+    );
 
+    await Effect.runPromise(startTtydEffect);
     return c.json({ success: true, sessionId });
   } catch (error) {
     const errorMsg = String(error);
@@ -280,6 +294,16 @@ app.post('/terminal/:sessionId/start', async (c) => {
     if (errorMsg.includes('Containers have not been enabled')) {
       console.log(`[Worker] Containers not enabled, returning local dev response for session: ${sessionId}`);
       return c.json({ success: true, sessionId, message: 'Local dev mode - container server handles ttyd' });
+    }
+    // Handle Effect errors
+    if (error && typeof error === 'object' && '_tag' in error) {
+      const effectError = error as { _tag: string; message?: string; cause?: unknown };
+      console.error(`[Worker] Effect error (${effectError._tag}):`, effectError.message || errorMsg);
+      return c.json({
+        error: effectError.message || errorMsg,
+        errorType: effectError._tag,
+        message: 'Failed to start terminal',
+      }, 500);
     }
     console.error(`[Worker] Failed to start ttyd for session ${sessionId}:`, error);
     return c.json({
@@ -363,7 +387,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     } as ResponseInit & { webSocket: WebSocket });
   }
 
-  // Production: use Sandbox WebSocket
+  // Production: use Sandbox WebSocket with Effect
   try {
     const sandbox = getSandbox(c.env.Sandbox, sessionId);
 
@@ -373,7 +397,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     const server = pair[1];
     (server as any).accept();
 
-    // Connect to ttyd asynchronously
+    // Connect to ttyd asynchronously with Effect
     (async () => {
       try {
         console.log(`[Worker] Connecting to ttyd for session: ${sessionId}`);
@@ -386,16 +410,25 @@ app.get('/terminal/:sessionId/ws', async (c) => {
           headers: c.req.raw.headers,
         });
 
-        console.log(`[Worker] Calling sandbox.wsConnect to port 7681...`);
-        const ttydResponse = await sandbox.wsConnect(wsRequest, 7681) as Response & { webSocket?: WebSocket };
+        // Wrap wsConnect in Effect with retry and timeout
+        const connectWsEffect = Effect.gen(function* () {
+          console.log(`[Worker] Calling sandbox.wsConnect to port 7681...`);
+          const ttydResponse = yield* Effect.tryPromise({
+            try: () => sandbox.wsConnect(wsRequest, 7681) as Promise<Response & { webSocket?: WebSocket }>,
+            catch: (error) => new WebSocketError(`Failed to connect WebSocket: ${String(error)}`, error),
+          });
 
-        if (ttydResponse.status !== 101 || !ttydResponse.webSocket) {
-          console.error(`[Worker] ttyd connection failed:`, ttydResponse.status);
-          server.close(1011, 'Failed to connect to ttyd');
-          return;
-        }
+          if (ttydResponse.status !== 101 || !ttydResponse.webSocket) {
+            yield* Effect.fail(new WebSocketError(`ttyd connection failed: status ${ttydResponse.status}`));
+          }
 
-        const ttydWs = ttydResponse.webSocket;
+          return ttydResponse.webSocket!;
+        }).pipe(
+          (effect) => retryWithBackoff(effect, 3),
+          (effect) => withTimeout(effect, 30000)
+        );
+
+        const ttydWs: WebSocket = await Effect.runPromise(connectWsEffect);
         console.log(`[Worker] ttyd WebSocket received, accepting...`);
         (ttydWs as any).accept();
 
@@ -445,8 +478,15 @@ app.get('/terminal/:sessionId/ws', async (c) => {
         console.log(`[Worker] Sending terminal size to ttyd (text):`, sizeMsg);
         ttydWs.send(sizeMsg);
       } catch (error) {
-        console.error(`[Worker] WebSocket connection error:`, error);
-        server.close(1011, String(error));
+        // Handle Effect errors
+        if (error && typeof error === 'object' && '_tag' in error) {
+          const effectError = error as { _tag: string; message?: string; cause?: unknown };
+          console.error(`[Worker] Effect error (${effectError._tag}):`, effectError.message || String(error));
+          server.close(1011, effectError.message || 'WebSocket connection failed');
+        } else {
+          console.error(`[Worker] WebSocket connection error:`, error);
+          server.close(1011, String(error));
+        }
       }
     })();
 

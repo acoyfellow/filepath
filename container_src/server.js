@@ -29,44 +29,79 @@ wss.on('connection', function connection(ws, request) {
   // Spawn ttyd process if not already running
   if (!ttydProcess) {
     console.log('[Container] Spawning ttyd process...');
+    
     ttydProcess = spawn('ttyd', ['-W', '-p', '7681', 'bash'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
+    ttydProcess.on('error', (error) => {
+      if (error.code === 'ENOENT') {
+        console.error('[Container] ERROR: ttyd not found. Please install ttyd:');
+        console.error('  macOS: brew install ttyd');
+        console.error('  Linux: sudo apt-get install ttyd  (or use your package manager)');
+        console.error('  Or build from source: https://github.com/tsl0922/ttyd');
+        ws.close(1011, 'ttyd not installed');
+        ttydProcess = null;
+        return;
+      } else {
+        console.error('[Container] ttyd spawn error:', error);
+        ws.close(1011, 'Failed to start ttyd');
+        ttydProcess = null;
+        return;
+      }
+    });
+
+    // Set up exit handler
     ttydProcess.on('exit', () => {
       console.log('[Container] ttyd process exited');
       ttydProcess = null;
       ttydWsServer = null;
     });
 
-    // Connect to ttyd WebSocket server
-    const ttydWsUrl = 'ws://localhost:7681/ws';
-    const ttydWs = new WebSocket(ttydWsUrl);
+    // Check if spawn succeeded (has PID) after a tick
+    process.nextTick(() => {
+      // Only connect if ttyd process actually started (has PID)
+      if (ttydProcess && ttydProcess.pid) {
+        // Wait a bit for ttyd to start before connecting
+        setTimeout(() => {
+          if (!ttydProcess) {
+            return;
+          }
+          
+          // Connect to ttyd WebSocket server
+          const ttydWsUrl = 'ws://localhost:7681/ws';
+          const ttydWs = new WebSocket(ttydWsUrl);
 
-    ttydWs.on('open', () => {
-      console.log('[Container] Connected to ttyd WebSocket');
-      ttydWsServer = ttydWs;
+          ttydWs.on('open', () => {
+            console.log('[Container] Connected to ttyd WebSocket');
+            ttydWsServer = ttydWs;
 
-      // Send terminal size to ttyd
-      const sizeMsg = JSON.stringify({ columns: 80, rows: 24 });
-      ttydWs.send(sizeMsg);
+            // Send terminal size to ttyd
+            const sizeMsg = JSON.stringify({ columns: 80, rows: 24 });
+            ttydWs.send(sizeMsg);
 
-      // Forward messages: ttyd -> client
-      ttydWs.on('message', (data) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(data);
-        }
-      });
+            // Forward messages: ttyd -> client
+            ttydWs.on('message', (data) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(data);
+              }
+            });
+          });
+
+          ttydWs.on('error', (error) => {
+            console.error('[Container] ttyd WebSocket error:', error);
+          });
+
+          ttydWs.on('close', () => {
+            console.log('[Container] ttyd WebSocket closed');
+            ttydWsServer = null;
+          });
+        }, 500);
+      }
+      // If spawn failed (no PID), error handler already closed the client WebSocket
     });
-
-    ttydWs.on('error', (error) => {
-      console.error('[Container] ttyd WebSocket error:', error);
-    });
-
-    ttydWs.on('close', () => {
-      console.log('[Container] ttyd WebSocket closed');
-      ttydWsServer = null;
-    });
+  } else {
+    // ttyd already running, messages will be forwarded via existing ttydWsServer
   }
 
   // Forward messages: client -> ttyd

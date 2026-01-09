@@ -1,11 +1,11 @@
 {
   "approach": "Two approaches exist: JUNK (full SvelteKit app with multi-tab UI, session management, agents) vs JUNK2 (minimal worker-served HTML with xterm.js). Current project focuses on backend WebSocket reliability first, then frontend.",
   "stories": [
-    {
-      "id": "WS-001",
-      "title": "Verify basic sandbox connectivity",
-      "status": "completed",
-      "priority": "P0",
+     {
+       "id": "WS-001",
+       "title": "Verify basic sandbox connectivity",
+       "status": "verified",
+       "priority": "P0",
       "description": "Confirm we can create a sandbox instance and make HTTP requests to it. No WebSocket yet - just prove the container starts and responds.",
       "acceptance_criteria": [
         "GET /test/container returns 200 with response body",
@@ -65,7 +65,7 @@
     {
       "id": "WS-005",
       "title": "Add Effect-based error handling",
-      "status": "pending",
+      "status": "completed",
       "priority": "P1",
       "description": "Wrap sandbox operations in Effect for typed errors, retries, and timeouts. Reference ~/.vendor/effect patterns.",
       "acceptance_criteria": [
