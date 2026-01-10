@@ -1,12 +1,12 @@
 {
   "approach": "Two approaches exist: JUNK (full SvelteKit app with multi-tab UI, session management, agents) vs JUNK2 (minimal worker-served HTML with xterm.js). Current project focuses on backend WebSocket reliability first, then frontend.\n\nCURRENT STATUS: BLOCKED - See BUG-REPORT-WebSocket-Message-Flow.md for critical bug blocking all WebSocket functionality. Worker serves HTML and WebSocket endpoint, but container server cannot establish reliable connection to local ttyd process, causing terminals to appear black.",
   "stories": [
-    {
-      "id": "WS-001",
-      "title": "Verify basic sandbox connectivity",
-      "status": "blocked",
-      "priority": "P0",
-      "blocking_issue": "Container server ttyd WebSocket connection fails - see BUG-REPORT-WebSocket-Message-Flow.md",
+     {
+       "id": "WS-001",
+       "title": "Verify basic sandbox connectivity",
+       "status": "completed",
+       "priority": "P0",
+       "blocking_issue": null,
       "description": "Confirm we can create a sandbox instance and make HTTP requests to it. No WebSocket yet - just prove the container starts and responds.",
       "acceptance_criteria": [
         "GET /test/container returns 200 with response body",
@@ -195,10 +195,10 @@
     },
      {
        "id": "FE-002",
-       "title": "Full SvelteKit frontend (optional - reference JUNK)",
+       "title": "Full SvelteKit frontend (reference JUNK and JUNK2)",
        "status": "cancelled",
        "priority": "P2",
-      "description": "Build full SvelteKit app with multi-tab UI, session management, agent selection (like JUNK). This is the full experience but can be done after minimal frontend works.",
+      "description": "Build full SvelteKit app with multi-tab UI, session management, agent selection (like JUNK and JUNK2). This is the full experience but should be done after minimal frontend works. This is the middle of the deploy goal. ",
       "acceptance_criteria": [
         "SvelteKit app with terminal UI",
         "Multi-tab support with tab management",

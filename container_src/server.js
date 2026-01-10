@@ -90,6 +90,8 @@ wss.on('connection', function connection(ws, request) {
 
           ttydWs.on('error', (error) => {
             console.error('[Container] ttyd WebSocket error:', error);
+            console.error('[Container] Ttyd WebSocket error - closing connection to client');
+            ws.close(1011, 'Container internal error');
           });
 
           ttydWs.on('close', () => {
@@ -116,7 +118,14 @@ wss.on('connection', function connection(ws, request) {
   });
 
   ws.on('error', (error) => {
-    console.error('[Container] Client WebSocket error:', error);
+    console.error('[Container] Client WebSocket error:', {
+      type: error.type,
+      message: error.message,
+      code: error.code,
+      reason: error.reason
+    });
+    console.error('[Container] Client WebSocket error - closing connection');
+    ws.close(1011, 'Container internal error');
   });
 });
 

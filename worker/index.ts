@@ -330,6 +330,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
   if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
     const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
     const wsUrl = containerUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
+    console.log(`[Worker] Local dev mode: Connecting to container at ${wsUrl}`);
 
     // Return 101 with client WebSocket, proxy connections
     const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };
@@ -337,11 +338,11 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     const server = pair[1];
     (server as any).accept();
 
-    // Connect to container's ttyd WebSocket
-    (async () => {
-      try {
-        console.log(`[Worker] Connecting to container ttyd for session: ${sessionId}`);
-        const containerWs = new WebSocket(wsUrl);
+        // Connect to container's ttyd WebSocket
+        (async () => {
+          try {
+            console.log(`[Worker] Connecting to container ttyd for session: ${sessionId} at ${wsUrl}`);
+            const containerWs = new WebSocket(wsUrl);
 
         containerWs.addEventListener('open', () => {
           console.log('[Worker] Connected to container ttyd');
@@ -349,7 +350,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
 
         containerWs.addEventListener('message', (event: MessageEvent) => {
           if (server.readyState === WebSocket.OPEN) {
-            server.send(event.data);
+            server.send(event.data); // Forward data FROM ttyd (containerWs) TO client (server)
           }
         });
 
