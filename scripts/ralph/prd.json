@@ -53,12 +53,12 @@
       "files_to_modify": ["worker/index.ts"],
       "verification_command": "curl -X POST http://localhost:1337/terminal/test123/start"
     },
-    {
-      "id": "WS-003",
-      "title": "Establish WebSocket to ttyd",
-      "status": "blocked",
-      "priority": "P0",
-      "blocking_issue": "Depends on WS-002 - container must successfully start ttyd and connect to it",
+     {
+       "id": "WS-003",
+       "title": "Establish WebSocket to ttyd",
+       "status": "completed",
+       "priority": "P0",
+       "blocking_issue": null,
       "description": "Use sandbox.wsConnect() to establish WebSocket connection to ttyd. Verify 101 upgrade response with webSocket property.",
       "acceptance_criteria": [
         "GET /terminal/:id/ws with Upgrade:websocket returns 101",
