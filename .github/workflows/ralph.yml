@@ -1,0 +1,139 @@
+name: Ralph Loop
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - AGENTS.md
+      - scripts/ralph/**
+      - .opencode/**
+      - .github/workflows/ralph.yml
+
+jobs:
+  iterate:
+    if: github.event_name == 'workflow_dispatch' || contains(env.ALLOWED_BOT_ACTORS, github.actor)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      PAUSE_REGEX: '^[[:space:]]*-[[:space:]]*PAUSED:[[:space:]]*true'
+      ALLOWED_BOT_ACTORS: "github-actions[bot],ralph-bot,ralph-bot[bot]"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RALPH_PAT }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Install OpenCode CLI
+        run: |
+          set -e
+          curl --proto '=https' --tlsv1.2 -fsSL https://opencode.ai/install -o /tmp/opencode-install.sh
+          test -s /tmp/opencode-install.sh
+          if [[ -z "${OPENCODE_INSTALL_SHA256:-}" ]]; then
+            echo "OPENCODE_INSTALL_SHA256 is required to verify the installer checksum." >&2
+            exit 1
+          fi
+          actual=$(sha256sum /tmp/opencode-install.sh | cut -d' ' -f1)
+          if [[ "$actual" != "$OPENCODE_INSTALL_SHA256" ]]; then
+            echo "Checksum mismatch for OpenCode installer" >&2
+            exit 1
+          fi
+          bash /tmp/opencode-install.sh
+          rm /tmp/opencode-install.sh
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Validate JSON state
+        run: |
+          set -e
+          for file in scripts/ralph/prd.json scripts/ralph/constraints.json scripts/ralph/failure.json; do
+            jq empty "$file"
+          done
+
+      - name: Respect pause flag
+        id: pause
+        run: |
+          if grep -Eq "$PAUSE_REGEX" AGENTS.md; then
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Ralph iteration with OpenCode
+        if: steps.pause.outputs.paused != 'true'
+        id: iterate
+        continue-on-error: true
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          set -e
+          export PATH="$HOME/.opencode/bin:$PATH"
+          opencode run --config .opencode/opencode.json --once
+
+      - name: Guard verification
+        if: steps.pause.outputs.paused != 'true' && steps.iterate.outcome == 'success'
+        run: bash scripts/ralph/guard.sh scripts/ralph/constraints.json
+
+      - name: Commit success
+        if: steps.pause.outputs.paused != 'true' && steps.iterate.outcome == 'success'
+        run: |
+          set -e
+          if git status --porcelain | grep .; then
+            git config user.name "ralph-bot"
+            git config user.email "ralph-bot@users.noreply.github.com"
+            git add .
+            git commit -m "[ralph] auto-iteration"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+
+      - name: Handle iteration failure
+        if: steps.pause.outputs.paused != 'true' && steps.iterate.outcome != 'success'
+        run: |
+          set -e
+          now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          max_retries=$(jq -r '.maxFailureRetries // 3' scripts/ralph/constraints.json)
+          current=$(jq -r '.consecutiveFailures' scripts/ralph/failure.json)
+          next=$((current + 1))
+          jq --argjson n "$next" --arg url "${RUN_URL}" --arg ts "$now" --arg err "iteration failed" \
+            '.consecutiveFailures=$n | .lastRunUrl=$url | .lastError=$err | .updatedAt=$ts' \
+            scripts/ralph/failure.json > /tmp/failure.json
+          mv /tmp/failure.json scripts/ralph/failure.json
+          if (( next >= max_retries )); then
+            python - <<'PY'
+from pathlib import Path
+path = Path("AGENTS.md")
+lines = path.read_text().splitlines()
+updated = False
+new_lines = []
+for line in lines:
+    if line.strip().startswith("- PAUSED:"):
+        new_lines.append("- PAUSED: true")
+        updated = True
+    else:
+        new_lines.append(line)
+if not updated:
+    new_lines.insert(0, "- PAUSED: true")
+path.write_text("\n".join(new_lines) + "\n")
+PY
+          fi
+          if git status --porcelain | grep .; then
+            git config user.name "ralph-bot"
+            git config user.email "ralph-bot@users.noreply.github.com"
+            git add AGENTS.md scripts/ralph/failure.json
+            git commit -m "[ralph] record failure"
+            git push
+          else
+            echo "No failure state changes to commit."
+          fi
