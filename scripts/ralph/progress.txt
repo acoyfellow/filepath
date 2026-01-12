@@ -1,0 +1,1 @@
+Initialized Ralph loop scaffolding. Append one line per completed story with date, story id, and learning.

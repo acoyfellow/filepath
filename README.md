@@ -77,6 +77,15 @@ Visit `http://localhost:5173`
 - **URL sharing** - No auth needed, share via link
 - **Dump/fork** - Export tab state, clone to new sessions
 
+## Ralph loop (automation)
+
+- State lives in `AGENTS.md` and `scripts/ralph/`
+- Stories are tracked in `scripts/ralph/prd.json` (one story per run)
+- Guard: `bash scripts/ralph/guard.sh scripts/ralph/constraints.json`
+- Workflow: `.github/workflows/ralph.yml`
+- Trigger manually from GitHub Actions (workflow_dispatch) or by bot pushes to `AGENTS.md`/`scripts/ralph/**`
+- Secrets expected: `RALPH_PAT` (push), `OPENCODE_API_KEY` (agent), and `OPENCODE_INSTALL_SHA256` (installer checksum)
+
 ## Architecture Details
 
 ### Session Lifecycle

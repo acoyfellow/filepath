@@ -1,0 +1,12 @@
+{
+  "name": "ralph-loop",
+  "entry": "AGENTS.md",
+  "state": {
+    "prd": "scripts/ralph/prd.json",
+    "progress": "scripts/ralph/progress.txt",
+    "constraints": "scripts/ralph/constraints.json",
+    "failure": "scripts/ralph/failure.json"
+  },
+  "workingDirectory": ".",
+  "notes": "One story per run; guard must pass before committing."
+}

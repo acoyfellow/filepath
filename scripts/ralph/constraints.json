@@ -1,0 +1,18 @@
+{
+  "allowedPaths": [
+    "AGENTS.md",
+    ".opencode/**",
+    "scripts/ralph/**",
+    ".github/workflows/ralph.yml",
+    "README.md"
+  ],
+  "maxLineDelta": 800,
+  "maxFiles": 40,
+  "pausedFlagFile": "AGENTS.md",
+  "maxFailureRetries": 3,
+  "jsonRequired": [
+    "scripts/ralph/prd.json",
+    "scripts/ralph/constraints.json",
+    "scripts/ralph/failure.json"
+  ]
+}

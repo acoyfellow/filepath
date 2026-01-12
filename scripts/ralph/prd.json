@@ -1,0 +1,35 @@
+{
+  "stories": [
+    {
+      "id": "S1",
+      "title": "Boot Ralph automation scaffold",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Required state files exist (AGENTS.md, prd.json, progress.txt, constraints.json, failure.json, guard.sh)",
+        "Ralph workflow file is present and references guard"
+      ]
+    },
+    {
+      "id": "S2",
+      "title": "Add/verify diff guard in CI",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "scripts/ralph/guard.sh enforces allowed paths and line delta",
+        "CI runs guard before committing changes"
+      ]
+    },
+    {
+      "id": "S3",
+      "title": "Make README describe how to run Ralph loop",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "README documents the Ralph loop and how to trigger it",
+        "No additional dependencies added unless required"
+      ]
+    }
+  ],
+  "meta": {
+    "updatedAt": "2026-01-12T20:08:46Z",
+    "notes": "Stories should be completed one per iteration."
+  }
+}
