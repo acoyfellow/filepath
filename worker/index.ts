@@ -160,6 +160,212 @@ app.get('/test/container', async (c) => {
   }
 });
 
+// Session page - serves HTML with tab bar + iframe
+app.get('/session/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  const protocol = c.req.url.startsWith('https://') ? 'wss:' : 'ws:';
+  const host = new URL(c.req.url).host;
+
+  return c.html(html`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Session ${sessionId}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-gray-900 h-screen overflow-hidden">
+        <!-- Tab bar -->
+        <div class="bg-gray-800 border-b border-gray-700 px-4 py-2">
+          <div class="flex space-x-1">
+            ${session.tabs.map((tab, index) => html`
+              <button
+                class="px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  index === session.activeTab
+                    ? 'bg-gray-700 text-white border-b-2 border-blue-500'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                }"
+                onclick="switchTab(${index})"
+              >
+                ${tab.name}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Iframe region -->
+        <div class="h-full">
+          <iframe
+            id="terminal-iframe"
+            class="w-full h-full border-0"
+            src="/tab/${sessionId}/${session.tabs[session.activeTab].id}"
+          ></iframe>
+        </div>
+
+        <script>
+          function switchTab(tabIndex) {
+            fetch('/session/${sessionId}/tabs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ activeTab: tabIndex })
+            }).then(() => {
+              // Update iframe src
+              const tabs = ${JSON.stringify(session.tabs)};
+              const iframe = document.getElementById('terminal-iframe');
+              iframe.src = '/tab/${sessionId}/' + tabs[tabIndex].id;
+            });
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+// Tab page - serves iframe content with terminal
+app.get('/tab/:sessionId/:tabId', (c) => {
+  const sessionId = c.req.param('sessionId');
+  const tabId = c.req.param('tabId');
+
+  return c.html(html`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Terminal ${tabId}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/@xterm/xterm@6.0.0/css/xterm.css"
+        />
+      </head>
+      <body class="bg-black h-screen overflow-hidden">
+        <div id="terminal" class="h-full w-full"></div>
+        <script>
+          (function() {
+            function loadScript(src) {
+              return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
+              });
+            }
+
+            async function init() {
+              try {
+                await loadScript('https://unpkg.com/@xterm/xterm@6.0.0/lib/xterm.js');
+                await loadScript('https://unpkg.com/@xterm/addon-fit@0.11.0/lib/addon-fit.js');
+
+                const terminal = new Terminal({
+                  cursorBlink: true,
+                  fontSize: 14,
+                  fontFamily: 'monospace',
+                  theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                  },
+                });
+
+                const fitAddon = new FitAddon.FitAddon();
+                terminal.loadAddon(fitAddon);
+                terminal.open(document.getElementById('terminal'));
+                fitAddon.fit();
+
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = \`\${protocol}//\${window.location.host}/terminal/${sessionId}/${tabId}/ws\`;
+
+                console.log('[Frontend] Connecting to:', wsUrl);
+
+                const ws = new WebSocket(wsUrl);
+                ws.binaryType = 'arraybuffer';
+
+                const textEncoder = new TextEncoder();
+                const CMD_OUTPUT = '0';
+
+                ws.addEventListener('open', () => {
+                  console.log('[Frontend] WebSocket opened');
+                  terminal.clear();
+
+                  // ttyd handshake - send terminal size
+                  const sizeMsg = JSON.stringify({
+                    columns: terminal.cols,
+                    rows: terminal.rows,
+                  });
+                  ws.send(textEncoder.encode(sizeMsg));
+                });
+
+                ws.addEventListener('message', (e) => {
+                  if (typeof e.data === 'string') return;
+
+                  if (e.data instanceof ArrayBuffer) {
+                    const u8 = new Uint8Array(e.data);
+                    if (u8.length === 0) return;
+
+                    const cmd = String.fromCharCode(u8[0]);
+                    const data = e.data.slice(1);
+
+                    if (cmd === CMD_OUTPUT) {
+                      terminal.write(new Uint8Array(data));
+                    }
+                  }
+                });
+
+                terminal.onData((data) => {
+                  if (ws.readyState !== WebSocket.OPEN) return;
+                  const payload = new Uint8Array(data.length * 3 + 1);
+                  payload[0] = CMD_OUTPUT.charCodeAt(0);
+                  const stats = textEncoder.encodeInto(data, payload.subarray(1));
+                  ws.send(payload.subarray(0, stats.written + 1));
+                });
+
+                ws.addEventListener('error', (e) => {
+                  console.error('[Frontend] WebSocket error:', e);
+                });
+
+                ws.addEventListener('close', (e) => {
+                  console.log('[Frontend] WebSocket closed:', e.code, e.reason);
+                });
+
+                window.addEventListener('resize', () => {
+                  fitAddon.fit();
+                  if (ws.readyState === WebSocket.OPEN) {
+                    const sizeMsg = JSON.stringify({
+                      columns: terminal.cols,
+                      rows: terminal.rows,
+                    });
+                    ws.send(textEncoder.encode(sizeMsg));
+                  }
+                });
+              } catch (error) {
+                console.error('[Frontend] Initialization error:', error);
+                const terminalEl = document.getElementById('terminal');
+                if (terminalEl) {
+                  terminalEl.innerHTML = '<div class="text-white p-4">Failed to initialize terminal. Check console for details.</div>';
+                }
+              }
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', init);
+            } else {
+              init();
+            }
+          })();
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 // Root endpoint - serves HTML terminal UI
 app.get('/', (c) => {
   const protocol = c.req.url.startsWith('https://') ? 'wss:' : 'ws:';
@@ -192,15 +398,15 @@ app.get('/', (c) => {
                 document.body.appendChild(script);
               });
             }
-            
+
             async function init() {
               try {
                 await loadScript('https://unpkg.com/@xterm/xterm@6.0.0/lib/xterm.js');
                 await loadScript('https://unpkg.com/@xterm/addon-fit@0.11.0/lib/addon-fit.js');
-                
-                const sessionId = new URLSearchParams(window.location.search).get('session') || 
+
+                const sessionId = new URLSearchParams(window.location.search).get('session') ||
                   crypto.randomUUID().slice(0, 8);
-                
+
                 const terminal = new Terminal({
                   cursorBlink: true,
                   fontSize: 14,
@@ -211,27 +417,27 @@ app.get('/', (c) => {
                     cursor: '#ffffff',
                   },
                 });
-                
+
                 const fitAddon = new FitAddon.FitAddon();
                 terminal.loadAddon(fitAddon);
                 terminal.open(document.getElementById('terminal'));
                 fitAddon.fit();
-                
+
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = \`\${protocol}//\${window.location.host}/terminal/\${sessionId}/ws\`;
-                
+
                 console.log('[Frontend] Connecting to:', wsUrl);
-                
+
                 const ws = new WebSocket(wsUrl);
                 ws.binaryType = 'arraybuffer';
-                
+
                 const textEncoder = new TextEncoder();
                 const CMD_OUTPUT = '0';
-                
+
                 ws.addEventListener('open', () => {
                   console.log('[Frontend] WebSocket opened');
                   terminal.clear();
-                  
+
                   // ttyd handshake - send terminal size (worker also sends this, but we send on resize)
                   const sizeMsg = JSON.stringify({
                     columns: terminal.cols,
@@ -239,23 +445,23 @@ app.get('/', (c) => {
                   });
                   ws.send(textEncoder.encode(sizeMsg));
                 });
-                
+
                 ws.addEventListener('message', (e) => {
                   if (typeof e.data === 'string') return;
-                  
+
                   if (e.data instanceof ArrayBuffer) {
                     const u8 = new Uint8Array(e.data);
                     if (u8.length === 0) return;
-                    
+
                     const cmd = String.fromCharCode(u8[0]);
                     const data = e.data.slice(1);
-                    
+
                     if (cmd === CMD_OUTPUT) {
                       terminal.write(new Uint8Array(data));
                     }
                   }
                 });
-                
+
                 terminal.onData((data) => {
                   if (ws.readyState !== WebSocket.OPEN) return;
                   const payload = new Uint8Array(data.length * 3 + 1);
@@ -263,15 +469,15 @@ app.get('/', (c) => {
                   const stats = textEncoder.encodeInto(data, payload.subarray(1));
                   ws.send(payload.subarray(0, stats.written + 1));
                 });
-                
+
                 ws.addEventListener('error', (e) => {
                   console.error('[Frontend] WebSocket error:', e);
                 });
-                
+
                 ws.addEventListener('close', (e) => {
                   console.log('[Frontend] WebSocket closed:', e.code, e.reason);
                 });
-                
+
                 window.addEventListener('resize', () => {
                   fitAddon.fit();
                   if (ws.readyState === WebSocket.OPEN) {
@@ -290,7 +496,7 @@ app.get('/', (c) => {
                 }
               }
             }
-            
+
             if (document.readyState === 'loading') {
               document.addEventListener('DOMContentLoaded', init);
             } else {
@@ -304,25 +510,27 @@ app.get('/', (c) => {
 });
 
 // Terminal start endpoint - starts ttyd process in sandbox
-app.post('/terminal/:sessionId/start', async (c) => {
+app.post('/terminal/:sessionId/:tabId/start', async (c) => {
   const sessionId = c.req.param('sessionId');
+  const tabId = c.req.param('tabId');
 
-  if (!sessionId) {
-    return c.json({ error: 'sessionId required' }, 400);
+  if (!sessionId || !tabId) {
+    return c.json({ error: 'sessionId and tabId required' }, 400);
   }
 
   // Local dev: return success (container server handles ttyd)
   if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
-    return c.json({ success: true, sessionId, message: 'Local dev mode - container server handles ttyd' });
+    return c.json({ success: true, sessionId, tabId, message: 'Local dev mode - container server handles ttyd' });
   }
 
   // Production: use Sandbox to start ttyd with Effect
   try {
-    const sandbox = getSandbox(c.env.Sandbox, sessionId);
+    const sandboxId = `${sessionId}:${tabId}`;
+    const sandbox = getSandbox(c.env.Sandbox, sandboxId);
 
     // Wrap sandbox operations in Effect with retry and timeout
     const startTtydEffect = Effect.gen(function* () {
-      console.log(`[Worker] Starting ttyd for session: ${sessionId}`);
+      console.log(`[Worker] Starting ttyd for session: ${sessionId}, tab: ${tabId}`);
       const ttyd = yield* Effect.tryPromise({
         try: () => sandbox.startProcess('ttyd -W -p 7681 bash'),
         catch: (error) => new ContainerError(`Failed to start ttyd process: ${String(error)}`, error),
@@ -334,7 +542,7 @@ app.post('/terminal/:sessionId/start', async (c) => {
         catch: (error) => new ContainerError(`Port 7681 not ready: ${String(error)}`, error),
       });
 
-      console.log(`[Worker] ttyd ready on port 7681 for session: ${sessionId}`);
+      console.log(`[Worker] ttyd ready on port 7681 for session: ${sessionId}, tab: ${tabId}`);
       return ttyd;
     }).pipe(
       (effect) => retryWithBackoff(effect, 3),
@@ -342,13 +550,13 @@ app.post('/terminal/:sessionId/start', async (c) => {
     );
 
     await Effect.runPromise(startTtydEffect);
-    return c.json({ success: true, sessionId });
+    return c.json({ success: true, sessionId, tabId });
   } catch (error) {
     const errorMsg = String(error);
     // If containers aren't enabled, fall back to local dev response
     if (errorMsg.includes('Containers have not been enabled')) {
-      console.log(`[Worker] Containers not enabled, returning local dev response for session: ${sessionId}`);
-      return c.json({ success: true, sessionId, message: 'Local dev mode - container server handles ttyd' });
+      console.log(`[Worker] Containers not enabled, returning local dev response for session: ${sessionId}, tab: ${tabId}`);
+      return c.json({ success: true, sessionId, tabId, message: 'Local dev mode - container server handles ttyd' });
     }
     // Handle Effect errors
     if (error && typeof error === 'object' && '_tag' in error) {
@@ -360,7 +568,7 @@ app.post('/terminal/:sessionId/start', async (c) => {
         message: 'Failed to start terminal',
       }, 500);
     }
-    console.error(`[Worker] Failed to start ttyd for session ${sessionId}:`, error);
+    console.error(`[Worker] Failed to start ttyd for session ${sessionId}, tab ${tabId}:`, error);
     return c.json({
       error: errorMsg,
       message: 'Failed to start terminal',
@@ -370,15 +578,16 @@ app.post('/terminal/:sessionId/start', async (c) => {
 });
 
 // WebSocket terminal connection endpoint
-app.get('/terminal/:sessionId/ws', async (c) => {
+app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   const upgrade = c.req.header('Upgrade');
   if (upgrade?.toLowerCase() !== 'websocket') {
     return c.text('Expected WebSocket upgrade', 400);
   }
 
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) {
-    return c.text('sessionId required', 400);
+  const tabId = c.req.param('tabId');
+  if (!sessionId || !tabId) {
+    return c.text('sessionId and tabId required', 400);
   }
 
   // Local dev: proxy to container server WebSocket
@@ -396,7 +605,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
         // Connect to container's ttyd WebSocket
         (async () => {
           try {
-            console.log(`[Worker] Connecting to container ttyd for session: ${sessionId} at ${wsUrl}`);
+            console.log(`[Worker] Connecting to container ttyd for session: ${sessionId}, tab: ${tabId} at ${wsUrl}`);
             const containerWs = new WebSocket(wsUrl);
 
         containerWs.addEventListener('open', () => {
@@ -449,7 +658,8 @@ app.get('/terminal/:sessionId/ws', async (c) => {
 
   // Production: use Sandbox WebSocket with Effect
   try {
-    const sandbox = getSandbox(c.env.Sandbox, sessionId);
+    const sandboxId = `${sessionId}:${tabId}`;
+    const sandbox = getSandbox(c.env.Sandbox, sandboxId);
 
     // Create WebSocketPair for client connection
     const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };
@@ -460,7 +670,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     // Connect to ttyd asynchronously with Effect
     (async () => {
       try {
-        console.log(`[Worker] Connecting to ttyd for session: ${sessionId}`);
+        console.log(`[Worker] Connecting to ttyd for session: ${sessionId}, tab: ${tabId}`);
 
         // Rewrite URL to /ws for ttyd
         const originalUrl = new URL(c.req.url);
@@ -558,7 +768,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     const errorMsg = String(error);
     // If containers aren't enabled, fall back to local dev
     if (errorMsg.includes('Containers have not been enabled')) {
-      console.log(`[Worker] Containers not enabled, falling back to local dev WebSocket for session: ${sessionId}`);
+      console.log(`[Worker] Containers not enabled, falling back to local dev WebSocket for session: ${sessionId}, tab: ${tabId}`);
       const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
       const wsUrl = containerUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
 
@@ -569,7 +779,7 @@ app.get('/terminal/:sessionId/ws', async (c) => {
 
       (async () => {
         try {
-          console.log(`[Worker] Connecting to container ttyd for session: ${sessionId}`);
+          console.log(`[Worker] Connecting to container ttyd for session: ${sessionId}, tab: ${tabId}`);
           const containerWs = new WebSocket(wsUrl);
 
           containerWs.addEventListener('open', () => {

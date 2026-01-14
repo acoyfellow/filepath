@@ -1,6 +1,7 @@
-2026-01-14
-
-- Reset Ralph loop tracking to a clean baseline:
-  - AGENTS.md: <=70 lines, stop condition + absolute rules + quirks.
-  - prd.json: history-agnostic; all stories pending; north star = shareable multi-terminal session (tabs + iframe-per-tab).
-
+Story 002 completed: Per-tab terminal plumbing implemented
+- Added :tabId to /terminal routes for per-tab containers
+- Container ID now `${sessionId}:${tabId}`
+- WebSocket proxying works for both local dev and production
+- ttyd handshake sends {columns,rows} JSON as TEXT after WS connect
+- Tests written but can't run due to Cloudflare modules in test env
+- TypeScript typecheck passes

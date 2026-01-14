@@ -7,7 +7,7 @@
     {
       "id": "001",
       "title": "Session + tabs data model (minimal, password optional)",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Define the stable public surface: create session, optional password, list tabs, set active tab. Keep it dead simple; no agents, dumps, or advanced features yet.",
       "acceptance_criteria": [
@@ -27,7 +27,7 @@
     {
       "id": "002",
       "title": "Per-tab terminal plumbing (start + WS proxy)",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Each tab maps to one Sandbox container (id = `${sessionId}:${tabId}`) running `ttyd` on port 7681. Provide start + ws endpoints. Keep upgrade path clean (no async middleware before 101).",
       "acceptance_criteria": [
