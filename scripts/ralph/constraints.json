@@ -1,0 +1,56 @@
+{
+  "implementation_safeguards": {
+    "code_quality": {
+      "typescript_strict": true,
+      "no_any_types": false,
+      "test_coverage_minimum": 0,
+      "description": "Maintain TypeScript strict mode, minimize use of 'any' types"
+    },
+    "architecture": {
+      "preserve_durable_objects": true,
+      "no_breaking_api_changes": true,
+      "maintain_svelte5_runes": true,
+      "description": "Preserve core architecture: Durable Objects for state, Svelte 5 runes for reactivity"
+    },
+    "dependencies": {
+      "minimize_new_deps": true,
+      "security_check_required": true,
+      "description": "Only add dependencies when strictly necessary, always check for vulnerabilities"
+    },
+    "testing": {
+      "manual_testing_required": true,
+      "smoke_test_terminals": true,
+      "description": "Manually test terminal functionality and WebSocket connections"
+    },
+    "documentation": {
+      "update_readme_on_features": true,
+      "update_claude_md_on_architecture": true,
+      "description": "Keep README.md and CLAUDE.md in sync with changes"
+    }
+  },
+  "guard_checks": {
+    "git_status_clean": {
+      "enabled": true,
+      "description": "Ensure no untracked files that should be ignored"
+    },
+    "no_console_logs": {
+      "enabled": false,
+      "description": "Warn on console.log statements in production code"
+    },
+    "no_secrets": {
+      "enabled": true,
+      "description": "Block commits containing API keys or secrets"
+    },
+    "file_size_limit": {
+      "enabled": true,
+      "max_size_kb": 500,
+      "description": "Prevent committing large files (>500KB)"
+    }
+  },
+  "iteration_limits": {
+    "max_files_changed_per_iteration": 10,
+    "max_lines_changed_per_iteration": 500,
+    "require_story_reference": true,
+    "description": "Keep iterations small and focused on single stories"
+  }
+}

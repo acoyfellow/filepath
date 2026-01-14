@@ -1,0 +1,118 @@
+name: RALPH Loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      halt:
+        description: 'Halt the loop (true/false)'
+        required: false
+        default: 'false'
+  push:
+    branches:
+      - 'ralph/**'
+    paths:
+      - 'scripts/ralph/prd.json'
+      - 'scripts/ralph/progress.txt'
+      - '.github/workflows/ralph.yml'
+
+jobs:
+  ralph_iteration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Check halt condition
+        id: check_halt
+        run: |
+          if [ "${{ github.event.inputs.halt }}" = "true" ]; then
+            echo "halt=true" >> $GITHUB_OUTPUT
+            echo "🛑 Manual halt requested"
+            exit 0
+          fi
+          
+          # Check if there are any pending stories
+          pending=$(cat scripts/ralph/prd.json | jq '[.stories[] | select(.status == "pending")] | length')
+          if [ "$pending" -eq 0 ]; then
+            echo "halt=true" >> $GITHUB_OUTPUT
+            echo "✅ No pending stories found. Loop complete."
+            exit 0
+          fi
+          
+          echo "halt=false" >> $GITHUB_OUTPUT
+          echo "🔄 Found $pending pending stories"
+
+      - name: Run guard checks
+        if: steps.check_halt.outputs.halt != 'true'
+        run: |
+          chmod +x scripts/ralph/guard.sh
+          scripts/ralph/guard.sh || {
+            echo "❌ Guard checks failed"
+            exit 1
+          }
+
+      - name: Read current state
+        if: steps.check_halt.outputs.halt != 'true'
+        id: read_state
+        run: |
+          # Get highest priority pending story
+          story_id=$(cat scripts/ralph/prd.json | jq -r '[.stories[] | select(.status == "pending")] | sort_by(.priority) | .[0].id // empty')
+          
+          if [ -z "$story_id" ]; then
+            echo "No pending stories found"
+            echo "story_id=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "story_id=$story_id" >> $GITHUB_OUTPUT
+          echo "📋 Next story: $story_id"
+          
+          # Display story details
+          cat scripts/ralph/prd.json | jq ".stories[] | select(.id == \"$story_id\")"
+
+      - name: Display iteration info
+        if: steps.check_halt.outputs.halt != 'true' && steps.read_state.outputs.story_id != ''
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🤖 RALPH Loop - Iteration Starting"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Story: ${{ steps.read_state.outputs.story_id }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## RALPH Loop Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check_halt.outputs.halt }}" = "true" ]; then
+            echo "🛑 **Status**: Loop halted" >> $GITHUB_STEP_SUMMARY
+          elif [ -z "${{ steps.read_state.outputs.story_id }}" ]; then
+            echo "✅ **Status**: No pending stories" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🔄 **Status**: Iteration ready" >> $GITHUB_STEP_SUMMARY
+            echo "📋 **Next Story**: ${{ steps.read_state.outputs.story_id }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Current Stories" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat scripts/ralph/prd.json | jq '.stories[] | {id, title, status, priority}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

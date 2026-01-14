@@ -1,0 +1,73 @@
+{
+  "stories": [
+    {
+      "id": "RALPH-001",
+      "title": "Set up RALPH loop infrastructure",
+      "description": "Create the core RALPH pattern files including documentation, configuration, and guard scripts to enable self-perpetuating development iterations",
+      "priority": 1,
+      "status": "in_progress",
+      "acceptance_criteria": [
+        "AGENTS.md exists with loop metadata",
+        ".opencode/opencode.json configured",
+        "scripts/ralph/ directory with all required files",
+        "GitHub Actions workflow for automation",
+        "Guard script validates constraints before commits"
+      ]
+    },
+    {
+      "id": "RALPH-002",
+      "title": "Enhance terminal session persistence",
+      "description": "Improve session state recovery and persistence across browser refreshes and network interruptions",
+      "priority": 2,
+      "status": "pending",
+      "acceptance_criteria": [
+        "Sessions survive browser refresh",
+        "State properly restored from Durable Objects",
+        "WebSocket reconnection handles gracefully"
+      ]
+    },
+    {
+      "id": "RALPH-003",
+      "title": "Add session password protection",
+      "description": "Implement optional password protection for terminal sessions to enable private collaboration",
+      "priority": 3,
+      "status": "pending",
+      "acceptance_criteria": [
+        "Password can be set during session creation",
+        "Password validation on session access",
+        "Password stored securely in SessionStateDO"
+      ]
+    },
+    {
+      "id": "RALPH-004",
+      "title": "Improve error handling and user feedback",
+      "description": "Add comprehensive error handling with user-friendly error messages throughout the application",
+      "priority": 2,
+      "status": "pending",
+      "acceptance_criteria": [
+        "All API errors show user-friendly messages",
+        "WebSocket connection errors handled gracefully",
+        "Loading states visible during operations"
+      ]
+    },
+    {
+      "id": "RALPH-005",
+      "title": "Add tab rename functionality",
+      "description": "Allow users to rename tabs for better organization and identification of different workspaces",
+      "priority": 3,
+      "status": "pending",
+      "acceptance_criteria": [
+        "Tab names editable via UI",
+        "Tab name persisted in TabStateDO",
+        "Tab names synced across connected clients"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": "2026-01-14T02:04:38.590Z",
+    "total_stories": 5,
+    "completed_stories": 0,
+    "in_progress_stories": 1
+  }
+}

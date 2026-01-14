@@ -1,0 +1,20 @@
+{
+  "failures": [],
+  "metadata": {
+    "version": "1.0.0",
+    "last_failure": null,
+    "total_failures": 0
+  },
+  "schema": {
+    "failure_entry": {
+      "timestamp": "ISO 8601 timestamp",
+      "iteration": "Iteration number",
+      "story_id": "Story ID from prd.json",
+      "error_type": "Type of error (build, test, guard, deployment)",
+      "error_message": "Detailed error message",
+      "stack_trace": "Stack trace if available",
+      "context": "Additional context about the failure",
+      "resolution": "How the failure was resolved or null if unresolved"
+    }
+  }
+}

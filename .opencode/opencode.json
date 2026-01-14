@@ -1,0 +1,44 @@
+{
+  "version": "1.0.0",
+  "agent": {
+    "name": "RALPH",
+    "description": "Read, Act, Learn, Plan, Halt - A self-perpetuating development loop",
+    "model": "opencode/alpha-glm-4.7"
+  },
+  "workflow": {
+    "trigger": "manual",
+    "max_iterations": 1,
+    "auto_commit": true,
+    "auto_pr": false
+  },
+  "context": {
+    "files": [
+      "scripts/ralph/prd.json",
+      "scripts/ralph/progress.txt",
+      "scripts/ralph/constraints.json",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "README.md"
+    ],
+    "exclude": [
+      "node_modules/**",
+      ".alchemy/**",
+      "dist/**",
+      "build/**"
+    ]
+  },
+  "guards": {
+    "pre_commit": "scripts/ralph/guard.sh",
+    "require_story_reference": true,
+    "max_files_per_iteration": 10
+  },
+  "iteration_flow": [
+    "Read current state from prd.json and progress.txt",
+    "Select highest priority pending story",
+    "Plan minimal implementation",
+    "Execute changes following constraints.json",
+    "Run guard.sh to validate changes",
+    "Update progress.txt with results",
+    "Commit if all guards pass, otherwise log to failure.json"
+  ]
+}
