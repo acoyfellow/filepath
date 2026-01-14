@@ -1,4 +1,23 @@
 import { describe, it, expect } from 'vitest';
+import { vi } from 'vitest';
+
+// Mock Cloudflare modules
+vi.mock('@cloudflare/sandbox', () => ({
+  getSandbox: vi.fn(),
+  Sandbox: vi.fn(),
+}));
+
+vi.mock('@cloudflare/containers', () => ({
+  ContainerError: class ContainerError extends Error {},
+  WebSocketError: class WebSocketError extends Error {},
+}));
+
+// Mock Cloudflare Workers globals
+global.WebSocketPair = vi.fn(() => ({
+  0: { accept: vi.fn() },
+  1: { accept: vi.fn() }
+}));
+
 import { app } from '../worker/index';
 
 // Set local dev mode for testing

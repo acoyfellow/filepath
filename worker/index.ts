@@ -73,8 +73,8 @@ app.post('/session/:sessionId/tabs', async (c) => {
 // Check if we're in local dev mode (no containers configured)
 function isLocalDev(c: any): boolean {
   // Always use local dev if LOCAL_DEV env var is set
-  if (c.env.LOCAL_DEV === 'true') return true;
-  if (!c.env.Sandbox) return true;
+  if (c.env?.LOCAL_DEV === 'true') return true;
+  if (!c.env?.Sandbox) return true;
   // Try to create and use a sandbox stub
   try {
     const sandbox = getSandbox(c.env.Sandbox, 'test');
@@ -93,7 +93,7 @@ function isLocalDev(c: any): boolean {
 async function getSandboxResponse(c: any, path: string = '/', sessionId: string = 'test') {
   // If LOCAL_DEV is set or no Sandbox binding, use local dev
   if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
-    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+    const containerUrl = c.env?.CONTAINER_URL || 'http://localhost:8085';
     return fetch(`${containerUrl}${path}`);
   }
 
@@ -112,7 +112,7 @@ async function getSandboxResponse(c: any, path: string = '/', sessionId: string 
     // Any error from sandbox, fall back to local dev
     const errorMsg = String(error);
     console.log('[Worker] Sandbox failed, falling back to local dev:', errorMsg.substring(0, 100));
-    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+    const containerUrl = c.env?.CONTAINER_URL || 'http://localhost:8085';
     return fetch(`${containerUrl}${path}`);
   }
 }
@@ -134,7 +134,7 @@ app.get('/test/container', async (c) => {
     if (errorMsg.includes('Containers have not been enabled')) {
       console.log('[Test] Containers not enabled, using local dev fallback');
       try {
-        const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+    const containerUrl = c.env?.CONTAINER_URL || 'http://localhost:8085';
         const response = await fetch(`${containerUrl}/`);
         const text = await response.text();
         return c.json({
@@ -519,14 +519,14 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
   }
 
   // Local dev: return success (container server handles ttyd)
-  if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
+  if (isLocalDev(c)) {
     return c.json({ success: true, sessionId, tabId, message: 'Local dev mode - container server handles ttyd' });
   }
 
   // Production: use Sandbox to start ttyd with Effect
   try {
     const sandboxId = `${sessionId}:${tabId}`;
-    const sandbox = getSandbox(c.env.Sandbox, sandboxId);
+    const sandbox = getSandbox(c.env!.Sandbox!, sandboxId);
 
     // Wrap sandbox operations in Effect with retry and timeout
     const startTtydEffect = Effect.gen(function* () {
@@ -591,8 +591,8 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   }
 
   // Local dev: proxy to container server WebSocket
-  if (c.env.LOCAL_DEV === 'true' || !c.env.Sandbox) {
-    const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+  if (isLocalDev(c)) {
+    const containerUrl = c.env?.CONTAINER_URL || 'http://localhost:8085';
     const wsUrl = containerUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
     console.log(`[Worker] Local dev mode: Connecting to container at ${wsUrl}`);
 
@@ -659,7 +659,7 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
   // Production: use Sandbox WebSocket with Effect
   try {
     const sandboxId = `${sessionId}:${tabId}`;
-    const sandbox = getSandbox(c.env.Sandbox, sandboxId);
+    const sandbox = getSandbox(c.env!.Sandbox!, sandboxId);
 
     // Create WebSocketPair for client connection
     const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };
@@ -769,7 +769,7 @@ app.get('/terminal/:sessionId/:tabId/ws', async (c) => {
     // If containers aren't enabled, fall back to local dev
     if (errorMsg.includes('Containers have not been enabled')) {
       console.log(`[Worker] Containers not enabled, falling back to local dev WebSocket for session: ${sessionId}, tab: ${tabId}`);
-      const containerUrl = c.env.CONTAINER_URL || 'http://localhost:8085';
+      const containerUrl = c.env?.CONTAINER_URL || 'http://localhost:8085';
       const wsUrl = containerUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
 
       const pair = new WebSocketPair() as { 0: WebSocket; 1: WebSocket & { accept(): void } };

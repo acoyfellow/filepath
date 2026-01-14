@@ -1,4 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { vi } from 'vitest';
+
+// Mock Cloudflare modules
+vi.mock('@cloudflare/sandbox', () => ({
+  getSandbox: vi.fn(),
+  Sandbox: vi.fn(),
+}));
+
+vi.mock('@cloudflare/containers', () => ({
+  ContainerError: class ContainerError extends Error {},
+  WebSocketError: class WebSocketError extends Error {},
+}));
+
 import { app } from '../worker/index';
 
 describe('001: Session + tabs data model', () => {
