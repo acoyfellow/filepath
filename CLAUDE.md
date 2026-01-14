@@ -85,3 +85,13 @@ Required in `.env` for agents:
 - Svelte 5 runes: `$state`, `$derived`, `$effect` (not Svelte 4 stores)
 - Minimal abstractions - keep code simple and direct
 - Terminal sessions are the core product; sharing is first-class
+
+## RALPH Loop
+
+This repository uses the RALPH pattern for self-perpetuating development:
+- **State files**: `scripts/ralph/prd.json`, `progress.txt`, `constraints.json`
+- **Guard script**: `scripts/ralph/guard.sh` validates all changes before commit
+- **Workflow**: `.github/workflows/ralph.yml` automates iterations
+- **Documentation**: See `AGENTS.md` for complete loop specification
+
+When contributing, follow constraints in `scripts/ralph/constraints.json` and ensure `guard.sh` passes.

@@ -186,6 +186,22 @@ Uses Alchemy for infrastructure. Configure in `alchemy.run.ts`.
 - Terminal sessions are the core product
 - Sharing is a first-class feature
 
+## RALPH Loop
+
+This repository uses the RALPH (Read, Act, Learn, Plan, Halt) pattern for automated iterative development. See `AGENTS.md` for details on the self-perpetuating development loop.
+
+**Quick Start**:
+```bash
+# View current stories
+cat scripts/ralph/prd.json | jq '.stories'
+
+# Run guard checks
+scripts/ralph/guard.sh
+
+# Trigger workflow (GitHub Actions)
+git push origin ralph/feature-name
+```
+
 ## License
 
 MIT
