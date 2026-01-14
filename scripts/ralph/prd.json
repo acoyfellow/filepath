@@ -1,32 +1,11 @@
 {
-  "name": "filepath-clean",
+  "name": "filepath",
   "version": "0.1.0",
   "north_star": "Shareable URL (password optional) opens a session with N tabs. Each tab is exactly one iframe-backed live terminal. Terminal is interactive over WebSocket: Browser → Worker → Sandbox (ttyd) → Browser. Works in local dev + prod.",
-  "goal": "Build a clean, demo-first implementation path in a new folder, with only Ralph loop files + the minimal code needed to reach the north star.",
+  "goal": "Build the north star: session model → terminal plumbing → UI → end-to-end verification.",
   "stories": [
     {
       "id": "001",
-      "title": "New clean folder + Ralph loop files only",
-      "status": "pending",
-      "priority": "P0",
-      "description": "Create a new folder for the clean implementation. Only add Ralph loop files + the minimal worker/container scaffolding needed to begin. Do not refactor legacy; keep it as reference (until deleted).",
-      "acceptance_criteria": [
-        "Folder `clean/` exists",
-        "`clean/` contains only: worker code, container dev helper (optional), tests, and minimal docs",
-        "Repo tests/typecheck still run"
-      ],
-      "dependencies": [],
-      "files_to_modify": [
-        "clean/AGENTS.md",
-        "clean/scripts/ralph/prd.json",
-        "clean/scripts/ralph/progress.txt",
-        "clean/scripts/ralph/session.json"
-      ],
-      "test_file": "clean/test/hygiene-001.test.ts",
-      "verification": "bun run test && bun run typecheck"
-    },
-    {
-      "id": "002",
       "title": "Session + tabs data model (minimal, password optional)",
       "status": "pending",
       "priority": "P0",
@@ -37,16 +16,16 @@
         "GET `/session/:sessionId/tabs` returns `{tabs, activeTab}`",
         "POST `/session/:sessionId/tabs` updates tabs/activeTab"
       ],
-      "dependencies": ["001"],
+      "dependencies": [],
       "files_to_modify": [
-        "clean/worker/index.ts",
-        "clean/worker/types.ts"
+        "worker/index.ts",
+        "worker/types.ts"
       ],
-      "test_file": "clean/test/session-002.test.ts",
+      "test_file": "test/session-001.test.ts",
       "verification": "bun run test && bun run typecheck"
     },
     {
-      "id": "003",
+      "id": "002",
       "title": "Per-tab terminal plumbing (start + WS proxy)",
       "status": "pending",
       "priority": "P0",
@@ -56,16 +35,16 @@
         "GET `/terminal/:sessionId/:tabId/ws` returns 101 and forwards bytes both directions",
         "After connecting to ttyd WS, send `{columns,rows}` JSON as TEXT to trigger prompt"
       ],
-      "dependencies": ["002"],
+      "dependencies": ["001"],
       "files_to_modify": [
-        "clean/worker/index.ts",
-        "clean/worker/types.ts"
+        "worker/index.ts",
+        "worker/types.ts"
       ],
-      "test_file": "clean/test/terminal-003.test.ts",
+      "test_file": "test/terminal-002.test.ts",
       "verification": "bun run test && bun run typecheck"
     },
     {
-      "id": "004",
+      "id": "003",
       "title": "Session page UI (tabs + iframe-per-tab)",
       "status": "pending",
       "priority": "P0",
@@ -75,15 +54,15 @@
         "Each tab corresponds to `/tab/:sessionId/:tabId` (iframe src)",
         "Tab page connects to `/terminal/:sessionId/:tabId/ws` and is interactive"
       ],
-      "dependencies": ["003"],
+      "dependencies": ["002"],
       "files_to_modify": [
-        "clean/worker/index.ts"
+        "worker/index.ts"
       ],
-      "test_file": "clean/test/ui-004.test.ts",
+      "test_file": "test/ui-003.test.ts",
       "verification": "bun run test && bun run typecheck"
     },
     {
-      "id": "005",
+      "id": "004",
       "title": "North Star: shareable multi-terminal session (tabs + iframe-per-tab) works in dev + prod",
       "status": "pending",
       "priority": "P0",
@@ -98,9 +77,9 @@
         "Prod works after deploy with the same UX",
         "`bun run test` and `bun run typecheck` are green"
       ],
-      "dependencies": ["004"],
+      "dependencies": ["003"],
       "files_to_modify": [],
-      "test_file": "clean/test/end-005.test.ts",
+      "test_file": "test/end-004.test.ts",
       "verification": "bun run test && bun run typecheck"
     }
   ],
@@ -109,7 +88,6 @@
     "status_values": ["pending", "completed"],
     "one_story_per_iteration": true,
     "tests_required": "bun run test && bun run typecheck",
-    "work_area": "All new work goes under `clean/` (legacy stays as reference).",
     "terminal_protocol": "ttyd requires {columns,rows} JSON as TEXT after WS connect",
     "ws_upgrade": "Do not do async auth/middleware before returning 101"
   }

@@ -9,8 +9,7 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ws-001": "bun run test/ws-001.test.ts"
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
