@@ -69,7 +69,7 @@ jobs:
         if: steps.check_halt.outputs.halt != 'true'
         id: read_state
         run: |
-          # Get highest priority pending story
+          # Get highest priority pending story (priority 1 = highest, sorted ascending)
           story_id=$(cat scripts/ralph/prd.json | jq -r '[.stories[] | select(.status == "pending")] | sort_by(.priority) | .[0].id // empty')
           
           if [ -z "$story_id" ]; then

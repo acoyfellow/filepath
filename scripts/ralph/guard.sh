@@ -28,16 +28,19 @@ fi
 
 # Check for secrets in staged files (actual API keys, not references)
 echo "🔍 Checking for secrets..."
-if git diff --cached --name-only | xargs grep -E "(sk-[a-zA-Z0-9]{20,}|api[_-]?key['\"]?\s*[:=]\s*['\"][a-zA-Z0-9]{20,})" 2>/dev/null | grep -v ".env.example"; then
-    echo -e "${RED}❌ Potential secrets detected in staged files${NC}"
-    echo "Please remove sensitive data before committing"
-    exit $EXIT_GUARD_FAILURE
+staged_files=$(git diff --cached --name-only)
+if [ -n "$staged_files" ]; then
+    if echo "$staged_files" | xargs grep -E "(sk-[a-zA-Z0-9]{20,}|api[_-]?key['\"]?\s*[:=]\s*['\"][a-zA-Z0-9]{20,})" 2>/dev/null | grep -v ".env.example"; then
+        echo -e "${RED}❌ Potential secrets detected in staged files${NC}"
+        echo "Please remove sensitive data before committing"
+        exit $EXIT_GUARD_FAILURE
+    fi
 fi
 
 # Check file sizes
 echo "📏 Checking file sizes..."
 MAX_SIZE_KB=500
-for file in $(git diff --cached --name-only); do
+git diff --cached --name-only -z | while IFS= read -r -d '' file; do
     if [ -f "$file" ]; then
         size_kb=$(du -k "$file" | cut -f1)
         if [ "$size_kb" -gt "$MAX_SIZE_KB" ]; then
