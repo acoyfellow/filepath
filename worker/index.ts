@@ -3,6 +3,7 @@ import { html } from 'hono/html';
 import { getSandbox, Sandbox } from '@cloudflare/sandbox';
 import { Effect } from 'effect';
 import { ContainerError, WebSocketError, retryWithBackoff, withTimeout } from './effects';
+import { Session, Tab } from './types';
 
 // Export Sandbox class for Wrangler
 export { Sandbox };
@@ -13,7 +14,61 @@ type Env = {
   LOCAL_DEV?: string;
 };
 
+const sessions = new Map<string, Session>();
+
 const app = new Hono<{ Bindings: Env }>();
+
+// Session management routes
+app.post('/session', async (c) => {
+  const sessionId = crypto.randomUUID();
+  const session: Session = {
+    id: sessionId,
+    tabs: [{ id: 'tab1', name: 'Terminal 1' }],
+    activeTab: 0
+  };
+  sessions.set(sessionId, session);
+  return c.json({ sessionId });
+});
+
+app.get('/session/:sessionId/info', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+  return c.json({
+    sessionId: session.id,
+    hasPassword: !!session.password
+  });
+});
+
+app.get('/session/:sessionId/tabs', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+  return c.json({
+    tabs: session.tabs,
+    activeTab: session.activeTab
+  });
+});
+
+app.post('/session/:sessionId/tabs', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+  const body = await c.req.json();
+  if (body.tabs) {
+    session.tabs = body.tabs;
+  }
+  if (typeof body.activeTab === 'number') {
+    session.activeTab = body.activeTab;
+  }
+  return c.json({ success: true });
+});
 
 // Check if we're in local dev mode (no containers configured)
 function isLocalDev(c: any): boolean {
@@ -568,6 +623,8 @@ app.get('/terminal/:sessionId/ws', async (c) => {
     }, 500);
   }
 });
+
+export { app };
 
 export default {
   fetch: app.fetch.bind(app),
