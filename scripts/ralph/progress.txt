@@ -1,7 +1,14 @@
 Story 002 completed: Per-tab terminal plumbing implemented
 - Added :tabId to /terminal routes for per-tab containers
-- Container ID now `${sessionId}:${tabId}`
-- WebSocket proxying works for both local dev and production
-- ttyd handshake sends {columns,rows} JSON as TEXT after WS connect
-- Tests written but can't run due to Cloudflare modules in test env
+- Container ID now `${sessionId}:${tabId}` as required
+- WebSocket proxying works for local dev and production
+- ttyd handshake sends {columns,rows} JSON as TEXT
+- Tests written (can't run due to Cloudflare modules)
 - TypeScript typecheck passes
+
+Story 003 completed: Session page UI with tabs + iframes implemented
+- GET /session/:sessionId returns HTML with tab bar + iframe
+- Each tab iframe points to /tab/:sessionId/:tabId
+- Tab pages connect to /terminal/:sessionId/:tabId/ws for interactivity
+- Tab switching swaps iframe src dynamically
+- Tests written, typecheck passes

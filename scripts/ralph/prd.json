@@ -46,7 +46,7 @@
     {
       "id": "003",
       "title": "Session page UI (tabs + iframe-per-tab)",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Serve a session page that renders a tab bar + one iframe. Switching tabs swaps the iframe src. The iframe page is a minimal xterm client for that tab.",
       "acceptance_criteria": [
