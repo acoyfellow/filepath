@@ -1,24 +1,17 @@
 {
   "session_start": "2025-01-08",
-  "current_story": null,
+  "current_story": "WS-006",
   "learnings": [
-    "In wrangler dev, containers aren't enabled by default - need LOCAL_DEV env var or fallback logic",
-    "getSandbox() can throw synchronously if containers not enabled - need try/catch around it",
-    "Container server runs on port 8085, worker dev on 8788 (per AGENTS.md)",
-    "Error handling: catch container errors and fall back to local dev container server"
+    "Local dev: LOCAL_DEV=true in wrangler.dev.json, worker proxies to container server on 8085",
+    "Production: Uses @cloudflare/sandbox binding, getSandbox() can throw if containers disabled",
+    "ttyd protocol: Send {columns,rows} JSON after WebSocket connect to trigger prompt",
+    "Effect errors: Check _tag field, use Effect.runPromise at boundary"
   ],
   "blockers": [],
   "notes": [
     "JUNK/ has full SvelteKit UI - use as visual reference",
     "JUNK2/ has Effect patterns - use as code reference",
     "Effect library at ~/.vendor/effect for types/patterns",
-    "@cloudflare/sandbox is the key binding - getSandbox(), wsConnect()",
-    "ttyd needs size message {columns,rows} to start outputting",
-    "WS-001 completed: Added LOCAL_DEV to wrangler.dev.json, enhanced getSandboxResponse error handling, added fallback in /test/container endpoint",
-    "WS-002 completed: Updated /terminal/:id/start endpoint to use LOCAL_DEV check, implements sandbox.startProcess('ttyd -W -p 7681 bash') and waitForPort(7681) with 30s timeout. Works in both local dev (returns success) and production (actually starts ttyd)",
-    "WS-003 completed: Updated /terminal/:id/ws endpoint to use LOCAL_DEV pattern, uses sandbox.wsConnect(wsRequest, 7681) to connect to ttyd, returns 101 with webSocket property, calls ttydWs.accept(). Has error handling with fallback to local dev WebSocket proxy",
-    "WS-004 completed: Bidirectional message flow already implemented - sends {columns:80,rows:24} size message, forwards client→ttyd and ttyd→client messages directly without modification",
-    "FE-001 completed: Added minimal frontend - GET / returns HTML page with xterm.js, manually handles ttyd protocol (sends terminal size, handles binary messages with CMD_OUTPUT), connects to WebSocket, handles resize events. Uses same ttyd protocol handling as JUNK for compatibility.",
-    "WS-005 completed: Added Effect-based error handling - Created worker/effects.ts with ContainerError, WebSocketError, TimeoutError types. Added retryWithBackoff (exponential backoff, 3 retries) and withTimeout (30s). Wrapped sandbox.startProcess and sandbox.wsConnect with Effect, retry, and timeout. Effect.runPromise at boundary. Fixed container server to handle ttyd not installed gracefully. Installed ttyd via brew."
+    "Ports: Container 8085, Worker 8788 (must be unique)"
   ]
 }

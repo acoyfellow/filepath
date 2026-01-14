@@ -30,7 +30,7 @@ wss.on('connection', function connection(ws, request) {
   if (!ttydProcess) {
     console.log('[Container] Spawning ttyd process...');
     
-    ttydProcess = spawn('ttyd', ['-W', '-p', '7681', 'bash'], {
+    ttydProcess = spawn('ttyd', ['-W', '-p', '7681', 'bash', '-i'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -51,6 +51,14 @@ wss.on('connection', function connection(ws, request) {
       }
     });
 
+    ttydProcess.stdout.on('data', (data) => {
+      console.log('[Container] ttyd stdout:', data.toString());
+    });
+
+    ttydProcess.stderr.on('data', (data) => {
+      console.log('[Container] ttyd stderr:', data.toString());
+    });
+
     // Set up exit handler
     ttydProcess.on('exit', () => {
       console.log('[Container] ttyd process exited');
@@ -60,8 +68,10 @@ wss.on('connection', function connection(ws, request) {
 
     // Check if spawn succeeded (has PID) after a tick
     process.nextTick(() => {
+      console.log('[Container] Checking ttyd spawn:', { pid: ttydProcess?.pid, killed: ttydProcess?.killed });
       // Only connect if ttyd process actually started (has PID)
       if (ttydProcess && ttydProcess.pid) {
+        console.log('[Container] ttyd spawned with PID:', ttydProcess.pid);
         // Wait a bit for ttyd to start before connecting
         setTimeout(() => {
           if (!ttydProcess) {
@@ -82,6 +92,10 @@ wss.on('connection', function connection(ws, request) {
 
             // Forward messages: ttyd -> client
             ttydWs.on('message', (data) => {
+              console.log('[Container] Received from ttyd:', {
+                type: typeof data,
+                length: data instanceof ArrayBuffer ? data.byteLength : data?.length,
+              });
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(data);
               }
@@ -130,7 +144,9 @@ wss.on('connection', function connection(ws, request) {
 });
 
 server.on('upgrade', function upgrade(request, socket, head) {
+  console.log('[Container] Upgrade request for:', request.url);
   if (request.url === '/ws') {
+    console.log('[Container] Upgrading WS for /ws');
     wss.handleUpgrade(request, socket, head, function done(ws) {
       wss.emit('connection', ws, request);
     });

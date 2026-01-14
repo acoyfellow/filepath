@@ -349,6 +349,10 @@ app.get('/terminal/:sessionId/ws', async (c) => {
         });
 
         containerWs.addEventListener('message', (event: MessageEvent) => {
+          console.log('[Worker] Received from container:', {
+            type: typeof event.data,
+            length: event.data instanceof ArrayBuffer ? event.data.byteLength : event.data?.length,
+          });
           if (server.readyState === WebSocket.OPEN) {
             server.send(event.data); // Forward data FROM ttyd (containerWs) TO client (server)
           }
