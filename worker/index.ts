@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
 import { html } from 'hono/html';
-import { getSandbox, Sandbox } from '@cloudflare/sandbox';
+import { getSandbox, Sandbox as sandbox } from '@cloudflare/sandbox';
 import { Effect } from 'effect';
 import { ContainerError, WebSocketError, retryWithBackoff, withTimeout } from './effects';
 import { Session, Tab } from './types';
 
-// Export Sandbox class for Wrangler
-export { Sandbox };
+// Export sandbox class for Wrangler
+export { sandbox as Sandbox };
 
 type Env = {
-  Sandbox?: DurableObjectNamespace<Sandbox>;
-  CONTAINER_URL?: string;
-  LOCAL_DEV?: string;
+   Sandbox?: DurableObjectNamespace<sandbox>;
+   CONTAINER_URL?: string;
+   LOCAL_DEV?: string;
 };
 
 const sessions = new Map<string, Session>();
@@ -424,7 +424,7 @@ app.get('/', (c) => {
                 fitAddon.fit();
 
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = \`\${protocol}//\${window.location.host}/terminal/\${sessionId}/ws\`;
+                const wsUrl = \`\${protocol}//\${window.location.host}/terminal/\${sessionId}/tab1/ws\`;
 
                 console.log('[Frontend] Connecting to:', wsUrl);
 
@@ -575,6 +575,13 @@ app.post('/terminal/:sessionId/:tabId/start', async (c) => {
       stack: error instanceof Error ? error.stack : undefined,
     }, 500);
   }
+});
+
+// WebSocket terminal connection endpoint (legacy single terminal)
+app.get('/terminal/:sessionId/ws', async (c) => {
+  // Redirect legacy single terminal to tab1
+  const sessionId = c.req.param('sessionId');
+  return c.redirect(`/terminal/${sessionId}/tab1/ws`);
 });
 
 // WebSocket terminal connection endpoint
