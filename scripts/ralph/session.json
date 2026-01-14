@@ -1,17 +1,13 @@
 {
-  "session_start": "2025-01-08",
-  "current_story": "WS-006",
+  "session_start": "2026-01-14",
+  "current_story": "001",
   "learnings": [
-    "Local dev: LOCAL_DEV=true in wrangler.dev.json, worker proxies to container server on 8085",
-    "Production: Uses @cloudflare/sandbox binding, getSandbox() can throw if containers disabled",
-    "ttyd protocol: Send {columns,rows} JSON after WebSocket connect to trigger prompt",
-    "Effect errors: Check _tag field, use Effect.runPromise at boundary"
+    "Ralph loop = one story: tests → implement → verify → commit → update prd.json + progress.txt",
+    "North star product = shareable multi-terminal session (tabs + iframe-per-tab), based on JUNK/JUNK2"
   ],
   "blockers": [],
   "notes": [
-    "JUNK/ has full SvelteKit UI - use as visual reference",
-    "JUNK2/ has Effect patterns - use as code reference",
-    "Effect library at ~/.vendor/effect for types/patterns",
-    "Ports: Container 8085, Worker 8788 (must be unique)"
+    "Keep AGENTS.md small; only tests/build/layout/quirks",
+    "Local dev uses LOCAL_DEV=true to proxy to container server on 8085"
   ]
 }

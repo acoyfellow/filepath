@@ -1,0 +1,6 @@
+2026-01-14
+
+- Reset Ralph loop tracking to a clean baseline:
+  - AGENTS.md: <=70 lines, stop condition + absolute rules + quirks.
+  - prd.json: history-agnostic; all stories pending; north star = shareable multi-terminal session (tabs + iframe-per-tab).
+

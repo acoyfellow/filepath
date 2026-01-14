@@ -1,7 +1,16 @@
 # AGENTS.md
 
-## Goal
-Reliable WebSocket terminal: Browser → Worker → Sandbox (ttyd) → browser.
+## North Star / Stop Condition
+Stop when ALL are true:
+- Shareable session URL (password optional) opens a page with N tabs.
+- Each tab shows a live terminal (iframe-backed) over WebSocket: Browser → Worker → Sandbox (ttyd) → Browser.
+- Works in local dev + prod; `bun run test` + `bun run typecheck` green.
+
+## Absolute Rules
+- PRD only (`scripts/ralph/prd.json`)
+- One story per loop: implement → verify → commit → repeat
+- Tests first; verify before commit
+- Memory is files: `prd.json`, `progress.txt`, git commits
 
 ## Run Tests
 ```bash
@@ -9,33 +18,25 @@ bun run test
 bun run typecheck
 ```
 
-## Build & Dev
+## Dev / Deploy
 ```bash
-# Terminal 1: Container server (port 8085)
+# Terminal 1 (local dev only): container server (port 8085)
 bun run dev:container
 
-# Terminal 2: Worker dev server (port 8788)
+# Terminal 2: worker dev server (port 8788)
 bun run dev
-```
 
-## Deploy
-```bash
 bun run deploy
 ```
 
-## Project Layout
-- `worker/index.ts` - Hono routes, WebSocket proxying
-- `worker/effects.ts` - Effect-TS error handling
-- `container_src/server.js` - Local ttyd server (dev only)
-- `alchemy.run.ts` - Infrastructure config
-- `scripts/ralph/prd.json` - Story tracking
+## Layout
+- `worker/` - current Worker (Hono) + WebSocket proxying
+- `container_src/` - local dev ttyd server (8085)
+- `scripts/ralph/prd.json` - tasks
+- `scripts/ralph/progress.txt` - learnings
 
 ## Critical Quirks
-- Local dev: `LOCAL_DEV=true` in wrangler.dev.json, worker proxies to container server on 8085
-- Production: Uses `@cloudflare/sandbox` binding, `getSandbox()` can throw if containers disabled
-- ttyd protocol: Send `{columns,rows}` JSON after WebSocket connect to trigger prompt
-- Effect errors: Check `_tag` field, use `Effect.runPromise` at boundaries
-- Ports: Container 8085, Worker 8788 (must be unique)
-
-## Type Safety
-All code TypeScript, no `any`. Use Effect for retries/timeouts.
+- Local dev: `LOCAL_DEV=true` (wrangler.dev.json) ⇒ proxy to container `http://localhost:8085`
+- ttyd: after WS connect, send `{"columns":..,"rows":..}` as **text** to trigger prompt
+- WebSocket upgrades: don’t do async auth/middleware before returning 101
+- Ports: container 8085, worker 8788
