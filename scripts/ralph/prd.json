@@ -64,7 +64,7 @@
     {
       "id": "004",
       "title": "North Star: shareable multi-terminal session (tabs + iframe-per-tab) works in dev + prod",
-      "status": "pending",
+      "status": "completed",
       "priority": "P0",
       "description": "Open `/session/:sessionId` (password optional) → see N tabs → each tab renders exactly one iframe-backed live terminal. Terminal is interactive via WebSocket: Browser → Worker → Sandbox(ttyd) → Browser. No auth walls; link is shareable.",
       "acceptance_criteria": [

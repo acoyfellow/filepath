@@ -12,3 +12,12 @@ Story 003 completed: Session page UI with tabs + iframes implemented
 - Tab pages connect to /terminal/:sessionId/:tabId/ws for interactivity
 - Tab switching swaps iframe src dynamically
 - Tests written, typecheck passes
+
+Story 004 completed: North Star achieved - shareable multi-terminal sessions
+- Shareable URLs /session/:sessionId load without login
+- N tabs with live iframe-backed terminals
+- WebSocket proxying works for bidirectional communication
+- ttyd handshake sends {columns,rows} JSON as TEXT
+- Code ready for local dev (bun run dev:container + bun run dev)
+- Code ready for prod deploy (bun run deploy)
+- TypeScript typecheck passes, tests written
