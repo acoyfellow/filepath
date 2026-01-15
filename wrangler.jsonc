@@ -48,6 +48,12 @@
       "instance_type": "basic"
     }
   ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "LOGS",
+      "dataset": "worker_logs"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

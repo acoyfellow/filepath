@@ -14,7 +14,7 @@ import {
 import type { Config, OpencodeClient } from '@opencode-ai/sdk';
 import { Effect, Context, Schedule } from 'effect';
 import { RequestContext, withRequestContext } from './context';
-import { LoggerService, LoggerServiceLive } from './logger';
+import { LoggerService, createLoggerService } from './logger';
 import {
   ContainerConnectionError,
   SandboxError,
@@ -100,7 +100,7 @@ export default {
       requestId,
       handleRequest(request, env)
     ).pipe(
-      Effect.provide(Context.make(LoggerService, LoggerServiceLive)),
+      Effect.provide(Context.make(LoggerService, createLoggerService({ LOGS: (env as any).LOGS }))),
       Effect.catchAll((error) =>
         Effect.gen(function* () {
           const logger = yield* LoggerService;
@@ -118,7 +118,7 @@ export default {
             }
           );
         }).pipe(
-          Effect.provide(Context.make(LoggerService, LoggerServiceLive)),
+          Effect.provide(Context.make(LoggerService, createLoggerService({ LOGS: (env as any).LOGS }))),
           Effect.provide(Context.make(RequestContext, { requestId }))
         )
       )
