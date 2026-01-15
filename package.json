@@ -9,14 +9,24 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "types": "wrangler types",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "debug": "bun scripts/debug-tail.ts",
+    "debug:raw": "wrangler tail --format json",
+    "debug:pretty": "wrangler tail --format pretty",
+    "e2e": "bun scripts/e2e-debug.ts",
+    "e2e:test": "CLOUDFLARE_ACCOUNT_ID=bfcb6ac5b3ceaf42a09607f6f7925823 bun scripts/e2e-debug.ts terminal-app https://terminal-app.coy.workers.dev/"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.1.20"
+    "@effect/platform": "^0.94.1",
+    "@effect/schema": "^0.75.5",
+    "@opencode-ai/sdk": "^1.1.20",
+    "effect": "^3.19.14"
   },
   "devDependencies": {
     "@cloudflare/sandbox": "^0.7.0",
+    "@playwright/test": "^1.57.0",
     "@types/node": "^24.10.8",
+    "playwright": "^1.57.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.59.1"
   },
