@@ -273,7 +273,7 @@ export const stories: Story[] = [
   {
     id: 'cli-deploy',
     title: 'filepath deploy pushes worker + container',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['cli-init'],
     gateFile: './gates/cli-deploy.gate.ts'
   },
