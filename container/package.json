@@ -1,0 +1,11 @@
+{
+  "name": "filepath-agent",
+  "type": "module",
+  "scripts": {
+    "start": "bun run agent/index.ts",
+    "test:browser": "bun run agent/test-browser.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}

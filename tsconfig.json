@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationDir": "dist",
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["bun-types"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "cli/**/*.ts",
+    "worker/**/*.ts",
+    "container/**/*.ts",
+    "test/**/*.ts",
+    "prd.ts",
+    "alchemy.run.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "_source"
+  ]
+}
