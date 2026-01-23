@@ -237,7 +237,7 @@ export const stories: Story[] = [
   {
     id: 'src-run',
     title: 'src/index.ts exports run()',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['src-types'],
     gateFile: './gates/src-run.gate.ts'
   },
