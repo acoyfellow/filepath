@@ -164,7 +164,7 @@ export const stories: Story[] = [
   {
     id: 'agent-result',
     title: 'agent returns { success, output, screenshot }',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['agent-execute'],
     gateFile: './gates/agent-result.gate.ts'
   },
