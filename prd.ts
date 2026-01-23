@@ -184,7 +184,7 @@ export const stories: Story[] = [
   {
     id: 'worker-do',
     title: 'ContainerManager DO exists',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['worker-entry'],
     gateFile: './gates/worker-do.gate.ts'
   },
