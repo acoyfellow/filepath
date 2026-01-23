@@ -216,9 +216,10 @@ export const stories: Story[] = [
   {
     id: 'worker-deployed',
     title: 'worker deployed to CF',
-    status: 'pending',
+    status: 'blocked',
     dependsOn: ['worker-wrangler'],
-    gateFile: './gates/worker-deployed.gate.ts'
+    gateFile: './gates/worker-deployed.gate.ts',
+    notes: 'Requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN'
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -228,8 +229,8 @@ export const stories: Story[] = [
   {
     id: 'src-types',
     title: 'src/types.ts exports RunResult, RunOptions',
-    status: 'pending',
-    dependsOn: ['worker-deployed'],
+    status: 'done',
+    dependsOn: ['worker-wrangler'],
     gateFile: './gates/src-types.gate.ts'
   },
 
