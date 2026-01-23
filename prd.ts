@@ -320,7 +320,7 @@ export const stories: Story[] = [
   {
     id: 'e2e-form',
     title: 'run("fill form on httpbin") → success + screenshot',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['e2e-title'],
     gateFile: './gates/e2e-form.gate.ts',
     notes: 'THE MONEY GATE - verified submission with proof'

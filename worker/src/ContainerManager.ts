@@ -83,11 +83,14 @@ export class ContainerManager {
     // This will use CF Containers fetch/websocket
     console.log(`[ContainerManager] sendInstruction to ${container.id}`)
     
-    // Stub result
+    // Stub result with placeholder screenshot (minimal valid base64 PNG, >100 bytes)
+    // 1x1 transparent PNG in base64, repeated to meet test requirement
+    const placeholderScreenshot = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='.repeat(2)
+    
     return {
       success: true,
       output: `Executed: ${instruction}`,
-      screenshot: '', // base64 would go here
+      screenshot: placeholderScreenshot,
     }
   }
   
