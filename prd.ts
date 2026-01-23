@@ -156,7 +156,7 @@ export const stories: Story[] = [
   {
     id: 'agent-execute',
     title: 'agent/index.ts executes instruction via claude',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['agent-browser'],
     gateFile: './gates/agent-execute.gate.ts'
   },
