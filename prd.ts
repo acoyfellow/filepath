@@ -127,7 +127,7 @@ export const stories: Story[] = [
   {
     id: 'container-browser',
     title: 'playwright launches in container',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['container-builds'],
     gateFile: './gates/container-browser.gate.ts',
     notes: 'KEY GATE - browser works, no CF Browser limits'
