@@ -192,7 +192,7 @@ export const stories: Story[] = [
   {
     id: 'worker-spawn',
     title: 'DO can spawn container',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['worker-do'],
     gateFile: './gates/worker-spawn.gate.ts'
   },
