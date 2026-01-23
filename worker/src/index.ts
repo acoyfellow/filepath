@@ -26,6 +26,8 @@ export default {
     // POST /run - execute instruction
     if (url.pathname === '/run' && request.method === 'POST') {
       try {
+        // Clone request so we can read body and forward to DO
+        const clonedRequest = request.clone()
         const body = await request.json() as { instruction: string }
         
         if (!body.instruction) {
@@ -39,8 +41,8 @@ export default {
         const id = env.CONTAINER_MANAGER.idFromName('default')
         const stub = env.CONTAINER_MANAGER.get(id)
         
-        // Forward to DO
-        return stub.fetch(request)
+        // Forward cloned request to DO (body not consumed)
+        return stub.fetch(clonedRequest)
         
       } catch (err) {
         const error = err instanceof Error ? err.message : 'unknown error'

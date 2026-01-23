@@ -4,11 +4,11 @@
  * run(instruction) → { success, output, screenshot, error }
  */
 
-import { RunResult, RunOptions, FilepathConfig } from './types'
+import type { RunResult, RunOptions, FilepathConfig } from './types'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
-export { RunResult, RunOptions, FilepathConfig } from './types'
+export type { RunResult, RunOptions, FilepathConfig } from './types'
 
 // Default worker URL (user's deployed worker)
 let workerUrl: string | null = null

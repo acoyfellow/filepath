@@ -312,7 +312,7 @@ export const stories: Story[] = [
   {
     id: 'e2e-title',
     title: 'run("get title of example.com") → "Example Domain"',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['worker-deployed', 'agent-result'],
     gateFile: './gates/e2e-title.gate.ts'
   },
