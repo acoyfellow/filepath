@@ -11,6 +11,10 @@ bindings = [
 tag = "v1"
 new_classes = ["ContainerManager"]
 
+[[migrations]]
+tag = "v2"
+deleted_classes = ["Sandbox", "TabStateDO", "SessionStateDO", "TabBroadcastDO"]
+
 # Uncomment when CF Containers are configured
 # [containers]
 # bindings = [

@@ -216,10 +216,9 @@ export const stories: Story[] = [
   {
     id: 'worker-deployed',
     title: 'worker deployed to CF',
-    status: 'blocked',
+    status: 'done',
     dependsOn: ['worker-wrangler'],
-    gateFile: './gates/worker-deployed.gate.ts',
-    notes: 'Requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN'
+    gateFile: './gates/worker-deployed.gate.ts'
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
