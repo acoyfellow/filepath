@@ -176,7 +176,7 @@ export const stories: Story[] = [
   {
     id: 'worker-entry',
     title: 'worker/src/index.ts exports default',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['container-registry'],
     gateFile: './gates/worker-entry.gate.ts'
   },
