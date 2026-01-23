@@ -115,3 +115,12 @@ bun run prd.ts
 ## License
 
 Proprietary
+
+
+
+## NOTES
+```
+- being able to switch models mid loop is crucial
+- as a "driver" now, i need cursor for: diff view, code view/edit, and chat.
+- we'll have to solve for those in the remote sessions somehow
+```

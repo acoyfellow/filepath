@@ -329,7 +329,7 @@ export const stories: Story[] = [
   {
     id: 'e2e-fresh',
     title: 'fresh user: init → deploy → run → works',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['e2e-form', 'cli-deploy'],
     gateFile: './gates/e2e-fresh.gate.ts',
     notes: 'NORTH STAR - someone else can use this'

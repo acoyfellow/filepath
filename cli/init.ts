@@ -38,12 +38,26 @@ export async function init() {
     return
   }
   
+  // Get account subdomain from CF API
+  const subdomainResponse = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`,
+    { headers: { Authorization: `Bearer ${apiToken}` } }
+  )
+  const subdomainData = await subdomainResponse.json()
+  const subdomain = subdomainData.result?.subdomain
+  
+  if (!subdomain) {
+    console.log('Failed to get workers.dev subdomain from Cloudflare API')
+    console.log('You may need to set your subdomain in the Cloudflare dashboard\n')
+    return
+  }
+  
   // Create config
   mkdirSync(configDir, { recursive: true })
   
   const config = {
     accountId,
-    workerUrl: `https://filepath-worker.${accountId}.workers.dev`,
+    workerUrl: `https://filepath-worker.${subdomain}.workers.dev`,
     createdAt: new Date().toISOString(),
   }
   
