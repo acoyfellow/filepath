@@ -91,7 +91,7 @@ export const stories: Story[] = [
   {
     id: 'alchemy',
     title: 'alchemy.run.ts defines CF resources',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['remote-bootstrap'],
     gateFile: './gates/alchemy.gate.ts'
   },
