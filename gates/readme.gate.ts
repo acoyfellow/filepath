@@ -5,7 +5,7 @@ const result = await Gate.run({
   observe: createEmptyObserveResource(),
   act: [
     Act.exec('bun run gates/_checks/file-exists.ts README.md'),
-    Act.exec('bun run gates/_checks/file-contains.ts README.md filepath install run(')
+    Act.exec('bun run gates/_checks/file-contains.ts README.md filepath install run')
   ],
   assert: [Assert.noErrors()],
   report: 'pretty'

@@ -301,7 +301,7 @@ export const stories: Story[] = [
   {
     id: 'readme',
     title: 'README.md has usage',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['build-works'],
     gateFile: './gates/readme.gate.ts'
   },
