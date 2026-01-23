@@ -208,7 +208,7 @@ export const stories: Story[] = [
   {
     id: 'worker-wrangler',
     title: 'wrangler.toml configured',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['worker-run'],
     gateFile: './gates/worker-wrangler.gate.ts'
   },
