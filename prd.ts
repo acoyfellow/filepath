@@ -245,7 +245,7 @@ export const stories: Story[] = [
   {
     id: 'src-fetch',
     title: 'run() calls worker API',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['src-run'],
     gateFile: './gates/src-fetch.gate.ts'
   },

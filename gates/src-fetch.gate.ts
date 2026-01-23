@@ -4,7 +4,7 @@ const result = await Gate.run({
   name: 'src-fetch',
   observe: createEmptyObserveResource(),
   act: [
-    Act.exec('bun run gates/_checks/file-contains.ts src/index.ts fetch POST workers.dev')
+    Act.exec('bun run gates/_checks/file-contains.ts src/index.ts fetch POST method')
   ],
   assert: [Assert.noErrors()],
   report: 'pretty'
