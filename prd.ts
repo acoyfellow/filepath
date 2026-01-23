@@ -265,7 +265,7 @@ export const stories: Story[] = [
   {
     id: 'cli-init',
     title: 'filepath init creates .filepath/config.json',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['cli-bin'],
     gateFile: './gates/cli-init.gate.ts'
   },
