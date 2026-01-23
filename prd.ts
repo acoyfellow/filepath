@@ -200,7 +200,7 @@ export const stories: Story[] = [
   {
     id: 'worker-run',
     title: 'DO sends instruction, receives result',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['worker-spawn'],
     gateFile: './gates/worker-run.gate.ts'
   },
