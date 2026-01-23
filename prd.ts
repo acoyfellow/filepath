@@ -257,7 +257,7 @@ export const stories: Story[] = [
   {
     id: 'cli-bin',
     title: 'cli/index.ts is bin entry',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['src-fetch'],
     gateFile: './gates/cli-bin.gate.ts'
   },
