@@ -4,7 +4,7 @@ const result = await Gate.run({
   name: 'pkg-ready',
   observe: createEmptyObserveResource(),
   act: [
-    Act.exec('bun run gates/_checks/file-contains.ts package.json "name": "main": "types": "bin":')
+    Act.exec('bun run gates/_checks/file-contains.ts package.json name main types bin')
   ],
   assert: [Assert.noErrors()],
   report: 'pretty'

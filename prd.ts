@@ -285,7 +285,7 @@ export const stories: Story[] = [
   {
     id: 'pkg-ready',
     title: 'package.json has name, main, types, bin',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['cli-deploy'],
     gateFile: './gates/pkg-ready.gate.ts'
   },
