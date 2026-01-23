@@ -119,7 +119,7 @@ export const stories: Story[] = [
   {
     id: 'container-builds',
     title: 'docker build succeeds locally',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['container-entry'],
     gateFile: './gates/container-builds.gate.ts'
   },
