@@ -293,7 +293,7 @@ export const stories: Story[] = [
   {
     id: 'build-works',
     title: 'bun run build generates dist/',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['pkg-ready'],
     gateFile: './gates/build-works.gate.ts'
   },
