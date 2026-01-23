@@ -148,7 +148,7 @@ export const stories: Story[] = [
   {
     id: 'agent-browser',
     title: 'agent/browser.ts has goto, click, fill, screenshot',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['container-browser'],
     gateFile: './gates/agent-browser.gate.ts'
   },
