@@ -136,7 +136,7 @@ export const stories: Story[] = [
   {
     id: 'container-registry',
     title: 'container pushed to CF registry',
-    status: 'pending',
+    status: 'done',
     dependsOn: ['container-browser'],
     gateFile: './gates/container-registry.gate.ts'
   },
