@@ -1,23 +1,9 @@
-/**
- * worker/src/index.ts
- * 
- * Worker entry point. Routes requests to ContainerManager DO.
- */
-
-import { ContainerManager } from './ContainerManager'
-
-export { ContainerManager }
-
-export interface Env {
-  CONTAINER_MANAGER: DurableObjectNamespace
-}
-
-const HTML_PAGE = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>filepath - Natural Language Browser Automation</title>
+    <title>filepath - Test Your Instructions</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
@@ -64,7 +50,7 @@ const HTML_PAGE = `<!DOCTYPE html>
 
         <div class="main">
             <div id="status" class="status">
-                🤖 Ready to automate!
+                ✅ Connected to filepath worker - ready to play!
             </div>
 
             <div class="examples">
@@ -107,6 +93,8 @@ const HTML_PAGE = `<!DOCTYPE html>
     </div>
 
     <script>
+        const WORKER_URL = 'https://filepath-worker.coy.workers.dev';
+
         function setExample(instruction) {
             document.getElementById('instruction').value = instruction;
         }
@@ -130,7 +118,7 @@ const HTML_PAGE = `<!DOCTYPE html>
             try {
                 console.log('Sending instruction:', instruction);
 
-                const response = await fetch('/run', {
+                const response = await fetch(WORKER_URL + '/run', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -152,22 +140,22 @@ const HTML_PAGE = `<!DOCTYPE html>
                     result.className = 'result success';
                     resultTitle.textContent = '✅ Success';
 
-                    let content = \`<p><strong>Output:</strong></p><pre>\${data.output || 'No output'}</pre>\`;
+                    let content = `<p><strong>Output:</strong></p><pre>${data.output || 'No output'}</pre>`;
 
                     if (data.screenshot) {
-                        content += \`
+                        content += `
                             <div class="screenshot">
                                 <p><strong>Screenshot:</strong></p>
-                                <img src="data:image/png;base64,\${data.screenshot}" alt="Screenshot" />
+                                <img src="data:image/png;base64,${data.screenshot}" alt="Screenshot" />
                             </div>
-                        \`;
+                        `;
                     }
 
                     resultContent.innerHTML = content;
                 } else {
                     result.className = 'result error';
                     resultTitle.textContent = '❌ Error';
-                    resultContent.innerHTML = \`<p><strong>Error:</strong> \${data.error || 'Unknown error'}</p>\`;
+                    resultContent.innerHTML = `<p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`;
                 }
 
             } catch (error) {
@@ -175,7 +163,7 @@ const HTML_PAGE = `<!DOCTYPE html>
                 result.style.display = 'block';
                 result.className = 'result error';
                 resultTitle.textContent = '❌ Network Error';
-                resultContent.innerHTML = \`<p><strong>Error:</strong> \${error.message}</p>\`;
+                resultContent.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
             } finally {
                 // Reset button
                 submitBtn.disabled = false;
@@ -187,60 +175,4 @@ const HTML_PAGE = `<!DOCTYPE html>
         document.getElementById('instruction').focus();
     </script>
 </body>
-</html>`;
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url)
-
-    // Serve frontend on root path
-    if (url.pathname === '/' && request.method === 'GET') {
-      return new Response(HTML_PAGE, {
-        headers: {
-          'Content-Type': 'text/html',
-        },
-      })
-    }
-
-    // Health check
-    if (url.pathname === '/health') {
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
-    // POST /run - execute instruction
-    if (url.pathname === '/run' && request.method === 'POST') {
-      try {
-        // Clone request so we can read body and forward to DO
-        const clonedRequest = request.clone()
-        const body = await request.json() as { instruction: string }
-
-        if (!body.instruction) {
-          return new Response(JSON.stringify({ error: 'instruction required' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          })
-        }
-
-        // Get or create a container manager
-        const id = env.CONTAINER_MANAGER.idFromName('default')
-        const stub = env.CONTAINER_MANAGER.get(id)
-
-        // Forward cloned request to DO (body not consumed)
-        return stub.fetch(clonedRequest)
-
-      } catch (err) {
-        const error = err instanceof Error ? err.message : 'unknown error'
-        return new Response(JSON.stringify({ error }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      }
-    }
-
-    return new Response('filepath worker. Visit / for UI, or POST /run with { instruction: "..." }', {
-      status: 200,
-    })
-  }
-}
+</html>

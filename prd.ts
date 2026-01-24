@@ -348,6 +348,19 @@ export const stories: Story[] = [
      notes: 'CHEW ON IT - test the actual deployed library in production'
    },
 
+   // ─────────────────────────────────────────────────────────────────────────────
+   // LAYER 9: Production Frontend
+   // ─────────────────────────────────────────────────────────────────────────────
+
+   {
+     id: 'frontend-prod',
+     title: 'production frontend: web UI served from worker',
+     status: 'done',
+     dependsOn: ['prod-test'],
+     gateFile: './gates/frontend-prod.gate.ts',
+     notes: 'HUMAN FRIENDLY - web interface for natural language instructions'
+   },
+
  ]
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>filepath - Test Your Instructions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2d3748;
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .main {
+            padding: 32px;
+        }
+
+        .instruction-form {
+            margin-bottom: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .options {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .option-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="number"] {
+            width: 80px;
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .result {
+            display: none;
+            margin-top: 32px;
+            padding: 24px;
+            border-radius: 8px;
+            border-left: 4px solid #48bb78;
+        }
+
+        .result.success {
+            background: #f0fff4;
+            border-color: #48bb78;
+        }
+
+        .result.error {
+            background: #fed7d7;
+            border-color: #f56565;
+        }
+
+        .result h3 {
+            margin-bottom: 16px;
+            font-size: 1.25rem;
+        }
+
+        .result pre {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .screenshot {
+            margin-top: 16px;
+        }
+
+        .screenshot img {
+            max-width: 100%;
+            border-radius: 6px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .examples {
+            margin-bottom: 32px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+
+        .examples h3 {
+            margin-bottom: 16px;
+            color: #2d3748;
+        }
+
+        .example-btn {
+            display: inline-block;
+            margin: 4px 8px 4px 0;
+            padding: 8px 16px;
+            background: #e2e8f0;
+            color: #2d3748;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .example-btn:hover {
+            background: #cbd5e0;
+        }
+
+        .status {
+            text-align: center;
+            padding: 16px;
+            background: #fef5e7;
+            border-radius: 6px;
+            margin-bottom: 24px;
+        }
+
+        .status.error {
+            background: #fed7d7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>filepath</h1>
+            <p>Natural language instructions → Verified results</p>
+        </div>
+
+        <div class="main">
+            <div id="status" class="status" style="display: none;">
+                Testing connection...
+            </div>
+
+            <div class="examples">
+                <h3>Try these examples:</h3>
+                <button class="example-btn" onclick="setExample('get title of example.com')">Get page title</button>
+                <button class="example-btn" onclick="setExample('go to httpbin.org/html and extract all headings')">Extract headings</button>
+                <button class="example-btn" onclick="setExample('visit github.com and find the search input')">Find search input</button>
+                <button class="example-btn" onclick="setExample('go to httpbin.org/forms/post and fill the form with name: John, email: john@test.com')">Fill form</button>
+            </div>
+
+            <form class="instruction-form" onsubmit="runInstruction(event)">
+                <div class="form-group">
+                    <label for="instruction">What should the agent do?</label>
+                    <textarea
+                        id="instruction"
+                        placeholder="e.g., go to example.com and get the page title"
+                        required
+                    >get title of example.com</textarea>
+                </div>
+
+                <div class="form-group">
+                    <div class="options">
+                        <div class="option-group">
+                            <label for="timeout">Timeout (seconds):</label>
+                            <input type="number" id="timeout" value="60" min="10" max="300">
+                        </div>
+                        <div class="option-group">
+                            <input type="checkbox" id="debug" checked>
+                            <label for="debug">Debug mode</label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    Run Instruction
+                </button>
+            </form>
+
+            <div id="result" class="result">
+                <h3 id="resultTitle">Result</h3>
+                <div id="resultContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_URL = 'https://filepath-worker.coy.workers.dev';
+
+        async function checkConnection() {
+            const status = document.getElementById('status');
+            status.style.display = 'block';
+
+            try {
+                const response = await fetch(WORKER_URL + '/health');
+                if (response.ok) {
+                    status.textContent = '✅ Connected to filepath worker';
+                    status.className = 'status';
+                } else {
+                    throw new Error('Health check failed');
+                }
+            } catch (error) {
+                status.textContent = '❌ Cannot connect to filepath worker. Make sure it\'s deployed.';
+                status.className = 'status error';
+            }
+        }
+
+        function setExample(instruction) {
+            document.getElementById('instruction').value = instruction;
+        }
+
+        async function runInstruction(event) {
+            event.preventDefault();
+
+            const instruction = document.getElementById('instruction').value.trim();
+            const timeout = parseInt(document.getElementById('timeout').value) * 1000;
+            const debug = document.getElementById('debug').checked;
+
+            const submitBtn = document.getElementById('submitBtn');
+            const result = document.getElementById('result');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultContent = document.getElementById('resultContent');
+
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = 'Running... <div class="loading"></div>';
+
+            try {
+                console.log('Sending instruction:', instruction);
+
+                const response = await fetch(WORKER_URL + '/run', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        instruction,
+                        timeout,
+                        debug
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Response:', data);
+
+                // Show result
+                result.style.display = 'block';
+
+                if (data.success) {
+                    result.className = 'result success';
+                    resultTitle.textContent = '✅ Success';
+
+                    let content = `<p><strong>Output:</strong></p><pre>${data.output || 'No output'}</pre>`;
+
+                    if (data.screenshot) {
+                        content += `
+                            <div class="screenshot">
+                                <p><strong>Screenshot:</strong></p>
+                                <img src="data:image/png;base64,${data.screenshot}" alt="Screenshot" />
+                            </div>
+                        `;
+                    }
+
+                    resultContent.innerHTML = content;
+                } else {
+                    result.className = 'result error';
+                    resultTitle.textContent = '❌ Error';
+                    resultContent.innerHTML = `<p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`;
+                }
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                result.style.display = 'block';
+                result.className = 'result error';
+                resultTitle.textContent = '❌ Network Error';
+                resultContent.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
+            } finally {
+                // Reset button
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Run Instruction';
+            }
+        }
+
+        // Check connection on load
+        checkConnection();
+
+        // Focus on textarea
+        document.getElementById('instruction').focus();
+    </script>
+</body>
+</html>
