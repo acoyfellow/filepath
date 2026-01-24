@@ -326,32 +326,113 @@ export const stories: Story[] = [
     notes: 'THE MONEY GATE - verified submission with proof'
   },
 
-  {
-    id: 'e2e-fresh',
-    title: 'fresh user: init → deploy → run → works',
-    status: 'done',
-    dependsOn: ['e2e-form', 'cli-deploy'],
-    gateFile: './gates/e2e-fresh.gate.ts',
-    notes: 'NORTH STAR - someone else can use this'
-  },
+   {
+     id: 'e2e-fresh',
+     title: 'fresh user: init → deploy → run → works',
+     status: 'done',
+     dependsOn: ['e2e-form', 'cli-deploy'],
+     gateFile: './gates/e2e-fresh.gate.ts',
+     notes: 'NORTH STAR - someone else can use this'
+   },
 
-]
+   // ─────────────────────────────────────────────────────────────────────────────
+   // LAYER 8: Production Testing
+   // ─────────────────────────────────────────────────────────────────────────────
+
+   {
+     id: 'prod-test',
+     title: 'production deployment: import & run works end-to-end',
+     status: 'done',
+     dependsOn: ['e2e-fresh'],
+     gateFile: './gates/prod-test.gate.ts',
+     notes: 'CHEW ON IT - test the actual deployed library in production'
+   },
+
+ ]
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RUNNER
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { spawnSync } from 'child_process'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, watch, readdirSync, statSync } from 'fs'
+import { join } from 'path'
 
 function nextEligible(stories: Story[]): Story | null {
   const done = new Set(stories.filter(s => s.status === 'done').map(s => s.id))
   return stories.find(s => s.status === 'pending' && s.dependsOn.every(d => done.has(d))) ?? null
 }
 
+function showBlockedGates(stories: Story[]): void {
+  const done = new Set(stories.filter(s => s.status === 'done').map(s => s.id))
+  const pending = stories.filter(s => s.status === 'pending')
+  
+  if (pending.length === 0) return
+  
+  console.log(`  ┌─ Blocked Gates ─────────────────────────────────────────────────────────────┐`)
+  pending.forEach(story => {
+    const missing = story.dependsOn.filter(d => !done.has(d))
+    if (missing.length > 0) {
+      console.log(`  │ ${story.id.padEnd(30)} │ waiting on: ${missing.join(', ')}`)
+    }
+  })
+  console.log(`  └─────────────────────────────────────────────────────────────────────────────┘`)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const WATCH_MODE = process.argv.includes('--watch')
+
+// Helper to recursively find all .gate.ts files
+function findGateFiles(dir: string, fileList: string[] = []): string[] {
+  const files = readdirSync(dir)
+  files.forEach(file => {
+    const filePath = join(dir, file)
+    const stat = statSync(filePath)
+    if (stat.isDirectory()) {
+      findGateFiles(filePath, fileList)
+    } else if (file.endsWith('.gate.ts')) {
+      fileList.push(filePath)
+    }
+  })
+  return fileList
+}
+
+if (WATCH_MODE) {
+  console.log(`  👀 Watch mode enabled - will rerun on file changes\n`)
+  
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  
+  const rerun = () => {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      console.log(`\n  🔄 File changed, rerunning...\n`)
+      // Re-execute prd.ts by spawning new process (without --watch to avoid recursion)
+      spawnSync('bun', ['run', 'prd.ts'], {
+        stdio: 'inherit',
+        cwd: process.cwd()
+      })
+    }, 500)
+  }
+  
+  // Watch prd.ts
+  if (existsSync('prd.ts')) {
+    watch('prd.ts', rerun)
+  }
+  
+  // Watch all gate files
+  if (existsSync('gates')) {
+    const gateFiles = findGateFiles('gates')
+    gateFiles.forEach(file => {
+      watch(file, rerun)
+    })
+  }
+  
+  // In watch mode, don't exit after running - keep watching
+  // We'll handle exit in the main flow below
+}
 
 const done = stories.filter(s => s.status === 'done').length
 const pending = stories.filter(s => s.status === 'pending').length
@@ -367,12 +448,17 @@ console.log(`
 
 if (pending === 0) {
   console.log(`  ✓ ALL GATES PASS - NORTH STAR ACHIEVED\n`)
-  process.exit(0)
+  if (!WATCH_MODE) {
+    process.exit(0)
+  }
+  // In watch mode, keep watching for changes
+  console.log(`  👀 Watching for file changes... (Ctrl+C to exit)\n`)
 }
 
 const next = nextEligible(stories)
 if (!next) {
   console.log(`  ✗ NO ELIGIBLE STORIES (circular dependency?)\n`)
+  showBlockedGates(stories)
   process.exit(1)
 }
 
@@ -390,17 +476,64 @@ if (!existsSync(next.gateFile)) {
   process.exit(1)
 }
 
-// Run gate file
+// Ensure .loop/gates directory exists
+mkdirSync('.loop/gates', { recursive: true })
+
+// Run gate file with output capture
 const result = spawnSync('bun', ['run', next.gateFile], {
   encoding: 'utf-8',
-  stdio: 'inherit',
+  stdio: ['inherit', 'pipe', 'pipe'],
   cwd: process.cwd()
 })
 
+// Combine stdout + stderr
+const combinedOutput = [
+  result.stdout || '',
+  result.stderr || ''
+].filter(Boolean).join('\n')
+
+// Save to log file
+const logPath = join('.loop', 'gates', `${next.id}.log`)
+writeFileSync(logPath, combinedOutput, 'utf-8')
+
+// Display output to console (for immediate feedback)
+if (result.stdout) process.stdout.write(result.stdout)
+if (result.stderr) process.stderr.write(result.stderr)
+
 if (result.status === 0) {
-  console.log(`  ✓ PASS → mark status: 'done' for "${next.id}" in prd.ts, commit, continue\n`)
-  process.exit(0)
+  console.log(`\n  ✓ PASS → mark status: 'done' for "${next.id}" in prd.ts, commit, continue`)
+  console.log(`  📝 Gate output saved to: ${logPath}\n`)
+  if (!WATCH_MODE) {
+    process.exit(0)
+  }
+  // In watch mode, keep running to watch for changes
 } else {
-  console.log(`  ✗ FAIL\n`)
-  process.exit(1)
+  console.log(`\n  ✗ FAIL`)
+  
+  // Show last 50 lines of stderr (or stdout if stderr empty)
+  const output = result.stderr || result.stdout || ''
+  const lines = output.split('\n')
+  const lastLines = lines.slice(-50).join('\n')
+  
+  if (lastLines) {
+    console.log(`  ┌─ Diagnostics (last 50 lines) ─────────────────────────────────────────────┐`)
+    console.log(`  │`)
+    lastLines.split('\n').forEach(line => {
+      console.log(`  │ ${line.slice(0, 75).padEnd(75)} │`)
+    })
+    console.log(`  │`)
+    console.log(`  └─────────────────────────────────────────────────────────────────────────────┘`)
+  }
+  
+  console.log(`  📝 Gate output saved to: ${logPath}\n`)
+  if (!WATCH_MODE) {
+    process.exit(1)
+  }
+  // In watch mode, keep running to watch for changes
+}
+
+// In watch mode, keep the process alive to continue watching
+if (WATCH_MODE) {
+  console.log(`  👀 Watching for file changes... (Ctrl+C to exit)\n`)
+  // Process will stay alive, watchers will trigger rerun on changes
 }
