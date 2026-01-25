@@ -262,7 +262,9 @@ async function startTerminal(
   }
 
   const sandbox = getSandbox(env.Sandbox, terminalId);
-  const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+  const ttyd = await sandbox.startProcess(
+    'ttyd -W -p 7681 bash -lc "opencode || bash"'
+  );
   try {
     const hostname = new URL(request.url).hostname;
     await sandbox.exposePort(7681, { hostname });

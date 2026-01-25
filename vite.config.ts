@@ -6,9 +6,18 @@ export default defineConfig({
   plugins: [react(), alchemy()],
   server: {
     proxy: {
-      '/run': 'http://localhost:1337',
-      '/terminal': 'http://localhost:1337',
-      '/session': 'http://localhost:1337'
+      '/run': {
+        target: 'http://localhost:1337',
+        ws: true
+      },
+      '/terminal': {
+        target: 'http://localhost:1337',
+        ws: true
+      },
+      '/session': {
+        target: 'http://localhost:1337',
+        ws: true
+      }
     }
   }
 });

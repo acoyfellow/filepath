@@ -16,9 +16,8 @@ RUN bun add -g @anthropic-ai/claude-code @openai/codex && \
     # Clean up any temp files from installs
     rm -rf /tmp/* /var/tmp/*
 
-# PATH will be set at runtime to avoid loading all binaries into memory at startup
-# Base PATH only - agents added dynamically
-ENV PATH="/usr/local/bin:/usr/bin:/bin"
+# Ensure agent CLIs are on PATH
+ENV PATH="/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Expose ports for ttyd WebSocket and sandbox services
 EXPOSE 7681

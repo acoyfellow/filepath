@@ -34,7 +34,8 @@ export const prd = definePrd({
   progressLog: [
     "Implemented chat -> terminal task assignment with status and outputs.",
     "Added command audit log with actor attribution.",
-    "Marked terminals expired on reload until iframe connects."
+    "Marked terminals expired on reload until iframe connects.",
+    "Default terminal now launches opencode in ttyd."
   ],
   stories: [
     // EPIC: Session (Chat) persistence with zero auth
@@ -69,7 +70,9 @@ export const prd = definePrd({
         "Terminal backend provisions a PTY and streams I/O over WebSocket per terminal",
       gateFile: "./gates/terminal-backend-pty-ws.gate.ts",
       dependsOn: ["terminal-create-ephemeral"],
-      progress: [],
+      progress: [
+        "Default terminal command launches opencode (fallback to bash) with ttyd."
+      ],
     },
     {
       id: "terminal-viewer-ui",
