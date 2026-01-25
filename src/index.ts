@@ -181,9 +181,24 @@ type TerminalTask = {
   stderr?: string;
 };
 
+type CommandActor = 'user' | 'agent';
+
+type CommandAuditEntry = {
+  id: string;
+  sessionId: string;
+  tabId: string;
+  actor: CommandActor;
+  command: string;
+  status: TerminalTaskStatus;
+  createdAt: number;
+  completedAt?: number;
+  exitCode?: number | null;
+};
+
 const sessions = new Map<string, SessionState>();
 const sessionClients = new Map<string, Set<WebSocket>>();
 const tasksBySession = new Map<string, TerminalTask[]>();
+const auditBySession = new Map<string, CommandAuditEntry[]>();
 const activeTerminals = new Set<string>();
 
 function getOrCreateSession(sessionId: string): SessionState {
@@ -220,6 +235,12 @@ function addTask(task: TerminalTask) {
   const tasks = tasksBySession.get(task.sessionId) || [];
   tasks.unshift(task);
   tasksBySession.set(task.sessionId, tasks.slice(0, 50));
+}
+
+function addAudit(entry: CommandAuditEntry) {
+  const audit = auditBySession.get(entry.sessionId) || [];
+  audit.unshift(entry);
+  auditBySession.set(entry.sessionId, audit.slice(0, 200));
 }
 
 async function startTerminal(
@@ -568,6 +589,13 @@ export default {
       return Response.json({ tasks });
     }
 
+    const sessionAuditMatch = url.pathname.match(/^\/session\/([^/]+)\/audit$/);
+    if (sessionAuditMatch && request.method === 'GET') {
+      const sessionId = sessionAuditMatch[1];
+      const audit = auditBySession.get(sessionId) || [];
+      return Response.json({ audit });
+    }
+
     const terminalTabMatch = url.pathname.match(
       /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws|task)$/
     );
@@ -588,7 +616,7 @@ export default {
         }
 
         const body = (await request.json().catch(() => null)) as
-          | { command?: string }
+          | { command?: string; actor?: CommandActor }
           | null;
         const command =
           body?.command && typeof body.command === 'string'
@@ -597,6 +625,10 @@ export default {
         if (!command.trim()) {
           return Response.json({ error: 'Missing command' }, { status: 400 });
         }
+        const actor: CommandActor =
+          body?.actor === 'agent' || body?.actor === 'user'
+            ? body.actor
+            : 'agent';
 
         const task: TerminalTask = {
           id: crypto.randomUUID(),
@@ -607,7 +639,18 @@ export default {
           createdAt: Date.now()
         };
         addTask(task);
+        const auditEntry: CommandAuditEntry = {
+          id: crypto.randomUUID(),
+          sessionId,
+          tabId,
+          actor,
+          command,
+          status: 'queued',
+          createdAt: task.createdAt
+        };
+        addAudit(auditEntry);
         task.status = 'running';
+        auditEntry.status = 'running';
 
         try {
           const sandbox = getSandbox(env.Sandbox, `${sessionId}:${tabId}`);
@@ -617,11 +660,16 @@ export default {
           task.exitCode = result.exitCode ?? null;
           task.stdout = result.stdout;
           task.stderr = result.stderr;
+          auditEntry.status = 'done';
+          auditEntry.completedAt = task.completedAt;
+          auditEntry.exitCode = task.exitCode ?? null;
           return Response.json({ task });
         } catch (error) {
           task.status = 'failed';
           task.completedAt = Date.now();
           task.stderr = error instanceof Error ? error.message : String(error);
+          auditEntry.status = 'failed';
+          auditEntry.completedAt = task.completedAt;
           return Response.json({ task, error: task.stderr }, { status: 500 });
         }
       }

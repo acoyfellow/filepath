@@ -38,6 +38,19 @@ interface TerminalTask {
   stderr?: string;
 }
 
+type CommandActor = 'user' | 'agent';
+
+interface CommandAuditEntry {
+  id: string;
+  tabId: string;
+  actor: CommandActor;
+  command: string;
+  status: TerminalTaskStatus;
+  createdAt: number;
+  completedAt?: number;
+  exitCode?: number | null;
+}
+
 /**
  * Get or create a session ID for this user.
  * The session ID is stored in localStorage and persists across browser sessions.
@@ -88,6 +101,7 @@ function App() {
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>('chat');
   const [terminalTasks, setTerminalTasks] = useState<TerminalTask[]>([]);
+  const [commandAudit, setCommandAudit] = useState<CommandAuditEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string>('');
@@ -264,7 +278,7 @@ function App() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: userInput })
+            body: JSON.stringify({ command: userInput, actor: 'user' })
           }
         );
         const payload = (await response.json()) as {
@@ -277,6 +291,19 @@ function App() {
         setTerminalTasks((prev) =>
           prev.map((task) => (task.id === taskId ? payload.task! : task))
         );
+        setCommandAudit((prev) => [
+          {
+            id: nanoid(10),
+            tabId: selectedTerminalId,
+            actor: 'user',
+            command: userInput,
+            status: payload.task!.status,
+            createdAt: pendingTask.createdAt,
+            completedAt: payload.task!.completedAt,
+            exitCode: payload.task!.exitCode ?? null
+          },
+          ...prev
+        ]);
       } else {
         const result = await makeApiCall(userInput);
         // Update the message with the response
@@ -296,6 +323,17 @@ function App() {
               : task
           )
         );
+        setCommandAudit((prev) => [
+          {
+            id: nanoid(10),
+            tabId: selectedTerminalId,
+            actor: 'user',
+            command: userInput,
+            status: 'failed',
+            createdAt: Date.now()
+          },
+          ...prev
+        ]);
       } else {
         const errorResponse: Response = {
           naturalResponse: 'An error occurred while processing your request.',
@@ -601,6 +639,29 @@ function App() {
                     {task.stderr && (
                       <pre className="terminal-task-error">{task.stderr}</pre>
                     )}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="terminal-task-log">
+              <div className="terminal-task-header">Command audit</div>
+              {commandAudit.length === 0 ? (
+                <div className="terminal-task-empty">No commands logged.</div>
+              ) : (
+                commandAudit.map((entry) => (
+                  <div key={entry.id} className="terminal-task">
+                    <div className="terminal-task-row">
+                      <span className="terminal-task-tab">
+                        {terminalTabs.find((t) => t.id === entry.tabId)?.name ||
+                          entry.tabId}
+                      </span>
+                      <span
+                        className={`terminal-task-status terminal-task-${entry.status}`}
+                      >
+                        {entry.actor}:{entry.status}
+                      </span>
+                    </div>
+                    <div className="terminal-task-command">{entry.command}</div>
                   </div>
                 ))
               )}

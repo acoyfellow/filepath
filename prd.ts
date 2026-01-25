@@ -32,7 +32,8 @@ import { definePrd, runPrd } from "gateproof/prd";
 
 export const prd = definePrd({
   progressLog: [
-    "Implemented chat -> terminal task assignment with status and outputs."
+    "Implemented chat -> terminal task assignment with status and outputs.",
+    "Added command audit log with actor attribution."
   ],
   stories: [
     // EPIC: Session (Chat) persistence with zero auth
@@ -162,7 +163,9 @@ export const prd = definePrd({
         "Every executed command is logged with actor attribution (user vs agent) and timestamps",
       gateFile: "./gates/command-audit-log.gate.ts",
       dependsOn: ["terminal-io-streaming", "chat-orchestrates-terminal-task"],
-      progress: [],
+      progress: [
+        "Added audit tracking in worker and UI list with actor + status."
+      ],
     },
 
     // EPIC: Terminal ephemeral reality vs persisted session UI
