@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react(), alchemy()],
   server: {
     proxy: {
-      '/run': 'http://localhost:1337'
+      '/run': 'http://localhost:1337',
+      '/terminal': 'http://localhost:1337'
     }
   }
 });

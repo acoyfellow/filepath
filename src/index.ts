@@ -155,6 +155,239 @@ async function handleRunRequest(
   }
 }
 
+const activeTerminals = new Set<string>();
+
+async function startTerminal(
+  env: Env,
+  sessionId: string,
+  tabId: string
+): Promise<Response> {
+  if (!env.Sandbox) {
+    return Response.json(
+      { error: 'Sandbox binding missing' },
+      { status: 500 }
+    );
+  }
+
+  const terminalId = `${sessionId}:${tabId}`;
+  if (activeTerminals.has(terminalId)) {
+    return Response.json({ success: true, sessionId, tabId, reused: true });
+  }
+
+  const sandbox = getSandbox(env.Sandbox, terminalId);
+  const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+  await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 30000 });
+  activeTerminals.add(terminalId);
+
+  return Response.json({ success: true, sessionId, tabId });
+}
+
+function renderTerminalTabPage(sessionId: string, tabId: string): Response {
+  const html = `<!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Terminal ${tabId}</title>
+      <link
+        rel="stylesheet"
+        href="https://unpkg.com/@xterm/xterm@6.0.0/css/xterm.css"
+      />
+      <style>
+        html, body { margin: 0; padding: 0; height: 100%; background: #000; }
+        #terminal { height: 100%; width: 100%; }
+      </style>
+    </head>
+    <body>
+      <div id="terminal"></div>
+      <script>
+        (function() {
+          function loadScript(src) {
+            return new Promise((resolve, reject) => {
+              var script = document.createElement('script');
+              script.src = src;
+              script.onload = resolve;
+              script.onerror = reject;
+              document.body.appendChild(script);
+            });
+          }
+
+          async function init() {
+            await loadScript('https://unpkg.com/@xterm/xterm@6.0.0/lib/xterm.js');
+            await loadScript('https://unpkg.com/@xterm/addon-fit@0.11.0/lib/addon-fit.js');
+
+            var terminal = new Terminal({
+              cursorBlink: true,
+              fontSize: 14,
+              fontFamily: 'monospace',
+              theme: { background: '#000000', foreground: '#ffffff', cursor: '#ffffff' }
+            });
+            var fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            terminal.open(document.getElementById('terminal'));
+            fitAddon.fit();
+
+            terminal.write('\\x1b[2J\\x1b[H');
+            terminal.writeln('\\r\\n  Connecting to terminal...\\r\\n');
+
+            await fetch('/terminal/${sessionId}/${tabId}/start', { method: 'POST' });
+
+            var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            var wsUrl = protocol + '//' + window.location.host + '/terminal/${sessionId}/${tabId}/ws';
+            var ws = new WebSocket(wsUrl, ['tty']);
+            ws.binaryType = 'arraybuffer';
+
+            var textEncoder = new TextEncoder();
+            var CMD_OUTPUT = '0';
+
+            ws.addEventListener('open', function() {
+              terminal.clear();
+              var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
+              ws.send(textEncoder.encode(sizeMsg));
+            });
+
+            ws.addEventListener('message', function(e) {
+              if (typeof e.data === 'string') return;
+              if (e.data instanceof ArrayBuffer) {
+                var u8 = new Uint8Array(e.data);
+                if (u8.length === 0) return;
+                var cmd = String.fromCharCode(u8[0]);
+                var data = e.data.slice(1);
+                if (cmd === CMD_OUTPUT) {
+                  terminal.write(new Uint8Array(data));
+                }
+              }
+            });
+
+            terminal.onData(function(data) {
+              if (ws.readyState !== WebSocket.OPEN) return;
+              var payload = new Uint8Array(data.length * 3 + 1);
+              payload[0] = CMD_OUTPUT.charCodeAt(0);
+              var stats = textEncoder.encodeInto(data, payload.subarray(1));
+              ws.send(payload.subarray(0, stats.written + 1));
+            });
+
+            function sendResize() {
+              if (ws.readyState !== WebSocket.OPEN) return;
+              var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
+              ws.send(textEncoder.encode(sizeMsg));
+            }
+
+            window.addEventListener('resize', function() {
+              fitAddon.fit();
+              sendResize();
+            });
+            terminal.onResize(sendResize);
+          }
+
+          init().catch(function(err) {
+            console.error('[Terminal] init failed', err);
+            var el = document.getElementById('terminal');
+            if (el) {
+              el.innerHTML = '<div style="color:#fff;padding:16px">Failed to initialize terminal</div>';
+            }
+          });
+        })();
+      </script>
+    </body>
+  </html>`;
+
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
+
+async function handleTerminalWebSocket(
+  request: Request,
+  env: Env,
+  sessionId: string,
+  tabId: string
+): Promise<Response> {
+  if (!env.Sandbox) {
+    return new Response('Sandbox binding missing', { status: 500 });
+  }
+
+  const upgrade = request.headers.get('Upgrade');
+  if (!upgrade || upgrade.toLowerCase() !== 'websocket') {
+    return new Response('Expected WebSocket upgrade', { status: 400 });
+  }
+
+  const pair = new WebSocketPair() as {
+    0: WebSocket;
+    1: WebSocket & { accept(): void };
+  };
+  const client = pair[0];
+  const server = pair[1];
+  server.accept();
+
+  (async () => {
+    try {
+      const sandbox = getSandbox(env.Sandbox!, `${sessionId}:${tabId}`);
+      const url = new URL(request.url);
+      url.pathname = '/ws';
+      const wsRequest = new Request(url.toString(), {
+        headers: request.headers,
+        method: 'GET'
+      });
+
+      const ttydResponse = (await sandbox.wsConnect(
+        wsRequest,
+        7681
+      )) as Response & { webSocket?: WebSocket };
+
+      if (ttydResponse.status !== 101 || !ttydResponse.webSocket) {
+        server.close(1011, 'ttyd connection failed');
+        return;
+      }
+
+      const ttydWs = ttydResponse.webSocket;
+      (ttydWs as any).accept?.();
+
+      ttydWs.addEventListener('message', (event) => {
+        if (server.readyState === WebSocket.OPEN) {
+          server.send(event.data);
+        }
+      });
+
+      server.addEventListener('message', (event) => {
+        if (ttydWs.readyState === WebSocket.OPEN) {
+          ttydWs.send(event.data);
+        }
+      });
+
+      server.addEventListener('close', () => {
+        if (ttydWs.readyState === WebSocket.OPEN) {
+          ttydWs.close();
+        }
+      });
+
+      ttydWs.addEventListener('close', () => {
+        if (server.readyState === WebSocket.OPEN) {
+          server.close();
+        }
+      });
+
+      ttydWs.addEventListener('error', () => {
+        if (server.readyState === WebSocket.OPEN) {
+          server.close(1011, 'ttyd websocket error');
+        }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const sizeMsg = JSON.stringify({ columns: 80, rows: 24 });
+      ttydWs.send(sizeMsg);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      server.close(1011, message);
+    }
+  })();
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client
+  } as ResponseInit & { webSocket: WebSocket });
+}
+
 export default {
   async fetch(
     request: Request,
@@ -178,6 +411,28 @@ export default {
       }
 
       return handleRunRequest(request, env, sessionId);
+    }
+
+    const terminalTabMatch = url.pathname.match(
+      /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws)$/
+    );
+    if (terminalTabMatch) {
+      const [, sessionId, tabId, action] = terminalTabMatch;
+      if (action === 'start' && request.method === 'POST') {
+        return startTerminal(env, sessionId, tabId);
+      }
+      if (action === 'ws' && request.method === 'GET') {
+        return handleTerminalWebSocket(request, env, sessionId, tabId);
+      }
+    }
+
+    const terminalTabPageMatch = url.pathname.match(
+      /^\/terminal\/([^/]+)\/tab$/
+    );
+    if (terminalTabPageMatch && request.method === 'GET') {
+      const sessionId = terminalTabPageMatch[1];
+      const tabId = url.searchParams.get('tab') || 'tab1';
+      return renderTerminalTabPage(sessionId, tabId);
     }
 
     if (request.method === 'GET') {

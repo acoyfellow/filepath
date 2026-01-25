@@ -20,6 +20,11 @@ interface Message {
   timestamp: number;
 }
 
+interface TerminalTab {
+  id: string;
+  name: string;
+}
+
 /**
  * Get or create a session ID for this user.
  * The session ID is stored in localStorage and persists across browser sessions.
@@ -63,8 +68,11 @@ function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sessionIdRef = useRef<string>('');
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -78,6 +86,47 @@ function App() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    sessionIdRef.current = getOrCreateSessionId();
+    const tabsKey = `terminal-tabs:${sessionIdRef.current}`;
+    const activeKey = `terminal-active:${sessionIdRef.current}`;
+    const storedTabs = localStorage.getItem(tabsKey);
+    const storedActive = localStorage.getItem(activeKey);
+
+    if (storedTabs) {
+      try {
+        const parsed = JSON.parse(storedTabs) as TerminalTab[];
+        if (parsed.length > 0) {
+          setTerminalTabs(parsed);
+          setActiveTerminalId(
+            storedActive && parsed.some((t) => t.id === storedActive)
+              ? storedActive
+              : parsed[0].id
+          );
+          return;
+        }
+      } catch (error) {
+        console.error('Error loading terminal tabs:', error);
+      }
+    }
+
+    const firstTab: TerminalTab = { id: nanoid(8), name: 'Terminal 1' };
+    setTerminalTabs([firstTab]);
+    setActiveTerminalId(firstTab.id);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionIdRef.current || terminalTabs.length === 0) return;
+    const tabsKey = `terminal-tabs:${sessionIdRef.current}`;
+    localStorage.setItem(tabsKey, JSON.stringify(terminalTabs));
+  }, [terminalTabs]);
+
+  useEffect(() => {
+    if (!sessionIdRef.current || !activeTerminalId) return;
+    const activeKey = `terminal-active:${sessionIdRef.current}`;
+    localStorage.setItem(activeKey, activeTerminalId);
+  }, [activeTerminalId]);
 
   // Save messages to localStorage whenever they change
   useEffect(() => {
@@ -154,6 +203,18 @@ function App() {
       localStorage.removeItem(STORAGE_KEY);
     }
   };
+
+  const createTerminalTab = () => {
+    const nextIndex = terminalTabs.length + 1;
+    const newTab: TerminalTab = {
+      id: nanoid(8),
+      name: `Terminal ${nextIndex}`
+    };
+    setTerminalTabs((prev) => [...prev, newTab]);
+    setActiveTerminalId(newTab.id);
+  };
+
+  const terminalSessionId = sessionIdRef.current;
 
   const renderMessage = (message: Message) => (
     <div key={message.id} className="message">
@@ -307,30 +368,77 @@ function App() {
           )}
         </div>
 
-        <div className="messages-container">
-          {messages.length === 0 ? (
-            <div className="empty-state">
-              <div className="output-content">
-                Start a conversation by entering a command below.
-              </div>
+        <div className="main-split">
+          <div className="chat-pane">
+            <div className="messages-container">
+              {messages.length === 0 ? (
+                <div className="empty-state">
+                  <div className="output-content">
+                    Start a conversation by entering a command below.
+                  </div>
+                </div>
+              ) : (
+                messages.map(renderMessage)
+              )}
+              <div ref={messagesEndRef} />
             </div>
-          ) : (
-            messages.map(renderMessage)
-          )}
-          <div ref={messagesEndRef} />
-        </div>
 
-        <form onSubmit={handleSubmit} className="input-form">
-          <input
-            ref={inputRef}
-            type="text"
-            className="input"
-            placeholder="Enter your natural language command..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={loading}
-          />
-        </form>
+            <form onSubmit={handleSubmit} className="input-form">
+              <input
+                ref={inputRef}
+                type="text"
+                className="input"
+                placeholder="Enter your natural language command..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                disabled={loading}
+              />
+            </form>
+          </div>
+
+          <div className="terminal-pane">
+            <div className="terminal-tabs">
+              <div className="terminal-tabs-list">
+                {terminalTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={
+                      tab.id === activeTerminalId
+                        ? 'terminal-tab terminal-tab-active'
+                        : 'terminal-tab'
+                    }
+                    onClick={() => setActiveTerminalId(tab.id)}
+                  >
+                    {tab.name}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="terminal-add-button"
+                onClick={createTerminalTab}
+              >
+                + Terminal
+              </button>
+            </div>
+
+            <div className="terminal-frame">
+              {terminalTabs.map((tab) => (
+                <iframe
+                  key={tab.id}
+                  className={
+                    tab.id === activeTerminalId
+                      ? 'terminal-iframe terminal-iframe-active'
+                      : 'terminal-iframe'
+                  }
+                  src={`/terminal/${terminalSessionId}/tab?tab=${tab.id}`}
+                  title={`Terminal ${tab.name}`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
