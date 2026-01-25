@@ -10,6 +10,11 @@ import { definePrd, runPrd } from "gateproof/prd";
  * - Memory is files: git commits + prd.ts only.
  * - Progress tracking: each story has a `progress: string[]` in this file.
  *
+ * Harness discipline (required):
+ * - Dev harness must be green before touching prod.
+ * - Prod harness is expected to fail until deployed.
+ * - After deploy, re-run prod harness to go green, then move on.
+ *
  * Scope target (checkpoint):
  * - No auth (anonymous UX prototype)
  * - Chat Sessions persist (localStorage)
@@ -38,6 +43,23 @@ export const prd = definePrd({
     "Default terminal now launches opencode in ttyd."
   ],
   stories: [
+    // EPIC: Harnesses (dev must be green; prod fails until deploy)
+    {
+      id: "harness-dev-local",
+      title:
+        "Dev harness: local web + worker stack starts and the UI responds at http://localhost:5173",
+      gateFile: "./gates/harness-dev-local.gate.ts",
+      progress: [],
+    },
+    {
+      id: "harness-prod-smoke",
+      title:
+        "Prod harness: PROD_URL responds with 200 (expected to fail until deployed)",
+      gateFile: "./gates/harness-prod-smoke.gate.ts",
+      dependsOn: ["harness-dev-local"],
+      progress: [],
+    },
+
     // EPIC: Session (Chat) persistence with zero auth
     {
       id: "session-create-and-list",
