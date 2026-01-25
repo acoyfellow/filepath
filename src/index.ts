@@ -325,78 +325,99 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
             terminal.write('\\x1b[2J\\x1b[H');
             terminal.writeln('\\r\\n  Connecting to terminal...\\r\\n');
 
-            await fetch('/terminal/${sessionId}/${tabId}/start', { method: 'POST' });
-
+            var isDev = window.location.port === '5173';
+            var wsHost = isDev ? window.location.hostname + ':1337' : window.location.host;
             var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            var wsUrl = protocol + '//' + window.location.host + '/terminal/${sessionId}/${tabId}/ws';
-            var ws = new WebSocket(wsUrl, ['tty']);
-            ws.binaryType = 'arraybuffer';
+            var wsUrl = protocol + '//' + wsHost + '/terminal/${sessionId}/${tabId}/ws';
+            var httpBase = window.location.origin;
 
+            await fetch(httpBase + '/terminal/${sessionId}/${tabId}/start', { method: 'POST' });
             var textEncoder = new TextEncoder();
             var CMD_OUTPUT = '0';
+            var retries = 0;
+            var maxRetries = 5;
+            var connectedOnce = false;
 
-            ws.addEventListener('open', function() {
-              terminal.clear();
-              var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
-              ws.send(textEncoder.encode(sizeMsg));
-              if (window.parent) {
-                window.parent.postMessage(
-                  { type: 'terminal-status', tabId: '${tabId}', status: 'connected' },
-                  window.location.origin
-                );
+            function connect() {
+              var ws = new WebSocket(wsUrl, ['tty']);
+              ws.binaryType = 'arraybuffer';
+
+              ws.addEventListener('open', function() {
+                connectedOnce = true;
+                retries = 0;
+                terminal.clear();
+                terminal.writeln('[connected]');
+                var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
+                ws.send(sizeMsg);
+                if (window.parent) {
+                  window.parent.postMessage(
+                    { type: 'terminal-status', tabId: '${tabId}', status: 'connected' },
+                    window.location.origin
+                  );
+                }
+              });
+
+              ws.addEventListener('message', function(e) {
+                if (typeof e.data === 'string') return;
+                if (e.data instanceof ArrayBuffer) {
+                  var u8 = new Uint8Array(e.data);
+                  if (u8.length === 0) return;
+                  var cmd = String.fromCharCode(u8[0]);
+                  var data = e.data.slice(1);
+                  if (cmd === CMD_OUTPUT) {
+                    terminal.write(new Uint8Array(data));
+                  } else if (cmd) {
+                    terminal.write(new Uint8Array(data));
+                  }
+                }
+              });
+
+              terminal.onData(function(data) {
+                if (ws.readyState !== WebSocket.OPEN) return;
+                var payload = new Uint8Array(data.length * 3 + 1);
+                payload[0] = CMD_OUTPUT.charCodeAt(0);
+                var stats = textEncoder.encodeInto(data, payload.subarray(1));
+                ws.send(payload.subarray(0, stats.written + 1));
+              });
+
+              function sendResize() {
+                if (ws.readyState !== WebSocket.OPEN) return;
+                var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
+                ws.send(sizeMsg);
               }
-            });
 
-            ws.addEventListener('message', function(e) {
-              if (typeof e.data === 'string') return;
-              if (e.data instanceof ArrayBuffer) {
-                var u8 = new Uint8Array(e.data);
-                if (u8.length === 0) return;
-                var cmd = String.fromCharCode(u8[0]);
-                var data = e.data.slice(1);
-                if (cmd === CMD_OUTPUT) {
-                  terminal.write(new Uint8Array(data));
+              window.addEventListener('resize', function() {
+                fitAddon.fit();
+                sendResize();
+              });
+              terminal.onResize(sendResize);
+
+              function markExpired() {
+                if (window.parent) {
+                  window.parent.postMessage(
+                    { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
+                    window.location.origin
+                  );
                 }
               }
-            });
 
-            terminal.onData(function(data) {
-              if (ws.readyState !== WebSocket.OPEN) return;
-              var payload = new Uint8Array(data.length * 3 + 1);
-              payload[0] = CMD_OUTPUT.charCodeAt(0);
-              var stats = textEncoder.encodeInto(data, payload.subarray(1));
-              ws.send(payload.subarray(0, stats.written + 1));
-            });
+              ws.addEventListener('close', function() {
+                markExpired();
+                if (!connectedOnce && retries < maxRetries) {
+                  retries += 1;
+                  var waitMs = 500 * retries;
+                  terminal.write('\\r\\n[reconnecting in ' + waitMs + 'ms]\\r\\n');
+                  setTimeout(connect, waitMs);
+                }
+              });
 
-            function sendResize() {
-              if (ws.readyState !== WebSocket.OPEN) return;
-              var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
-              ws.send(textEncoder.encode(sizeMsg));
+              ws.addEventListener('error', function() {
+                markExpired();
+                terminal.write('\\r\\n[connection error]\\r\\n');
+              });
             }
 
-            window.addEventListener('resize', function() {
-              fitAddon.fit();
-              sendResize();
-            });
-            terminal.onResize(sendResize);
-
-            ws.addEventListener('close', function() {
-              if (window.parent) {
-                window.parent.postMessage(
-                  { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
-                  window.location.origin
-                );
-              }
-            });
-
-            ws.addEventListener('error', function() {
-              if (window.parent) {
-                window.parent.postMessage(
-                  { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
-                  window.location.origin
-                );
-              }
-            });
+            connect();
           }
 
           init().catch(function(err) {
