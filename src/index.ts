@@ -263,7 +263,7 @@ async function startTerminal(
 
   const sandbox = getSandbox(env.Sandbox, terminalId);
   const ttyd = await sandbox.startProcess(
-    'ttyd -W -p 7681 bash -lc "opencode || bash"'
+    'ttyd -W -p 7681 bash -lc "export PATH=/root/.opencode/bin:/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin; /root/.opencode/bin/opencode || bash"'
   );
   try {
     const hostname = new URL(request.url).hostname;
