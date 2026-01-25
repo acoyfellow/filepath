@@ -18,6 +18,10 @@ import { definePrd, runPrd } from "gateproof/prd";
  * Notes on “agents”:
  * - For this checkpoint, assume a single default coding agent behavior per terminal.
  * - We DO support multiple terminals (parallel agents), but NOT agent customization.
+ *
+ * Terminal transport (v0):
+ * - Real terminal via ttyd over WebSocket (PTY semantics).
+ * - UI uses iframe-per-tab to isolate terminal runtime and avoid cross-terminal state bleed.
  */
 
 export const prd = definePrd({
