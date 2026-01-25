@@ -4,6 +4,12 @@ import { definePrd, runPrd } from "gateproof/prd";
  * Product: myFilepath.com (filepath)
  * Concept: 1 Chat Session orchestrates N isolated Terminal Sessions (each with its own agent).
  *
+ * Loop discipline (required):
+ * - Pick one story -> implement -> verify -> commit -> repeat.
+ * - PRD only; one story per iteration; verify before commit.
+ * - Memory is files: git commits + prd.ts only.
+ * - Progress tracking: each story has a `progress: string[]` in this file.
+ *
  * Scope target (checkpoint):
  * - No auth (anonymous UX prototype)
  * - Chat Sessions persist (localStorage)
@@ -25,6 +31,9 @@ import { definePrd, runPrd } from "gateproof/prd";
  */
 
 export const prd = definePrd({
+  progressLog: [
+    "Implemented chat -> terminal task assignment with status and outputs."
+  ],
   stories: [
     // EPIC: Session (Chat) persistence with zero auth
     {
@@ -32,6 +41,7 @@ export const prd = definePrd({
       title:
         "User can create a Chat Session and see it in a Sessions list (anonymous, no auth)",
       gateFile: "./gates/session-create-and-list.gate.ts",
+      progress: [],
     },
     {
       id: "session-persists-localstorage",
@@ -39,6 +49,7 @@ export const prd = definePrd({
         "Chat Session state persists to localStorage and restores on reload (no auth)",
       gateFile: "./gates/session-persists-localstorage.gate.ts",
       dependsOn: ["session-create-and-list"],
+      progress: [],
     },
 
     // EPIC: Terminal Sessions (ephemeral, isolated, network on)
@@ -48,6 +59,7 @@ export const prd = definePrd({
         "User can create an ephemeral Terminal Session tab inside a Chat Session",
       gateFile: "./gates/terminal-create-ephemeral.gate.ts",
       dependsOn: ["session-create-and-list"],
+      progress: [],
     },
     {
       id: "terminal-backend-pty-ws",
@@ -55,6 +67,7 @@ export const prd = definePrd({
         "Terminal backend provisions a PTY and streams I/O over WebSocket per terminal",
       gateFile: "./gates/terminal-backend-pty-ws.gate.ts",
       dependsOn: ["terminal-create-ephemeral"],
+      progress: [],
     },
     {
       id: "terminal-viewer-ui",
@@ -62,6 +75,7 @@ export const prd = definePrd({
         "UI renders a real terminal viewport with interactive input (ANSI + PTY semantics)",
       gateFile: "./gates/terminal-viewer-ui.gate.ts",
       dependsOn: ["terminal-create-ephemeral"],
+      progress: [],
     },
     {
       id: "terminal-io-streaming",
@@ -69,6 +83,7 @@ export const prd = definePrd({
         "Terminal streams stdout/stderr in real time and accepts interactive input",
       gateFile: "./gates/terminal-io-streaming.gate.ts",
       dependsOn: ["terminal-backend-pty-ws", "terminal-viewer-ui"],
+      progress: [],
     },
     {
       id: "terminal-multiple-tabs",
@@ -76,6 +91,7 @@ export const prd = definePrd({
         "User can create N terminal tabs and switch between them without losing scrollback",
       gateFile: "./gates/terminal-multiple-tabs.gate.ts",
       dependsOn: ["terminal-io-streaming"],
+      progress: [],
     },
     {
       id: "terminal-isolation-no-shared-filesystem",
@@ -83,6 +99,7 @@ export const prd = definePrd({
         "Each terminal is isolated: filesystem writes in Terminal A are not visible in Terminal B",
       gateFile: "./gates/terminal-isolation-no-shared-filesystem.gate.ts",
       dependsOn: ["terminal-multiple-tabs"],
+      progress: [],
     },
     {
       id: "terminal-network-on-by-default",
@@ -90,6 +107,7 @@ export const prd = definePrd({
         "Network is on by default inside terminals (basic outbound request succeeds)",
       gateFile: "./gates/terminal-network-on-by-default.gate.ts",
       dependsOn: ["terminal-create-ephemeral"],
+      progress: [],
     },
 
     // EPIC: Chat as orchestrator (task routing + lifecycle)
@@ -99,6 +117,10 @@ export const prd = definePrd({
         "From chat, user can assign a task to a specific terminal and see status updates (queued → running → done/failed)",
       gateFile: "./gates/chat-orchestrates-terminal-task.gate.ts",
       dependsOn: ["terminal-io-streaming"],
+      progress: [
+        "Added /terminal/:sessionId/:tabId/task endpoint with exec + status updates.",
+        "UI now assigns chat input to a terminal with status chips and task output."
+      ],
     },
     {
       id: "chat-fanout-multiple-terminals",
@@ -106,6 +128,7 @@ export const prd = definePrd({
         "One chat message can fan out tasks to multiple terminals and report results back per terminal",
       gateFile: "./gates/chat-fanout-multiple-terminals.gate.ts",
       dependsOn: ["chat-orchestrates-terminal-task", "terminal-multiple-tabs"],
+      progress: [],
     },
 
     // EPIC: Human override / jump-in behavior (no fighting)
@@ -115,6 +138,7 @@ export const prd = definePrd({
         "When user focuses a terminal and types, the agent yields control (no interleaved keystrokes) and can be resumed",
       gateFile: "./gates/jump-in-pauses-agent.gate.ts",
       dependsOn: ["chat-orchestrates-terminal-task", "terminal-io-streaming"],
+      progress: [],
     },
 
     // EPIC: Allow changes
@@ -128,6 +152,7 @@ export const prd = definePrd({
         "terminal-io-streaming",
         "terminal-isolation-no-shared-filesystem",
       ],
+      progress: [],
     },
 
     // EPIC: Auditability
@@ -137,6 +162,7 @@ export const prd = definePrd({
         "Every executed command is logged with actor attribution (user vs agent) and timestamps",
       gateFile: "./gates/command-audit-log.gate.ts",
       dependsOn: ["terminal-io-streaming", "chat-orchestrates-terminal-task"],
+      progress: [],
     },
 
     // EPIC: Terminal ephemeral reality vs persisted session UI
@@ -151,6 +177,7 @@ export const prd = definePrd({
         "terminal-create-ephemeral",
         "terminal-multiple-tabs",
       ],
+      progress: [],
     },
 
     // FUTURE: Agent CLI swap (commented to prevent scope creep)

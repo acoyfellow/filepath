@@ -25,6 +25,19 @@ interface TerminalTab {
   name: string;
 }
 
+type TerminalTaskStatus = 'queued' | 'running' | 'done' | 'failed';
+
+interface TerminalTask {
+  id: string;
+  tabId: string;
+  command: string;
+  status: TerminalTaskStatus;
+  createdAt: number;
+  completedAt?: number;
+  stdout?: string;
+  stderr?: string;
+}
+
 /**
  * Get or create a session ID for this user.
  * The session ID is stored in localStorage and persists across browser sessions.
@@ -73,6 +86,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>('chat');
+  const [terminalTasks, setTerminalTasks] = useState<TerminalTask[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string>('');
@@ -227,25 +242,72 @@ function App() {
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      const result = await makeApiCall(userInput);
-      // Update the message with the response
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === userMessage.id ? { ...msg, response: result } : msg
-        )
-      );
+      if (selectedTerminalId !== 'chat') {
+        const taskId = nanoid(10).toLowerCase();
+        const pendingTask: TerminalTask = {
+          id: taskId,
+          tabId: selectedTerminalId,
+          command: userInput,
+          status: 'queued',
+          createdAt: Date.now()
+        };
+        setTerminalTasks((prev) => [pendingTask, ...prev]);
+
+        setTerminalTasks((prev) =>
+          prev.map((task) =>
+            task.id === taskId ? { ...task, status: 'running' } : task
+          )
+        );
+
+        const response = await fetch(
+          `/terminal/${sessionIdRef.current}/${selectedTerminalId}/task`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: userInput })
+          }
+        );
+        const payload = (await response.json()) as {
+          task?: TerminalTask;
+          error?: string;
+        };
+        if (!response.ok || !payload.task) {
+          throw new Error(payload.error || 'Terminal task failed');
+        }
+        setTerminalTasks((prev) =>
+          prev.map((task) => (task.id === taskId ? payload.task! : task))
+        );
+      } else {
+        const result = await makeApiCall(userInput);
+        // Update the message with the response
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === userMessage.id ? { ...msg, response: result } : msg
+          )
+        );
+      }
     } catch (error) {
       console.error('Error:', error);
-      const errorResponse: Response = {
-        naturalResponse: 'An error occurred while processing your request.',
-        commandResults: [],
-        fileOperations: []
-      };
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === userMessage.id ? { ...msg, response: errorResponse } : msg
-        )
-      );
+      if (selectedTerminalId !== 'chat') {
+        setTerminalTasks((prev) =>
+          prev.map((task) =>
+            task.command === userInput && task.status !== 'done'
+              ? { ...task, status: 'failed', stderr: String(error) }
+              : task
+          )
+        );
+      } else {
+        const errorResponse: Response = {
+          naturalResponse: 'An error occurred while processing your request.',
+          commandResults: [],
+          fileOperations: []
+        };
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === userMessage.id ? { ...msg, response: errorResponse } : msg
+          )
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -440,6 +502,24 @@ function App() {
             </div>
 
             <form onSubmit={handleSubmit} className="input-form">
+              <div className="input-row">
+                <label htmlFor="terminal-select" className="input-label">
+                  Assign:
+                </label>
+                <select
+                  id="terminal-select"
+                  className="terminal-select"
+                  value={selectedTerminalId}
+                  onChange={(e) => setSelectedTerminalId(e.target.value)}
+                >
+                  <option value="chat">Chat only</option>
+                  {terminalTabs.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <input
                 ref={inputRef}
                 type="text"
@@ -495,6 +575,35 @@ function App() {
                   title={`Terminal ${tab.name}`}
                 />
               ))}
+            </div>
+            <div className="terminal-task-log">
+              <div className="terminal-task-header">Terminal tasks</div>
+              {terminalTasks.length === 0 ? (
+                <div className="terminal-task-empty">No terminal tasks yet.</div>
+              ) : (
+                terminalTasks.map((task) => (
+                  <div key={task.id} className="terminal-task">
+                    <div className="terminal-task-row">
+                      <span className="terminal-task-tab">
+                        {terminalTabs.find((t) => t.id === task.tabId)?.name ||
+                          task.tabId}
+                      </span>
+                      <span
+                        className={`terminal-task-status terminal-task-${task.status}`}
+                      >
+                        {task.status}
+                      </span>
+                    </div>
+                    <div className="terminal-task-command">{task.command}</div>
+                    {task.stdout && (
+                      <pre className="terminal-task-output">{task.stdout}</pre>
+                    )}
+                    {task.stderr && (
+                      <pre className="terminal-task-error">{task.stderr}</pre>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

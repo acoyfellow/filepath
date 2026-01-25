@@ -166,8 +166,24 @@ type SessionState = {
   activeTabId: string;
 };
 
+type TerminalTaskStatus = 'queued' | 'running' | 'done' | 'failed';
+
+type TerminalTask = {
+  id: string;
+  sessionId: string;
+  tabId: string;
+  command: string;
+  status: TerminalTaskStatus;
+  createdAt: number;
+  completedAt?: number;
+  exitCode?: number | null;
+  stdout?: string;
+  stderr?: string;
+};
+
 const sessions = new Map<string, SessionState>();
 const sessionClients = new Map<string, Set<WebSocket>>();
+const tasksBySession = new Map<string, TerminalTask[]>();
 const activeTerminals = new Set<string>();
 
 function getOrCreateSession(sessionId: string): SessionState {
@@ -198,6 +214,12 @@ function broadcastSessionTabs(sessionId: string) {
       client.send(payload);
     }
   }
+}
+
+function addTask(task: TerminalTask) {
+  const tasks = tasksBySession.get(task.sessionId) || [];
+  tasks.unshift(task);
+  tasksBySession.set(task.sessionId, tasks.slice(0, 50));
 }
 
 async function startTerminal(
@@ -539,8 +561,15 @@ export default {
       } as ResponseInit & { webSocket: WebSocket });
     }
 
+    const sessionTasksMatch = url.pathname.match(/^\/session\/([^/]+)\/tasks$/);
+    if (sessionTasksMatch && request.method === 'GET') {
+      const sessionId = sessionTasksMatch[1];
+      const tasks = tasksBySession.get(sessionId) || [];
+      return Response.json({ tasks });
+    }
+
     const terminalTabMatch = url.pathname.match(
-      /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws)$/
+      /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws|task)$/
     );
     if (terminalTabMatch) {
       const [, sessionId, tabId, action] = terminalTabMatch;
@@ -549,6 +578,52 @@ export default {
       }
       if (action === 'ws' && request.method === 'GET') {
         return handleTerminalWebSocket(request, env, sessionId, tabId);
+      }
+      if (action === 'task' && request.method === 'POST') {
+        if (!env.Sandbox) {
+          return Response.json(
+            { error: 'Sandbox binding missing' },
+            { status: 500 }
+          );
+        }
+
+        const body = (await request.json().catch(() => null)) as
+          | { command?: string }
+          | null;
+        const command =
+          body?.command && typeof body.command === 'string'
+            ? body.command
+            : '';
+        if (!command.trim()) {
+          return Response.json({ error: 'Missing command' }, { status: 400 });
+        }
+
+        const task: TerminalTask = {
+          id: crypto.randomUUID(),
+          sessionId,
+          tabId,
+          command,
+          status: 'queued',
+          createdAt: Date.now()
+        };
+        addTask(task);
+        task.status = 'running';
+
+        try {
+          const sandbox = getSandbox(env.Sandbox, `${sessionId}:${tabId}`);
+          const result = await sandbox.exec(command);
+          task.status = 'done';
+          task.completedAt = Date.now();
+          task.exitCode = result.exitCode ?? null;
+          task.stdout = result.stdout;
+          task.stderr = result.stderr;
+          return Response.json({ task });
+        } catch (error) {
+          task.status = 'failed';
+          task.completedAt = Date.now();
+          task.stderr = error instanceof Error ? error.message : String(error);
+          return Response.json({ task, error: task.stderr }, { status: 500 });
+        }
       }
     }
 
