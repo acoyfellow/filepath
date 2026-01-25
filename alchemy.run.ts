@@ -1,29 +1,44 @@
-/**
- * alchemy.run.ts
- * 
- * Typed Cloudflare infrastructure.
- * Run with: bunx alchemy run
- */
+import alchemy from "alchemy";
+import { Assets, Container, Vite, Worker } from "alchemy/cloudflare";
 
-import alchemy from 'alchemy'
-
-// The worker that orchestrates containers
-export const worker = alchemy.Worker('filepath-worker', {
-  main: './worker/src/index.ts',
-  compatibilityDate: '2024-01-01',
-  durableObjects: {
-    CONTAINER_MANAGER: 'ContainerManager'
-  }
-})
-
-// Container image for the agent
-export const container = alchemy.Container('filepath-agent', {
-  dockerfile: './container/Dockerfile',
-  // The container runs: bun + chromium + playwright + claude
-})
-
-// Export for CLI
-export default {
-  worker,
-  container,
+const password = process.env.ALCHEMY_PASSWORD;
+if (!password) {
+  throw new Error("Missing ALCHEMY_PASSWORD for Alchemy secrets.");
 }
+
+const app = await alchemy("filepath", { password });
+
+const assets = await Assets({
+  path: "./public",
+});
+
+export const website = await Vite("filepath-web", {
+  name: "filepath-web",
+});
+
+const sandbox = await Container("sandbox", {
+  className: "Sandbox",
+  build: {
+    context: ".",
+    dockerfile: "Dockerfile",
+  },
+  instanceType: "lite",
+  maxInstances: 1,
+});
+
+export const worker = await Worker("filepath", {
+  name: "filepath",
+  entrypoint: "./src/index.ts",
+  compatibilityDate: "2025-11-15",
+  compatibilityFlags: ["nodejs_compat"],
+  observability: {
+    enabled: true,
+  },
+  bindings: {
+    ASSETS: assets,
+    Sandbox: sandbox,
+    OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY ?? ""),
+  },
+});
+
+await app.finalize();

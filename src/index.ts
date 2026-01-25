@@ -1,134 +1,199 @@
-/**
- * filepath
- * 
- * run(instruction) → { success, output, screenshot, error }
- */
+import { getSandbox, Sandbox } from '@cloudflare/sandbox';
+import { Editor, Shell } from '@cloudflare/sandbox/openai';
+export { Sandbox }; // export the Sandbox class for the worker
 
-import type { RunResult, RunOptions, FilepathConfig } from './types'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { Agent, applyPatchTool, run, shellTool } from '@openai/agents';
 
-export type { RunResult, RunOptions, FilepathConfig } from './types'
-
-// Default worker URL (user's deployed worker)
-let workerUrl: string | null = null
-
-/**
- * Load config from .filepath/config.json
- */
-function loadConfig(): FilepathConfig | null {
-  const configPath = join(process.cwd(), '.filepath', 'config.json')
-  
-  if (existsSync(configPath)) {
-    try {
-      const content = readFileSync(configPath, 'utf-8')
-      return JSON.parse(content)
-    } catch {
-      return null
-    }
-  }
-  
-  return null
+// Helper functions for error handling
+function isErrorWithProperties(error: unknown): error is {
+  message?: string;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  status?: number;
+  stack?: string;
+} {
+  return typeof error === 'object' && error !== null;
 }
 
-/**
- * Configure the worker URL
- */
-export function configure(url: string): void {
-  workerUrl = url
+function getErrorMessage(error: unknown): string {
+  if (isErrorWithProperties(error) && typeof error.message === 'string') {
+    return error.message;
+  }
+  return String(error);
 }
 
-/**
- * Run an instruction
- * 
- * @example
- * ```ts
- * import { run } from 'filepath'
- * 
- * const result = await run("go to example.com and get the page title")
- * 
- * if (result.success) {
- *   console.log(result.output)      // "Example Domain"
- *   console.log(result.screenshot)  // base64 PNG
- * } else {
- *   console.error(result.error)
- * }
- * ```
- */
-export async function run(
-  instruction: string,
-  options: RunOptions = {}
-): Promise<RunResult> {
-  const { timeout = 60000, debug = false } = options
-  
-  // Get worker URL
-  let url = workerUrl
-  
-  if (!url) {
-    const config = loadConfig()
-    if (config?.workerUrl) {
-      url = config.workerUrl
-    }
+function getErrorStack(error: unknown): string | undefined {
+  if (isErrorWithProperties(error) && typeof error.stack === 'string') {
+    return error.stack;
   }
-  
-  if (!url) {
-    // Check env
-    url = process.env.FILEPATH_WORKER_URL || null
-  }
-  
-  if (!url) {
-    return {
-      success: false,
-      output: '',
-      screenshot: '',
-      error: 'No worker URL configured. Run `filepath init` and `filepath deploy` first, or set FILEPATH_WORKER_URL.',
-    }
-  }
-  
-  if (debug) {
-    console.log(`[filepath] POST ${url}/run`)
-    console.log(`[filepath] instruction: ${instruction}`)
-  }
-  
+  return undefined;
+}
+
+async function handleRunRequest(
+  request: Request,
+  env: Env,
+  sessionId: string
+): Promise<Response> {
+  console.debug('[openai-example]', 'handleRunRequest called', {
+    method: request.method,
+    url: request.url
+  });
+
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
-    
-    const response = await fetch(`${url}/run`, {
-      method: 'POST',
+    // Parse request body
+    console.debug('[openai-example]', 'Parsing request body');
+    const body = (await request.json()) as { input?: string };
+    const input = body.input;
+
+    if (!input || typeof input !== 'string') {
+      console.warn('[openai-example]', 'Invalid or missing input field', {
+        input
+      });
+      return new Response(
+        JSON.stringify({ error: 'Missing or invalid input field' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.info('[openai-example]', 'Processing request', {
+      inputLength: input.length
+    });
+
+    // Get sandbox instance (reused for both shell and editor)
+    console.debug('[openai-example]', 'Getting sandbox instance', {
+      sandboxId: `session-${sessionId}`
+    });
+    const sandbox = getSandbox(env.Sandbox, `session-${sessionId}`);
+
+    // Create shell (automatically collects results)
+    console.debug('[openai-example]', 'Creating SandboxShell');
+    const shell = new Shell(sandbox);
+
+    // Create workspace editor
+    console.debug('[openai-example]', 'Creating WorkspaceEditor', {
+      root: '/workspace'
+    });
+    const editor = new Editor(sandbox, '/workspace');
+
+    // Create agent with both shell and patch tools, auto-approval for web API
+    console.debug('[openai-example]', 'Creating Agent', {
+      name: 'Sandbox Studio',
+      model: 'gpt-5.1'
+    });
+    const agent = new Agent({
+      name: 'Sandbox Studio',
+      model: 'gpt-5.1',
+      instructions:
+        'You can execute shell commands and edit files in the workspace. Use shell commands to inspect the repository and the apply_patch tool to create, update, or delete files. Keep responses concise and include command output when helpful.',
+      tools: [
+        shellTool({
+          shell,
+          needsApproval: false // Auto-approve for web API
+        }),
+        applyPatchTool({
+          editor,
+          needsApproval: false // Auto-approve for web API
+        })
+      ]
+    });
+
+    // Run the agent
+    console.info('[openai-example]', 'Running agent', { input });
+    const result = await run(agent, input);
+    console.debug('[openai-example]', 'Agent run completed', {
+      hasOutput: !!result.finalOutput,
+      outputLength: result.finalOutput?.length || 0
+    });
+
+    // Combine and sort all results by timestamp for logging
+    const allResults = [
+      ...shell.results.map((r) => ({ type: 'command' as const, ...r })),
+      ...editor.results.map((r) => ({ type: 'file' as const, ...r }))
+    ].sort((a, b) => a.timestamp - b.timestamp);
+
+    console.debug('[openai-example]', 'Results collected', {
+      commandResults: shell.results.length,
+      fileOperations: editor.results.length,
+      totalResults: allResults.length
+    });
+
+    // Format response with combined and sorted results
+    const response = {
+      naturalResponse: result.finalOutput || null,
+      commandResults: shell.results.sort((a, b) => a.timestamp - b.timestamp),
+      fileOperations: editor.results.sort((a, b) => a.timestamp - b.timestamp)
+    };
+
+    console.info('[openai-example]', 'Request completed successfully');
+    return new Response(JSON.stringify(response), {
       headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ instruction }),
-      signal: controller.signal,
-    })
-    
-    clearTimeout(timeoutId)
-    
-    const result = await response.json() as RunResult
-    
-    if (debug) {
-      console.log(`[filepath] success: ${result.success}`)
-      if (result.error) console.log(`[filepath] error: ${result.error}`)
-    }
-    
-    return result
-    
-  } catch (err) {
-    const error = err instanceof Error ? err.message : 'unknown error'
-    
-    if (debug) {
-      console.error(`[filepath] fetch error: ${error}`)
-    }
-    
-    return {
-      success: false,
-      output: '',
-      screenshot: '',
-      error: `Failed to reach worker: ${error}`,
-    }
+        'Content-Type': 'application/json'
+      }
+    });
+  } catch (error: unknown) {
+    const errorMessage = getErrorMessage(error);
+    const errorStack = getErrorStack(error);
+    console.error('[openai-example]', 'Error handling run request', {
+      error: errorMessage,
+      stack: errorStack
+    });
+    return new Response(
+      JSON.stringify({
+        error: errorMessage || 'Internal server error',
+        naturalResponse: 'An error occurred while processing your request.',
+        commandResults: [],
+        fileOperations: []
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    );
   }
 }
 
-// Default export for convenience
-export default { run, configure }
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext
+  ): Promise<Response> {
+    const url = new URL(request.url);
+    console.debug('[openai-example]', 'Fetch handler called', {
+      pathname: url.pathname,
+      method: request.method
+    });
+
+    if (url.pathname === '/.well-known/appspecific/com.chrome.devtools.json') {
+      return Response.json({});
+    }
+
+    if (url.pathname === '/run' && request.method === 'POST') {
+      const sessionId = request.headers.get('X-Session-Id');
+      if (!sessionId) {
+        return new Response('Missing X-Session-Id header', { status: 400 });
+      }
+
+      return handleRunRequest(request, env, sessionId);
+    }
+
+    if (request.method === 'GET') {
+      const assets = (env as Env & {
+        ASSETS?: { fetch: (request: Request) => Promise<Response> };
+      }).ASSETS;
+
+      if (assets) {
+        return assets.fetch(request);
+      }
+    }
+
+    console.warn('[openai-example]', 'Route not found', {
+      pathname: url.pathname,
+      method: request.method
+    });
+    return new Response('Not found', { status: 404 });
+  }
+};

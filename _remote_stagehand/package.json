@@ -1,0 +1,38 @@
+{
+  "name": "filepath",
+  "version": "0.0.1",
+  "description": "run(instruction) → verified result",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "filepath": "./cli/index.ts"
+  },
+  "scripts": {
+    "prd": "bun run prd.ts",
+    "loop": "./loop.sh",
+    "bootstrap": "./bootstrap.sh",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "container:build": "cd container && docker build -t filepath-agent .",
+    "container:push": "echo 'TODO: push to CF registry'",
+    "test": "bun test",
+    "test:e2e": "bun run test/e2e-title.ts && bun run test/e2e-form.ts"
+  },
+  "dependencies": {
+    "alchemy": "^0.83.1",
+    "gateproof": "^0.1.1",
+    "hono": "^4.11.5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0",
+    "wrangler": "^3.0.0"
+  },
+  "files": [
+    "dist",
+    "src",
+    "cli"
+  ],
+  "author": "",
+  "license": "PROPRIETARY"
+}

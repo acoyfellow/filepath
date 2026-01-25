@@ -1,38 +1,34 @@
 {
-  "name": "filepath",
-  "version": "0.0.1",
-  "description": "run(instruction) → verified result",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "filepath": "./cli/index.ts"
-  },
+  "name": "@cloudflare/filepath",
+  "version": "1.0.0",
+  "description": "Using OpenAI Agents with Sandbox SDK",
+  "private": true,
   "scripts": {
-    "prd": "bun run prd.ts",
-    "loop": "./loop.sh",
-    "bootstrap": "./bootstrap.sh",
-    "build": "bun build src/index.ts --outdir dist --target node",
-    "container:build": "cd container && docker build -t filepath-agent .",
-    "container:push": "echo 'TODO: push to CF registry'",
-    "test": "bun test",
-    "test:e2e": "bun run test/e2e-title.ts && bun run test/e2e-form.ts"
+    "dev": "clear && alchemy dev",
+    "deploy": "alchemy deploy",
+    "destroy": "alchemy destroy",
+    "dev:vite": "vite dev",
+    "deploy:vite": "vite build && wrangler deploy",
+    "types": "wrangler types env.d.ts --include-runtime false",
+    "typecheck": "tsc --noEmit"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
   "dependencies": {
-    "alchemy": "^0.83.1",
-    "gateproof": "^0.1.1",
-    "hono": "^4.11.5"
+    "@cloudflare/sandbox": "*",
+    "@openai/agents": "^0.3.3",
+    "nanoid": "^5.1.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.0.0",
-    "wrangler": "^3.0.0"
-  },
-  "files": [
-    "dist",
-    "src",
-    "cli"
-  ],
-  "author": "",
-  "license": "PROPRIETARY"
+    "@cloudflare/vite-plugin": "^1.15.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "alchemy": "^0.83.1",
+    "vite": "^7.2.4"
+  }
 }

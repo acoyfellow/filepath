@@ -4,7 +4,8 @@
   "description": "Minimal terminal app using Cloudflare Sandbox",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --config wrangler.dev.json --port 8788",
+    "dev": "alchemy dev",
+    "dev:wrangler": "wrangler dev --config wrangler.json --port 1337",
     "dev:container": "PORT=8085 node container_src/server.js",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
