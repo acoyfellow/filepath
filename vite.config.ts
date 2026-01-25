@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/run': 'http://localhost:1337',
-      '/terminal': 'http://localhost:1337'
+      '/terminal': 'http://localhost:1337',
+      '/session': 'http://localhost:1337'
     }
   }
 });

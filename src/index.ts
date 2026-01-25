@@ -155,9 +155,53 @@ async function handleRunRequest(
   }
 }
 
+type TerminalTab = {
+  id: string;
+  name: string;
+};
+
+type SessionState = {
+  id: string;
+  tabs: TerminalTab[];
+  activeTabId: string;
+};
+
+const sessions = new Map<string, SessionState>();
+const sessionClients = new Map<string, Set<WebSocket>>();
 const activeTerminals = new Set<string>();
 
+function getOrCreateSession(sessionId: string): SessionState {
+  const existing = sessions.get(sessionId);
+  if (existing) return existing;
+
+  const initialTab = { id: 'tab1', name: 'Terminal 1' };
+  const session: SessionState = {
+    id: sessionId,
+    tabs: [initialTab],
+    activeTabId: initialTab.id
+  };
+  sessions.set(sessionId, session);
+  return session;
+}
+
+function broadcastSessionTabs(sessionId: string) {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  const payload = JSON.stringify({
+    tabs: session.tabs,
+    activeTabId: session.activeTabId
+  });
+  const clients = sessionClients.get(sessionId);
+  if (!clients) return;
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  }
+}
+
 async function startTerminal(
+  request: Request,
   env: Env,
   sessionId: string,
   tabId: string
@@ -176,6 +220,12 @@ async function startTerminal(
 
   const sandbox = getSandbox(env.Sandbox, terminalId);
   const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+  try {
+    const hostname = new URL(request.url).hostname;
+    await sandbox.exposePort(7681, { hostname });
+  } catch (error) {
+    console.warn('[terminal] exposePort failed', error);
+  }
   await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 30000 });
   activeTerminals.add(terminalId);
 
@@ -413,13 +463,89 @@ export default {
       return handleRunRequest(request, env, sessionId);
     }
 
+    if (url.pathname === '/session' && request.method === 'POST') {
+      const body = (await request.json().catch(() => null)) as
+        | { sessionId?: string }
+        | null;
+      const sessionId =
+        body?.sessionId && typeof body.sessionId === 'string'
+          ? body.sessionId
+          : crypto.randomUUID();
+      const session = getOrCreateSession(sessionId);
+      return Response.json({ sessionId: session.id });
+    }
+
+    const sessionInfoMatch = url.pathname.match(/^\/session\/([^/]+)\/tabs$/);
+    if (sessionInfoMatch) {
+      const sessionId = sessionInfoMatch[1];
+      const session = getOrCreateSession(sessionId);
+      if (request.method === 'GET') {
+        return Response.json({
+          tabs: session.tabs,
+          activeTabId: session.activeTabId
+        });
+      }
+      if (request.method === 'POST') {
+        const body = (await request.json()) as {
+          tabs?: TerminalTab[];
+          activeTabId?: string;
+        };
+        if (Array.isArray(body.tabs)) {
+          session.tabs = body.tabs;
+        }
+        if (typeof body.activeTabId === 'string') {
+          session.activeTabId = body.activeTabId;
+        }
+        broadcastSessionTabs(sessionId);
+        return Response.json({ success: true });
+      }
+    }
+
+    const sessionTabsWsMatch = url.pathname.match(
+      /^\/session\/([^/]+)\/tabs\/ws$/
+    );
+    if (sessionTabsWsMatch && request.method === 'GET') {
+      const upgrade = request.headers.get('Upgrade');
+      if (!upgrade || upgrade.toLowerCase() !== 'websocket') {
+        return new Response('Expected WebSocket upgrade', { status: 400 });
+      }
+      const sessionId = sessionTabsWsMatch[1];
+      const session = getOrCreateSession(sessionId);
+
+      const pair = new WebSocketPair() as {
+        0: WebSocket;
+        1: WebSocket & { accept(): void };
+      };
+      const client = pair[0];
+      const server = pair[1];
+      server.accept();
+
+      const clients =
+        sessionClients.get(sessionId) || new Set<WebSocket>();
+      clients.add(server);
+      sessionClients.set(sessionId, clients);
+
+      server.send(
+        JSON.stringify({ tabs: session.tabs, activeTabId: session.activeTabId })
+      );
+
+      server.addEventListener('close', () => {
+        clients.delete(server);
+      });
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client
+      } as ResponseInit & { webSocket: WebSocket });
+    }
+
     const terminalTabMatch = url.pathname.match(
       /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws)$/
     );
     if (terminalTabMatch) {
       const [, sessionId, tabId, action] = terminalTabMatch;
       if (action === 'start' && request.method === 'POST') {
-        return startTerminal(env, sessionId, tabId);
+        return startTerminal(request, env, sessionId, tabId);
       }
       if (action === 'ws' && request.method === 'GET') {
         return handleTerminalWebSocket(request, env, sessionId, tabId);

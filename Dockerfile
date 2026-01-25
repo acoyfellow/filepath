@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 docker.io/cloudflare/sandbox:0.6.7
+FROM --platform=linux/amd64 docker.io/cloudflare/sandbox:0.7.0
 
 # Install ttyd and tmux for shared terminal sessions
 # Use minimal install to reduce memory footprint
@@ -20,5 +20,7 @@ RUN bun add -g @anthropic-ai/claude-code @openai/codex && \
 # Base PATH only - agents added dynamically
 ENV PATH="/usr/local/bin:/usr/bin:/bin"
 
-# Expose port for ttyd WebSocket
+# Expose ports for ttyd WebSocket and sandbox services
 EXPOSE 7681
+EXPOSE 3000
+EXPOSE 8080

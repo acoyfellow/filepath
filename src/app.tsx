@@ -33,7 +33,10 @@ function getOrCreateSessionId(): string {
   let sessionId = localStorage.getItem('session-id');
 
   if (!sessionId) {
-    sessionId = nanoid(8);
+    sessionId = nanoid(8).toLowerCase();
+    localStorage.setItem('session-id', sessionId);
+  } else if (sessionId !== sessionId.toLowerCase()) {
+    sessionId = sessionId.toLowerCase();
     localStorage.setItem('session-id', sessionId);
   }
 
@@ -73,8 +76,22 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string>('');
+  const tabsSocketRef = useRef<WebSocket | null>(null);
 
   // Load messages from localStorage on mount
+  const saveTabs = (tabs: TerminalTab[], activeTabIdValue: string | null) => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId || !activeTabIdValue) return;
+    void fetch(`/session/${sessionId}/tabs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tabs,
+        activeTabId: activeTabIdValue
+      })
+    });
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -89,44 +106,81 @@ function App() {
 
   useEffect(() => {
     sessionIdRef.current = getOrCreateSessionId();
-    const tabsKey = `terminal-tabs:${sessionIdRef.current}`;
-    const activeKey = `terminal-active:${sessionIdRef.current}`;
-    const storedTabs = localStorage.getItem(tabsKey);
-    const storedActive = localStorage.getItem(activeKey);
+    const sessionId = sessionIdRef.current;
 
-    if (storedTabs) {
+    const initializeSession = async () => {
       try {
-        const parsed = JSON.parse(storedTabs) as TerminalTab[];
-        if (parsed.length > 0) {
-          setTerminalTabs(parsed);
+        await fetch('/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        });
+
+        const tabsResponse = await fetch(`/session/${sessionId}/tabs`);
+        if (!tabsResponse.ok) throw new Error('Failed to load tabs');
+        const data = (await tabsResponse.json()) as {
+          tabs: TerminalTab[];
+          activeTabId?: string;
+        };
+        if (data.tabs && data.tabs.length > 0) {
+          setTerminalTabs(data.tabs);
           setActiveTerminalId(
-            storedActive && parsed.some((t) => t.id === storedActive)
-              ? storedActive
-              : parsed[0].id
+            data.activeTabId && data.tabs.some((t) => t.id === data.activeTabId)
+              ? data.activeTabId
+              : data.tabs[0].id
           );
-          return;
         }
       } catch (error) {
-        console.error('Error loading terminal tabs:', error);
+        console.error('Error initializing session:', error);
+        const fallbackTab: TerminalTab = {
+          id: nanoid(8).toLowerCase(),
+          name: 'Terminal 1'
+        };
+        setTerminalTabs([fallbackTab]);
+        setActiveTerminalId(fallbackTab.id);
       }
-    }
+    };
 
-    const firstTab: TerminalTab = { id: nanoid(8), name: 'Terminal 1' };
-    setTerminalTabs([firstTab]);
-    setActiveTerminalId(firstTab.id);
+    initializeSession();
+
+    return () => {
+      if (tabsSocketRef.current) {
+        tabsSocketRef.current.close();
+        tabsSocketRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
-    if (!sessionIdRef.current || terminalTabs.length === 0) return;
-    const tabsKey = `terminal-tabs:${sessionIdRef.current}`;
-    localStorage.setItem(tabsKey, JSON.stringify(terminalTabs));
-  }, [terminalTabs]);
+    const sessionId = sessionIdRef.current;
+    if (!sessionId || tabsSocketRef.current || terminalTabs.length === 0) return;
 
-  useEffect(() => {
-    if (!sessionIdRef.current || !activeTerminalId) return;
-    const activeKey = `terminal-active:${sessionIdRef.current}`;
-    localStorage.setItem(activeKey, activeTerminalId);
-  }, [activeTerminalId]);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/session/${sessionId}/tabs/ws`;
+    const socket = new WebSocket(wsUrl);
+    tabsSocketRef.current = socket;
+
+    socket.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data) as {
+          tabs?: TerminalTab[];
+          activeTabId?: string;
+        };
+        if (Array.isArray(data.tabs) && data.tabs.length > 0) {
+          setTerminalTabs(data.tabs);
+        }
+        if (typeof data.activeTabId === 'string') {
+          setActiveTerminalId(data.activeTabId);
+        }
+      } catch (error) {
+        console.error('Failed to parse tab update:', error);
+      }
+    });
+
+    socket.addEventListener('close', () => {
+      tabsSocketRef.current = null;
+    });
+  }, []);
 
   // Save messages to localStorage whenever they change
   useEffect(() => {
@@ -207,11 +261,13 @@ function App() {
   const createTerminalTab = () => {
     const nextIndex = terminalTabs.length + 1;
     const newTab: TerminalTab = {
-      id: nanoid(8),
+      id: nanoid(8).toLowerCase(),
       name: `Terminal ${nextIndex}`
     };
-    setTerminalTabs((prev) => [...prev, newTab]);
+    const updatedTabs = [...terminalTabs, newTab];
+    setTerminalTabs(updatedTabs);
     setActiveTerminalId(newTab.id);
+    saveTabs(updatedTabs, newTab.id);
   };
 
   const terminalSessionId = sessionIdRef.current;
@@ -408,7 +464,10 @@ function App() {
                         ? 'terminal-tab terminal-tab-active'
                         : 'terminal-tab'
                     }
-                    onClick={() => setActiveTerminalId(tab.id)}
+                    onClick={() => {
+                      setActiveTerminalId(tab.id);
+                      saveTabs(terminalTabs, tab.id);
+                    }}
                   >
                     {tab.name}
                   </button>
