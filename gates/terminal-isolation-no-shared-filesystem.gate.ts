@@ -3,7 +3,11 @@ import { Gate, Act, Assert, createEmptyObserveResource } from 'gateproof'
 const result = await Gate.run({
   name: 'terminal-isolation-no-shared-filesystem',
   observe: createEmptyObserveResource(),
-  act: [Act.exec('echo "TODO: terminal-isolation-no-shared-filesystem"')],
+  act: [
+    Act.exec(
+      'bun run gates/_checks/file-contains.ts src/index.ts terminalId getSandbox'
+    )
+  ],
   assert: [Assert.noErrors()],
   report: 'pretty'
 })
