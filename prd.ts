@@ -33,7 +33,8 @@ import { definePrd, runPrd } from "gateproof/prd";
 export const prd = definePrd({
   progressLog: [
     "Implemented chat -> terminal task assignment with status and outputs.",
-    "Added command audit log with actor attribution."
+    "Added command audit log with actor attribution.",
+    "Marked terminals expired on reload until iframe connects."
   ],
   stories: [
     // EPIC: Session (Chat) persistence with zero auth
@@ -180,7 +181,9 @@ export const prd = definePrd({
         "terminal-create-ephemeral",
         "terminal-multiple-tabs",
       ],
-      progress: [],
+      progress: [
+        "Iframe posts terminal status to parent; tabs marked expired on reload until connected."
+      ],
     },
 
     // FUTURE: Agent CLI swap (commented to prevent scope creep)

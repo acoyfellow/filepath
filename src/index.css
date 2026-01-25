@@ -79,12 +79,42 @@ body {
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .terminal-tab-active {
   border-color: #808080;
   background: #ffffff;
   color: #1a1a1a;
+}
+
+.terminal-status {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.terminal-status-connected {
+  color: #1f7a3a;
+  border-color: #9bd7b3;
+  background: #e9f7ef;
+}
+
+.terminal-status-connecting {
+  color: #8a5a00;
+  border-color: #f2c46d;
+  background: #fff4d6;
+}
+
+.terminal-status-expired {
+  color: #a13a3a;
+  border-color: #f0a8a8;
+  background: #feecec;
 }
 
 .terminal-add-button {

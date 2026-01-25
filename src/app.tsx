@@ -102,6 +102,9 @@ function App() {
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>('chat');
   const [terminalTasks, setTerminalTasks] = useState<TerminalTask[]>([]);
   const [commandAudit, setCommandAudit] = useState<CommandAuditEntry[]>([]);
+  const [terminalStatus, setTerminalStatus] = useState<Record<string, string>>(
+    {}
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string>('');
@@ -158,6 +161,11 @@ function App() {
               ? data.activeTabId
               : data.tabs[0].id
           );
+          const nextStatus: Record<string, string> = {};
+          data.tabs.forEach((tab) => {
+            nextStatus[tab.id] = 'expired';
+          });
+          setTerminalStatus(nextStatus);
         }
       } catch (error) {
         console.error('Error initializing session:', error);
@@ -167,6 +175,7 @@ function App() {
         };
         setTerminalTabs([fallbackTab]);
         setActiveTerminalId(fallbackTab.id);
+        setTerminalStatus({ [fallbackTab.id]: 'expired' });
       }
     };
 
@@ -197,6 +206,15 @@ function App() {
         };
         if (Array.isArray(data.tabs) && data.tabs.length > 0) {
           setTerminalTabs(data.tabs);
+          setTerminalStatus((prev) => {
+            const next = { ...prev };
+            data.tabs.forEach((tab) => {
+              if (!next[tab.id]) {
+                next[tab.id] = 'expired';
+              }
+            });
+            return next;
+          });
         }
         if (typeof data.activeTabId === 'string') {
           setActiveTerminalId(data.activeTabId);
@@ -209,6 +227,25 @@ function App() {
     socket.addEventListener('close', () => {
       tabsSocketRef.current = null;
     });
+  }, []);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as
+        | { type?: string; tabId?: string; status?: string }
+        | undefined;
+      if (!data || data.type !== 'terminal-status' || !data.tabId) return;
+      setTerminalStatus((prev) => ({
+        ...prev,
+        [data.tabId!]: data.status || 'expired'
+      }));
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
   }, []);
 
   // Save messages to localStorage whenever they change
@@ -367,6 +404,7 @@ function App() {
     const updatedTabs = [...terminalTabs, newTab];
     setTerminalTabs(updatedTabs);
     setActiveTerminalId(newTab.id);
+    setTerminalStatus((prev) => ({ ...prev, [newTab.id]: 'connecting' }));
     saveTabs(updatedTabs, newTab.id);
   };
 
@@ -587,7 +625,12 @@ function App() {
                       saveTabs(terminalTabs, tab.id);
                     }}
                   >
-                    {tab.name}
+                    <span>{tab.name}</span>
+                    <span
+                      className={`terminal-status terminal-status-${terminalStatus[tab.id] || 'expired'}`}
+                    >
+                      {terminalStatus[tab.id] || 'expired'}
+                    </span>
                   </button>
                 ))}
               </div>

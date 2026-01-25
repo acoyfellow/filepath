@@ -337,6 +337,12 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
               terminal.clear();
               var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
               ws.send(textEncoder.encode(sizeMsg));
+              if (window.parent) {
+                window.parent.postMessage(
+                  { type: 'terminal-status', tabId: '${tabId}', status: 'connected' },
+                  window.location.origin
+                );
+              }
             });
 
             ws.addEventListener('message', function(e) {
@@ -371,6 +377,24 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
               sendResize();
             });
             terminal.onResize(sendResize);
+
+            ws.addEventListener('close', function() {
+              if (window.parent) {
+                window.parent.postMessage(
+                  { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
+                  window.location.origin
+                );
+              }
+            });
+
+            ws.addEventListener('error', function() {
+              if (window.parent) {
+                window.parent.postMessage(
+                  { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
+                  window.location.origin
+                );
+              }
+            });
           }
 
           init().catch(function(err) {
@@ -378,6 +402,12 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
             var el = document.getElementById('terminal');
             if (el) {
               el.innerHTML = '<div style="color:#fff;padding:16px">Failed to initialize terminal</div>';
+            }
+            if (window.parent) {
+              window.parent.postMessage(
+                { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
+                window.location.origin
+              );
             }
           });
         })();
