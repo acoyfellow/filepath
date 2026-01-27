@@ -118,7 +118,9 @@ export const prd = definePrd({
         "UI renders a real terminal viewport with interactive input (ANSI + PTY semantics)",
       gateFile: "./gates/terminal-viewer-ui.gate.ts",
       dependsOn: ["terminal-create-ephemeral"],
-      progress: [],
+      progress: [
+        "Terminal iframe loads `xterm` + /terminal/:session/tab page with ANSI UI wired."
+      ],
     },
     {
       id: "terminal-io-streaming",
