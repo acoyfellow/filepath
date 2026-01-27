@@ -108,7 +108,8 @@ export const prd = definePrd({
       gateFile: "./gates/terminal-backend-pty-ws.gate.ts",
       dependsOn: ["terminal-create-ephemeral"],
       progress: [
-        "Default terminal command launches opencode (fallback to bash) with ttyd."
+        "Default terminal command launches opencode (fallback to bash) with ttyd.",
+        "WebSocketPair handler and /terminal/:session/:tab/(start|ws) logic present."
       ],
     },
     {
