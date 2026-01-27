@@ -1,0 +1,12 @@
+{
+  "name": "sandbox-sdk-309-minimal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.json",
+    "deploy": "WRANGLER_CI=1 wrangler deploy --config wrangler.json"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "^0.7.0"
+  }
+}

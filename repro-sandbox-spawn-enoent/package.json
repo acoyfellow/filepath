@@ -1,0 +1,12 @@
+{
+  "name": "sandbox-spawn-enoent-repro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --remote",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "^0.7.0"
+  }
+}

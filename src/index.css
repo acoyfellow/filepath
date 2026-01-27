@@ -45,6 +45,77 @@ body {
   min-height: 0;
 }
 
+.session-panel {
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: #fafafa;
+}
+
+.session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.session-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.session-new {
+  border: 1px solid #1a1a1a;
+  background: #1a1a1a;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.session-new:hover {
+  background: #2d2d2d;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.session-item {
+  border: 1px solid #d0d0d0;
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.session-item-active {
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 1px #1a1a1a inset;
+}
+
+.session-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.session-id {
+  font-size: 0.7rem;
+  color: #606060;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .terminal-pane {
   display: flex;
   flex-direction: column;
@@ -71,6 +142,17 @@ body {
 }
 
 .terminal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.terminal-tab-active {
+  background: #ffffff;
+}
+
+.terminal-tab-button {
   padding: 0.35rem 0.65rem;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -78,15 +160,13 @@ body {
   color: #404040;
   font-size: 0.85rem;
   cursor: pointer;
-  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.terminal-tab-active {
+.terminal-tab-active .terminal-tab-button {
   border-color: #808080;
-  background: #ffffff;
   color: #1a1a1a;
 }
 
@@ -115,6 +195,29 @@ body {
   color: #a13a3a;
   border-color: #f0a8a8;
   background: #feecec;
+}
+
+.terminal-status-closed {
+  color: #6b6b6b;
+  border-color: #c7c7c7;
+  background: #f2f2f2;
+}
+
+.terminal-tab-close {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #6b6b6b;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.terminal-tab-close:hover {
+  color: #1a1a1a;
+  border-color: #b0b0b0;
+  background: #f0f0f0;
 }
 
 .terminal-add-button {
@@ -255,6 +358,20 @@ body {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid #d0d0d0;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  /*invert*/
+  filter: invert(1);
 }
 
 .app-title {

@@ -9,6 +9,7 @@ import { definePrd, runPrd } from "gateproof/prd";
  * - PRD only; one story per iteration; verify before commit.
  * - Memory is files: git commits + prd.ts only.
  * - Progress tracking: each story has a `progress: string[]` in this file.
+ * - Agent Loop: after each task, check GH Actions via `gh pr checks <PR_ID> --watch` and only proceed when green.
  *
  * Harness discipline (required):
  * - Dev harness must be green before touching prod.
@@ -40,24 +41,32 @@ export const prd = definePrd({
     "Implemented chat -> terminal task assignment with status and outputs.",
     "Added command audit log with actor attribution.",
     "Marked terminals expired on reload until iframe connects.",
-    "Default terminal now launches opencode in ttyd."
+    "Default terminal now launches opencode in ttyd.",
+    "Prod WS fixed: header pass-through for ttyd wsConnect + browser WS no subprotocol; /terminal/.../ws now connects.",
+    "Prod harness: prod-terminal-ws check passes; harness-prod-smoke green against api.myfilepath.com.",
+    "Added minimal repro folders for sandbox issues (#309) and observed platform instability in repro runs."
   ],
   stories: [
     // EPIC: Harnesses (dev must be green; prod fails until deploy)
     {
       id: "harness-dev-local",
       title:
-        "Dev harness: local web + worker stack starts and the UI responds at http://localhost:5173",
+        "Dev harness: local web + worker stack starts, UI responds at http://localhost:5173, and API works at http://localhost:1337",
       gateFile: "./gates/harness-dev-local.gate.ts",
-      progress: [],
+      progress: [
+        "Started alchemy dev stack; harness-dev-local passes (localhost:5173 + localhost:1337)."
+      ],
     },
     {
       id: "harness-prod-smoke",
       title:
-        "Prod harness: PROD_URL responds with 200 (expected to fail until deployed)",
+        "Prod harness: PROD_URL responds with 200 and Cloudflare logs show no errors (expected to fail until deployed)",
       gateFile: "./gates/harness-prod-smoke.gate.ts",
       dependsOn: ["harness-dev-local"],
-      progress: [],
+      progress: [
+        "Added WS debug check to prod harness; prod-terminal-ws now passes.",
+        "Harness-prod-smoke green (using api.myfilepath.com origin)."
+      ],
     },
 
     // EPIC: Session (Chat) persistence with zero auth
@@ -66,7 +75,9 @@ export const prd = definePrd({
       title:
         "User can create a Chat Session and see it in a Sessions list (anonymous, no auth)",
       gateFile: "./gates/session-create-and-list.gate.ts",
-      progress: [],
+      progress: [
+        "Added Sessions panel with create + switch; session list stored locally and active session syncs to API."
+      ],
     },
     {
       id: "session-persists-localstorage",
@@ -74,7 +85,9 @@ export const prd = definePrd({
         "Chat Session state persists to localStorage and restores on reload (no auth)",
       gateFile: "./gates/session-persists-localstorage.gate.ts",
       dependsOn: ["session-create-and-list"],
-      progress: [],
+      progress: [
+        "Per-session history stored under unique keys; session list + active session saved and rehydrated from localStorage."
+      ],
     },
 
     // EPIC: Terminal Sessions (ephemeral, isolated, network on)

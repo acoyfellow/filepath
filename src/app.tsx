@@ -25,6 +25,12 @@ interface TerminalTab {
   name: string;
 }
 
+interface ChatSession {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
 type TerminalTaskStatus = 'queued' | 'running' | 'done' | 'failed';
 
 interface TerminalTask {
@@ -51,33 +57,56 @@ interface CommandAuditEntry {
   exitCode?: number | null;
 }
 
-/**
- * Get or create a session ID for this user.
- * The session ID is stored in localStorage and persists across browser sessions.
- */
-function getOrCreateSessionId(): string {
-  let sessionId = localStorage.getItem('session-id');
-
-  if (!sessionId) {
-    sessionId = nanoid(8).toLowerCase();
-    localStorage.setItem('session-id', sessionId);
-  } else if (sessionId !== sessionId.toLowerCase()) {
-    sessionId = sessionId.toLowerCase();
-    localStorage.setItem('session-id', sessionId);
-  }
-
-  return sessionId;
+const STORAGE_KEY = 'openai-agents-history';
+const SESSION_LIST_KEY = 'chat-sessions';
+const ACTIVE_SESSION_KEY = 'active-session-id';
+const DEFAULT_DEV_API_BASE = 'http://localhost:1337';
+function getApiBase(): string {
+  const envBase = import.meta.env.VITE_API_BASE as string | undefined;
+  if (envBase) return envBase;
+  if (import.meta.env.DEV) return DEFAULT_DEV_API_BASE;
+  return window.location.origin;
 }
 
-const STORAGE_KEY = 'openai-agents-history';
+function toApiUrl(path: string): string {
+  return new URL(path, getApiBase()).toString();
+}
 
-async function makeApiCall(input: string): Promise<Response> {
+function toWsUrl(path: string): string {
+  const envBase = import.meta.env.VITE_WS_BASE as string | undefined;
+  const base = (envBase || getApiBase()).replace(/^http/, 'ws');
+  return new URL(path, base).toString();
+}
+
+function getHistoryKey(sessionId: string): string {
+  return `${STORAGE_KEY}:${sessionId}`;
+}
+
+function loadSessionsFromStorage(): ChatSession[] {
+  const raw = localStorage.getItem(SESSION_LIST_KEY);
+  if (!raw) return [];
   try {
-    const response = await fetch('/run', {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSessionsToStorage(sessions: ChatSession[]): void {
+  localStorage.setItem(SESSION_LIST_KEY, JSON.stringify(sessions));
+}
+
+async function makeApiCall(
+  input: string,
+  sessionId: string
+): Promise<Response> {
+  try {
+    const response = await fetch(toApiUrl('/run'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Session-Id': getOrCreateSessionId()
+        'X-Session-Id': sessionId
       },
       body: JSON.stringify({ input })
     });
@@ -97,6 +126,8 @@ function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>('chat');
@@ -110,11 +141,10 @@ function App() {
   const sessionIdRef = useRef<string>('');
   const tabsSocketRef = useRef<WebSocket | null>(null);
 
-  // Load messages from localStorage on mount
   const saveTabs = (tabs: TerminalTab[], activeTabIdValue: string | null) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId || !activeTabIdValue) return;
-    void fetch(`/session/${sessionId}/tabs`, {
+    void fetch(toApiUrl(`/session/${sessionId}/tabs`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -125,30 +155,39 @@ function App() {
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setMessages(parsed);
-      } catch (error) {
-        console.error('Error loading history:', error);
-      }
+    const storedSessions = loadSessionsFromStorage();
+    if (storedSessions.length === 0) {
+      const newSession: ChatSession = {
+        id: nanoid(8).toLowerCase(),
+        name: 'Session 1',
+        createdAt: Date.now()
+      };
+      setSessions([newSession]);
+      saveSessionsToStorage([newSession]);
+      setActiveSessionId(newSession.id);
+    } else {
+      setSessions(storedSessions);
+      const storedActive = localStorage.getItem(ACTIVE_SESSION_KEY);
+      setActiveSessionId(storedActive || storedSessions[0].id);
     }
   }, []);
 
   useEffect(() => {
-    sessionIdRef.current = getOrCreateSessionId();
-    const sessionId = sessionIdRef.current;
+    if (!activeSessionId) return;
+    sessionIdRef.current = activeSessionId;
+    localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
 
     const initializeSession = async () => {
       try {
-        await fetch('/session', {
+        await fetch(toApiUrl('/session'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId })
+          body: JSON.stringify({ sessionId: activeSessionId })
         });
 
-        const tabsResponse = await fetch(`/session/${sessionId}/tabs`);
+        const tabsResponse = await fetch(
+          toApiUrl(`/session/${activeSessionId}/tabs`)
+        );
         if (!tabsResponse.ok) throw new Error('Failed to load tabs');
         const data = (await tabsResponse.json()) as {
           tabs: TerminalTab[];
@@ -179,8 +218,35 @@ function App() {
       }
     };
 
-    initializeSession();
+    if (tabsSocketRef.current) {
+      tabsSocketRef.current.close();
+      tabsSocketRef.current = null;
+    }
 
+    setTerminalTabs([]);
+    setActiveTerminalId(null);
+    setTerminalStatus({});
+    setTerminalTasks([]);
+    setCommandAudit([]);
+    setSelectedTerminalId('chat');
+
+    const saved = localStorage.getItem(getHistoryKey(activeSessionId));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setMessages(Array.isArray(parsed) ? parsed : []);
+      } catch (error) {
+        console.error('Error loading history:', error);
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
+
+    void initializeSession();
+  }, [activeSessionId]);
+
+  useEffect(() => {
     return () => {
       if (tabsSocketRef.current) {
         tabsSocketRef.current.close();
@@ -193,8 +259,7 @@ function App() {
     const sessionId = sessionIdRef.current;
     if (!sessionId || tabsSocketRef.current || terminalTabs.length === 0) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/session/${sessionId}/tabs/ws`;
+    const wsUrl = toWsUrl(`/session/${sessionId}/tabs/ws`);
     const socket = new WebSocket(wsUrl);
     tabsSocketRef.current = socket;
 
@@ -227,11 +292,17 @@ function App() {
     socket.addEventListener('close', () => {
       tabsSocketRef.current = null;
     });
-  }, []);
+  }, [terminalTabs, activeSessionId]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      const apiOrigin = new URL(getApiBase()).origin;
+      if (
+        event.origin !== window.location.origin &&
+        event.origin !== apiOrigin
+      ) {
+        return;
+      }
       const data = event.data as
         | { type?: string; tabId?: string; status?: string }
         | undefined;
@@ -250,8 +321,10 @@ function App() {
 
   // Save messages to localStorage whenever they change
   useEffect(() => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) return;
     if (messages.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      localStorage.setItem(getHistoryKey(sessionId), JSON.stringify(messages));
     }
   }, [messages]);
 
@@ -278,6 +351,8 @@ function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) return;
 
     const userInput = input.trim();
     setInput('');
@@ -311,7 +386,9 @@ function App() {
         );
 
         const response = await fetch(
-          `/terminal/${sessionIdRef.current}/${selectedTerminalId}/task`,
+          toApiUrl(
+            `/terminal/${sessionIdRef.current}/${selectedTerminalId}/task`
+          ),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -342,7 +419,7 @@ function App() {
           ...prev
         ]);
       } else {
-        const result = await makeApiCall(userInput);
+        const result = await makeApiCall(userInput, sessionId);
         // Update the message with the response
         setMessages((prev) =>
           prev.map((msg) =>
@@ -391,11 +468,37 @@ function App() {
   const clearHistory = () => {
     if (confirm('Are you sure you want to clear all history?')) {
       setMessages([]);
-      localStorage.removeItem(STORAGE_KEY);
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        localStorage.removeItem(getHistoryKey(sessionId));
+      }
+    }
+  };
+
+  const createSession = async () => {
+    const nextSessionId = nanoid(8).toLowerCase();
+    const newSession: ChatSession = {
+      id: nextSessionId,
+      name: `Session ${sessions.length + 1}`,
+      createdAt: Date.now()
+    };
+    const nextSessions = [...sessions, newSession];
+    setSessions(nextSessions);
+    saveSessionsToStorage(nextSessions);
+    setActiveSessionId(nextSessionId);
+    try {
+      await fetch(toApiUrl('/session'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: nextSessionId })
+      });
+    } catch (error) {
+      console.warn('Failed to create session:', error);
     }
   };
 
   const createTerminalTab = () => {
+    if (!sessionIdRef.current) return;
     const nextIndex = terminalTabs.length + 1;
     const newTab: TerminalTab = {
       id: nanoid(8).toLowerCase(),
@@ -406,6 +509,53 @@ function App() {
     setActiveTerminalId(newTab.id);
     setTerminalStatus((prev) => ({ ...prev, [newTab.id]: 'connecting' }));
     saveTabs(updatedTabs, newTab.id);
+  };
+
+  const closeTerminalTab = async (tabId: string) => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) return;
+
+    const apiOrigin = new URL(getApiBase()).origin;
+    const frame = document.getElementById(
+      `terminal-frame-${tabId}`
+    ) as HTMLIFrameElement | null;
+    frame?.contentWindow?.postMessage(
+      { type: 'terminal-close', tabId },
+      apiOrigin
+    );
+
+    try {
+      await fetch(toApiUrl(`/terminal/${sessionId}/${tabId}/close`), {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.warn('Failed to close terminal:', error);
+    }
+
+    const nextTabs = terminalTabs.filter((tab) => tab.id !== tabId);
+    const nextActive =
+      activeTerminalId === tabId
+        ? nextTabs[0]?.id ?? null
+        : activeTerminalId;
+    setTerminalTabs(nextTabs);
+    setActiveTerminalId(nextActive);
+    if (selectedTerminalId === tabId) {
+      setSelectedTerminalId('chat');
+    }
+    setTerminalStatus((prev) => {
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+    if (nextActive) {
+      saveTabs(nextTabs, nextActive);
+    } else {
+      void fetch(toApiUrl(`/session/${sessionId}/tabs`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tabs: nextTabs })
+      });
+    }
   };
 
   const terminalSessionId = sessionIdRef.current;
@@ -550,7 +700,9 @@ function App() {
     <div className="app">
       <div className="container">
         <div className="header">
-          <h1 className="app-title">Sandbox Studio</h1>
+          <div className="header-brand">
+            <img src="/logo.svg" alt="filepath logo" className="brand-logo" />
+          </div>
           {messages.length > 0 && (
             <button
               type="button"
@@ -564,6 +716,35 @@ function App() {
 
         <div className="main-split">
           <div className="chat-pane">
+            <div className="session-panel">
+              <div className="session-header">
+                <div className="session-title">Sessions</div>
+                <button
+                  type="button"
+                  className="session-new"
+                  onClick={createSession}
+                >
+                  + New
+                </button>
+              </div>
+              <div className="session-list">
+                {sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    type="button"
+                    className={
+                      session.id === activeSessionId
+                        ? 'session-item session-item-active'
+                        : 'session-item'
+                    }
+                    onClick={() => setActiveSessionId(session.id)}
+                  >
+                    <span className="session-name">{session.name}</span>
+                    <span className="session-id">{session.id}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="messages-container">
               {messages.length === 0 ? (
                 <div className="empty-state">
@@ -612,26 +793,42 @@ function App() {
             <div className="terminal-tabs">
               <div className="terminal-tabs-list">
                 {terminalTabs.map((tab) => (
-                  <button
+                  <div
                     key={tab.id}
-                    type="button"
                     className={
                       tab.id === activeTerminalId
                         ? 'terminal-tab terminal-tab-active'
                         : 'terminal-tab'
                     }
-                    onClick={() => {
-                      setActiveTerminalId(tab.id);
-                      saveTabs(terminalTabs, tab.id);
-                    }}
                   >
-                    <span>{tab.name}</span>
-                    <span
-                      className={`terminal-status terminal-status-${terminalStatus[tab.id] || 'expired'}`}
+                    <button
+                      type="button"
+                      className="terminal-tab-button"
+                      onClick={() => {
+                        setActiveTerminalId(tab.id);
+                        saveTabs(terminalTabs, tab.id);
+                      }}
                     >
-                      {terminalStatus[tab.id] || 'expired'}
-                    </span>
-                  </button>
+                      <span>{tab.name}</span>
+                      <span
+                        className={`terminal-status terminal-status-${terminalStatus[tab.id] || 'expired'}`}
+                      >
+                        {terminalStatus[tab.id] || 'expired'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="terminal-tab-close"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void closeTerminalTab(tab.id);
+                        }}
+                        aria-label={`Close ${tab.name}`}
+                        title={`Close ${tab.name}`}
+                      >
+                        ×
+                      </button>
+                  </div>
                 ))}
               </div>
               <button
@@ -647,12 +844,15 @@ function App() {
               {terminalTabs.map((tab) => (
                 <iframe
                   key={tab.id}
+                  id={`terminal-frame-${tab.id}`}
                   className={
                     tab.id === activeTerminalId
                       ? 'terminal-iframe terminal-iframe-active'
                       : 'terminal-iframe'
                   }
-                  src={`/terminal/${terminalSessionId}/tab?tab=${tab.id}`}
+                  src={toApiUrl(
+                    `/terminal/${terminalSessionId}/tab?tab=${tab.id}&parentOrigin=${encodeURIComponent(window.location.origin)}`
+                  )}
                   title={`Terminal ${tab.name}`}
                 />
               ))}
