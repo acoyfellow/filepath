@@ -97,7 +97,9 @@ export const prd = definePrd({
         "User can create an ephemeral Terminal Session tab inside a Chat Session",
       gateFile: "./gates/terminal-create-ephemeral.gate.ts",
       dependsOn: ["session-create-and-list"],
-      progress: [],
+      progress: [
+        "Terminal panel renders iframe per tab and create button wired to backend tab start."
+      ],
     },
     {
       id: "terminal-backend-pty-ws",
