@@ -738,7 +738,7 @@ export default {
         'Access-Control-Allow-Headers',
         'Content-Type, X-Session-Id'
       );
-      headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      headers.set('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -785,6 +785,38 @@ export default {
           : crypto.randomUUID();
       const session = getOrCreateSession(sessionId);
       return withCors(Response.json({ sessionId: session.id }));
+    }
+
+    const sessionDeleteMatch = url.pathname.match(/^\/session\/([^/]+)$/);
+    if (sessionDeleteMatch && request.method === 'DELETE') {
+      const sessionId = sessionDeleteMatch[1];
+      const session = sessions.get(sessionId);
+      if (!session) {
+        return withCors(Response.json({ success: true }));
+      }
+
+      // Close all terminal tabs for this session
+      for (const tab of session.tabs) {
+        await closeTerminal(env, sessionId, tab.id);
+      }
+
+      // Close all session-level WebSocket clients
+      const clients = sessionClients.get(sessionId);
+      if (clients) {
+        for (const client of clients) {
+          try {
+            client.close(1000, 'session closed');
+          } catch {}
+        }
+      }
+
+      // Delete from all server-side maps
+      sessions.delete(sessionId);
+      sessionClients.delete(sessionId);
+      tasksBySession.delete(sessionId);
+      auditBySession.delete(sessionId);
+
+      return withCors(Response.json({ success: true }));
     }
 
     const sessionInfoMatch = url.pathname.match(/^\/session\/([^/]+)\/tabs$/);

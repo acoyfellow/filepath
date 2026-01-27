@@ -511,6 +511,49 @@ function App() {
     saveTabs(updatedTabs, newTab.id);
   };
 
+  const closeSession = async (sessionId: string) => {
+    if (!window.confirm('Close this session? All terminals and chat history will be deleted.')) {
+      return;
+    }
+
+    // Call backend to tear down tabs/sandboxes
+    try {
+      await fetch(toApiUrl(`/session/${sessionId}`), { method: 'DELETE' });
+    } catch (error) {
+      console.warn('Failed to delete session on server:', error);
+    }
+
+    // Close the tabs WebSocket if this is the active session
+    if (sessionId === activeSessionId && tabsSocketRef.current) {
+      tabsSocketRef.current.close();
+      tabsSocketRef.current = null;
+    }
+
+    // Remove session from state and localStorage
+    const nextSessions = sessions.filter((s) => s.id !== sessionId);
+    setSessions(nextSessions);
+    saveSessionsToStorage(nextSessions);
+    localStorage.removeItem(getHistoryKey(sessionId));
+
+    // Switch active session
+    if (sessionId === activeSessionId) {
+      if (nextSessions.length > 0) {
+        setActiveSessionId(nextSessions[0].id);
+      } else {
+        // No sessions left — create a fresh one
+        const newSession: ChatSession = {
+          id: nanoid(8).toLowerCase(),
+          name: 'Session 1',
+          createdAt: Date.now()
+        };
+        const fresh = [newSession];
+        setSessions(fresh);
+        saveSessionsToStorage(fresh);
+        setActiveSessionId(newSession.id);
+      }
+    }
+  };
+
   const closeTerminalTab = async (tabId: string) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
@@ -729,19 +772,35 @@ function App() {
               </div>
               <div className="session-list">
                 {sessions.map((session) => (
-                  <button
+                  <div
                     key={session.id}
-                    type="button"
                     className={
                       session.id === activeSessionId
                         ? 'session-item session-item-active'
                         : 'session-item'
                     }
-                    onClick={() => setActiveSessionId(session.id)}
                   >
-                    <span className="session-name">{session.name}</span>
-                    <span className="session-id">{session.id}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="session-item-button"
+                      onClick={() => setActiveSessionId(session.id)}
+                    >
+                      <span className="session-name">{session.name}</span>
+                      <span className="session-id">{session.id}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="session-close"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void closeSession(session.id);
+                      }}
+                      aria-label={`Close ${session.name}`}
+                      title={`Close ${session.name}`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

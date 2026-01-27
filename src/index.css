@@ -91,17 +91,46 @@ body {
   border: 1px solid #d0d0d0;
   background: #ffffff;
   border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.session-item-active {
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 1px #1a1a1a inset;
+}
+
+.session-item-button {
+  flex: 1;
+  border: none;
+  background: transparent;
   padding: 0.5rem 0.65rem;
   cursor: pointer;
   text-align: left;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  min-width: 0;
 }
 
-.session-item-active {
-  border-color: #1a1a1a;
-  box-shadow: 0 0 0 1px #1a1a1a inset;
+.session-close {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #6b6b6b;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.35rem 0.5rem;
+  margin-right: 0.25rem;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.session-close:hover {
+  color: #a13a3a;
+  border-color: #f0a8a8;
+  background: #feecec;
 }
 
 .session-name {
