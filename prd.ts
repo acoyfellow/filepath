@@ -45,7 +45,13 @@ export const prd = definePrd({
     "Prod WS fixed: header pass-through for ttyd wsConnect + browser WS no subprotocol; /terminal/.../ws now connects.",
     "Prod harness: prod-terminal-ws check passes; harness-prod-smoke green against api.myfilepath.com.",
     "Added minimal repro folders for sandbox issues (#309) and observed platform instability in repro runs.",
-    "Documented `repro-sandbox-309-minimal` steps and ran `/spawn-test` + `/agent-sdk-test` locally via `wrangler dev` to surface spawn behavior."
+    "Documented `repro-sandbox-309-minimal` steps and ran `/spawn-test` + `/agent-sdk-test` locally via `wrangler dev` to surface spawn behavior.",
+    "Prod repro attempt: /run commands (ls/bun/node) on myfilepath.com exit 1 with empty output; /terminal task on api.myfilepath.com returns SandboxError 500.",
+    "Tailed worker logs and saw `SandboxError: Maximum number of running container instances exceeded` during `/terminal/.../start`; next step was to raise sandbox capacity.",
+    "Increased sandbox maxInstances to 2, redeployed with `NODE_ENV=production`, and confirmed myfilepath.com/api.myfilepath.com stayed bound while `/run` and `/terminal/.../start` succeeded (via `curl --resolve`).",
+    "Deployed the minimal repro worker as sandbox-sdk-309-minimal.coy.workers.dev and confirmed /spawn-test executes the claude spawn check there.",
+    "Implemented session-close: DELETE /session/:id backend endpoint + closeSession() frontend handler + close button UI. Deployed to filepath-app.coy.workers.dev.",
+    "Extended repro-sandbox-spawn-enoent with deep diagnostics: /diagnostics (file/ldd/readelf/xxd/linker), /spawn-test (static vs dynamic vs script), /workerd-compat (child_process compat matrix), /delay-test (startup-window hypothesis). Deployed to sandbox-spawn-enoent-repro.coy.workers.dev."
   ],
   stories: [
     // EPIC: Harnesses (dev must be green; prod fails until deploy)
@@ -78,6 +84,19 @@ export const prd = definePrd({
       gateFile: "./gates/session-create-and-list.gate.ts",
       progress: [
         "Added Sessions panel with create + switch; session list stored locally and active session syncs to API."
+      ],
+    },
+    {
+      id: "session-close",
+      title:
+        "User can close a Chat Session, which recursively tears down all its terminal tabs (sandbox containers released)",
+      gateFile: "./gates/session-close.gate.ts",
+      dependsOn: ["session-create-and-list", "terminal-create-ephemeral"],
+      progress: [
+        "Added DELETE /session/:id backend endpoint that iterates session.tabs calling closeTerminal(), closes session WebSocket clients, and deletes from sessions/sessionClients/tasksBySession/auditBySession maps. Idempotent (returns success even if session not found). CORS updated to allow DELETE.",
+        "Added closeSession() frontend handler: confirms via window.confirm, calls DELETE /session/:id, closes tabs WebSocket if active session, removes from state + localStorage, removes chat history key, switches to next session or creates fresh default.",
+        "Added close button (x) next to each session in the session panel with red hover state. Refactored session-item from single button to flex container with session-item-button + session-close.",
+        "Deployed to https://filepath-app.coy.workers.dev."
       ],
     },
     {
@@ -132,10 +151,9 @@ export const prd = definePrd({
       dependsOn: ["terminal-backend-pty-ws", "terminal-viewer-ui"],
       progress: [
         "Terminal WebSocket bridges onData/onMessage with xterm and binary chunks (`CMD_OUTPUT`).",
-        "Prod sandbox still aborts while ttyd spins up; logs report `Network connection lost` and DO resets once ttyd hits port 7681."
-      ],
-      notes: [
-        "Prod sandbox occasionally resets while ttyd is warming up; logs show `Network connection lost` and DO restarts after port check. Next agent should monitor container health/timeouts so the DO can stay alive through ttyd boot."
+        "Prod sandbox still aborts while ttyd spins up; logs report `Network connection lost` and DO resets once ttyd hits port 7681.",
+        "Prod sandbox occasionally resets while ttyd is warming up; logs show `Network connection lost` and DO restarts after port check. Next agent should monitor container health/timeouts so the DO can stay alive through ttyd boot.",
+        "BLOCKER (Jan 27 2026): Cloudflare incident https://www.cloudflarestatus.com/incidents/54h1hbfvchlf — elevated errors and query timeouts for D1 and SQLite-backed Durable Objects (started Jan 25, fix rolling out Jan 27). DO resets during ttyd boot may be platform-side, not ours. Re-test prod after Cloudflare confirms resolution before debugging further."
       ]
     },
     {
@@ -231,10 +249,30 @@ export const prd = definePrd({
         "Document minimal reproduction for sandbox-sdk issue #309 (child_process.spawn ENOENT) and capture local behavior",
       gateFile: "./gates/sandbox-issue-309-repro.gate.ts",
       progress: [
-        "Copied the reproduction from the issue comment into `repro-sandbox-309-minimal`, ran the examples with `wrangler dev`, and confirmed both `/spawn-test` and `/agent-sdk-test` return exit code 0; platform still needs remote confirmation."
+        "Copied the reproduction from the issue comment into `repro-sandbox-309-minimal`, ran the examples with `wrangler dev`, and confirmed both `/spawn-test` and `/agent-sdk-test` return exit code 0; platform still needs remote confirmation.",
+        "Deployed `sandbox-sdk-309-minimal` (https://sandbox-sdk-309-minimal.coy.workers.dev) and verified `/spawn-test` hits the repro worker with working `accessSync` + `spawnSync` data.",
+        "Re-ran `gates/sandbox-issue-309-repro.gate.ts` (passes).",
+        "Prod data: `POST https://myfilepath.com/run` (X-Session-Id set) running `ls -la /`, `bun -v`, and `node -e ...spawnSync...` returns exitCode=1 with empty stdout/stderr.",
+        "Prod data: `POST https://api.myfilepath.com/terminal/<session>/<tab>/task` with `ls -la /` returns `SandboxError: HTTP error! status: 500`.",
+        "Tailed the prod worker logs and saw `/terminal/.../start` hit `SandboxError: Maximum number of running container instances exceeded` before a spawn could run.",
+        "Local container shows the claude CLI executing successfully, so the ENOENT must still be a remote/production anomaly; capture Cloudflare logs or additional sandbox incidence as the next proof.",
+        "Prod repro is currently failing earlier than ENOENT: /run shell results are empty with exit code 1, and /terminal task exec returns 500."
       ],
-      notes: [
-        "Local container shows the claude CLI executing successfully, so the ENOENT must still be a remote/production anomaly; capture Cloudflare logs or additional sandbox incidence as the next proof."
+    },
+    {
+      id: "prod-shell-recovery",
+      title:
+        "Root cause the `/run` and `/terminal/:session/:tab/task` failures on myfilepath.com and restore basic command execution",
+      gateFile: "./gates/prod-shell-recovery.gate.ts",
+      dependsOn: ["sandbox-issue-309-repro"],
+      progress: [
+        "Confirmed that every `POST https://myfilepath.com/run` command exits 1 with empty stdout/stderr and terminal tasks report `SandboxError: HTTP error! status: 500` before spawning any processes.",
+        "Plan: gather Cloudflare worker + sandbox logs for the failing requests, reproduce the condition with a simple command, and identify the sandbox or binding issue blocking `/run` and `/terminal`.",
+        "Worker logs now show the sandbox hitting the `max_instances` cap during `/terminal/.../start`; we need to bump that limit (or ensure containers are released) so these endpoints can succeed.",
+        "Raised the sandbox `maxInstances`, redeployed with `NODE_ENV=production`, and verified `/run` + `/terminal/:session/:tab/start` succeed via `curl --resolve` and tail logs (only the expected DO reset remains).",
+        "Rechecked a terminal start just now and the log shows `[terminal] ready` with no further sandbox errors, so the UI should stop showing `[expired]`.",
+        "Until `/run` and terminal tasks accept commands, none of the sandbox repros can run in production; this story is about clearing that first layer of failure before revalidating ENOENT.",
+        "Next step: monitor that `/run` and `/terminal` stay healthy as DNS propagates without needing the `--resolve` shortcut."
       ],
     },
 
