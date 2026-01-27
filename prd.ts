@@ -149,7 +149,9 @@ export const prd = definePrd({
         "Each terminal is isolated: filesystem writes in Terminal A are not visible in Terminal B",
       gateFile: "./gates/terminal-isolation-no-shared-filesystem.gate.ts",
       dependsOn: ["terminal-multiple-tabs"],
-      progress: [],
+      progress: [
+        "Each tab uses sandbox sessions keyed by `${sessionId}:${tabId}`; terminalId/shard mapping keeps filesystem per tab."
+      ],
     },
     {
       id: "terminal-network-on-by-default",
