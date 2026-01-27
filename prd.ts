@@ -44,7 +44,8 @@ export const prd = definePrd({
     "Default terminal now launches opencode in ttyd.",
     "Prod WS fixed: header pass-through for ttyd wsConnect + browser WS no subprotocol; /terminal/.../ws now connects.",
     "Prod harness: prod-terminal-ws check passes; harness-prod-smoke green against api.myfilepath.com.",
-    "Added minimal repro folders for sandbox issues (#309) and observed platform instability in repro runs."
+    "Added minimal repro folders for sandbox issues (#309) and observed platform instability in repro runs.",
+    "Documented `repro-sandbox-309-minimal` steps and ran `/spawn-test` + `/agent-sdk-test` locally via `wrangler dev` to surface spawn behavior."
   ],
   stories: [
     // EPIC: Harnesses (dev must be green; prod fails until deploy)
@@ -130,8 +131,12 @@ export const prd = definePrd({
       gateFile: "./gates/terminal-io-streaming.gate.ts",
       dependsOn: ["terminal-backend-pty-ws", "terminal-viewer-ui"],
       progress: [
-        "Terminal WebSocket bridges onData/onMessage with xterm and binary chunks (`CMD_OUTPUT`)."
+        "Terminal WebSocket bridges onData/onMessage with xterm and binary chunks (`CMD_OUTPUT`).",
+        "Prod sandbox still aborts while ttyd spins up; logs report `Network connection lost` and DO resets once ttyd hits port 7681."
       ],
+      notes: [
+        "Prod sandbox occasionally resets while ttyd is warming up; logs show `Network connection lost` and DO restarts after port check. Next agent should monitor container health/timeouts so the DO can stay alive through ttyd boot."
+      ]
     },
     {
       id: "terminal-multiple-tabs",
@@ -216,6 +221,20 @@ export const prd = definePrd({
       dependsOn: ["terminal-io-streaming", "chat-orchestrates-terminal-task"],
       progress: [
         "Added audit tracking in worker and UI list with actor + status."
+      ],
+    },
+
+    // EPIC: Platform reproducibility
+    {
+      id: "sandbox-issue-309-repro",
+      title:
+        "Document minimal reproduction for sandbox-sdk issue #309 (child_process.spawn ENOENT) and capture local behavior",
+      gateFile: "./gates/sandbox-issue-309-repro.gate.ts",
+      progress: [
+        "Copied the reproduction from the issue comment into `repro-sandbox-309-minimal`, ran the examples with `wrangler dev`, and confirmed both `/spawn-test` and `/agent-sdk-test` return exit code 0; platform still needs remote confirmation."
+      ],
+      notes: [
+        "Local container shows the claude CLI executing successfully, so the ENOENT must still be a remote/production anomaly; capture Cloudflare logs or additional sandbox incidence as the next proof."
       ],
     },
 
