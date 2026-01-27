@@ -81,6 +81,9 @@ export const worker = await Worker(`${projectName}-worker`, {
     Sandbox: sandbox,
     API_WS_HOST: "api.myfilepath.com",
     OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY ?? ""),
+    OPENCODE_ZEN_API_KEY: alchemy.secret(
+      process.env.OPENCODE_ZEN_API_KEY ?? ""
+    ),
   },
 });
 
