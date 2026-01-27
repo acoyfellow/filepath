@@ -299,13 +299,18 @@ async function startTerminal(
     } catch {}
     const sandbox = getSandbox(env.Sandbox, terminalId);
     console.info('[terminal]', 'start', { sessionId, tabId });
-    const envKey =
-      env.OPENAI_API_KEY?.replace(/\\/g, '\\\\').replace(/"/g, '\\"') ?? '';
-    const openaiExport = envKey
-      ? `export OPENAI_API_KEY="${envKey}"; `
-      : '';
+    const envKeyRaw =
+      env.OPENCODE_ZEN_API_KEY ??
+      env.OPENAI_API_KEY ??
+      env.OPENAI_API_KEY ??
+      '';
+    const escapedKey = envKeyRaw
+      .toString()
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"');
+    const keyExport = escapedKey ? `export OPENCODE_ZEN_API_KEY="${escapedKey}"; ` : '';
     ttyd = await sandbox.startProcess(
-      `ttyd -W -p 7681 bash -lc "${openaiExport}export PATH=/root/.opencode/bin:/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin; /root/.opencode/bin/opencode || bash"`
+      `ttyd -W -p 7681 bash -lc "${keyExport}export PATH=/root/.opencode/bin:/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin; /root/.opencode/bin/opencode || bash"`
     );
     try {
       if (isLocal) {

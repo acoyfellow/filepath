@@ -110,7 +110,7 @@ export const prd = definePrd({
       progress: [
         "Default terminal command launches opencode (fallback to bash) with ttyd.",
         "WebSocketPair handler and /terminal/:session/:tab/(start|ws) logic present.",
-        "Sandbox processes now export `OPENAI_API_KEY` so opencode sees credentials."
+        "Sandbox processes now export `OPENCODE_ZEN_API_KEY` so opencode sees upstream credentials."
       ],
     },
     {
