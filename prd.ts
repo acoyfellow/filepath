@@ -128,7 +128,9 @@ export const prd = definePrd({
         "Terminal streams stdout/stderr in real time and accepts interactive input",
       gateFile: "./gates/terminal-io-streaming.gate.ts",
       dependsOn: ["terminal-backend-pty-ws", "terminal-viewer-ui"],
-      progress: [],
+      progress: [
+        "Terminal WebSocket bridges onData/onMessage with xterm and binary chunks (`CMD_OUTPUT`)."
+      ],
     },
     {
       id: "terminal-multiple-tabs",
