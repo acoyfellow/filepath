@@ -30,6 +30,28 @@ function getErrorStack(error: unknown): string | undefined {
   return undefined;
 }
 
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetries<T>(
+  fn: () => Promise<T>,
+  opts: { attempts: number; delayMs: number }
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= opts.attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < opts.attempts) {
+        await sleep(opts.delayMs * attempt);
+      }
+    }
+  }
+  throw lastError;
+}
+
 async function handleRunRequest(
   request: Request,
   env: Env,
@@ -78,11 +100,11 @@ async function handleRunRequest(
 
     // Create agent with both shell and patch tools, auto-approval for web API
     console.debug('[openai-example]', 'Creating Agent', {
-      name: 'Sandbox Studio',
+      name: 'filepath',
       model: 'gpt-5.1'
     });
     const agent = new Agent({
-      name: 'Sandbox Studio',
+      name: 'filepath',
       model: 'gpt-5.1',
       instructions:
         'You can execute shell commands and edit files in the workspace. Use shell commands to inspect the repository and the apply_patch tool to create, update, or delete files. Keep responses concise and include command output when helpful.',
@@ -200,6 +222,8 @@ const sessionClients = new Map<string, Set<WebSocket>>();
 const tasksBySession = new Map<string, TerminalTask[]>();
 const auditBySession = new Map<string, CommandAuditEntry[]>();
 const activeTerminals = new Set<string>();
+const terminalProcesses = new Map<string, { id: string; kill: (signal?: string) => Promise<void> }>();
+const terminalSockets = new Map<string, Set<WebSocket>>();
 
 function getOrCreateSession(sessionId: string): SessionState {
   const existing = sessions.get(sessionId);
@@ -258,26 +282,120 @@ async function startTerminal(
 
   const terminalId = `${sessionId}:${tabId}`;
   if (activeTerminals.has(terminalId)) {
+    console.info('[terminal]', 'reuse', { sessionId, tabId });
     return Response.json({ success: true, sessionId, tabId, reused: true });
   }
 
-  const sandbox = getSandbox(env.Sandbox, terminalId);
-  const ttyd = await sandbox.startProcess(
-    'ttyd -W -p 7681 bash -lc "export PATH=/root/.opencode/bin:/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin; /root/.opencode/bin/opencode || bash"'
-  );
+  let ttyd: { waitForPort: (port: number, opts: { mode: 'tcp'; timeout: number }) => Promise<void>; kill: (signal?: string) => Promise<void> } | null =
+    null;
   try {
-    const hostname = new URL(request.url).hostname;
-    await sandbox.exposePort(7681, { hostname });
-  } catch (error) {
-    console.warn('[terminal] exposePort failed', error);
-  }
-  await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 30000 });
-  activeTerminals.add(terminalId);
+    let isLocal = false;
+    try {
+      const hostname = new URL(request.url).hostname;
+      isLocal =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.endsWith('.localhost');
+    } catch {}
+    const sandbox = getSandbox(env.Sandbox, terminalId);
+    console.info('[terminal]', 'start', { sessionId, tabId });
+    const envKey =
+      env.OPENAI_API_KEY?.replace(/\\/g, '\\\\').replace(/"/g, '\\"') ?? '';
+    const openaiExport = envKey
+      ? `export OPENAI_API_KEY="${envKey}"; `
+      : '';
+    ttyd = await sandbox.startProcess(
+      `ttyd -W -p 7681 bash -lc "${openaiExport}export PATH=/root/.opencode/bin:/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin; /root/.opencode/bin/opencode || bash"`
+    );
+    try {
+      if (isLocal) {
+        await sandbox.exposePort(7681, { hostname });
+      }
+    } catch (error) {
+      console.warn('[terminal] exposePort failed', error);
+    }
+    if (isLocal) {
+      await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 30000 });
+    } else {
+      console.info('[terminal]', 'skip waitForPort in prod', {
+        sessionId,
+        tabId
+      });
+    }
+    console.info('[terminal]', 'ready', { sessionId, tabId });
+    activeTerminals.add(terminalId);
+    terminalProcesses.set(terminalId, ttyd);
 
+    return Response.json({ success: true, sessionId, tabId });
+  } catch (error) {
+    const message = getErrorMessage(error);
+    const stack = getErrorStack(error);
+    console.error('[terminal]', 'start failed', {
+      sessionId,
+      tabId,
+      message,
+      stack
+    });
+    if (ttyd) {
+      try {
+        await ttyd.kill('SIGTERM');
+      } catch {}
+    }
+    activeTerminals.delete(terminalId);
+    terminalProcesses.delete(terminalId);
+    return Response.json(
+      { error: 'Terminal start failed', message },
+      { status: 500 }
+    );
+  }
+}
+
+async function closeTerminal(
+  env: Env,
+  sessionId: string,
+  tabId: string
+): Promise<Response> {
+  if (!env.Sandbox) {
+    return Response.json(
+      { error: 'Sandbox binding missing' },
+      { status: 500 }
+    );
+  }
+
+  const terminalId = `${sessionId}:${tabId}`;
+  console.info('[terminal]', 'close', { sessionId, tabId });
+  const sockets = terminalSockets.get(terminalId);
+  if (sockets) {
+    for (const socket of sockets) {
+      try {
+        socket.close(1000, 'terminal closed');
+      } catch {}
+    }
+    terminalSockets.delete(terminalId);
+  }
+
+  const process = terminalProcesses.get(terminalId);
+  if (process) {
+    try {
+      await process.kill('SIGTERM');
+    } catch {}
+    terminalProcesses.delete(terminalId);
+  }
+
+  try {
+    const sandbox = getSandbox(env.Sandbox, terminalId);
+    await sandbox.unexposePort(7681);
+  } catch {}
+
+  activeTerminals.delete(terminalId);
   return Response.json({ success: true, sessionId, tabId });
 }
 
-function renderTerminalTabPage(sessionId: string, tabId: string): Response {
+function renderTerminalTabPage(
+  sessionId: string,
+  tabId: string,
+  apiWsHost?: string
+): Response {
   const html = `<!DOCTYPE html>
   <html lang="en">
     <head>
@@ -325,10 +443,8 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
             terminal.write('\\x1b[2J\\x1b[H');
             terminal.writeln('\\r\\n  Connecting to terminal...\\r\\n');
 
-            var isDev = window.location.port === '5173';
-            var wsHost = isDev ? window.location.hostname + ':1337' : window.location.host;
+            var apiWsHost = ${JSON.stringify(apiWsHost ?? '')};
             var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            var wsUrl = protocol + '//' + wsHost + '/terminal/${sessionId}/${tabId}/ws';
             var httpBase = window.location.origin;
 
             await fetch(httpBase + '/terminal/${sessionId}/${tabId}/start', { method: 'POST' });
@@ -337,9 +453,31 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
             var retries = 0;
             var maxRetries = 5;
             var connectedOnce = false;
+            var shouldReconnect = true;
+            var ws = null;
+
+            var parentOrigin = (function() {
+              try {
+                var params = new URLSearchParams(window.location.search);
+                var originParam = params.get('parentOrigin');
+                if (originParam) return originParam;
+              } catch {}
+              try {
+                return new URL(document.referrer).origin;
+              } catch {}
+              return window.location.origin;
+            })();
+
+            var isDev = window.location.port === '5173' ||
+              parentOrigin.indexOf('http://localhost') === 0 ||
+              parentOrigin.indexOf('http://127.0.0.1') === 0;
+            var wsHost = isDev
+              ? window.location.hostname + ':1337'
+              : (apiWsHost || window.location.host);
+            var wsUrl = protocol + '//' + wsHost + '/terminal/${sessionId}/${tabId}/ws';
 
             function connect() {
-              var ws = new WebSocket(wsUrl, ['tty']);
+              ws = new WebSocket(wsUrl);
               ws.binaryType = 'arraybuffer';
 
               ws.addEventListener('open', function() {
@@ -352,7 +490,7 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
                 if (window.parent) {
                   window.parent.postMessage(
                     { type: 'terminal-status', tabId: '${tabId}', status: 'connected' },
-                    window.location.origin
+                    parentOrigin
                   );
                 }
               });
@@ -396,12 +534,15 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
                 if (window.parent) {
                   window.parent.postMessage(
                     { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
-                    window.location.origin
+                    parentOrigin
                   );
                 }
               }
 
               ws.addEventListener('close', function() {
+                if (!shouldReconnect) {
+                  return;
+                }
                 markExpired();
                 if (!connectedOnce && retries < maxRetries) {
                   retries += 1;
@@ -412,10 +553,29 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
               });
 
               ws.addEventListener('error', function() {
+                if (!shouldReconnect) {
+                  return;
+                }
                 markExpired();
                 terminal.write('\\r\\n[connection error]\\r\\n');
               });
             }
+
+            window.addEventListener('message', function(event) {
+              if (!event.data || event.data.type !== 'terminal-close') return;
+              if (event.data.tabId !== '${tabId}') return;
+              shouldReconnect = false;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close(1000, 'terminal closed');
+              }
+              terminal.writeln('\\r\\n[closed]\\r\\n');
+              if (window.parent) {
+                window.parent.postMessage(
+                  { type: 'terminal-status', tabId: '${tabId}', status: 'closed' },
+                  parentOrigin
+                );
+              }
+            });
 
             connect();
           }
@@ -429,7 +589,7 @@ function renderTerminalTabPage(sessionId: string, tabId: string): Response {
             if (window.parent) {
               window.parent.postMessage(
                 { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
-                window.location.origin
+                parentOrigin
               );
             }
           });
@@ -465,23 +625,38 @@ async function handleTerminalWebSocket(
   const client = pair[0];
   const server = pair[1];
   server.accept();
+  const terminalId = `${sessionId}:${tabId}`;
+  console.info('[terminal]', 'ws open', { sessionId, tabId });
+  const sockets = terminalSockets.get(terminalId) || new Set<WebSocket>();
+  sockets.add(server);
+  terminalSockets.set(terminalId, sockets);
 
   (async () => {
     try {
       const sandbox = getSandbox(env.Sandbox!, `${sessionId}:${tabId}`);
       const url = new URL(request.url);
       url.pathname = '/ws';
+      const headers = new Headers(request.headers);
+      const clientProtocol = request.headers.get('Sec-WebSocket-Protocol');
+      if (!clientProtocol) {
+        headers.set('Sec-WebSocket-Protocol', 'tty');
+      }
       const wsRequest = new Request(url.toString(), {
-        headers: request.headers,
+        headers,
         method: 'GET'
       });
 
-      const ttydResponse = (await sandbox.wsConnect(
-        wsRequest,
-        7681
+      const ttydResponse = (await withRetries(
+        () => sandbox.wsConnect(wsRequest, 7681),
+        { attempts: 10, delayMs: 300 }
       )) as Response & { webSocket?: WebSocket };
 
       if (ttydResponse.status !== 101 || !ttydResponse.webSocket) {
+        console.warn('[terminal]', 'ws connect failed', {
+          sessionId,
+          tabId,
+          status: ttydResponse.status
+        });
         server.close(1011, 'ttyd connection failed');
         return;
       }
@@ -502,6 +677,7 @@ async function handleTerminalWebSocket(
       });
 
       server.addEventListener('close', () => {
+        sockets.delete(server);
         if (ttydWs.readyState === WebSocket.OPEN) {
           ttydWs.close();
         }
@@ -524,6 +700,7 @@ async function handleTerminalWebSocket(
       ttydWs.send(sizeMsg);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error('[terminal]', 'ws error', { sessionId, tabId, message });
       server.close(1011, message);
     }
   })();
@@ -540,6 +717,34 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<Response> {
+    const origin = request.headers.get('Origin') || '';
+    const allowedOrigins = new Set([
+      'http://localhost:5173',
+      'http://127.0.0.1:5173'
+    ]);
+    const allowOrigin = allowedOrigins.has(origin) ? origin : '';
+
+    const withCors = (response: Response): Response => {
+      if (!allowOrigin) return response;
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', allowOrigin);
+      headers.set('Access-Control-Allow-Credentials', 'true');
+      headers.set(
+        'Access-Control-Allow-Headers',
+        'Content-Type, X-Session-Id'
+      );
+      headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+      });
+    };
+
+    if (request.method === 'OPTIONS' && allowOrigin) {
+      return withCors(new Response(null, { status: 204 }));
+    }
+
     const url = new URL(request.url);
     console.debug('[openai-example]', 'Fetch handler called', {
       pathname: url.pathname,
@@ -547,16 +752,22 @@ export default {
     });
 
     if (url.pathname === '/.well-known/appspecific/com.chrome.devtools.json') {
-      return Response.json({});
+      return withCors(Response.json({}));
+    }
+
+    if (url.pathname === '/' && request.method === 'GET') {
+      return withCors(Response.json({ success: true }));
     }
 
     if (url.pathname === '/run' && request.method === 'POST') {
       const sessionId = request.headers.get('X-Session-Id');
       if (!sessionId) {
-        return new Response('Missing X-Session-Id header', { status: 400 });
+        return withCors(
+          new Response('Missing X-Session-Id header', { status: 400 })
+        );
       }
 
-      return handleRunRequest(request, env, sessionId);
+      return withCors(await handleRunRequest(request, env, sessionId));
     }
 
     if (url.pathname === '/session' && request.method === 'POST') {
@@ -568,7 +779,7 @@ export default {
           ? body.sessionId
           : crypto.randomUUID();
       const session = getOrCreateSession(sessionId);
-      return Response.json({ sessionId: session.id });
+      return withCors(Response.json({ sessionId: session.id }));
     }
 
     const sessionInfoMatch = url.pathname.match(/^\/session\/([^/]+)\/tabs$/);
@@ -576,10 +787,12 @@ export default {
       const sessionId = sessionInfoMatch[1];
       const session = getOrCreateSession(sessionId);
       if (request.method === 'GET') {
-        return Response.json({
-          tabs: session.tabs,
-          activeTabId: session.activeTabId
-        });
+        return withCors(
+          Response.json({
+            tabs: session.tabs,
+            activeTabId: session.activeTabId
+          })
+        );
       }
       if (request.method === 'POST') {
         const body = (await request.json()) as {
@@ -593,7 +806,7 @@ export default {
           session.activeTabId = body.activeTabId;
         }
         broadcastSessionTabs(sessionId);
-        return Response.json({ success: true });
+        return withCors(Response.json({ success: true }));
       }
     }
 
@@ -603,7 +816,9 @@ export default {
     if (sessionTabsWsMatch && request.method === 'GET') {
       const upgrade = request.headers.get('Upgrade');
       if (!upgrade || upgrade.toLowerCase() !== 'websocket') {
-        return new Response('Expected WebSocket upgrade', { status: 400 });
+        return withCors(
+          new Response('Expected WebSocket upgrade', { status: 400 })
+        );
       }
       const sessionId = sessionTabsWsMatch[1];
       const session = getOrCreateSession(sessionId);
@@ -639,32 +854,34 @@ export default {
     if (sessionTasksMatch && request.method === 'GET') {
       const sessionId = sessionTasksMatch[1];
       const tasks = tasksBySession.get(sessionId) || [];
-      return Response.json({ tasks });
+      return withCors(Response.json({ tasks }));
     }
 
     const sessionAuditMatch = url.pathname.match(/^\/session\/([^/]+)\/audit$/);
     if (sessionAuditMatch && request.method === 'GET') {
       const sessionId = sessionAuditMatch[1];
       const audit = auditBySession.get(sessionId) || [];
-      return Response.json({ audit });
+      return withCors(Response.json({ audit }));
     }
 
     const terminalTabMatch = url.pathname.match(
-      /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws|task)$/
+      /^\/terminal\/([^/]+)\/([^/]+)\/(start|ws|task|close)$/
     );
     if (terminalTabMatch) {
       const [, sessionId, tabId, action] = terminalTabMatch;
       if (action === 'start' && request.method === 'POST') {
-        return startTerminal(request, env, sessionId, tabId);
+        return withCors(await startTerminal(request, env, sessionId, tabId));
       }
       if (action === 'ws' && request.method === 'GET') {
         return handleTerminalWebSocket(request, env, sessionId, tabId);
       }
+      if (action === 'close' && request.method === 'POST') {
+        return withCors(await closeTerminal(env, sessionId, tabId));
+      }
       if (action === 'task' && request.method === 'POST') {
         if (!env.Sandbox) {
-          return Response.json(
-            { error: 'Sandbox binding missing' },
-            { status: 500 }
+          return withCors(
+            Response.json({ error: 'Sandbox binding missing' }, { status: 500 })
           );
         }
 
@@ -676,7 +893,9 @@ export default {
             ? body.command
             : '';
         if (!command.trim()) {
-          return Response.json({ error: 'Missing command' }, { status: 400 });
+          return withCors(
+            Response.json({ error: 'Missing command' }, { status: 400 })
+          );
         }
         const actor: CommandActor =
           body?.actor === 'agent' || body?.actor === 'user'
@@ -716,14 +935,16 @@ export default {
           auditEntry.status = 'done';
           auditEntry.completedAt = task.completedAt;
           auditEntry.exitCode = task.exitCode ?? null;
-          return Response.json({ task });
+          return withCors(Response.json({ task }));
         } catch (error) {
           task.status = 'failed';
           task.completedAt = Date.now();
           task.stderr = error instanceof Error ? error.message : String(error);
           auditEntry.status = 'failed';
           auditEntry.completedAt = task.completedAt;
-          return Response.json({ task, error: task.stderr }, { status: 500 });
+          return withCors(
+            Response.json({ task, error: task.stderr }, { status: 500 })
+          );
         }
       }
     }
@@ -734,7 +955,8 @@ export default {
     if (terminalTabPageMatch && request.method === 'GET') {
       const sessionId = terminalTabPageMatch[1];
       const tabId = url.searchParams.get('tab') || 'tab1';
-      return renderTerminalTabPage(sessionId, tabId);
+      const apiWsHost = (env as Env & { API_WS_HOST?: string }).API_WS_HOST;
+      return withCors(renderTerminalTabPage(sessionId, tabId, apiWsHost));
     }
 
     if (request.method === 'GET') {
@@ -743,7 +965,7 @@ export default {
       }).ASSETS;
 
       if (assets) {
-        return assets.fetch(request);
+        return withCors(await assets.fetch(request));
       }
     }
 
@@ -751,6 +973,6 @@ export default {
       pathname: url.pathname,
       method: request.method
     });
-    return new Response('Not found', { status: 404 });
+    return withCors(new Response('Not found', { status: 404 }));
   }
 };

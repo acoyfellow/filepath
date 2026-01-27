@@ -5,10 +5,12 @@
   "private": true,
   "scripts": {
     "dev": "clear && alchemy dev",
-    "deploy": "alchemy deploy",
+    "deploy": "NODE_ENV=production alchemy deploy",
     "destroy": "alchemy destroy",
     "dev:vite": "vite dev",
     "deploy:vite": "vite build && wrangler deploy",
+    "tail:worker": "set -a && source .env && set +a && wrangler tail filepath-worker --format=pretty",
+    "tail:worker:gateproof": "set -a && source .env && set +a && bun run gates/_checks/tail-worker-logs.ts",
     "types": "wrangler types env.d.ts --include-runtime false",
     "typecheck": "tsc --noEmit"
   },
@@ -17,19 +19,19 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@cloudflare/sandbox": "*",
-    "@openai/agents": "^0.3.3",
+    "@cloudflare/sandbox": "^0.7.0",
+    "@openai/agents": "^0.3.9",
     "nanoid": "^5.1.6",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.15.2",
-    "@types/react": "^19.2.7",
+    "@cloudflare/vite-plugin": "^1.21.2",
+    "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@vitejs/plugin-react": "^5.1.2",
     "alchemy": "^0.83.1",
-    "gateproof": "^0.2.1",
-    "vite": "^7.2.4"
+    "gateproof": "^0.2.2",
+    "vite": "^7.3.1"
   }
 }

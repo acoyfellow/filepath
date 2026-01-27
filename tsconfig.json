@@ -4,7 +4,7 @@
     "lib": ["esnext", "dom", "dom.iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["@types/node", "@cloudflare/workers-types"],
+    "types": ["@types/node", "@cloudflare/workers-types", "./types/env.d.ts"],
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

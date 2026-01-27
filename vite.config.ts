@@ -5,6 +5,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), alchemy()],
   server: {
+    host: '127.0.0.1',
     proxy: {
       '/run': {
         target: 'http://localhost:1337',

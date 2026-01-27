@@ -5,20 +5,20 @@
     "": {
       "name": "@cloudflare/filepath",
       "dependencies": {
-        "@cloudflare/sandbox": "*",
-        "@openai/agents": "^0.3.3",
+        "@cloudflare/sandbox": "^0.7.0",
+        "@openai/agents": "^0.3.9",
         "nanoid": "^5.1.6",
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
+        "react": "^19.2.3",
+        "react-dom": "^19.2.3",
       },
       "devDependencies": {
-        "@cloudflare/vite-plugin": "^1.15.2",
-        "@types/react": "^19.2.7",
+        "@cloudflare/vite-plugin": "^1.21.2",
+        "@types/react": "^19.2.9",
         "@types/react-dom": "^19.2.3",
-        "@vitejs/plugin-react": "^5.1.1",
+        "@vitejs/plugin-react": "^5.1.2",
         "alchemy": "^0.83.1",
-        "gateproof": "^0.2.1",
-        "vite": "^7.2.4",
+        "gateproof": "^0.2.2",
+        "vite": "^7.3.1",
       },
     },
   },
@@ -629,7 +629,7 @@
 
     "function-bind": ["function-bind@1.1.2", "", {}, "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="],
 
-    "gateproof": ["gateproof@0.2.1", "", { "dependencies": { "@effect/schema": "^0.75.5", "alchemy": "^0.83.1", "effect": "^3.19.14" }, "peerDependencies": { "playwright": "" }, "optionalPeers": ["playwright"], "bin": { "gateproof": "dist/cli/gateproof.js" } }, "sha512-rt+T9NQIPcVJ2u9ye1CBzO70cFPXFBwXXCwEpmQPEPmybVZ+RDo1jvI4BxKjCfWDZEjN0XkbwWJhMcSTehNBiw=="],
+    "gateproof": ["gateproof@0.2.2", "", { "dependencies": { "@effect/schema": "^0.75.5", "alchemy": "^0.83.1", "effect": "^3.19.14" }, "peerDependencies": { "playwright": "" }, "optionalPeers": ["playwright"], "bin": { "gateproof": "dist/cli/gateproof.js" } }, "sha512-VJ8OUuaBYLzW2qiKXd8Dbg0TF8M747rQBfPq87U0uO5h3Y2FK8LBCzRndjMG88He+X4Z2ET5venqxbwFy6O6pw=="],
 
     "gensync": ["gensync@1.0.0-beta.2", "", {}, "sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg=="],
 
