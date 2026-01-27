@@ -139,7 +139,9 @@ export const prd = definePrd({
         "User can create N terminal tabs and switch between them without losing scrollback",
       gateFile: "./gates/terminal-multiple-tabs.gate.ts",
       dependsOn: ["terminal-io-streaming"],
-      progress: [],
+      progress: [
+        "Tabs arrays + statuses already exist; UI renders multiple iframe tabs with active/closed states."
+      ],
     },
     {
       id: "terminal-isolation-no-shared-filesystem",
