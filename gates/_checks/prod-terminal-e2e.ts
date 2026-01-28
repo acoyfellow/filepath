@@ -33,7 +33,7 @@ try {
     consoleLogs.push(`[${msg.type()}] ${msg.text()}`);
   });
 
-  await page.goto(PROD_URL, { waitUntil: 'networkidle', timeout: 30_000 });
+  await page.goto(PROD_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   console.log('[e2e] page loaded');
 
   // Wait for a terminal iframe to appear
@@ -44,8 +44,23 @@ try {
   // Wait for terminal status to become "connected"
   // The parent page renders a .terminal-status element with class .terminal-status-connected
   const connectedBadge = page.locator('.terminal-status-connected').first();
-  await connectedBadge.waitFor({ state: 'visible', timeout: TIMEOUT });
-  console.log('[e2e] terminal status: connected');
+  try {
+    await connectedBadge.waitFor({ state: 'visible', timeout: TIMEOUT });
+    console.log('[e2e] terminal status: connected');
+  } catch (e) {
+    // Debug: check what status we have
+    const statusBadge = page.locator('.terminal-status').first();
+    const statusText = await statusBadge.textContent().catch(() => 'unknown');
+    console.log(`[e2e] terminal status stuck at: ${statusText}`);
+
+    // Debug: check iframe content
+    const frame = await iframeLocator.contentFrame();
+    if (frame) {
+      const bodyText = await frame.locator('body').textContent({ timeout: 5_000 }).catch(() => 'no content');
+      console.log(`[e2e] iframe body text: ${bodyText?.slice(0, 500)}`);
+    }
+    throw e;
+  }
 
   // Verify the iframe has loaded and xterm rendered something
   const frame = await iframeLocator.contentFrame();

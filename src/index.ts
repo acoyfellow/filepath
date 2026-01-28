@@ -300,9 +300,17 @@ async function startTerminal(
     const sandbox = getSandbox(env.Sandbox, terminalId);
 
     // Warmup: wait for sandbox to become ready (workaround for SDK #309)
+    // Each exec has a 15s timeout to avoid hanging indefinitely
+    const execWithTimeout = (cmd: string, timeoutMs: number) =>
+      Promise.race([
+        sandbox.exec(cmd),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('exec timeout')), timeoutMs)
+        )
+      ]);
     await withRetries(
-      () => sandbox.exec('echo ready'),
-      { attempts: 10, delayMs: 1000 }
+      () => execWithTimeout('echo ready', 15000),
+      { attempts: 5, delayMs: 2000 }
     );
 
     console.info('[terminal]', 'start', { sessionId, tabId });
@@ -453,20 +461,11 @@ function renderTerminalTabPage(
             fitAddon.fit();
 
             terminal.write('\\x1b[2J\\x1b[H');
-            terminal.writeln('\\r\\n  Connecting to terminal...\\r\\n');
+            terminal.writeln('\\r\\n  Starting terminal...\\r\\n');
 
             var apiWsHost = ${JSON.stringify(apiWsHost ?? '')};
             var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             var httpBase = window.location.origin;
-
-            await fetch(httpBase + '/terminal/${sessionId}/${tabId}/start', { method: 'POST' });
-            var textEncoder = new TextEncoder();
-            var CMD_OUTPUT = '0';
-            var retries = 0;
-            var maxRetries = 5;
-            var connectedOnce = false;
-            var shouldReconnect = true;
-            var ws = null;
 
             var parentOrigin = (function() {
               try {
@@ -479,6 +478,44 @@ function renderTerminalTabPage(
               } catch {}
               return window.location.origin;
             })();
+
+            function reportStatus(status) {
+              if (window.parent) {
+                window.parent.postMessage(
+                  { type: 'terminal-status', tabId: '${tabId}', status: status },
+                  parentOrigin
+                );
+              }
+            }
+
+            // Start terminal with timeout (warmup can take up to 60s on cold start)
+            var startController = new AbortController();
+            var startTimeout = setTimeout(function() { startController.abort(); }, 90000);
+            try {
+              var startRes = await fetch(httpBase + '/terminal/${sessionId}/${tabId}/start', {
+                method: 'POST',
+                signal: startController.signal
+              });
+              clearTimeout(startTimeout);
+              if (!startRes.ok) {
+                var errBody = await startRes.text().catch(function() { return ''; });
+                throw new Error('Start failed: ' + startRes.status + ' ' + errBody);
+              }
+              terminal.writeln('  Terminal started, connecting...\\r\\n');
+            } catch (startErr) {
+              clearTimeout(startTimeout);
+              terminal.writeln('\\r\\n  [error] ' + (startErr.message || startErr) + '\\r\\n');
+              reportStatus('expired');
+              return;
+            }
+
+            var textEncoder = new TextEncoder();
+            var CMD_OUTPUT = '0';
+            var retries = 0;
+            var maxRetries = 5;
+            var connectedOnce = false;
+            var shouldReconnect = true;
+            var ws = null;
 
             var isDev = window.location.port === '5173' ||
               parentOrigin.indexOf('http://localhost') === 0 ||
@@ -499,12 +536,7 @@ function renderTerminalTabPage(
                 terminal.writeln('[connected]');
                 var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
                 ws.send(sizeMsg);
-                if (window.parent) {
-                  window.parent.postMessage(
-                    { type: 'terminal-status', tabId: '${tabId}', status: 'connected' },
-                    parentOrigin
-                  );
-                }
+                reportStatus('connected');
               });
 
               ws.addEventListener('message', function(e) {
@@ -542,20 +574,11 @@ function renderTerminalTabPage(
               });
               terminal.onResize(sendResize);
 
-              function markExpired() {
-                if (window.parent) {
-                  window.parent.postMessage(
-                    { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
-                    parentOrigin
-                  );
-                }
-              }
-
               ws.addEventListener('close', function() {
                 if (!shouldReconnect) {
                   return;
                 }
-                markExpired();
+                reportStatus('expired');
                 if (!connectedOnce && retries < maxRetries) {
                   retries += 1;
                   var waitMs = 500 * retries;
@@ -568,7 +591,7 @@ function renderTerminalTabPage(
                 if (!shouldReconnect) {
                   return;
                 }
-                markExpired();
+                reportStatus('expired');
                 terminal.write('\\r\\n[connection error]\\r\\n');
               });
             }
@@ -581,12 +604,7 @@ function renderTerminalTabPage(
                 ws.close(1000, 'terminal closed');
               }
               terminal.writeln('\\r\\n[closed]\\r\\n');
-              if (window.parent) {
-                window.parent.postMessage(
-                  { type: 'terminal-status', tabId: '${tabId}', status: 'closed' },
-                  parentOrigin
-                );
-              }
+              reportStatus('closed');
             });
 
             connect();
@@ -596,13 +614,16 @@ function renderTerminalTabPage(
             console.error('[Terminal] init failed', err);
             var el = document.getElementById('terminal');
             if (el) {
-              el.innerHTML = '<div style="color:#fff;padding:16px">Failed to initialize terminal</div>';
+              el.innerHTML = '<div style="color:#fff;padding:16px">Failed to initialize terminal: ' + (err.message || err) + '</div>';
             }
             if (window.parent) {
-              window.parent.postMessage(
-                { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
-                parentOrigin
-              );
+              try {
+                var fallbackOrigin = new URLSearchParams(window.location.search).get('parentOrigin') || window.location.origin;
+                window.parent.postMessage(
+                  { type: 'terminal-status', tabId: '${tabId}', status: 'expired' },
+                  fallbackOrigin
+                );
+              } catch (e) {}
             }
           });
         })();
