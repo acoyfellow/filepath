@@ -63,7 +63,7 @@ const sandbox = await Container(`${projectName}-sandbox`, {
     dockerfile: "Dockerfile",
   },
   instanceType: "lite",
-  maxInstances: 1,
+  maxInstances: 2,
 });
 
 export const worker = await Worker(`${projectName}-worker`, {

@@ -298,6 +298,13 @@ async function startTerminal(
         hostname.endsWith('.localhost');
     } catch {}
     const sandbox = getSandbox(env.Sandbox, terminalId);
+
+    // Warmup: wait for sandbox to become ready (workaround for SDK #309)
+    await withRetries(
+      () => sandbox.exec('echo ready'),
+      { attempts: 10, delayMs: 1000 }
+    );
+
     console.info('[terminal]', 'start', { sessionId, tabId });
     const envKeyRaw =
       env.OPENCODE_ZEN_API_KEY ??
