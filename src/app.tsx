@@ -540,16 +540,11 @@ function App() {
       if (nextSessions.length > 0) {
         setActiveSessionId(nextSessions[0].id);
       } else {
-        // No sessions left — create a fresh one
-        const newSession: ChatSession = {
-          id: nanoid(8).toLowerCase(),
-          name: 'Session 1',
-          createdAt: Date.now()
-        };
-        const fresh = [newSession];
-        setSessions(fresh);
-        saveSessionsToStorage(fresh);
-        setActiveSessionId(newSession.id);
+        // No sessions left — allow empty state
+        setActiveSessionId(null);
+        setTerminalTabs([]);
+        setActiveTerminalId(null);
+        setMessages([]);
       }
     }
   };

@@ -300,18 +300,29 @@ async function startTerminal(
     const sandbox = getSandbox(env.Sandbox, terminalId);
 
     // Warmup: wait for sandbox to become ready (workaround for SDK #309)
-    // Each exec has a 15s timeout to avoid hanging indefinitely
-    const execWithTimeout = (cmd: string, timeoutMs: number) =>
-      Promise.race([
-        sandbox.exec(cmd),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('exec timeout')), timeoutMs)
-        )
-      ]);
-    await withRetries(
-      () => execWithTimeout('echo ready', 15000),
-      { attempts: 5, delayMs: 2000 }
-    );
+    // Best-effort with short timeout - don't block forever if sandbox is unresponsive
+    console.info('[terminal]', 'warmup start', { sessionId, tabId });
+    try {
+      const execWithTimeout = (cmd: string, timeoutMs: number) =>
+        Promise.race([
+          sandbox.exec(cmd),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('exec timeout')), timeoutMs)
+          )
+        ]);
+      await withRetries(
+        () => execWithTimeout('echo ready', 5000),
+        { attempts: 3, delayMs: 1000 }
+      );
+      console.info('[terminal]', 'warmup done', { sessionId, tabId });
+    } catch (warmupErr) {
+      // Log but continue - ttyd might still work
+      console.warn('[terminal]', 'warmup failed, proceeding anyway', {
+        sessionId,
+        tabId,
+        error: warmupErr instanceof Error ? warmupErr.message : String(warmupErr)
+      });
+    }
 
     console.info('[terminal]', 'start', { sessionId, tabId });
     const envKeyRaw =
@@ -465,7 +476,8 @@ function renderTerminalTabPage(
 
             var apiWsHost = ${JSON.stringify(apiWsHost ?? '')};
             var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            var httpBase = window.location.origin;
+            // Use api host directly to avoid proxy timeout issues
+            var httpBase = apiWsHost ? ('https://' + apiWsHost) : window.location.origin;
 
             var parentOrigin = (function() {
               try {
@@ -753,7 +765,8 @@ export default {
     const origin = request.headers.get('Origin') || '';
     const allowedOrigins = new Set([
       'http://localhost:5173',
-      'http://127.0.0.1:5173'
+      'http://127.0.0.1:5173',
+      'https://myfilepath.com'
     ]);
     const allowOrigin = allowedOrigins.has(origin) ? origin : '';
 

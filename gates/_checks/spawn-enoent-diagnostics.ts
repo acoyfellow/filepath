@@ -11,7 +11,8 @@
  * take over 60s on a cold sandbox. All fetches use AbortController timeouts.
  */
 
-const BASE = process.env.GATE_BASE_URL || 'https://api.myfilepath.com';
+// Use myfilepath.com (not api.) to match the human path through the Vite proxy
+const BASE = process.env.GATE_BASE_URL || 'https://myfilepath.com';
 const SESSION_ID = `gate-${Date.now()}`;
 const TAB_ID = 'tab1';
 
