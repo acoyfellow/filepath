@@ -12,9 +12,10 @@ declare global {
 		// interface PageState {}
 		interface Platform {
 				env: {
-					COUNTER_DO: DurableObjectNamespace;
+					SESSION_DO: DurableObjectNamespace;
 					WORKER: Fetcher;
 					DB: D1Database;
+					Sandbox: any; // Container binding
 				};
 		}
 	}

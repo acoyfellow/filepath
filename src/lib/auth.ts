@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
+import { apiKey } from 'better-auth/plugins';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification } from './schema';
@@ -50,8 +51,9 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
   authInstance = betterAuth({
     trustedOrigins: [
       "http://localhost:5173",
-      "https://*.coey.dev",
-      "https://*-remote-app.coy.workers.dev",
+      "https://myfilepath.com",
+      "https://*.myfilepath.com",
+      "https://*-filepath-app.coy.workers.dev",
     ],
     database: drizzleAdapter(drizzleInstance, {
       provider: 'sqlite',
@@ -75,7 +77,21 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
       throw new Error('BETTER_AUTH_SECRET environment variable is required');
     })(),
     baseURL,
-    plugins: [sveltekitCookies(getRequestEvent as any)],
+    plugins: [
+      sveltekitCookies(getRequestEvent as any),
+      apiKey({
+        // Prefix for agent API keys
+        apiKeyHeaders: ['x-api-key', 'authorization'],
+        // Enable metadata for storing agent name, owner info
+        enableMetadata: true,
+        // Rate limiting per API key
+        rateLimit: {
+          enabled: true,
+          timeWindow: 1000 * 60 * 60, // 1 hour
+          maxRequests: 1000,
+        },
+      }),
+    ],
   });
 
   return authInstance;

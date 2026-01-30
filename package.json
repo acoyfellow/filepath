@@ -1,9 +1,12 @@
 {
-	"name": "remote",
+	"name": "myfilepath",
 	"version": "1.0.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/acoyfellow/remote"
+		"url": "https://github.com/acoyfellow/filepath"
+	},
+	"dependencies": {
+		"@cloudflare/sandbox": "^0.7.0"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^7.2.4",
@@ -12,10 +15,13 @@
 		"@tailwindcss/forms": "^0.5.11",
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.18",
-		"alchemy": "^0.81.4",
+		"@types/node": "^25.1.0",
+		"alchemy": "^0.83.1",
 		"better-auth": "^1.4.7",
 		"drizzle-kit": "^0.31.8",
 		"drizzle-orm": "^0.45.1",
+		"gateproof": "^0.2.2",
+		"playwright": "^1.58.0",
 		"svelte": "^5.46.0",
 		"svelte-check": "^4.3.4",
 		"tailwindcss": "^4.1.18",
@@ -23,12 +29,13 @@
 		"vite": "^7.3.0",
 		"wrangler": "^4.56.0"
 	},
-	"description": "Barebones starter for authenticated apps with persistent edge state - SvelteKit + Better Auth + Durable Objects",
-	"keywords": ["sveltekit", "better-auth", "cloudflare", "durable-objects", "alchemy", "remote-functions", "typescript"],
+	"description": "The platform for agents - terminal sessions with AI coding agents",
+	"keywords": ["agents", "terminal", "sveltekit", "better-auth", "cloudflare", "durable-objects"],
 	"scripts": {
 		"postinstall": "node patches/fix-alchemy-d1.js",
 		"dev": "alchemy dev",
-		"deploy": "alchemy deploy",
+		"deploy": "NODE_ENV=production alchemy deploy --stage prod",
+		"deploy:preview": "alchemy deploy",
 		"destroy": "alchemy destroy",
 		"build": "vite build",
 		"preview": "vite preview",
@@ -39,8 +46,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
-		"db:local": "wrangler d1 migrations apply remote-db --local",
-		"db:remote": "wrangler d1 migrations apply remote-db --remote"
+		"test": "bun run gates/prd.ts"
 	},
 	"type": "module"
 }
