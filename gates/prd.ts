@@ -97,14 +97,14 @@ export const prd = definePrd({
       title: "Track active/idle minutes per API key",
       gateFile: "./gates/usage-tracking.gate.ts",
       dependsOn: ["api-key-auth"],
-      progress: [],
+      progress: ["DONE - Implemented usage tracking in worker"],
     },
     {
       id: "billing-integration",
       title: "Stripe integration for usage billing",
       gateFile: "./gates/billing-integration.gate.ts",
       dependsOn: ["usage-tracking"],
-      progress: [],
+      progress: ["DONE - Implemented Stripe integration with prepaid credits"],
     },
   ],
 });
