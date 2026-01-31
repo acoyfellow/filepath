@@ -265,7 +265,7 @@
           </div>
         </div>
       {:else}
-        <form on:submit|preventDefault={handleSubmit}>
+        <form onsubmit={handleSubmit}>
           <div class="mb-4">
             <label for="email" class="block text-sm font-bold mb-2">EMAIL</label>
             <input

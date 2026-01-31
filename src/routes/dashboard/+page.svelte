@@ -80,7 +80,7 @@
       </a>
       <span class="px-3 py-2 font-mono text-sm border-4 border-black">{page.data.user?.email}</span>
       <button
-        on:click={signOutUser}
+        onclick={signOutUser}
         class="px-4 py-2 font-black border-4 border-black hover:bg-black hover:text-white"
       >
         SIGN OUT
@@ -95,7 +95,7 @@
         <h1 class="text-3xl font-black">YOUR SESSIONS</h1>
         <p class="text-gray-600 mt-1">Manage your AI agent terminal sessions</p>
       </div>
-      <Button on:click={createNewSession} class="px-6 py-3">
+      <Button onclick={createNewSession} class="px-6 py-3">
         + NEW SESSION
       </Button>
     </div>
@@ -115,7 +115,7 @@
       <div class="border-4 border-black p-12 text-center">
         <h3 class="text-2xl font-black mb-2">NO SESSIONS YET</h3>
         <p class="text-gray-600 mb-6">Create your first terminal session to get started</p>
-        <Button on:click={createNewSession} class="px-6 py-3">
+        <Button onclick={createNewSession} class="px-6 py-3">
           CREATE YOUR FIRST SESSION
         </Button>
       </div>
@@ -139,13 +139,13 @@
               <div class="mt-4 flex gap-2">
                 <button 
                   class="text-xs font-black px-3 py-1 border-2 border-black hover:bg-black hover:text-white"
-                  on:click={(e) => { e.stopPropagation(); goto(`/session/${session.id}`); }}
+                  onclick={(e) => { e.stopPropagation(); goto(`/session/${session.id}`); }}
                 >
                   OPEN
                 </button>
                 <button 
                   class="text-xs font-black px-3 py-1 border-2 border-black hover:bg-black hover:text-white"
-                  on:click={(e) => { e.stopPropagation(); /* Share functionality */ }}
+                  onclick={(e) => { e.stopPropagation(); /* Share functionality */ }}
                 >
                   SHARE
                 </button>

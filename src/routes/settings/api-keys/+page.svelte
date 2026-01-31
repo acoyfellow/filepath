@@ -138,8 +138,8 @@
         <p class="text-gray-600 mt-1">Manage API keys for your agents</p>
       </div>
       <div class="flex gap-2">
-        <Button variant="outline" on:click={() => goto('/')}>← Back</Button>
-        <Button on:click={() => { showCreateDialog = true; createdKey = null; error = null; }}>
+        <Button variant="outline" onclick={() => goto('/')}>← Back</Button>
+        <Button onclick={() => { showCreateDialog = true; createdKey = null; error = null; }}>
           + Create API Key
         </Button>
       </div>
@@ -148,7 +148,7 @@
     {#if error}
       <div class="bg-red-50 border-4 border-red-500 p-4 mb-6">
         <p class="text-red-700 font-bold">{error}</p>
-        <button on:click={() => error = null} class="text-red-500 underline text-sm">Dismiss</button>
+        <button onclick={() => error = null} class="text-red-500 underline text-sm">Dismiss</button>
       </div>
     {/if}
 
@@ -162,7 +162,7 @@
         <Card.Content class="py-12 text-center">
           <p class="text-xl font-bold mb-2">No API keys yet</p>
           <p class="text-gray-600 mb-6">Create an API key to give your agents access</p>
-          <Button on:click={() => { showCreateDialog = true; createdKey = null; }}>Create your first API key</Button>
+          <Button onclick={() => { showCreateDialog = true; createdKey = null; }}>Create your first API key</Button>
         </Card.Content>
       </Card.Root>
     {:else}
@@ -187,7 +187,7 @@
                   <span class="px-2 py-1 text-xs font-bold {key.expiresAt > new Date() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
                     {key.expiresAt > new Date() ? 'Active' : 'Expired'}
                   </span>
-                  <Button variant="destructive" size="sm" on:click={() => deleteApiKey(key.id)}>
+                  <Button variant="destructive" size="sm" onclick={() => deleteApiKey(key.id)}>
                     Delete
                   </Button>
                 </div>
@@ -216,10 +216,10 @@
         <div class="bg-black text-white p-4 font-mono text-sm break-all">
           {createdKey}
         </div>
-        <Button class="w-full mt-4" on:click={() => copyToClipboard(createdKey!)}>
+        <Button class="w-full mt-4" onclick={() => copyToClipboard(createdKey!)}>
           Copy to Clipboard
         </Button>
-        <Button variant="outline" class="w-full mt-2" on:click={() => { showCreateDialog = false; createdKey = null; }}>
+        <Button variant="outline" class="w-full mt-2" onclick={() => { showCreateDialog = false; createdKey = null; }}>
           Done
         </Button>
       </div>
@@ -258,8 +258,8 @@
         </div>
       </div>
       <Dialog.Footer>
-        <Button variant="outline" on:click={() => showCreateDialog = false}>Cancel</Button>
-        <Button on:click={createApiKey}>Create Key</Button>
+        <Button variant="outline" onclick={() => showCreateDialog = false}>Cancel</Button>
+        <Button onclick={createApiKey}>Create Key</Button>
       </Dialog.Footer>
     {/if}
   </Dialog.Content>
