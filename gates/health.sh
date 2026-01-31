@@ -33,7 +33,7 @@ fi
 echo ""
 echo "=== BUILD ==="
 ERRORS=$(npx tsc --noEmit 2>&1 | grep -c "error TS" || echo "0")
-if [ "$ERRORS" != "0" ]; then
+if [ "$ERRORS" -gt 0 ] 2>/dev/null; then
   echo "❌ $ERRORS type errors"
   npx tsc --noEmit 2>&1 | grep "error TS" | head -5
   exit 1
