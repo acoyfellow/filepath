@@ -44,7 +44,11 @@
     try {
       const result = await authClient.apiKey.list();
       if (result.data) {
-        apiKeys = result.data.apiKeys as ApiKeyData[];
+        // Transform the API response to match our expected structure
+        apiKeys = result.data.apiKeys.map(key => ({
+          ...key,
+          budgetCap: (key as any).budgetCap || null
+        })) as ApiKeyData[];
       }
     } catch (e) {
       error = 'Failed to load API keys';
@@ -90,7 +94,7 @@
           createdVia: 'web-ui'
         },
         budgetCap: budgetCap
-      });
+      } as any);
 
       if (result.data?.key) {
         createdKey = result.data.key;
@@ -180,8 +184,8 @@
                   </p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-1 text-xs font-bold {key.enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                    {key.enabled ? 'Active' : 'Disabled'}
+                  <span class="px-2 py-1 text-xs font-bold {key.expiresAt > new Date() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                    {key.expiresAt > new Date() ? 'Active' : 'Expired'}
                   </span>
                   <Button variant="destructive" size="sm" onclick={() => deleteApiKey(key.id)}>
                     Delete

@@ -28,14 +28,19 @@
         throw new Error('Failed to create checkout session');
       }
       
-      const { sessionId } = await response.json();
+      const { sessionId } = await response.json() as { sessionId: string; };
       
       // Redirect to Stripe checkout
-      const stripe = (await import('@stripe/stripe-js')).loadStripe(
+      const stripe = await (await import('@stripe/stripe-js')).loadStripe(
         import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
       );
       
-      const { error } = (await stripe).redirectToCheckout({ sessionId });
+      if (!stripe) {
+        console.error('Failed to load Stripe');
+        return;
+      }
+      
+      const { error } = await stripe.redirectToCheckout({ sessionId });
       
       if (error) {
         console.error('Stripe checkout error:', error);

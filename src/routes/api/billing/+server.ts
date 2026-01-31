@@ -13,7 +13,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
   const session = { user: locals.user };
   
-  const { creditAmount } = await request.json();
+  const { creditAmount } = await request.json() as { creditAmount: number; };
   
   if (!creditAmount || creditAmount < 1000) {
     throw error(400, 'Minimum purchase is 1000 credits ($10)');
@@ -63,7 +63,7 @@ export const PATCH: RequestHandler = async ({ request, locals, params }) => {
   }
   const session = { user: locals.user };
   
-  const { budgetCap } = await request.json();
+  const { budgetCap } = await request.json() as { budgetCap: number | null; };
   
   if (budgetCap !== null && (typeof budgetCap !== 'number' || budgetCap < 0)) {
     throw error(400, 'Invalid budget cap');

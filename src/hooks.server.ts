@@ -31,7 +31,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.locals.session = null;
     }
 
-    const response = await svelteKitHandler({ event, resolve, auth: auth || undefined, building });
+    const response = await svelteKitHandler({ event, resolve, auth: auth ?? undefined, building });
     return response;
 
   } catch (criticalError) {

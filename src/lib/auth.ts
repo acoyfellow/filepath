@@ -9,7 +9,7 @@ import { getRequestEvent } from '$app/server';
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-let authInstance: ReturnType<typeof betterAuth> | null = null;
+let authInstance: ReturnType<typeof betterAuth> | undefined = undefined;
 let authBaseURL: string | null = null;
 let drizzleInstance: ReturnType<typeof drizzle> | null = null;
 
@@ -42,7 +42,7 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
     });
   }
 
-  if (authInstance) {
+  if (authInstance !== undefined) {
     if (authBaseURL !== baseURL) {
       throw new Error(`Auth already initialized for ${authBaseURL}, cannot re-init for ${baseURL}`);
     }
@@ -51,7 +51,7 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
 
   authBaseURL = baseURL;
   authInstance = betterAuth({
-    database: drizzleAdapter(drizzleInstance, {
+    database: drizzleAdapter(drizzleInstance!, {
       provider: 'sqlite',
       schema: {
         user,

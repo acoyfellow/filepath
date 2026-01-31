@@ -148,7 +148,7 @@ export async function getApiKeyCreditBalance(apiKeyId: string): Promise<number> 
 /**
  * Get API keys with their credit balances for a user
  */
-export async function getUserApiKeysWithCredits(userId: string): Promise<ApiKey[]> {
+export async function getUserApiKeysWithCredits(userId: string): Promise<typeof ApiKey[]> {
   const db = getDrizzle();
   
   return await db.select().from(apikey).where(eq(apikey.userId, userId));

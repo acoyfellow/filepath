@@ -79,7 +79,7 @@
         });
         
         if (result.error) {
-          error = result.error.message;
+          error = result.error.message || 'An error occurred';
           return;
         }
         
@@ -89,7 +89,7 @@
         const result = await signIn.email({ email, password });
         
         if (result.error) {
-          error = result.error.message;
+          error = result.error.message || 'An error occurred';
           return;
         }
         
@@ -154,7 +154,7 @@
       });
       
       if (result.error) {
-        error = result.error.message;
+        error = result.error.message || 'An error occurred';
         return;
       }
       
@@ -165,7 +165,7 @@
       });
       
       if (passkeyResult.error) {
-        error = passkeyResult.error.message;
+        error = passkeyResult.error.message || 'Passkey registration failed';
         // Note: Account was created but passkey registration failed
         // In a production app, you might want to handle this more gracefully
         return;
@@ -265,7 +265,7 @@
           </div>
         </div>
       {:else}
-        <form on:submit|preventDefault={handleSubmit}>
+        <form onsubmit|preventDefault={handleSubmit}>
           <div class="mb-4">
             <label for="email" class="block text-sm font-bold mb-2">EMAIL</label>
             <input

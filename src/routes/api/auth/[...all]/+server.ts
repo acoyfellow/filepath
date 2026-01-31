@@ -6,6 +6,7 @@ export const GET: RequestHandler = async (event) => {
     const db = event.platform?.env?.DB;
     if (!db) throw new Error("D1 database not available");
     const auth = initAuth(db, event.platform?.env, event.url.origin);
+    if (!auth) throw new Error("Auth initialization failed");
     return await auth.handler(event.request);
   } catch (error) {
     console.error('Auth GET error:', error);
@@ -24,6 +25,7 @@ export const POST: RequestHandler = async (event) => {
     const db = event.platform?.env?.DB;
     if (!db) throw new Error("D1 database not available");
     const auth = initAuth(db, event.platform?.env, event.url.origin);
+    if (!auth) throw new Error("Auth initialization failed");
     return await auth.handler(event.request);
   } catch (error) {
     console.error('Auth POST error:', error);

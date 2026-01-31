@@ -60,7 +60,7 @@
     success = null;
     
     try {
-      const result = await passkey.addPasskey({
+      const result = await passkeyClient.addPasskey({
         name: newPasskeyName,
         authenticatorAttachment: "platform"
       });
@@ -89,7 +89,7 @@
     success = null;
     
     try {
-      const result = await passkey.deletePasskey({ id });
+      const result = await passkeyClient.deletePasskey({ id });
       
       if (result.error) {
         error = result.error.message;
