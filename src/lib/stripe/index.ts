@@ -20,22 +20,30 @@ export const CREDITS_PRODUCT_ID = 'prod_TtUK30b7c9Uuvh';
 export const CREDITS_PRICE_ID = 'price_1SvhMJF1oOQhJ3pzPkqJROjj';
 
 export async function createCheckoutSession(
+  customerId: string,
   customerEmail: string,
+  creditAmount: number,
   successUrl: string,
   cancelUrl: string
 ): Promise<Stripe.Checkout.Session> {
   const stripe = getStripe();
+  
+  // Calculate quantity based on credit amount ($10 for 1000 credits)
+  const quantity = Math.max(1, Math.floor(creditAmount / 1000));
+  
   return stripe.checkout.sessions.create({
     mode: 'payment',
-    customer_email: customerEmail,
+    customer: customerId || undefined,
+    customer_email: (!customerId && customerEmail) ? customerEmail : undefined,
     line_items: [{
       price: CREDITS_PRICE_ID,
-      quantity: 1,
+      quantity: quantity,
     }],
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: {
-      credits: '1000',
+      credits: (quantity * 1000).toString(),
+      creditAmount: creditAmount.toString(),
     },
   });
 }
