@@ -341,7 +341,8 @@ export default {
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
           // Start ttyd with opencode
-          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 opencode');
+          // Use bash for now - opencode may not be installed/working
+          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
           
           // Wait for ttyd to be ready on port 7681
           try {
