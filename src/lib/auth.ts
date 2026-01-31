@@ -112,9 +112,9 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
           
           const mailgun = new Mailgun(formData);
           const apiKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
-          const mg = mailgun.client({
+          const mg: ReturnType<Mailgun['client']> = mailgun.client({
             username: 'api',
-            key: apiKey,
+            key: apiKey as string,
           });
 
           const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
