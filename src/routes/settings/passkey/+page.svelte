@@ -26,15 +26,21 @@
     error = null;
     
     try {
-      // In a real implementation, we would fetch passkeys from the API
-      // For now, we'll just simulate with static data
-      setTimeout(() => {
-        passkeys = [
-          { id: '1', name: 'My MacBook Touch ID', createdAt: new Date() },
-          { id: '2', name: 'Android Phone', createdAt: new Date(Date.now() - 86400000) }
-        ];
+      const result = await passkey.listUserPasskeys();
+      
+      if (result.error) {
+        error = result.error.message;
         isLoading = false;
-      }, 500);
+        return;
+      }
+      
+      passkeys = result.data?.map(p => ({
+        id: p.id,
+        name: p.name || 'Unnamed Passkey',
+        createdAt: new Date(p.createdAt)
+      })) || [];
+      
+      isLoading = false;
     } catch (err) {
       error = 'Failed to load passkeys';
       isLoading = false;
@@ -82,7 +88,7 @@
     success = null;
     
     try {
-      const result = await passkey.removePasskey(id);
+      const result = await passkey.deletePasskey({ id });
       
       if (result.error) {
         error = result.error.message;
