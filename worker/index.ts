@@ -66,9 +66,9 @@ async function validateApiKey(request: Request, db: D1Database) {
   
   try {
     // Use the auth API to verify the API key
-    const result = await auth.api.verifyApiKey({
-      key: apiKeyHeader
-    });
+          const result = await auth.api.verifyApiKey({
+            body: { key: apiKeyHeader }
+          });
     
     if (!result.valid) {
       return { valid: false, error: result.error?.message || 'Invalid API key' };
