@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type "destroy" to confirm'
+        description: 'Type "destroy-prod" to confirm destroying production'
         required: true
 
 jobs:
   destroy:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'destroy'
+    if: github.event.inputs.confirm == 'destroy-prod'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,11 +24,13 @@ jobs:
         run: bun install
 
       - name: Destroy Production
-        run: bun run destroy --stage prod --yes
+        run: bunx alchemy destroy --stage prod
         env:
+          NODE_ENV: production
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}

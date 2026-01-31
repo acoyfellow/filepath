@@ -339,7 +339,7 @@ export default {
           return withCors(Response.json({ success: true, terminalId, reused: true }));
         }
         
-        let ttyd: { kill: (signal?: string) => Promise<void>; waitForPort: (port: number, opts: { mode: string; timeout: number }) => Promise<void> } | null = null;
+        let ttyd: { kill: (signal?: string) => Promise<void> } | null = null;
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
           
