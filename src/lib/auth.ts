@@ -58,6 +58,7 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
         session,
         account,
         verification,
+        apikey,
         passkey,
       },
     }),
@@ -100,7 +101,16 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
 
 // Export for CLI schema generation
 export const auth = betterAuth({
-  database: drizzleAdapter({} as any, { provider: 'sqlite' }),
+  database: drizzleAdapter(drizzle({} as any, {
+    schema: {
+      user,
+      session,
+      account,
+      verification,
+      apikey,
+      passkey,
+    },
+  }), { provider: 'sqlite' }),
   emailAndPassword: { enabled: true },
   secret: 'temp',
   baseURL: 'http://localhost:5173',

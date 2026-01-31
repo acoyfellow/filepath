@@ -8,10 +8,10 @@ import type { RequestHandler } from './$types';
  * POST /api/billing/checkout - Create a Stripe checkout session
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
-  const session = await locals.auth();
-  if (!session?.user) {
+  if (!locals.user) {
     throw error(401, 'Unauthorized');
   }
+  const session = { user: locals.user };
   
   const { creditAmount } = await request.json();
   
@@ -40,10 +40,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * GET /api/billing/balance - Get user's credit balance
  */
 export const GET: RequestHandler = async ({ locals }) => {
-  const session = await locals.auth();
-  if (!session?.user) {
+  if (!locals.user) {
     throw error(401, 'Unauthorized');
   }
+  const session = { user: locals.user };
   
   try {
     const balance = await getUserCreditBalance(session.user.id);
@@ -58,10 +58,10 @@ export const GET: RequestHandler = async ({ locals }) => {
  * PATCH /api/billing/apikey/:id/budget - Set budget cap for an API key
  */
 export const PATCH: RequestHandler = async ({ request, locals, params }) => {
-  const session = await locals.auth();
-  if (!session?.user) {
+  if (!locals.user) {
     throw error(401, 'Unauthorized');
   }
+  const session = { user: locals.user };
   
   const { budgetCap } = await request.json();
   

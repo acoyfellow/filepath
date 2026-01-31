@@ -135,4 +135,42 @@ export const passkeyRelations = relations(passkey, ({ one }) => ({
     fields: [passkey.userId],
     references: [user.id],
   }),
+}));export const apikey = sqliteTable(
+  "apikey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    start: text("start").notNull(),
+    prefix: text("prefix").notNull(),
+    hashedKey: text("hashed_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    budgetCap: integer("budget_cap"),
+    creditBalance: integer("credit_balance").default(0),
+    totalUsageMinutes: integer("total_usage_minutes").default(0),
+    encryptedSecrets: text("encrypted_secrets"),
+    metadata: text("metadata", { mode: "json" }),
+    permissions: text("permissions", { mode: "json" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("apikey_user_id_idx").on(table.userId),
+    index("apikey_prefix_idx").on(table.prefix),
+  ],
+);
+
+export const apikeyRelations = relations(apikey, ({ one }) => ({
+  user: one(user, {
+    fields: [apikey.userId],
+    references: [user.id],
+  }),
 }));

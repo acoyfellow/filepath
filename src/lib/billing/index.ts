@@ -1,7 +1,7 @@
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { getDrizzle } from '$lib/auth';
 import { user, apikey } from '$lib/schema';
-import type { User, ApiKey } from '$lib/schema';
+import type { user as User, apikey as ApiKey } from '$lib/schema';
 
 /**
  * Add credits to a user's account
@@ -104,7 +104,7 @@ export async function deductApiKeyCredits(apiKeyId: string, credits: number): Pr
   }
   
   // Check budget cap if set
-  if (apiKey.budgetCap !== null && (apiKey.creditBalance === null || apiKey.creditBalance - credits < 0)) {
+  if (apiKey.budgetCap !== null && apiKey.creditBalance !== null && apiKey.creditBalance - credits < 0) {
     return false;
   }
   
