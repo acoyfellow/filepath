@@ -65,7 +65,11 @@
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/session/${sessionId}/ws`;
+    // WebSocket goes directly to worker (api.myfilepath.com in prod)
+    const wsHost = window.location.hostname === 'localhost' 
+      ? window.location.host 
+      : 'api.myfilepath.com';
+    const wsUrl = `${protocol}//${wsHost}/session/${sessionId}/ws`;
     
     ws = new WebSocket(wsUrl);
     ws.onmessage = (event) => {
