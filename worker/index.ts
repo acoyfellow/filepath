@@ -1,4 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
+import { Sandbox } from '@cloudflare/sandbox'
+
+// Re-export Sandbox for Container binding
+export { Sandbox }
 
 type Tab = {
   id: string;
