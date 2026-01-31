@@ -39,9 +39,9 @@
     });
     
     return () => {
-      // Call unsubscribe if it's a function (SvelteKit v2)
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
+      // Handle unsubscribe properly
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        (unsubscribe as () => void)();
       }
       if (ws) ws.close();
     };
