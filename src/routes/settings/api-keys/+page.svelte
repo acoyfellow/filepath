@@ -188,9 +188,15 @@
                   </p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-1 text-xs font-bold {key.expiresAt > new Date() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                    {key.expiresAt > new Date() ? 'Active' : 'Expired'}
-                  </span>
+                  {#if key.expiresAt}
+                    <span class="px-2 py-1 text-xs font-bold {key.expiresAt > new Date() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                      {key.expiresAt > new Date() ? 'Active' : 'Expired'}
+                    </span>
+                  {:else}
+                    <span class="px-2 py-1 text-xs font-bold bg-blue-100 text-blue-700">
+                      No expiry
+                    </span>
+                  {/if}
                   <Button variant="destructive" size="sm" onclick={() => deleteApiKey(key.id)}>
                     Delete
                   </Button>
