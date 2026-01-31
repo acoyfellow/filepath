@@ -61,6 +61,8 @@ const Sandbox = await Container(`${projectName}-sandbox`, {
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
   entrypoint: "./worker/index.ts",
+  compatibilityDate: "2025-11-15",
+  compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   bindings: {
     SESSION_DO,
@@ -68,6 +70,9 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
   url: true,
+  observability: {
+    enabled: true,
+  },
   env: {
     API_WS_HOST: isProd ? "api.myfilepath.com" : "",
   },
