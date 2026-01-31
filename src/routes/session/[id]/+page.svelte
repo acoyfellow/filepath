@@ -39,7 +39,7 @@
     });
     
     return () => {
-      if (unsubscribe) unsubscribe();
+      unsubscribe();
       if (ws) ws.close();
     };
   });
