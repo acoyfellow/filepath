@@ -11,4 +11,10 @@ export const authClient = createAuthClient({
 }); 
 
 export const { signIn, signOut, signUp, useSession, passkey } = authClient;
-export const { forgetPassword, resetPassword } = authClient.emailOtp;
+
+// Password reset functions are accessed through the client proxy
+export const requestPasswordReset = authClient["request-password-reset"];
+export const resetPassword = authClient["reset-password"];
+
+// Email OTP functions
+export const forgetPassword = authClient["forget-password"]["email-otp"];
