@@ -95,8 +95,9 @@
           secrets: secretsObj,
           shell: 'bash',
           createdVia: 'web-ui'
-        },
-        budgetCap: budgetCap
+        }
+        // Only include budgetCap if it's defined
+        ...(budgetCap !== undefined ? { budgetCap } : {})
       });
 
       if (result.data?.key) {
