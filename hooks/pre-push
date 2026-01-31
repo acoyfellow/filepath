@@ -1,0 +1,37 @@
+#!/bin/bash
+# Pre-push hook: lint, type-check, and build before pushing
+# Install: cp hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+# Ensure we're using bun
+export PATH="$HOME/.bun/bin:$PATH"
+
+# 1. Type check
+echo "📝 Type checking..."
+bun run check || {
+  echo "❌ Type check failed. Fix errors before pushing."
+  exit 1
+}
+
+# 2. Build
+echo "🏗️  Building..."
+bun run build || {
+  echo "❌ Build failed. Fix errors before pushing."
+  exit 1
+}
+
+# 3. Syntax check gate scripts
+for gate in gates/*.gate.sh; do
+  if [ -f "$gate" ]; then
+    echo "🚦 Checking $gate syntax..."
+    bash -n "$gate" || {
+      echo "❌ Gate script $gate has syntax errors."
+      exit 1
+    }
+  fi
+done
+
+echo "✅ All pre-push checks passed!"
