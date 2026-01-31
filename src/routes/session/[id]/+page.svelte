@@ -34,15 +34,11 @@
     initSession();
     
     // Handle navigation away from page
-    const unsubscribe = afterNavigate(() => {
+    afterNavigate(() => {
       if (ws) ws.close();
     });
     
     return () => {
-      // Handle unsubscribe properly
-      if (unsubscribe && typeof unsubscribe === 'function') {
-        (unsubscribe as () => void)();
-      }
       if (ws) ws.close();
     };
   });
