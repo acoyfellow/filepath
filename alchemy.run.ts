@@ -97,10 +97,9 @@ export const APP = await SvelteKit(`${projectName}-app`, {
       async fetch(request, env, ctx) {
         const url = new URL(request.url);
         
-        // Route terminal WebSocket and start requests directly to worker
-        // Pattern: /terminal/{sessionId}/{tabId}/(ws|start)
-        if (url.pathname.match(/^\\/terminal\\/[^/]+\\/[^/]+\\/(ws|start)$/)) {
-          console.log('[router] forwarding to worker:', url.pathname);
+        // Route terminal WebSocket directly to worker (SvelteKit can't proxy WS upgrades)
+        // Pattern: /terminal/{sessionId}/{tabId}/ws
+        if (url.pathname.match(/^\\/terminal\\/[^/]+\\/[^/]+\\/ws$/)) {
           return env.WORKER.fetch(request);
         }
         

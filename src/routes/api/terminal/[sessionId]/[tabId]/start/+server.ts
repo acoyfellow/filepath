@@ -14,12 +14,11 @@ export const POST: RequestHandler = async ({ params, platform }) => {
     });
   }
 
-  const terminalId = `t-${sanitizeId(sessionId)}-${sanitizeId(tabId)}`;
-  
   try {
     // Proxy to worker which has the Sandbox binding
+    // Worker expects /terminal/{sessionId}/{tabId}/start format
     const response = await platform.env.WORKER.fetch(
-      new Request(`http://worker/terminal/${terminalId}/start`, {
+      new Request(`http://worker/terminal/${sessionId}/${tabId}/start`, {
         method: 'POST'
       })
     );
