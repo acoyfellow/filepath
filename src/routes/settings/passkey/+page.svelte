@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { passkey } from '$lib/auth-client';
+  import { authClient } from '$lib/auth-client';
+  import { passkeyClient } from '@better-auth/passkey/client';
   
   let passkeys = $state<Array<{id: string, name: string, createdAt: Date}>>([]);
   let newPasskeyName = $state('');
@@ -26,7 +27,7 @@
     error = null;
     
     try {
-      const result = await passkey.listUserPasskeys();
+      const result = await authClient.passkey.listUserPasskeys();
       
       if (result.error) {
         error = result.error.message;

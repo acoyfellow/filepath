@@ -5,7 +5,7 @@
   
   // Load data from page.data
   let balance = 0;
-  let apiKeys = [];
+  let apiKeys: any[] = [];
   
   onMount(async () => {
     const data = $page.data;
@@ -82,19 +82,19 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
       <button 
         class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        on:click={() => purchaseCredits(1000)}
+        onclick={() => purchaseCredits(1000)}
       >
         1,000 credits - $10.00
       </button>
       <button 
         class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        on:click={() => purchaseCredits(2500)}
+        onclick={() => purchaseCredits(2500)}
       >
         2,500 credits - $25.00
       </button>
       <button 
         class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        on:click={() => purchaseCredits(5000)}
+        onclick={() => purchaseCredits(5000)}
       >
         5,000 credits - $50.00
       </button>
@@ -121,7 +121,7 @@
               <tr class="border-b">
                 <td class="py-2 px-4">{apiKey.name || 'Unnamed Key'}</td>
                 <td class="py-2 px-4 font-mono text-sm">
-                  {apiKey.prefix}...{apiKey.key.slice(-4)}
+                  {apiKey.prefix}...{apiKey.hashedKey.slice(-4)}
                 </td>
                 <td class="py-2 px-4">{apiKey.creditBalance || 0}</td>
                 <td class="py-2 px-4">
@@ -130,13 +130,13 @@
                 <td class="py-2 px-4">
                   <button 
                     class="text-blue-500 hover:text-blue-700 mr-2"
-                    on:click={() => setBudgetCap(apiKey.id, 1000)}
+                    onclick={() => setBudgetCap(apiKey.id, 1000)}
                   >
                     Set 1k Cap
                   </button>
                   <button 
                     class="text-blue-500 hover:text-blue-700"
-                    on:click={() => setBudgetCap(apiKey.id, null)}
+                    onclick={() => setBudgetCap(apiKey.id, null)}
                   >
                     Remove Cap
                   </button>

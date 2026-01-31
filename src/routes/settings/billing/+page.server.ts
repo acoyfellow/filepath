@@ -3,10 +3,10 @@ import { getUserCreditBalance, getUserApiKeysWithCredits } from '$lib/billing';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const session = await locals.auth();
-  if (!session?.user) {
+  if (!locals.user) {
     return { status: 401, error: new Error('Unauthorized') };
   }
+  const session = { user: locals.user };
   
   try {
     const balance = await getUserCreditBalance(session.user.id);
