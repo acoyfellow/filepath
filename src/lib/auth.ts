@@ -22,10 +22,10 @@ export function getDrizzle(): ReturnType<typeof drizzle> {
 
 interface AuthEnv {
   BETTER_AUTH_SECRET?: string;
-  SESSION_DO?: any;
-  WORKER?: any;
-  DB?: any;
-  [key: string]: any;
+  SESSION_DO?: DurableObjectNamespace;
+  WORKER?: Fetcher;
+  DB?: D1Database;
+  [key: string]: unknown;
 }
 
 export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: string): Auth {
@@ -84,7 +84,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
     })(),
     baseURL,
     plugins: [
-      sveltekitCookies(getRequestEvent as any),
+      sveltekitCookies(getRequestEvent),
       apiKey({
         // Prefix for agent API keys
         apiKeyHeaders: ['x-api-key', 'authorization'],
