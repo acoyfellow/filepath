@@ -69,7 +69,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   url: false
 });
 
-// SvelteKit app
+// SvelteKit app with custom routing for terminal WebSocket
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${prefix}-app`,
   domains: isProd ? ["myfilepath.com"] : [],
@@ -77,8 +77,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     SESSION_DO,
     WORKER,
     DB,
-    // Note: Sandbox is only bound to WORKER, not the SvelteKit app
-    // SvelteKit proxies terminal requests to WORKER which has the Sandbox binding
   },
   url: true,
   adopt: true,
@@ -89,7 +87,28 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_URL: isProd 
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
-  }
+  },
+  // Custom routing: terminal WebSocket goes directly to worker
+  // This is needed because SvelteKit can't proxy WebSocket upgrades
+  script: `
+    import svelteKitHandler from './.svelte-kit/cloudflare/_worker.js';
+    
+    export default {
+      async fetch(request, env, ctx) {
+        const url = new URL(request.url);
+        
+        // Route terminal WebSocket and start requests directly to worker
+        // Pattern: /terminal/{sessionId}/{tabId}/(ws|start)
+        if (url.pathname.match(/^\\/terminal\\/[^/]+\\/[^/]+\\/(ws|start)$/)) {
+          console.log('[router] forwarding to worker:', url.pathname);
+          return env.WORKER.fetch(request);
+        }
+        
+        // Everything else goes to SvelteKit
+        return svelteKitHandler.fetch(request, env, ctx);
+      }
+    };
+  `,
 });
 
 await app.finalize();

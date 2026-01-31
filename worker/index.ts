@@ -153,9 +153,12 @@ export default {
       const url = new URL(request.url);
       const pathname = url.pathname;
 
-      // Handle terminal start: /terminal/{terminalId}/start
-      if (pathname.match(/^\/terminal\/[^/]+\/start$/) && request.method === 'POST') {
-        const terminalId = pathname.split('/')[2];
+      // Handle terminal start: /terminal/{sessionId}/{tabId}/start
+      if (pathname.match(/^\/terminal\/[^/]+\/[^/]+\/start$/) && request.method === 'POST') {
+        const parts = pathname.split('/');
+        const sessionId = parts[2];
+        const tabId = parts[3];
+        const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
         
         if (activeTerminals.has(terminalId)) {
           return Response.json({ success: true, terminalId, reused: true });
@@ -185,9 +188,12 @@ export default {
         }
       }
 
-      // Handle terminal WebSocket: /terminal/{terminalId}/ws
-      if (pathname.match(/^\/terminal\/[^/]+\/ws$/) && request.headers.get('Upgrade') === 'websocket') {
-        const terminalId = pathname.split('/')[2];
+      // Handle terminal WebSocket: /terminal/{sessionId}/{tabId}/ws
+      if (pathname.match(/^\/terminal\/[^/]+\/[^/]+\/ws$/) && request.headers.get('Upgrade') === 'websocket') {
+        const parts = pathname.split('/');
+        const sessionId = parts[2];
+        const tabId = parts[3];
+        const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
         
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
