@@ -58,6 +58,7 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
         session,
         account,
         verification,
+        passkey,
       },
     }),
     emailAndPassword: {
