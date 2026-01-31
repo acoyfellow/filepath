@@ -324,6 +324,17 @@ export default {
         return new Response(null, { headers: corsHeaders });
       }
 
+      // Debug endpoint to test container
+      if (pathname === '/debug/container') {
+        try {
+          const sandbox = getSandbox(env.Sandbox, 'debug-test');
+          const result = await sandbox.exec('echo hello');
+          return withCors(Response.json({ success: true, output: result }));
+        } catch (error) {
+          return withCors(Response.json({ error: String(error) }, { status: 500 }));
+        }
+      }
+
       // Handle terminal HTML page: /terminal/{sessionId}/tab?tab={tabId}
       // This serves the xterm.js page that connects to the terminal
       const terminalPageMatch = pathname.match(/^\/terminal\/([^/]+)\/tab$/);
