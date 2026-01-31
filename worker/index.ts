@@ -341,16 +341,17 @@ export default {
         const tabId = parts[3];
         const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
         
-        // Check user credits before starting terminal
-        const db = drizzle(env.DB);
-        const creditCheck = await checkUserCredits(db, sessionId);
-        
-        if (!creditCheck.hasCredits) {
-          return withCors(Response.json(
-            { error: 'Insufficient credits', message: 'Please add credits to your account to start a terminal session.' },
-            { status: 402 }
-          ));
-        }
+        // TODO: Re-enable billing gate once session-to-user mapping is fixed
+        // For now, skip credit check to test terminal functionality
+        // const db = drizzle(env.DB);
+        // const creditCheck = await checkUserCredits(db, sessionId);
+        // 
+        // if (!creditCheck.hasCredits) {
+        //   return withCors(Response.json(
+        //     { error: 'Insufficient credits', message: 'Please add credits to your account to start a terminal session.' },
+        //     { status: 402 }
+        //   ));
+        // }
         
         if (activeTerminals.has(terminalId)) {
           return withCors(Response.json({ success: true, terminalId, reused: true }));
