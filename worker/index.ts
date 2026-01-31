@@ -344,10 +344,12 @@ export default {
           console.info('[terminal/start]', 'getting sandbox', { terminalId });
           const sandbox = getSandbox(env.Sandbox, terminalId);
           
+          console.info('[terminal/start]', 'sandbox object', { terminalId, sandbox: typeof sandbox });
+          
           console.info('[terminal/start]', 'starting', { terminalId });
           
           // Start ttyd with bash (opencode can be added later)
-          console.info('[terminal/start]', 'calling startProcess', { terminalId });
+          console.info('[terminal/start]', 'calling startProcess', { terminalId, command: 'ttyd -W -p 7681 bash' });
           ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
           console.info('[terminal/start]', 'startProcess returned', { terminalId });
           
