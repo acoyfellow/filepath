@@ -107,9 +107,6 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
       }),
       emailOTP({
         sendVerificationOTP: async ({ email, otp, type }) => {
-          // Only send emails for forget-password type
-          if (type !== 'forget-password') return;
-          
           const mailgun = new Mailgun(formData);
           const apiKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
           const mg: ReturnType<Mailgun['client']> = mailgun.client({
@@ -123,13 +120,25 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
           const typedMg = mg as any;
           
           try {
-            await typedMg.messages.create(domain, {
-              from: `MyFilePath <noreply@${domain}>`,
-              to: [email],
-              subject: 'Password Reset Request',
-              text: `You requested to reset your password. Use this code: ${otp}`,
-              html: `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
-            });
+            if (type === 'forget-password') {
+              await typedMg.messages.create(domain, {
+                from: `MyFilePath <support@${domain}>`,
+                to: [email],
+                subject: 'Password Reset Request',
+                text: `You requested to reset your password. Use this code: ${otp}`,
+                html: `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
+              });
+            } else if (type === 'email-verification') {
+              // Welcome email for new users
+              await typedMg.messages.create(domain, {
+                from: `MyFilePath <support@${domain}>`,
+                to: [email],
+                subject: 'Welcome to MyFilePath!',
+                text: `Welcome to MyFilePath! Your verification code is: ${otp}\n\nMyFilePath is the platform for agents.`,
+                html: `<h1>Welcome to MyFilePath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>MyFilePath is the platform for agents.</p>`,
+              });
+            }
+            // For sign-in type, we don't send emails in this implementation
           } catch (error) {
             console.error('Error sending email:', error);
             throw error;
@@ -137,6 +146,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
         },
         otpLength: 6,
         expiresIn: 60 * 10, // 10 minutes
+        sendVerificationOnSignUp: true, // Send welcome email on sign-up
       }),
     ],
   }) as unknown as Auth;
