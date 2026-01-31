@@ -1,5 +1,4 @@
 import type { RequestHandler } from './$types';
-import { getSandbox } from '@cloudflare/sandbox';
 
 function sanitizeId(id: string): string {
   return id.replace(/^-+|-+$/g, '').replace(/[^a-z0-9-]/gi, '');
@@ -8,8 +7,8 @@ function sanitizeId(id: string): string {
 export const POST: RequestHandler = async ({ params, platform }) => {
   const { sessionId, tabId } = params;
   
-  if (!platform?.env?.Sandbox) {
-    return new Response(JSON.stringify({ error: 'Sandbox not available' }), {
+  if (!platform?.env?.WORKER) {
+    return new Response(JSON.stringify({ error: 'Worker not available' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -18,21 +17,17 @@ export const POST: RequestHandler = async ({ params, platform }) => {
   const terminalId = `t-${sanitizeId(sessionId)}-${sanitizeId(tabId)}`;
   
   try {
-    console.info('[terminal/start]', { sessionId, tabId, terminalId });
+    // Proxy to worker which has the Sandbox binding
+    const response = await platform.env.WORKER.fetch(
+      new Request(`http://worker/terminal/${terminalId}/start`, {
+        method: 'POST'
+      })
+    );
     
-    const sandbox = getSandbox(platform.env.Sandbox, terminalId);
+    const result = await response.json();
     
-    // Start ttyd with opencode
-    const ttyd = await sandbox.startProcess('ttyd -W -p 7681 opencode');
-    
-    console.info('[terminal/start]', 'ttyd started', { terminalId });
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      sessionId, 
-      tabId,
-      terminalId 
-    }), {
+    return new Response(JSON.stringify(result), {
+      status: response.status,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {

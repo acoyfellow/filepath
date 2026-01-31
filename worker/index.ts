@@ -1,8 +1,11 @@
 import { DurableObject } from 'cloudflare:workers'
-import { Sandbox } from '@cloudflare/sandbox'
+import { getSandbox, Sandbox } from '@cloudflare/sandbox'
 
 // Re-export Sandbox for Container binding
 export { Sandbox }
+
+// Track active terminals
+const activeTerminals = new Set<string>();
 
 type Tab = {
   id: string;
@@ -149,6 +152,51 @@ export default {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
+
+      // Handle terminal start: /terminal/{terminalId}/start
+      if (pathname.match(/^\/terminal\/[^/]+\/start$/) && request.method === 'POST') {
+        const terminalId = pathname.split('/')[2];
+        
+        if (activeTerminals.has(terminalId)) {
+          return Response.json({ success: true, terminalId, reused: true });
+        }
+        
+        try {
+          const sandbox = getSandbox(env.Sandbox, terminalId);
+          await sandbox.startProcess('ttyd -W -p 7681 opencode');
+          activeTerminals.add(terminalId);
+          
+          return Response.json({ success: true, terminalId });
+        } catch (error) {
+          console.error('[terminal/start]', error);
+          return Response.json(
+            { error: 'Failed to start terminal', message: String(error) },
+            { status: 500 }
+          );
+        }
+      }
+
+      // Handle terminal proxy: /terminal/{terminalId}/proxy/*
+      if (pathname.match(/^\/terminal\/[^/]+\/proxy/)) {
+        const parts = pathname.split('/');
+        const terminalId = parts[2];
+        const proxyPath = '/' + parts.slice(4).join('/') || '/';
+        
+        try {
+          const sandbox = getSandbox(env.Sandbox, terminalId);
+          const ttydUrl = `http://localhost:7681${proxyPath}${url.search}`;
+          
+          // Handle WebSocket upgrade
+          if (request.headers.get('Upgrade') === 'websocket') {
+            return sandbox.fetch(new Request(ttydUrl, { headers: request.headers }));
+          }
+          
+          return sandbox.fetch(new Request(ttydUrl));
+        } catch (error) {
+          console.error('[terminal/proxy]', error);
+          return new Response('Terminal not available', { status: 502 });
+        }
+      }
 
       // Handle session requests: /session/{sessionId}/*
       if (pathname.startsWith('/session/')) {
