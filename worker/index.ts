@@ -7,6 +7,143 @@ export { Sandbox }
 // Track active terminals
 const activeTerminals = new Set<string>();
 
+// Render terminal HTML page with xterm.js
+function renderTerminalPage(sessionId: string, tabId: string): Response {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terminal ${tabId}</title>
+  <link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@6.0.0/css/xterm.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+    #terminal { height: 100%; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="https://unpkg.com/@xterm/xterm@6.0.0/lib/xterm.js"></script>
+  <script src="https://unpkg.com/@xterm/addon-fit@0.11.0/lib/addon-fit.js"></script>
+  <script>
+    (function() {
+      var terminal = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'monospace',
+        theme: { background: '#000000', foreground: '#ffffff', cursor: '#ffffff' }
+      });
+      var fitAddon = new FitAddon.FitAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.open(document.getElementById('terminal'));
+      fitAddon.fit();
+
+      terminal.write('\\x1b[2J\\x1b[H');
+      terminal.writeln('\\r\\n  Starting terminal...\\r\\n');
+
+      var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var httpBase = window.location.origin;
+
+      function reportStatus(status) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            { type: 'terminal-status', tabId: '${tabId}', status: status },
+            '*'
+          );
+        }
+      }
+
+      // Start terminal
+      fetch(httpBase + '/terminal/${sessionId}/${tabId}/start', { method: 'POST' })
+        .then(function(res) {
+          if (!res.ok) throw new Error('Start failed: ' + res.status);
+          terminal.writeln('  Terminal started, connecting...\\r\\n');
+          connect();
+        })
+        .catch(function(err) {
+          terminal.writeln('\\r\\n  [error] ' + err.message + '\\r\\n');
+          reportStatus('expired');
+        });
+
+      var textEncoder = new TextEncoder();
+      var CMD_OUTPUT = '0';
+      var retries = 0;
+      var maxRetries = 10;
+      var ws = null;
+
+      function connect() {
+        var wsUrl = protocol + '//' + window.location.host + '/terminal/${sessionId}/${tabId}/ws';
+        ws = new WebSocket(wsUrl);
+        ws.binaryType = 'arraybuffer';
+
+        ws.addEventListener('open', function() {
+          retries = 0;
+          terminal.clear();
+          terminal.writeln('[connected]');
+          var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
+          ws.send(sizeMsg);
+          reportStatus('connected');
+        });
+
+        ws.addEventListener('message', function(e) {
+          if (typeof e.data === 'string') return;
+          if (e.data instanceof ArrayBuffer) {
+            var u8 = new Uint8Array(e.data);
+            if (u8.length === 0) return;
+            var cmd = String.fromCharCode(u8[0]);
+            var data = e.data.slice(1);
+            if (cmd === CMD_OUTPUT || cmd) {
+              terminal.write(new Uint8Array(data));
+            }
+          }
+        });
+
+        terminal.onData(function(data) {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          var payload = new Uint8Array(data.length * 3 + 1);
+          payload[0] = CMD_OUTPUT.charCodeAt(0);
+          var stats = textEncoder.encodeInto(data, payload.subarray(1));
+          ws.send(payload.subarray(0, stats.written + 1));
+        });
+
+        function sendResize() {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          var sizeMsg = JSON.stringify({ columns: terminal.cols, rows: terminal.rows });
+          ws.send(sizeMsg);
+        }
+
+        window.addEventListener('resize', function() {
+          fitAddon.fit();
+          sendResize();
+        });
+        terminal.onResize(sendResize);
+
+        ws.addEventListener('close', function() {
+          if (retries < maxRetries) {
+            retries++;
+            var waitMs = Math.min(500 * retries, 5000);
+            terminal.writeln('\\r\\n[disconnected, reconnecting in ' + waitMs + 'ms...]\\r\\n');
+            setTimeout(connect, waitMs);
+          } else {
+            terminal.writeln('\\r\\n[connection failed after ' + maxRetries + ' attempts]\\r\\n');
+            reportStatus('expired');
+          }
+        });
+
+        ws.addEventListener('error', function() {
+          terminal.writeln('\\r\\n[connection error]\\r\\n');
+        });
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html' }
+  });
+}
+
 type Tab = {
   id: string;
   name: string;
@@ -152,6 +289,15 @@ export default {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
+
+      // Handle terminal HTML page: /terminal/{sessionId}/tab?tab={tabId}
+      // This serves the xterm.js page that connects to the terminal
+      const terminalPageMatch = pathname.match(/^\/terminal\/([^/]+)\/tab$/);
+      if (terminalPageMatch && request.method === 'GET') {
+        const sessionId = terminalPageMatch[1];
+        const tabId = url.searchParams.get('tab') || 'tab1';
+        return renderTerminalPage(sessionId, tabId);
+      }
 
       // Handle terminal start: /terminal/{sessionId}/{tabId}/start
       if (pathname.match(/^\/terminal\/[^/]+\/[^/]+\/start$/) && request.method === 'POST') {

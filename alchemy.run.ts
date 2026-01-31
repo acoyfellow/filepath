@@ -88,8 +88,8 @@ export const APP = await SvelteKit(`${projectName}-app`, {
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
   },
-  // Custom routing: terminal WebSocket goes directly to worker
-  // This is needed because SvelteKit can't proxy WebSocket upgrades
+  // Custom routing: terminal and session endpoints go to worker
+  // This matches the working React version's architecture
   script: `
     import svelteKitHandler from './.svelte-kit/cloudflare/_worker.js';
     
@@ -97,9 +97,19 @@ export const APP = await SvelteKit(`${projectName}-app`, {
       async fetch(request, env, ctx) {
         const url = new URL(request.url);
         
-        // Route terminal WebSocket directly to worker (SvelteKit can't proxy WS upgrades)
-        // Pattern: /terminal/{sessionId}/{tabId}/ws
-        if (url.pathname.match(/^\\/terminal\\/[^/]+\\/[^/]+\\/ws$/)) {
+        // Route terminal/* and session/* to worker (like the React version)
+        // Worker handles: HTML pages, WebSocket, start/close endpoints
+        if (
+          url.pathname.startsWith('/terminal/') ||
+          url.pathname.startsWith('/session/') ||
+          url.pathname.startsWith('/api/session/')
+        ) {
+          // Rewrite /api/session/* to /session/* for worker
+          if (url.pathname.startsWith('/api/session/')) {
+            const newUrl = new URL(request.url);
+            newUrl.pathname = url.pathname.replace('/api/session/', '/session/');
+            return env.WORKER.fetch(new Request(newUrl, request));
+          }
           return env.WORKER.fetch(request);
         }
         

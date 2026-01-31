@@ -83,20 +83,10 @@
     };
   }
 
-  async function startTerminal(tabId: string) {
-    terminalStatus[tabId] = 'starting';
-    try {
-      const res = await fetch(`/api/terminal/${sessionId}/${tabId}/start`, {
-        method: 'POST'
-      });
-      if (res.ok) {
-        terminalStatus[tabId] = 'ready';
-      } else {
-        terminalStatus[tabId] = 'error';
-      }
-    } catch {
-      terminalStatus[tabId] = 'error';
-    }
+  function startTerminal(tabId: string) {
+    // Terminal start is handled by the terminal HTML page itself
+    // Just mark as ready so the iframe is shown
+    terminalStatus[tabId] = 'ready';
   }
 
   async function addTab() {
@@ -138,10 +128,9 @@
   }
 
   function getTerminalUrl(tabId: string): string {
-    // Point to ttyd running in sandbox
-    const host = window.location.host;
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    return `${protocol}//${host}/terminal/${sessionId}/${tabId}/`;
+    // Point to terminal HTML page served by worker
+    // Format: /terminal/{sessionId}/tab?tab={tabId}
+    return `/terminal/${sessionId}/tab?tab=${tabId}`;
   }
 
   // Auth handlers
