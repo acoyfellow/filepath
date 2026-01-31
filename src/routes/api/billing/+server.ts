@@ -1,7 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import { createCheckoutSession, getCheckoutSession } from '$lib/stripe';
 import { addUserCredits, getUserCreditBalance, setApiKeyBudgetCap } from '$lib/billing';
-import { authClient } from '$lib/auth-client';
+import { getDrizzle } from '$lib/auth';
+import { user as userTable } from '$lib/schema';
+import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 /**
@@ -20,9 +22,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
   
   try {
+    // Get full user record from database to access stripeCustomerId
+    const db = getDrizzle();
+    const [fullUser] = await db.select().from(userTable).where(eq(userTable.id, session.user.id));
+    
+    if (!fullUser) {
+      throw error(404, 'User not found');
+    }
+    
     // Create Stripe checkout session
     const checkoutSession = await createCheckoutSession(
-      session.user.stripeCustomerId || '',
+      fullUser.stripeCustomerId || '',
       session.user.email || '',
       creditAmount,
       `${import.meta.env.VITE_PUBLIC_URL || 'http://localhost:5173'}/settings/billing/success`,
@@ -54,26 +64,3 @@ export const GET: RequestHandler = async ({ locals }) => {
   }
 };
 
-/**
- * PATCH /api/billing/apikey/:id/budget - Set budget cap for an API key
- */
-export const PATCH: RequestHandler = async ({ request, locals, params }) => {
-  if (!locals.user) {
-    throw error(401, 'Unauthorized');
-  }
-  const session = { user: locals.user };
-  
-  const { budgetCap } = await request.json() as { budgetCap: number | null; };
-  
-  if (budgetCap !== null && (typeof budgetCap !== 'number' || budgetCap < 0)) {
-    throw error(400, 'Invalid budget cap');
-  }
-  
-  try {
-    await setApiKeyBudgetCap(params.id, session.user.id, budgetCap);
-    return json({ success: true });
-  } catch (err) {
-    console.error('Error setting budget cap:', err);
-    throw error(500, 'Failed to set budget cap');
-  }
-};

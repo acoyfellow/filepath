@@ -47,7 +47,7 @@
         // Transform the API response to match our expected structure
         apiKeys = result.data.apiKeys.map(key => ({
           ...key,
-          budgetCap: (key as any).budgetCap || null
+          budgetCap: (key as ApiKeyData).budgetCap || null
         })) as ApiKeyData[];
       }
     } catch (e) {
@@ -94,7 +94,7 @@
           createdVia: 'web-ui'
         },
         budgetCap: budgetCap
-      } as any);
+      });
 
       if (result.data?.key) {
         createdKey = result.data.key;

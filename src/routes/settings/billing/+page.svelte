@@ -5,7 +5,7 @@
   
   // Load data from page.data
   let balance = 0;
-  let apiKeys: any[] = [];
+  let apiKeys: { id: string; name: string | null; prefix: string; budgetCap: number | null }[] = [];
   
   onMount(async () => {
     const data = $page.data;
