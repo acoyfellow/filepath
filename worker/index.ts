@@ -1,101 +1,12 @@
-import { betterAuth } from 'better-auth';
-import { apiKey } from 'better-auth/plugins';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { drizzle } from 'drizzle-orm/d1';
-import { user, session, account, verification, apikey } from '../src/lib/schema';
-import { eq } from 'drizzle-orm';
-
 import { DurableObject } from 'cloudflare:workers'
 import { getSandbox, Sandbox } from '@cloudflare/sandbox'
-import type { D1Database } from '@cloudflare/workers-types';
-
-import { BillingService } from '../src/lib/billing';
 
 // Re-export Sandbox for Container binding
 export { Sandbox }
 
-// Create auth instance for API key validation
-let authInstance: ReturnType<typeof betterAuth> | null = null;
-
-function getAuthInstance(db: D1Database) {
-  if (authInstance) return authInstance;
-  
-  const drizzleInstance = drizzle(db, {
-    schema: {
-      user,
-      session,
-      account,
-      verification,
-      apikey,
-    },
-  });
-  
-  authInstance = betterAuth({
-    database: drizzleAdapter(drizzleInstance, {
-      provider: 'sqlite',
-      schema: {
-        user,
-        session,
-        account,
-        verification,
-      },
-    }),
-    secret: 'temp-secret-for-worker', // This should be a proper secret in production
-    baseURL: 'https://api.myfilepath.com', // This should match your API domain
-    plugins: [
-      apiKey({
-        apiKeyHeaders: ['x-api-key', 'authorization'],
-        enableMetadata: true,
-        rateLimit: {
-          enabled: true,
-          timeWindow: 1000 * 60 * 60, // 1 hour
-          maxRequests: 1000,
-        },
-      }),
-    ],
-  });
-  
-  return authInstance;
-}
-
-// Function to validate API key and retrieve metadata
-async function validateApiKey(request: Request, db: D1Database) {
-  const auth = getAuthInstance(db);
-  const apiKeyHeader = request.headers.get('x-api-key');
-  
-  if (!apiKeyHeader) {
-    return { valid: false, error: 'No API key provided' };
-  }
-  
-  try {
-    // Use the auth API to verify the API key
-    const result = await auth.api.verifyApiKey({
-      key: apiKeyHeader
-    });
-    
-    if (!result.valid) {
-      return { valid: false, error: result.error?.message || 'Invalid API key' };
-    }
-    
-    return { valid: true, key: result.key };
-  } catch (error) {
-    return { valid: false, error: `API key validation failed: ${error}` };
-  }
-}
-
 // Track active terminals and their processes
 const activeTerminals = new Set<string>();
 const terminalProcesses = new Map<string, { kill: (signal?: string) => Promise<void> }>();
-
-// Track terminal usage for billing
-interface TerminalUsage {
-  apiKeyId: string;
-  startedAt: number;
-  lastBilledAt: number;
-}
-
-const terminalUsage = new Map<string, TerminalUsage>();
-const billingInterval = 60000; // Bill every minute
 
 // CORS headers for cross-origin requests from myfilepath.com
 const corsHeaders = {
@@ -269,7 +180,6 @@ type Env = {
   SESSION_DO: DurableObjectNamespace<SessionDO>;
   Sandbox: any; // Container binding
   API_WS_HOST?: string; // e.g. 'api.myfilepath.com'
-  DB: D1Database; // D1 database binding
 };
 
 export class SessionDO extends DurableObject {
@@ -397,82 +307,8 @@ export class SessionDO extends DurableObject {
   }
 }
 
-// Periodic billing function
-async function billActiveTerminals(db: D1Database) {
-  const billingService = new BillingService(db);
-  
-  for (const [terminalId, usage] of terminalUsage.entries()) {
-    const now = Date.now();
-    const minutesSinceLastBill = (now - usage.lastBilledAt) / 60000;
-    
-    // Bill every minute
-    if (minutesSinceLastBill >= 1) {
-      const minutesToBill = Math.floor(minutesSinceLastBill);
-      
-      // Check quota before billing
-      const quotaCheck = await billingService.checkQuota(usage.apiKeyId);
-      if (!quotaCheck.allowed) {
-        // Quota exceeded, terminate terminal
-        console.info('[billing]', 'quota exceeded, terminating terminal', { terminalId });
-        const process = terminalProcesses.get(terminalId);
-        if (process) {
-          try {
-            await process.kill('SIGTERM');
-          } catch (error) {
-            console.error('[billing]', 'failed to kill terminal process', { terminalId, error });
-          }
-        }
-        activeTerminals.delete(terminalId);
-        terminalProcesses.delete(terminalId);
-        terminalUsage.delete(terminalId);
-        continue;
-      }
-      
-      // Deduct credits
-      const success = await billingService.deductCredits(usage.apiKeyId, minutesToBill);
-      if (!success) {
-        // Failed to deduct credits, terminate terminal
-        console.info('[billing]', 'failed to deduct credits, terminating terminal', { terminalId });
-        const process = terminalProcesses.get(terminalId);
-        if (process) {
-          try {
-            await process.kill('SIGTERM');
-          } catch (error) {
-            console.error('[billing]', 'failed to kill terminal process', { terminalId, error });
-          }
-        }
-        activeTerminals.delete(terminalId);
-        terminalProcesses.delete(terminalId);
-        terminalUsage.delete(terminalId);
-        continue;
-      }
-      
-      // Update last billed time
-      usage.lastBilledAt = now;
-      terminalUsage.set(terminalId, usage);
-      
-      console.info('[billing]', 'billed credits', { terminalId, minutes: minutesToBill });
-    }
-  }
-}
-
-// Start periodic billing
-let billingIntervalId: number | null = null;
-
-function startBilling(env: Env) {
-  if (billingIntervalId !== null) return; // Already started
-  
-  billingIntervalId = setInterval(() => {
-    billActiveTerminals(env.DB).catch(error => {
-      console.error('[billing]', 'error in periodic billing', { error });
-    });
-  }, billingInterval) as unknown as number;
-}
-
 export default {
   async fetch(request: Request, env: Env) {
-    // Start billing when worker starts handling requests
-    startBilling(env);
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
@@ -505,58 +341,12 @@ export default {
         
         let ttyd: { kill: (signal?: string) => Promise<void> } | null = null;
         try {
-          // Validate API key and retrieve metadata
-          const apiKeyResult = await validateApiKey(request, env.DB);
-          
-          if (!apiKeyResult.valid) {
-            return withCors(Response.json(
-              { error: 'Invalid API key', message: apiKeyResult.error },
-              { status: 401 }
-            ));
-          }
-          
-          // Initialize billing service
-          const billingService = new BillingService(env.DB);
-          
-          // Extract budget cap from metadata and update database if needed
-          if (apiKeyResult.key?.metadata) {
-            const metadata = apiKeyResult.key.metadata as { budgetCap?: number };
-            if (metadata.budgetCap !== undefined) {
-              // Update the API key record with the budget cap
-              try {
-                await env.DB.update(apikey)
-                  .set({ budgetCap: metadata.budgetCap })
-                  .where(eq(apikey.id, apiKeyResult.key.id));
-              } catch (error) {
-                console.error('[terminal/start]', 'failed to update budget cap', { error });
-              }
-            }
-          }
-          
-          // Check quota before starting terminal
-          const quotaCheck = await billingService.checkQuota(apiKeyResult.key.id);
-          if (!quotaCheck.allowed) {
-            return withCors(Response.json(
-              { error: 'Quota exceeded', message: quotaCheck.message },
-              { status: 402 }
-            ));
-          }
-          
-          // Extract secrets from metadata
-          let envVars: Record<string, string> = {};
-          if (apiKeyResult.key?.metadata) {
-            const metadata = apiKeyResult.key.metadata as { secrets?: Record<string, string> };
-            if (metadata.secrets) {
-              envVars = { ...metadata.secrets };
-            }
-          }
-          
           const sandbox = getSandbox(env.Sandbox, terminalId);
           
           console.info('[terminal/start]', 'starting', { terminalId });
           
-          // Start ttyd with bash, injecting environment variables
-          ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash', { env: envVars });
+          // Start ttyd with bash (opencode can be added later)
+          ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
           
           // Skip waitForPort in prod - it's unreliable and times out
           // The WebSocket connection will retry until ttyd is ready
@@ -564,13 +354,6 @@ export default {
           
           activeTerminals.add(terminalId);
           terminalProcesses.set(terminalId, ttyd);
-          
-          // Track terminal usage for billing
-          terminalUsage.set(terminalId, {
-            apiKeyId: apiKeyResult.key.id,
-            startedAt: Date.now(),
-            lastBilledAt: Date.now(),
-          });
           
           console.info('[terminal/start]', 'ready', { terminalId });
           return withCors(Response.json({ success: true, terminalId }));
@@ -582,7 +365,6 @@ export default {
           }
           activeTerminals.delete(terminalId);
           terminalProcesses.delete(terminalId);
-          terminalUsage.delete(terminalId);
           return withCors(Response.json(
             { error: 'Failed to start terminal', message: String(error) },
             { status: 500 }
@@ -662,20 +444,12 @@ export default {
             if (ttydWs.readyState === WebSocket.OPEN) {
               ttydWs.close();
             }
-            // Clean up terminal usage tracking
-            activeTerminals.delete(terminalId);
-            terminalProcesses.delete(terminalId);
-            terminalUsage.delete(terminalId);
           });
           
           ttydWs.addEventListener('close', () => {
             if ((server as WebSocket).readyState === WebSocket.OPEN) {
               server.close();
             }
-            // Clean up terminal usage tracking
-            activeTerminals.delete(terminalId);
-            terminalProcesses.delete(terminalId);
-            terminalUsage.delete(terminalId);
           });
           
           ttydWs.addEventListener('error', () => {
