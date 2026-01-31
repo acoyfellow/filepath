@@ -122,7 +122,7 @@
       });
       
       if (result.error) {
-        error = result.error.message;
+        error = result.error.message || 'An error occurred';
         return;
       }
       
