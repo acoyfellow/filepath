@@ -1,6 +1,16 @@
 import { DurableObject } from 'cloudflare:workers'
 import { getSandbox, Sandbox } from '@cloudflare/sandbox'
 import type { Process } from '@cloudflare/sandbox'
+import { drizzle } from 'drizzle-orm/d1';
+import { session as sessionTable, user as userTable } from '../src/lib/schema';
+import { eq } from 'drizzle-orm';
+
+import { DurableObject } from 'cloudflare:workers'
+import { getSandbox, Sandbox } from '@cloudflare/sandbox'
+import type { Process } from '@cloudflare/sandbox'
+import { drizzle } from 'drizzle-orm/d1';
+import { session as sessionTable, user as userTable } from '../src/lib/schema';
+import { eq } from 'drizzle-orm';
 
 // Re-export Sandbox for Container binding
 export { Sandbox }
@@ -180,6 +190,7 @@ type SessionState = {
 type Env = {
   SESSION_DO: DurableObjectNamespace<SessionDO>;
   Sandbox: DurableObjectNamespace<Sandbox>; // Container binding
+  DB: D1Database; // Database binding
   API_WS_HOST?: string; // e.g. 'api.myfilepath.com'
 };
 
@@ -335,6 +346,17 @@ export default {
         const sessionId = parts[2];
         const tabId = parts[3];
         const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
+        
+        // Check user credits before starting terminal
+        const db = drizzle(env.DB);
+        const creditCheck = await checkUserCredits(db, sessionId);
+        
+        if (!creditCheck.hasCredits) {
+          return withCors(Response.json(
+            { error: 'Insufficient credits', message: 'Please add credits to your account to start a terminal session.' },
+            { status: 402 }
+          ));
+        }
         
         if (activeTerminals.has(terminalId)) {
           return withCors(Response.json({ success: true, terminalId, reused: true }));
@@ -518,3 +540,66 @@ export default {
     }
   }
 };
+
+/**
+ * Check if a user has sufficient credits to start a terminal session
+ * @param db - Drizzle database instance
+ * @param sessionId - Session ID to check
+ * @returns { hasCredits: boolean, userId?: string, creditBalance?: number }
+ */
+async function checkUserCredits(db: ReturnType<typeof drizzle>, sessionId: string): Promise<{ 
+  hasCredits: boolean; 
+  userId?: string; 
+  creditBalance?: number 
+}> {
+  try {
+    // Get session from database
+    const sessions = await db.select().from(sessionTable).where(eq(sessionTable.token, sessionId));
+    
+    if (sessions.length === 0) {
+      // If not found by token, try by ID
+      const sessionsById = await db.select().from(sessionTable).where(eq(sessionTable.id, sessionId));
+      if (sessionsById.length === 0) {
+        return { hasCredits: false };
+      }
+      const session = sessionsById[0];
+      
+      // Get user
+      const users = await db.select().from(userTable).where(eq(userTable.id, session.userId));
+      if (users.length === 0) {
+        return { hasCredits: false };
+      }
+      
+      const user = users[0];
+      const creditBalance = user.creditBalance || 0;
+      
+      // Check if user has at least 100 credits (minimum for a session)
+      return { 
+        hasCredits: creditBalance >= 100, 
+        userId: user.id, 
+        creditBalance 
+      };
+    }
+    
+    const session = sessions[0];
+    
+    // Get user
+    const users = await db.select().from(userTable).where(eq(userTable.id, session.userId));
+    if (users.length === 0) {
+      return { hasCredits: false };
+    }
+    
+    const user = users[0];
+    const creditBalance = user.creditBalance || 0;
+    
+    // Check if user has at least 100 credits (minimum for a session)
+    return { 
+      hasCredits: creditBalance >= 100, 
+      userId: user.id, 
+      creditBalance 
+    };
+  } catch (error) {
+    console.error('[billing-check]', 'Error checking user credits:', error);
+    return { hasCredits: false };
+  }
+}
