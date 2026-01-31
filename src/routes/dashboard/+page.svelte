@@ -9,26 +9,45 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   
-  onMount(() => {
+  onMount(async () => {
     // TODO: Fetch real sessions from API
     // For now, show empty state
     isLoading = false;
   });
   
   async function createNewSession() {
-    // In a real implementation, we would call an API to create a new session
-    const newSessionId = 'session-' + (sessions.length + 1);
-    const newSession = {
-      id: newSessionId,
-      name: 'New Session ' + (sessions.length + 1),
-      createdAt: new Date(),
-      lastActive: new Date()
-    };
-    
-    sessions = [newSession, ...sessions];
-    
-    // Navigate to the new session
-    goto(`/session/${newSessionId}`);
+    try {
+      // Check user's credit balance before creating session
+      const response = await fetch('/api/billing/balance');
+      if (!response.ok) {
+        throw new Error('Failed to check credit balance');
+      }
+      
+      const { balance } = await response.json();
+      
+      // Check if user has at least $10 (1000 credits)
+      if (balance < 1000) {
+        error = 'Insufficient credits. Please add credits to your account to create a session. Minimum $10 (1000 credits) required.';
+        return;
+      }
+      
+      // In a real implementation, we would call an API to create a new session
+      const newSessionId = 'session-' + (sessions.length + 1);
+      const newSession = {
+        id: newSessionId,
+        name: 'New Session ' + (sessions.length + 1),
+        createdAt: new Date(),
+        lastActive: new Date()
+      };
+      
+      sessions = [newSession, ...sessions];
+      
+      // Navigate to the new session
+      goto(`/session/${newSessionId}`);
+    } catch (err) {
+      console.error('Error creating session:', err);
+      error = 'Failed to create session. Please try again.';
+    }
   }
   
   async function signOutUser() {
