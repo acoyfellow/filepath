@@ -7,6 +7,25 @@ export { Sandbox }
 // Track active terminals
 const activeTerminals = new Set<string>();
 
+// CORS headers for cross-origin requests from myfilepath.com
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+function withCors(response: Response): Response {
+  const newHeaders = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    newHeaders.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+}
+
 // Render terminal HTML page with xterm.js
 function renderTerminalPage(sessionId: string, tabId: string, apiWsHost?: string): Response {
   const html = `<!DOCTYPE html>
@@ -293,6 +312,11 @@ export default {
       const url = new URL(request.url);
       const pathname = url.pathname;
 
+      // Handle CORS preflight
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { headers: corsHeaders });
+      }
+
       // Handle terminal HTML page: /terminal/{sessionId}/tab?tab={tabId}
       // This serves the xterm.js page that connects to the terminal
       const terminalPageMatch = pathname.match(/^\/terminal\/([^/]+)\/tab$/);
@@ -311,7 +335,7 @@ export default {
         const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
         
         if (activeTerminals.has(terminalId)) {
-          return Response.json({ success: true, terminalId, reused: true });
+          return withCors(Response.json({ success: true, terminalId, reused: true }));
         }
         
         try {
@@ -328,13 +352,13 @@ export default {
           
           activeTerminals.add(terminalId);
           
-          return Response.json({ success: true, terminalId });
+          return withCors(Response.json({ success: true, terminalId }));
         } catch (error) {
           console.error('[terminal/start]', error);
-          return Response.json(
+          return withCors(Response.json(
             { error: 'Failed to start terminal', message: String(error) },
             { status: 500 }
-          );
+          ));
         }
       }
 
