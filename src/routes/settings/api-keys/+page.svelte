@@ -47,8 +47,11 @@
         // Transform the API response to match our expected structure
         apiKeys = result.data.apiKeys.map(key => ({
           ...key,
-          budgetCap: (key as ApiKeyData).budgetCap || null
-        })) as ApiKeyData[];
+          budgetCap: (key as any).budgetCap || null,
+          createdAt: new Date(key.createdAt),
+          updatedAt: new Date(key.updatedAt),
+          expiresAt: key.expiresAt ? new Date(key.expiresAt) : null
+        }));
       }
     } catch (e) {
       error = 'Failed to load API keys';
