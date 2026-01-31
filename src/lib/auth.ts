@@ -108,8 +108,23 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
 }
 
 // Export for CLI schema generation
+// Create a mock D1Database for schema generation (not used at runtime)
+const mockD1Database = {
+  prepare: () => ({
+    bind: () => ({}),
+    first: async () => null,
+    run: async () => ({ success: true, meta: {} }),
+    all: async () => ({ results: [], success: true, meta: {} }),
+    raw: async () => [],
+  }),
+  batch: async () => [],
+  exec: async () => ({ count: 0, duration: 0 }),
+  withSession: () => mockD1Database,
+  dump: async () => new ArrayBuffer(0),
+} as unknown as D1Database;
+
 export const auth = betterAuth({
-  database: drizzleAdapter(drizzle({} as any, {
+  database: drizzleAdapter(drizzle(mockD1Database, {
     schema: {
       user,
       session,
