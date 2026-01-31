@@ -12,7 +12,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (!db) return error(500, 'D1 database not available');
 
     // Initialize auth for this origin (previews/prod/local)
-    const auth = initAuth(db, event.platform?.env, event.url.origin);
+    const auth = initAuth(db, event.platform?.env as any, event.url.origin);
 
     if (auth) {
       try {
