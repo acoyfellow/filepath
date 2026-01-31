@@ -5,19 +5,14 @@
   import { signOut } from '$lib/auth-client';
   import { Button } from '$lib/components/ui/button';
   
-  let sessions = $state([
-    { id: 'session-1', name: 'Research Project', createdAt: new Date(), lastActive: new Date() },
-    { id: 'session-2', name: 'Code Analysis', createdAt: new Date(Date.now() - 86400000), lastActive: new Date(Date.now() - 3600000) },
-  ]);
+  let sessions = $state<Array<{ id: string; name: string; createdAt: Date; lastActive: Date }>>([]);
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   
   onMount(() => {
-    // In a real implementation, we would fetch sessions from the API
-    // For now, we'll just simulate with static data
-    setTimeout(() => {
-      isLoading = false;
-    }, 500);
+    // TODO: Fetch real sessions from API
+    // For now, show empty state
+    isLoading = false;
   });
   
   async function createNewSession() {
