@@ -57,8 +57,16 @@ export async function createCheckoutSession(
   // Calculate the amount in cents ($0.01/credit)
   const amountInCents = creditAmount; // 1000 credits = $10.00 = 1000 cents
   
-  // Get or create the product and price
-  const { priceId } = await createCreditsProduct();
+  // Use the existing price ID for 1000 credits
+  const priceId = 'price_1SvhMGF1oOQhJ3pzGR3I65sh'; // $10 for 1000 credits
+  
+  // For other amounts, we would need to create new price objects
+  // or use quantity multiplier with the base price
+  const quantity = creditAmount / 1000;
+  
+  if (creditAmount % 1000 !== 0) {
+    throw new Error('Credit amount must be a multiple of 1000');
+  }
   
   const session = await stripe.checkout.sessions.create({
     customer: customerId || undefined,
@@ -66,7 +74,7 @@ export async function createCheckoutSession(
     line_items: [
       {
         price: priceId,
-        quantity: 1,
+        quantity: quantity,
       },
     ],
     mode: 'payment',
