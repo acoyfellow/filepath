@@ -16,7 +16,7 @@
   let terminalStatus = $state<Record<string, string>>({
     tab1: 'ready'
   });
-  let ws: WebSocket | null = null;
+  let ws: WebSocket | undefined = $state(undefined);
   
   // Terminal iframe refs
   let iframeRefs = $state<Record<string, HTMLIFrameElement | null>>({});
@@ -35,11 +35,11 @@
     
     // Handle navigation away from page
     afterNavigate(() => {
-      if (ws) ws.close();
+      ws?.close();
     });
     
     return () => {
-      if (ws) ws.close();
+      ws?.close();
     };
   });
   

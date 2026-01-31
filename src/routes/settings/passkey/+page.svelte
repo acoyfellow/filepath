@@ -60,7 +60,7 @@
     success = null;
     
     try {
-      const result = await passkeyClient.addPasskey({
+      const result = await authClient.passkey.addPasskey({
         name: newPasskeyName,
         authenticatorAttachment: "platform"
       });
