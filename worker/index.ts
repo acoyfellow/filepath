@@ -341,12 +341,15 @@ export default {
         
         let ttyd: { kill: (signal?: string) => Promise<void> } | null = null;
         try {
+          console.info('[terminal/start]', 'getting sandbox', { terminalId });
           const sandbox = getSandbox(env.Sandbox, terminalId);
           
           console.info('[terminal/start]', 'starting', { terminalId });
           
           // Start ttyd with bash (opencode can be added later)
+          console.info('[terminal/start]', 'calling startProcess', { terminalId });
           ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+          console.info('[terminal/start]', 'startProcess returned', { terminalId });
           
           // Skip waitForPort in prod - it's unreliable and times out
           // The WebSocket connection will retry until ttyd is ready
@@ -358,7 +361,9 @@ export default {
           console.info('[terminal/start]', 'ready', { terminalId });
           return withCors(Response.json({ success: true, terminalId }));
         } catch (error) {
-          console.error('[terminal/start]', error);
+          console.error('[terminal/start]', 'caught error', error);
+          console.error('[terminal/start]', 'error type', typeof error);
+          console.error('[terminal/start]', 'error keys', Object.keys(error));
           // Cleanup on failure
           if (ttyd) {
             try { await ttyd.kill('SIGTERM'); } catch {}
