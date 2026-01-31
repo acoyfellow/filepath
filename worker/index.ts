@@ -163,8 +163,8 @@ export default {
         
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
-          // Start ttyd with bash first for debugging
-          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+          // Start ttyd with opencode
+          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 opencode');
           
           // Wait for ttyd to be ready on port 7681
           try {
@@ -185,25 +185,82 @@ export default {
         }
       }
 
-      // Handle terminal proxy: /terminal/{terminalId}/proxy/*
-      if (pathname.match(/^\/terminal\/[^/]+\/proxy/)) {
-        const parts = pathname.split('/');
-        const terminalId = parts[2];
-        const proxyPath = '/' + parts.slice(4).join('/') || '/';
+      // Handle terminal WebSocket: /terminal/{terminalId}/ws
+      if (pathname.match(/^\/terminal\/[^/]+\/ws$/) && request.headers.get('Upgrade') === 'websocket') {
+        const terminalId = pathname.split('/')[2];
         
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
-          const ttydUrl = `http://localhost:7681${proxyPath}${url.search}`;
           
-          // Handle WebSocket upgrade
-          if (request.headers.get('Upgrade') === 'websocket') {
-            return sandbox.fetch(new Request(ttydUrl, { headers: request.headers }));
+          // Create WebSocket pair for client connection
+          const pair = new WebSocketPair();
+          const [client, server] = Object.values(pair);
+          (server as any).accept();
+          
+          console.info('[terminal/ws]', 'connecting to ttyd', { terminalId });
+          
+          // Connect to ttyd via sandbox.wsConnect
+          const wsRequest = new Request('http://localhost/ws', {
+            headers: new Headers({
+              'Upgrade': 'websocket',
+              'Sec-WebSocket-Protocol': 'tty'
+            })
+          });
+          
+          // Retry connection to ttyd (may take time to start)
+          let ttydResponse: Response & { webSocket?: WebSocket } | null = null;
+          for (let attempt = 0; attempt < 20; attempt++) {
+            try {
+              ttydResponse = await sandbox.wsConnect(wsRequest, 7681) as Response & { webSocket?: WebSocket };
+              if (ttydResponse.status === 101 && ttydResponse.webSocket) {
+                break;
+              }
+            } catch (e) {
+              console.warn('[terminal/ws]', 'wsConnect attempt failed', { attempt, error: String(e) });
+            }
+            await new Promise(r => setTimeout(r, 500));
           }
           
-          return sandbox.fetch(new Request(ttydUrl));
+          if (!ttydResponse || ttydResponse.status !== 101 || !ttydResponse.webSocket) {
+            console.error('[terminal/ws]', 'failed to connect to ttyd', { terminalId });
+            server.close(1011, 'ttyd connection failed');
+            return new Response('ttyd connection failed', { status: 502 });
+          }
+          
+          const ttydWs = ttydResponse.webSocket;
+          (ttydWs as any).accept?.();
+          
+          console.info('[terminal/ws]', 'connected to ttyd', { terminalId });
+          
+          // Bridge the two WebSockets
+          ttydWs.addEventListener('message', (event) => {
+            if ((server as WebSocket).readyState === WebSocket.OPEN) {
+              server.send(event.data);
+            }
+          });
+          
+          server.addEventListener('message', (event) => {
+            if (ttydWs.readyState === WebSocket.OPEN) {
+              ttydWs.send(event.data);
+            }
+          });
+          
+          server.addEventListener('close', () => {
+            if (ttydWs.readyState === WebSocket.OPEN) {
+              ttydWs.close();
+            }
+          });
+          
+          ttydWs.addEventListener('close', () => {
+            if ((server as WebSocket).readyState === WebSocket.OPEN) {
+              server.close();
+            }
+          });
+          
+          return new Response(null, { status: 101, webSocket: client });
         } catch (error) {
-          console.error('[terminal/proxy]', error);
-          return new Response('Terminal not available', { status: 502 });
+          console.error('[terminal/ws]', error);
+          return new Response('WebSocket connection failed', { status: 502 });
         }
       }
 
