@@ -390,11 +390,16 @@ export default {
           console.info('[terminal/ws]', 'connecting to ttyd', { terminalId });
           
           // Connect to ttyd via sandbox.wsConnect
-          const wsRequest = new Request('http://localhost/ws', {
-            headers: new Headers({
-              'Upgrade': 'websocket',
-              'Sec-WebSocket-Protocol': 'tty'
-            })
+          // Preserve original request headers, ensure Sec-WebSocket-Protocol is set
+          const wsUrl = new URL(request.url);
+          wsUrl.pathname = '/ws';
+          const wsHeaders = new Headers(request.headers);
+          if (!wsHeaders.get('Sec-WebSocket-Protocol')) {
+            wsHeaders.set('Sec-WebSocket-Protocol', 'tty');
+          }
+          const wsRequest = new Request(wsUrl.toString(), {
+            headers: wsHeaders,
+            method: 'GET'
           });
           
           // Retry connection to ttyd (may take time to start)
