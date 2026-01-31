@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { goto, afterNavigate } from '$app/navigation';
-  import { page } from '$app/state';
+  import { page } from '$app/stores';
   import { signOut } from '$lib/auth-client';
+  import { get } from 'svelte/store';
   
   // Get session ID from URL
-  let sessionId = $props().id || '';
+  let sessionId = $state('');
   
   // Session state
   let tabs = $state<Array<{id: string, name: string}>>([
@@ -21,6 +22,9 @@
   let iframeRefs = $state<Record<string, HTMLIFrameElement | null>>({});
   
   onMount(() => {
+    // Get session ID from page store
+    sessionId = get(page).params.id || '';
+    
     if (!sessionId) {
       goto('/dashboard');
       return;
