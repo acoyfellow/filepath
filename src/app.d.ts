@@ -15,7 +15,6 @@ declare global {
 					SESSION_DO: DurableObjectNamespace;
 					WORKER: Fetcher;
 					DB: D1Database;
-					Sandbox: any; // Container binding
 				};
 		}
 	}

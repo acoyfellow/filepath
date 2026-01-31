@@ -77,7 +77,8 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     SESSION_DO,
     WORKER,
     DB,
-    Sandbox,
+    // Note: Sandbox is only bound to WORKER, not the SvelteKit app
+    // SvelteKit proxies terminal requests to WORKER which has the Sandbox binding
   },
   url: true,
   adopt: true,
