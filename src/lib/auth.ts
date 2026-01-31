@@ -3,7 +3,7 @@ import { sveltekitCookies } from "better-auth/svelte-kit";
 import { apiKey } from 'better-auth/plugins';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
-import { user, session, account, verification } from './schema';
+import { user, session, account, verification, apiKey as apiKeyTable } from './schema';
 import { getRequestEvent } from '$app/server';
 
 import type { D1Database } from '@cloudflare/workers-types';
@@ -36,6 +36,7 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
         session,
         account,
         verification,
+        apikey: apiKeyTable,
       },
     });
   }

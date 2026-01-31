@@ -18,6 +18,28 @@ bun install
 bun run dev        # localhost:5173
 ```
 
+## UI Components (shadcn-svelte)
+
+We use [shadcn-svelte](https://shadcn-svelte.com/) for UI components.
+
+```bash
+# Add a new component
+bunx shadcn-svelte@latest add [component-name] -y
+
+# Examples:
+bunx shadcn-svelte@latest add button -y
+bunx shadcn-svelte@latest add card input label dialog -y
+```
+
+Components are installed to `src/lib/components/ui/`. Import like:
+
+```svelte
+<script>
+  import { Button } from "$lib/components/ui/button";
+  import * as Card from "$lib/components/ui/card";
+</script>
+```
+
 ## Deploy
 
 ```bash

@@ -203,6 +203,12 @@
     
     <div class="flex items-center gap-2">
       {#if page.data.user}
+        <a
+          href="/settings/api-keys"
+          class="px-4 py-2 font-black border-4 border-black hover:bg-black hover:text-white"
+        >
+          API KEYS
+        </a>
         <span class="px-3 py-2 font-mono text-sm border-4 border-black">{page.data.user.email}</span>
         <button
           onclick={async () => { await signOut(); await invalidateAll(); }}
