@@ -35,8 +35,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       fullUser.stripeCustomerId || '',
       session.user.email || '',
       creditAmount,
-      `${import.meta.env.VITE_PUBLIC_URL || 'http://localhost:5173'}/settings/billing/success`,
-      `${import.meta.env.VITE_PUBLIC_URL || 'http://localhost:5173'}/settings/billing`
+      `${import.meta.env.VITE_PUBLIC_URL || 'https://myfilepath.com'}/settings/billing/success`,
+      `${import.meta.env.VITE_PUBLIC_URL || 'https://myfilepath.com'}/settings/billing`
     );
     
     return json({ sessionId: checkoutSession.id });
