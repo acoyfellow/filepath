@@ -1,7 +1,10 @@
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { getDrizzle } from '$lib/auth';
 import { user, apikey } from '$lib/schema';
-import type { user as User, apikey as ApiKey } from '$lib/schema';
+import type { InferSelectModel } from 'drizzle-orm';
+
+type User = InferSelectModel<typeof user>;
+type ApiKey = InferSelectModel<typeof apikey>;
 
 /**
  * Add credits to a user's account
@@ -148,7 +151,7 @@ export async function getApiKeyCreditBalance(apiKeyId: string): Promise<number> 
 /**
  * Get API keys with their credit balances for a user
  */
-export async function getUserApiKeysWithCredits(userId: string): Promise<typeof ApiKey[]> {
+export async function getUserApiKeysWithCredits(userId: string): Promise<ApiKey[]> {
   const db = getDrizzle();
   
   return await db.select().from(apikey).where(eq(apikey.userId, userId));
