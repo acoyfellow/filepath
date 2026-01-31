@@ -14,19 +14,24 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Initialize auth for this origin (previews/prod/local)
     const auth = initAuth(db, event.platform?.env, event.url.origin);
 
-    try {
-      const session = await auth.api.getSession({
-        headers: event.request.headers,
-      });
-      event.locals.user = session?.user || null;
-      event.locals.session = session?.session || null;
-    } catch (sessionError) {
-      console.error('Session loading error:', sessionError);
+    if (auth) {
+      try {
+        const session = await auth.api.getSession({
+          headers: event.request.headers,
+        });
+        event.locals.user = session?.user || null;
+        event.locals.session = session?.session || null;
+      } catch (sessionError) {
+        console.error('Session loading error:', sessionError);
+        event.locals.user = null;
+        event.locals.session = null;
+      }
+    } else {
       event.locals.user = null;
       event.locals.session = null;
     }
 
-    const response = await svelteKitHandler({ event, resolve, auth, building });
+    const response = await svelteKitHandler({ event, resolve, auth: auth || undefined, building });
     return response;
 
   } catch (criticalError) {

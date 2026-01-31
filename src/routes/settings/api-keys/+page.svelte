@@ -15,9 +15,11 @@
     start: string | null;
     prefix: string | null;
     createdAt: Date;
+    updatedAt: Date;
     expiresAt: Date | null;
-    enabled: boolean;
+    budgetCap: number | null;
     metadata: Record<string, unknown> | null;
+    permissions: Record<string, string[]> | null;
   };
 
   let apiKeys = $state<ApiKeyData[]>([]);
@@ -42,7 +44,7 @@
     try {
       const result = await authClient.apiKey.list();
       if (result.data) {
-        apiKeys = result.data as ApiKeyData[];
+        apiKeys = result.data.apiKeys as ApiKeyData[];
       }
     } catch (e) {
       error = 'Failed to load API keys';
@@ -85,9 +87,9 @@
           agentName: newKeyName.trim(),
           secrets: secretsObj,
           shell: 'bash',
-          createdVia: 'web-ui',
-          budgetCap: budgetCap
-        }
+          createdVia: 'web-ui'
+        },
+        budgetCap: budgetCap
       });
 
       if (result.data?.key) {
@@ -168,7 +170,7 @@
                 <div>
                   <p class="font-bold text-lg">{key.name || 'Unnamed'}</p>
                   <p class="font-mono text-sm text-gray-500">
-                    {key.prefix || ''}{key.start || ''}{'•'.repeat(20)}
+                    {key.prefix || ''}{key.start || ''}{'•'.repeat(10)}
                   </p>
                   <p class="text-xs text-gray-400 mt-1">
                     Created {new Date(key.createdAt).toLocaleDateString()}
