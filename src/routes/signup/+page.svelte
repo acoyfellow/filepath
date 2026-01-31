@@ -247,7 +247,7 @@
           {:else}
             <button
               type="button"
-              on:click={handlePasskeySignIn}
+              onclick={handlePasskeySignIn}
               disabled={isLoading}
               class="w-full px-4 py-3 font-black border-4 border-black bg-black text-white hover:bg-white hover:text-black disabled:opacity-50 mb-4"
             >
@@ -257,7 +257,7 @@
           
           <div class="text-center mt-4">
             <button 
-              on:click={togglePasskeyForm}
+              onclick={togglePasskeyForm}
               class="text-black font-bold underline"
             >
               Back to {isSignUp ? 'email signup' : 'email signin'}
@@ -323,7 +323,7 @@
         
         <button
           type="button"
-          on:click={togglePasskeyForm}
+          onclick={togglePasskeyForm}
           class="w-full px-4 py-3 font-black border-4 border-black hover:bg-black hover:text-white mb-4"
         >
           {isSignUp ? 'SIGN UP WITH PASSKEY' : 'SIGN IN WITH PASSKEY'}
@@ -331,7 +331,7 @@
         
         <div class="text-center mt-6">
           <button 
-            on:click={toggleMode}
+            onclick={toggleMode}
             class="text-black font-bold underline"
           >
             {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
