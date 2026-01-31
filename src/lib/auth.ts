@@ -97,12 +97,12 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
           maxRequests: 1000,
         },
       }),
-      passkey({
-        rpID: 'myfilepath.com',  // Your domain (or 'localhost' for dev)
-        rpName: 'myfilepath',     // Human-readable name
-        // Add debugging options
-        debug: true,
-      }),
+      // passkey({
+      //   rpID: 'myfilepath.com',  // Your domain (or 'localhost' for dev)
+      //   rpName: 'myfilepath',     // Human-readable name
+      //   // Add debugging options
+      //   debug: true,
+      // }),
     ],
   }) as unknown as Auth;
 
