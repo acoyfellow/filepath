@@ -41,13 +41,7 @@
       }
       
       // Redirect to Stripe checkout
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: sessionId
-      });
-      
-      if (error) {
-        console.error('Stripe checkout error:', error);
-      }
+      window.location.href = `/api/billing/checkout?sessionId=${sessionId}`;
     } catch (err) {
       console.error('Error initiating purchase:', err);
     }
