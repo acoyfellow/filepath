@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
-import { getSandbox, Sandbox, Process } from '@cloudflare/sandbox'
+import { getSandbox, Sandbox } from '@cloudflare/sandbox'
+import type { Process } from '@cloudflare/sandbox'
 
 // Re-export Sandbox for Container binding
 export { Sandbox }
@@ -372,7 +373,7 @@ export default {
           console.error('[terminal/start]', 'error type', typeof error);
           console.error('[terminal/start]', 'error keys', typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object');
           // Cleanup on failure
-          if (ttyd) {
+          if (ttyd !== null) {
             try { await ttyd.kill('SIGTERM'); } catch {}
           }
           activeTerminals.delete(terminalId);
