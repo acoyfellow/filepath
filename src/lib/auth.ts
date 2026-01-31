@@ -1,4 +1,4 @@
-import { betterAuth } from 'better-auth';
+import { betterAuth, type Auth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
 import { apiKey } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
@@ -7,9 +7,9 @@ import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey } from './schema';
 import { getRequestEvent } from '$app/server';
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, DurableObjectNamespace, Fetcher } from '@cloudflare/workers-types';
 
-let authInstance: ReturnType<typeof betterAuth> | undefined = undefined;
+let authInstance: Auth | undefined = undefined;
 let authBaseURL: string | null = null;
 let drizzleInstance: ReturnType<typeof drizzle> | null = null;
 
@@ -20,7 +20,15 @@ export function getDrizzle(): ReturnType<typeof drizzle> {
   return drizzleInstance;
 }
 
-export function initAuth(db: D1Database, env: any, baseURL: string) {
+interface AuthEnv {
+  BETTER_AUTH_SECRET?: string;
+  SESSION_DO?: any;
+  WORKER?: any;
+  DB?: any;
+  [key: string]: any;
+}
+
+export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: string): Auth {
   if (!db) {
     throw new Error('D1 database is required for Better Auth');
   }
@@ -94,7 +102,7 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
         rpName: 'myfilepath',     // Human-readable name
       }),
     ],
-  });
+  }) as unknown as Auth;
 
   return authInstance;
 }
@@ -114,4 +122,4 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true },
   secret: 'temp',
   baseURL: 'http://localhost:5173',
-} as any); 
+}) as unknown as Auth; 
