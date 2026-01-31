@@ -447,6 +447,17 @@ export default {
             }
           });
           
+          ttydWs.addEventListener('error', () => {
+            if ((server as WebSocket).readyState === WebSocket.OPEN) {
+              server.close(1011, 'ttyd websocket error');
+            }
+          });
+          
+          // Send initial size to ttyd (required to start output)
+          await new Promise(r => setTimeout(r, 100));
+          const sizeMsg = JSON.stringify({ columns: 80, rows: 24 });
+          ttydWs.send(sizeMsg);
+          
           return new Response(null, { status: 101, webSocket: client });
         } catch (error) {
           console.error('[terminal/ws]', error);
