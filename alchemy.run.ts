@@ -67,6 +67,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   bindings: {
     SESSION_DO,
     Sandbox,
+    DB,
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
   url: true,
