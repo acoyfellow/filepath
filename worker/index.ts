@@ -308,7 +308,7 @@ export class SessionDO extends DurableObject {
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
@@ -339,49 +339,55 @@ export default {
           return withCors(Response.json({ success: true, terminalId, reused: true }));
         }
         
-        let ttyd: { kill: (signal?: string) => Promise<void> } | null = null;
-        try {
-          console.info('[terminal/start]', 'getting sandbox', { terminalId });
-          const sandbox = getSandbox(env.Sandbox, terminalId);
-          
-          console.info('[terminal/start]', 'sandbox object', { terminalId, sandbox: typeof sandbox });
-          
-          console.info('[terminal/start]', 'starting', { terminalId });
-          
-          // Start ttyd with bash (opencode can be added later)
-          console.info('[terminal/start]', 'calling startProcess', { terminalId, command: 'ttyd -W -p 7681 bash' });
+        // Create a promise for the terminal start process
+        const startPromise = (async () => {
+          let ttyd: { kill: (signal?: string) => Promise<void> } | null = null;
           try {
-            ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
-            console.info('[terminal/start]', 'startProcess returned', { terminalId });
+            console.info('[terminal/start]', 'getting sandbox', { terminalId });
+            const sandbox = getSandbox(env.Sandbox, terminalId);
+            
+            console.info('[terminal/start]', 'sandbox object', { terminalId, sandbox: typeof sandbox });
+            
+            console.info('[terminal/start]', 'starting', { terminalId });
+            
+            // Start ttyd with bash (opencode can be added later)
+            console.info('[terminal/start]', 'calling startProcess', { terminalId, command: 'ttyd -W -p 7681 bash' });
+            try {
+              ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+              console.info('[terminal/start]', 'startProcess returned', { terminalId });
+            } catch (error) {
+              console.error('[terminal/start]', 'startProcess failed', { terminalId, error: String(error), errorType: typeof error, errorKeys: typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object' });
+              throw error;
+            }
+            
+            // Skip waitForPort in prod - it's unreliable and times out
+            // The WebSocket connection will retry until ttyd is ready
+            console.info('[terminal/start]', 'process started, skipping waitForPort', { terminalId });
+            
+            activeTerminals.add(terminalId);
+            terminalProcesses.set(terminalId, ttyd);
+            
+            console.info('[terminal/start]', 'ready', { terminalId });
+            return { success: true, terminalId };
           } catch (error) {
-            console.error('[terminal/start]', 'startProcess failed', { terminalId, error: String(error), errorType: typeof error, errorKeys: typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object' });
+            console.error('[terminal/start]', 'caught error', error);
+            console.error('[terminal/start]', 'error type', typeof error);
+            console.error('[terminal/start]', 'error keys', typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object');
+            // Cleanup on failure
+            if (ttyd) {
+              try { await ttyd.kill('SIGTERM'); } catch {}
+            }
+            activeTerminals.delete(terminalId);
+            terminalProcesses.delete(terminalId);
             throw error;
           }
-          
-          // Skip waitForPort in prod - it's unreliable and times out
-          // The WebSocket connection will retry until ttyd is ready
-          console.info('[terminal/start]', 'process started, skipping waitForPort', { terminalId });
-          
-          activeTerminals.add(terminalId);
-          terminalProcesses.set(terminalId, ttyd);
-          
-          console.info('[terminal/start]', 'ready', { terminalId });
-          return withCors(Response.json({ success: true, terminalId }));
-        } catch (error) {
-          console.error('[terminal/start]', 'caught error', error);
-          console.error('[terminal/start]', 'error type', typeof error);
-          console.error('[terminal/start]', 'error keys', typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object');
-          // Cleanup on failure
-          if (ttyd) {
-            try { await ttyd.kill('SIGTERM'); } catch {}
-          }
-          activeTerminals.delete(terminalId);
-          terminalProcesses.delete(terminalId);
-          return withCors(Response.json(
-            { error: 'Failed to start terminal', message: String(error) },
-            { status: 500 }
-          ));
-        }
+        })();
+        
+        // Use waitUntil to extend the lifetime of the request
+        ctx.waitUntil(startPromise);
+        
+        // Return a response immediately
+        return withCors(Response.json({ success: true, terminalId }));
       }
 
       // Handle terminal WebSocket: /terminal/{sessionId}/{tabId}/ws
