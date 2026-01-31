@@ -363,7 +363,7 @@ export default {
         } catch (error) {
           console.error('[terminal/start]', 'caught error', error);
           console.error('[terminal/start]', 'error type', typeof error);
-          console.error('[terminal/start]', 'error keys', Object.keys(error));
+          console.error('[terminal/start]', 'error keys', typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object');
           // Cleanup on failure
           if (ttyd) {
             try { await ttyd.kill('SIGTERM'); } catch {}
