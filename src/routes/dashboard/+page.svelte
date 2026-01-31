@@ -124,7 +124,7 @@
         {#each sessions as session (session.id)}
           <div 
             class="border-4 border-black hover:bg-gray-50 cursor-pointer"
-            onclick={() => goto(`/session/${session.id}`)}
+            on:click={() => goto(`/session/${session.id}`)}
           >
             <div class="p-6">
               <div class="flex justify-between items-start mb-4">
