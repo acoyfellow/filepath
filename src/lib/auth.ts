@@ -114,4 +114,4 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true },
   secret: 'temp',
   baseURL: 'http://localhost:5173',
-}); 
+} as any); 
