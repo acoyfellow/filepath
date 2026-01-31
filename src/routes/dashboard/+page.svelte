@@ -72,6 +72,12 @@
       >
         BILLING
       </a>
+      <a
+        href="/settings/passkey"
+        class="px-4 py-2 font-black border-4 border-black hover:bg-black hover:text-white"
+      >
+        PASSKEY
+      </a>
       <span class="px-3 py-2 font-mono text-sm border-4 border-black">{page.data.user?.email}</span>
       <button
         onclick={signOutUser}
