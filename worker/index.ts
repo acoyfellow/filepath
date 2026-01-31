@@ -1,8 +1,84 @@
+import { betterAuth } from 'better-auth';
+import { apiKey } from 'better-auth/plugins';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { drizzle } from 'drizzle-orm/d1';
+import { user, session, account, verification, apikey } from '../src/lib/schema';
+
 import { DurableObject } from 'cloudflare:workers'
 import { getSandbox, Sandbox } from '@cloudflare/sandbox'
+import type { D1Database } from '@cloudflare/workers-types';
 
 // Re-export Sandbox for Container binding
 export { Sandbox }
+
+// Create auth instance for API key validation
+let authInstance: ReturnType<typeof betterAuth> | null = null;
+
+function getAuthInstance(db: D1Database) {
+  if (authInstance) return authInstance;
+  
+  const drizzleInstance = drizzle(db, {
+    schema: {
+      user,
+      session,
+      account,
+      verification,
+      apikey,
+    },
+  });
+  
+  authInstance = betterAuth({
+    database: drizzleAdapter(drizzleInstance, {
+      provider: 'sqlite',
+      schema: {
+        user,
+        session,
+        account,
+        verification,
+      },
+    }),
+    secret: 'temp-secret-for-worker', // This should be a proper secret in production
+    baseURL: 'https://api.myfilepath.com', // This should match your API domain
+    plugins: [
+      apiKey({
+        apiKeyHeaders: ['x-api-key', 'authorization'],
+        enableMetadata: true,
+        rateLimit: {
+          enabled: true,
+          timeWindow: 1000 * 60 * 60, // 1 hour
+          maxRequests: 1000,
+        },
+      }),
+    ],
+  });
+  
+  return authInstance;
+}
+
+// Function to validate API key and retrieve metadata
+async function validateApiKey(request: Request, db: D1Database) {
+  const auth = getAuthInstance(db);
+  const apiKeyHeader = request.headers.get('x-api-key');
+  
+  if (!apiKeyHeader) {
+    return { valid: false, error: 'No API key provided' };
+  }
+  
+  try {
+    // Use the auth API to verify the API key
+    const result = await auth.api.verifyApiKey({
+      key: apiKeyHeader
+    });
+    
+    if (!result.valid) {
+      return { valid: false, error: result.error?.message || 'Invalid API key' };
+    }
+    
+    return { valid: true, key: result.key };
+  } catch (error) {
+    return { valid: false, error: `API key validation failed: ${error}` };
+  }
+}
 
 // Track active terminals and their processes
 const activeTerminals = new Set<string>();
@@ -180,6 +256,7 @@ type Env = {
   SESSION_DO: DurableObjectNamespace<SessionDO>;
   Sandbox: any; // Container binding
   API_WS_HOST?: string; // e.g. 'api.myfilepath.com'
+  DB: D1Database; // D1 database binding
 };
 
 export class SessionDO extends DurableObject {
@@ -341,12 +418,31 @@ export default {
         
         let ttyd: { kill: (signal?: string) => Promise<void> } | null = null;
         try {
+          // Validate API key and retrieve metadata
+          const apiKeyResult = await validateApiKey(request, env.DB);
+          
+          if (!apiKeyResult.valid) {
+            return withCors(Response.json(
+              { error: 'Invalid API key', message: apiKeyResult.error },
+              { status: 401 }
+            ));
+          }
+          
+          // Extract secrets from metadata
+          let envVars: Record<string, string> = {};
+          if (apiKeyResult.key?.metadata) {
+            const metadata = apiKeyResult.key.metadata as { secrets?: Record<string, string> };
+            if (metadata.secrets) {
+              envVars = { ...metadata.secrets };
+            }
+          }
+          
           const sandbox = getSandbox(env.Sandbox, terminalId);
           
           console.info('[terminal/start]', 'starting', { terminalId });
           
-          // Start ttyd with bash (opencode can be added later)
-          ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+          // Start ttyd with bash, injecting environment variables
+          ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash', { env: envVars });
           
           // Skip waitForPort in prod - it's unreliable and times out
           // The WebSocket connection will retry until ttyd is ready

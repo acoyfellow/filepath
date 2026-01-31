@@ -21,7 +21,7 @@ const projectName = "filepath";
 
 const app = await alchemy(projectName, {
   password,
-  stateStore: (scope) => new CloudflareStateStore(scope),
+  stateStore: (scope) => new CloudflareStateStore(scope, { forceUpdate: true }),
 });
 
 // For prod: use fixed names (protect existing resources)
