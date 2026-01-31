@@ -4,8 +4,9 @@ import { getSandbox, Sandbox } from '@cloudflare/sandbox'
 // Re-export Sandbox for Container binding
 export { Sandbox }
 
-// Track active terminals
+// Track active terminals and their processes
 const activeTerminals = new Set<string>();
+const terminalProcesses = new Map<string, { kill: (signal?: string) => Promise<void> }>();
 
 // CORS headers for cross-origin requests from myfilepath.com
 const corsHeaders = {
@@ -338,24 +339,32 @@ export default {
           return withCors(Response.json({ success: true, terminalId, reused: true }));
         }
         
+        let ttyd: { kill: (signal?: string) => Promise<void>; waitForPort: (port: number, opts: { mode: string; timeout: number }) => Promise<void> } | null = null;
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
-          // Start ttyd with opencode
-          // Use bash for now - opencode may not be installed/working
-          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
           
-          // Wait for ttyd to be ready on port 7681
-          try {
-            await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
-          } catch (portError) {
-            console.warn('[terminal/start] waitForPort timed out, continuing anyway', portError);
-          }
+          console.info('[terminal/start]', 'starting', { terminalId });
+          
+          // Start ttyd with bash (opencode can be added later)
+          ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+          
+          // Skip waitForPort in prod - it's unreliable and times out
+          // The WebSocket connection will retry until ttyd is ready
+          console.info('[terminal/start]', 'process started, skipping waitForPort', { terminalId });
           
           activeTerminals.add(terminalId);
+          terminalProcesses.set(terminalId, ttyd);
           
+          console.info('[terminal/start]', 'ready', { terminalId });
           return withCors(Response.json({ success: true, terminalId }));
         } catch (error) {
           console.error('[terminal/start]', error);
+          // Cleanup on failure
+          if (ttyd) {
+            try { await ttyd.kill('SIGTERM'); } catch {}
+          }
+          activeTerminals.delete(terminalId);
+          terminalProcesses.delete(terminalId);
           return withCors(Response.json(
             { error: 'Failed to start terminal', message: String(error) },
             { status: 500 }
