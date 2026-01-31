@@ -22,7 +22,7 @@ export function getDrizzle(): ReturnType<typeof drizzle> {
 
 interface AuthEnv {
   BETTER_AUTH_SECRET?: string;
-  SESSION_DO?: DurableObjectNamespace<SessionDO>;
+  SESSION_DO?: DurableObjectNamespace<DurableObject>;
   WORKER?: Fetcher;
   DB?: D1Database;
   [key: string]: unknown;
