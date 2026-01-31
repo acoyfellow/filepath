@@ -119,8 +119,11 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
 
           const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
           
+          // Type assertion for Mailgun client methods
+          const typedMg = mg as any;
+          
           try {
-            await mg.messages.create(domain, {
+            await typedMg.messages.create(domain, {
               from: `MyFilePath <noreply@${domain}>`,
               to: [email],
               subject: 'Password Reset Request',
