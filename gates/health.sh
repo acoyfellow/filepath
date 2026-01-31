@@ -5,6 +5,20 @@
 
 cd "$(dirname "$0")/.." || exit 1
 
+echo "=== UNCOMMITTED WORK CHECK ==="
+UNCOMMITTED=$(git status --porcelain | grep -E "^( M|M |A |\?\?)" | head -10)
+if [ -n "$UNCOMMITTED" ]; then
+  echo "⚠️ UNCOMMITTED CHANGES DETECTED - Previous session didn't commit!"
+  echo "$UNCOMMITTED"
+  echo ""
+  echo "🚨 COMMIT THESE FIRST before doing new work:"
+  echo "   git add <files>"
+  echo "   git commit -m 'description'"
+  echo ""
+  # Don't block, but make it VERY visible
+fi
+
+echo ""
 echo "=== CODE QUALITY CHECKS ==="
 
 # Check for explicit `any` usage
