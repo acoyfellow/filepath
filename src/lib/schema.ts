@@ -107,3 +107,32 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+export const passkey = sqliteTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull().unique(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
+    transports: text("transports"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    aaguid: text("aaguid"),
+  },
+  (table) => [
+    index("passkey_user_id_idx").on(table.userId),
+    index("passkey_credential_id_unique").on(table.credentialId),
+  ],
+);
+
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+  user: one(user, {
+    fields: [passkey.userId],
+    references: [user.id],
+  }),
+}));
