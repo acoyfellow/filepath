@@ -25,6 +25,7 @@
   let showCreateDialog = $state(false);
   let newKeyName = $state('');
   let newKeySecrets = $state('');
+  let newKeyBudgetCap = $state('');
   let createdKey = $state<string | null>(null);
   let error = $state<string | null>(null);
 
@@ -68,6 +69,15 @@
         }
       }
 
+      // Parse budget cap
+      let budgetCap: number | undefined;
+      if (newKeyBudgetCap.trim()) {
+        const cap = parseInt(newKeyBudgetCap.trim(), 10);
+        if (!isNaN(cap) && cap > 0) {
+          budgetCap = cap;
+        }
+      }
+
       const result = await authClient.apiKey.create({
         name: newKeyName.trim(),
         prefix: 'mfp_',
@@ -75,15 +85,17 @@
           agentName: newKeyName.trim(),
           secrets: secretsObj,
           shell: 'bash',
-          createdVia: 'web-ui'
+          createdVia: 'web-ui',
+          budgetCap: budgetCap
         }
       });
 
       if (result.data?.key) {
         createdKey = result.data.key;
-        await loadApiKeys();
-        newKeyName = '';
-        newKeySecrets = '';
+          await loadApiKeys();
+          newKeyName = '';
+          newKeySecrets = '';
+          newKeyBudgetCap = '';
       } else if (result.error) {
         error = result.error.message || 'Failed to create API key';
       }
@@ -226,6 +238,17 @@
             class="w-full border-2 border-black p-2 font-mono text-sm mt-1"
           ></textarea>
           <p class="text-xs text-gray-500 mt-1">One per line: KEY=value</p>
+        </div>
+        <div>
+          <Label for="budgetCap">Budget Cap (optional, credits)</Label>
+          <Input
+            id="budgetCap"
+            type="number"
+            bind:value={newKeyBudgetCap}
+            placeholder="e.g., 10000"
+            class="border-2 border-black mt-1"
+          />
+          <p class="text-xs text-gray-500 mt-1">Maximum credits this key can use</p>
         </div>
       </div>
       <Dialog.Footer>

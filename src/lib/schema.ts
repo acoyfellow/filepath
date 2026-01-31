@@ -17,6 +17,9 @@ export const user = sqliteTable("user", {
     .$defaultFn(() => new Date())
     .$onUpdate(() => new Date())
     .notNull(),
+  // Billing fields
+  stripeCustomerId: text("stripe_customer_id"),
+  creditBalance: integer("credit_balance").default(0),
 });
 
 export const session = sqliteTable(
@@ -112,6 +115,11 @@ export const apikey = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
     permissions: text("permissions"),
     metadata: text("metadata"),
+    // Billing fields
+    creditBalance: integer("credit_balance").default(0),
+    budgetCap: integer("budget_cap"),
+    totalUsageMinutes: integer("total_usage_minutes").default(0),
+    lastBilledAt: integer("last_billed_at", { mode: "timestamp" }),
   },
   (table) => [
     index("apikey_key_idx").on(table.key),
