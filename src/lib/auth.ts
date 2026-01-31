@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
 import { apiKey } from 'better-auth/plugins';
+import { passkey } from '@better-auth/passkey';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey } from './schema';
@@ -92,6 +93,10 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
           maxRequests: 1000,
         },
       }),
+      passkey({
+        rpID: 'myfilepath.com',  // Your domain (or 'localhost' for dev)
+        rpName: 'myfilepath',     // Human-readable name
+      }),
     ],
   });
 
@@ -99,9 +104,9 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
 }
 
 // Export for CLI schema generation
-// export const auth = betterAuth({
-//   database: drizzleAdapter({} as any, { provider: 'sqlite' }),
-//   emailAndPassword: { enabled: true },
-//   secret: 'temp',
-//   baseURL: 'http://localhost:5173',
-// }); 
+export const auth = betterAuth({
+  database: drizzleAdapter({} as any, { provider: 'sqlite' }),
+  emailAndPassword: { enabled: true },
+  secret: 'temp',
+  baseURL: 'http://localhost:5173',
+}); 
