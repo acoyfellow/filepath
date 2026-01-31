@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { forgetPassword } from '$lib/auth-client';
+  import { forgetPasswordEmailOTP } from '$lib/auth-client';
   
   let email = $state('');
   let isLoading = $state(false);
@@ -16,7 +16,7 @@
     error = null;
     
     try {
-      const result = await forgetPassword({ email, redirectTo: '/reset-password' });
+      const result = await forgetPasswordEmailOTP({ email });
       
       if (result.error) {
         error = result.error.message || 'An error occurred';
