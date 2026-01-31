@@ -1,12 +1,12 @@
 import { DurableObject } from 'cloudflare:workers'
-import { getSandbox, Sandbox } from '@cloudflare/sandbox'
+import { getSandbox, Sandbox, Process } from '@cloudflare/sandbox'
 
 // Re-export Sandbox for Container binding
 export { Sandbox }
 
 // Track active terminals and their processes
 const activeTerminals = new Set<string>();
-const terminalProcesses = new Map<string, { kill: (signal?: string) => Promise<void> }>();
+const terminalProcesses = new Map<string, Process>();
 
 // CORS headers for cross-origin requests from myfilepath.com
 const corsHeaders = {
