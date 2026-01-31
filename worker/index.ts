@@ -163,7 +163,15 @@ export default {
         
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
-          await sandbox.startProcess('ttyd -W -p 7681 opencode');
+          const ttyd = await sandbox.startProcess('ttyd -W -p 7681 opencode');
+          
+          // Wait for ttyd to be ready on port 7681
+          try {
+            await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 });
+          } catch (portError) {
+            console.warn('[terminal/start] waitForPort timed out, continuing anyway', portError);
+          }
+          
           activeTerminals.add(terminalId);
           
           return Response.json({ success: true, terminalId });
