@@ -28,7 +28,8 @@ export async function createCheckoutSession(
   cancelUrl: string
 ) {
   // $10 minimum purchase for 1000 credits ($0.01/credit)
-  const amountInCents = Math.max(1000, creditAmount);
+  // Calculate amount in cents ($0.01 per credit)
+  const amountInCents = Math.max(1000, creditAmount); // $10 minimum
   
   return await stripe.checkout.sessions.create({
     customer: customerId,
@@ -41,7 +42,7 @@ export async function createCheckoutSession(
             name: 'myfilepath Credits',
             description: `${creditAmount} credits for myfilepath`,
           },
-          unit_amount: amountInCents, // $10.00 for 1000 credits
+          unit_amount: amountInCents, // $10.00 for 1000 credits (minimum)
         },
         quantity: 1,
       },
