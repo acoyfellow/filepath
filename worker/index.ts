@@ -8,7 +8,7 @@ export { Sandbox }
 const activeTerminals = new Set<string>();
 
 // Render terminal HTML page with xterm.js
-function renderTerminalPage(sessionId: string, tabId: string): Response {
+function renderTerminalPage(sessionId: string, tabId: string, apiWsHost?: string): Response {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,7 +42,9 @@ function renderTerminalPage(sessionId: string, tabId: string): Response {
       terminal.writeln('\\r\\n  Starting terminal...\\r\\n');
 
       var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      var httpBase = window.location.origin;
+      var apiWsHost = ${JSON.stringify(apiWsHost || '')};
+      var httpBase = apiWsHost ? ('https://' + apiWsHost) : window.location.origin;
+      var wsHost = apiWsHost || window.location.host;
 
       function reportStatus(status) {
         if (window.parent && window.parent !== window) {
@@ -72,7 +74,7 @@ function renderTerminalPage(sessionId: string, tabId: string): Response {
       var ws = null;
 
       function connect() {
-        var wsUrl = protocol + '//' + window.location.host + '/terminal/${sessionId}/${tabId}/ws';
+        var wsUrl = protocol + '//' + wsHost + '/terminal/${sessionId}/${tabId}/ws';
         ws = new WebSocket(wsUrl);
         ws.binaryType = 'arraybuffer';
 
@@ -157,6 +159,7 @@ type SessionState = {
 type Env = {
   SESSION_DO: DurableObjectNamespace<SessionDO>;
   Sandbox: any; // Container binding
+  API_WS_HOST?: string; // e.g. 'api.myfilepath.com'
 };
 
 export class SessionDO extends DurableObject {
@@ -296,7 +299,8 @@ export default {
       if (terminalPageMatch && request.method === 'GET') {
         const sessionId = terminalPageMatch[1];
         const tabId = url.searchParams.get('tab') || 'tab1';
-        return renderTerminalPage(sessionId, tabId);
+        const apiWsHost = env.API_WS_HOST;
+        return renderTerminalPage(sessionId, tabId, apiWsHost);
       }
 
       // Handle terminal start: /terminal/{sessionId}/{tabId}/start

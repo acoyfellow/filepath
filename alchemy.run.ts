@@ -66,7 +66,11 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     SESSION_DO,
     Sandbox,
   },
-  url: false
+  domains: isProd ? ["api.myfilepath.com"] : [],
+  url: true,
+  env: {
+    API_WS_HOST: isProd ? "api.myfilepath.com" : "",
+  },
 });
 
 // SvelteKit app with custom routing for terminal WebSocket
