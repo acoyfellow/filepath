@@ -1,9 +1,86 @@
 import Stripe from 'stripe';
 
-// Initialize Stripe with the secret key
-export const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2026-01-28.clover',
-});
+// Initialize Stripe with the secret key, but only if it exists (to avoid build errors)
+let stripeInstance: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    const secretKey = import.meta.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is required');
+    }
+    stripeInstance = new Stripe(secretKey, {
+      apiVersion: '2026-01-28.clover',
+    });
+  }
+  return stripeInstance;
+}
+
+// Export a getter function instead of the instance directly
+export const stripe = {
+  get instance() {
+    return getStripe();
+  },
+  createCustomer: (email: string, name?: string) => getStripe().customers.create({ email, name }),
+  createCreditsProduct: () => {
+    const stripe = getStripe();
+    return Promise.all([
+      stripe.products.create({
+        name: 'myfilepath Credits',
+        description: 'Credits for using myfilepath.com services',
+      }),
+      stripe.prices.create({
+        product: '', // Will be filled after product creation
+        unit_amount: 1000,
+        currency: 'usd',
+        recurring: undefined,
+        metadata: { credits: '1000' },
+      })
+    ]).then(async ([product, price]) => {
+      // Update the price with the actual product ID
+      const updatedPrice = await stripe.prices.update(price.id, { product: product.id });
+      return { productId: product.id, priceId: updatedPrice.id };
+    });
+  },
+  createCheckoutSession: (
+    customerId: string,
+    customerEmail: string,
+    creditAmount: number,
+    successUrl: string,
+    cancelUrl: string
+  ) => {
+    const stripe = getStripe();
+    if (creditAmount % 1000 !== 0) {
+      throw new Error('Credit amount must be a multiple of 1000');
+    }
+    const priceId = 'price_1SvhMGF1oOQhJ3pzGR3I65sh';
+    const quantity = creditAmount / 1000;
+    return stripe.checkout.sessions.create({
+      customer: customerId || undefined,
+      customer_email: !customerId ? customerEmail : undefined,
+      line_items: [{ price: priceId, quantity }],
+      mode: 'payment',
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: { creditAmount: creditAmount.toString() },
+    });
+  },
+  getCheckoutSession: (sessionId: string) => getStripe().checkout.sessions.retrieve(sessionId),
+  handleWebhook: (payload: Buffer, signature: string, webhookSecret: string) => 
+    getStripe().webhooks.constructEvent(payload, signature, webhookSecret),
+  fulfillPayment: async (sessionId: string) => {
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status !== 'paid') {
+      throw new Error('Payment not completed');
+    }
+    const creditAmount = parseInt(session.metadata?.creditAmount || '0');
+    if (creditAmount <= 0) {
+      throw new Error('Invalid credit amount');
+    }
+    return creditAmount;
+  }
+};
 
 /**
  * Create a Stripe customer
