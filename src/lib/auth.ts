@@ -111,9 +111,10 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
           if (type !== 'forget-password') return;
           
           const mailgun = new Mailgun(formData);
+          const apiKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
           const mg = mailgun.client({
             username: 'api',
-            key: env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '',
+            key: apiKey,
           });
 
           const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
