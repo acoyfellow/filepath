@@ -374,7 +374,7 @@ export default {
           console.error('[terminal/start]', 'error keys', typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object');
           // Cleanup on failure
           if (ttyd !== null) {
-            try { await ttyd.kill('SIGTERM'); } catch {}
+            try { await (ttyd as Process).kill('SIGTERM'); } catch {}
           }
           activeTerminals.delete(terminalId);
           terminalProcesses.delete(terminalId);
