@@ -567,9 +567,9 @@ async function checkUserCredits(db: ReturnType<typeof drizzle>, sessionId: strin
       const user = users[0];
       const creditBalance = user.creditBalance || 0;
       
-      // Check if user has at least 100 credits (minimum for a session)
+      // Check if user has at least 1000 credits ($10 minimum)
       return { 
-        hasCredits: creditBalance >= 100, 
+        hasCredits: creditBalance >= 1000, 
         userId: user.id, 
         creditBalance 
       };
@@ -586,12 +586,12 @@ async function checkUserCredits(db: ReturnType<typeof drizzle>, sessionId: strin
     const user = users[0];
     const creditBalance = user.creditBalance || 0;
     
-    // Check if user has at least 100 credits (minimum for a session)
-    return { 
-      hasCredits: creditBalance >= 100, 
-      userId: user.id, 
-      creditBalance 
-    };
+    // Check if user has at least 1000 credits ($10 minimum)
+      return { 
+        hasCredits: creditBalance >= 1000, 
+        userId: user.id, 
+        creditBalance 
+      };
   } catch (error) {
     console.error('[billing-check]', 'Error checking user credits:', error);
     return { hasCredits: false };
