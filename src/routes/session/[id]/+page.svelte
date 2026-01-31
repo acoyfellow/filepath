@@ -39,7 +39,10 @@
     });
     
     return () => {
-      unsubscribe();
+      // Call unsubscribe if it's a function (SvelteKit v2)
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
       if (ws) ws.close();
     };
   });
