@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
   
   try {
     // Verify webhook signature
-    event = stripe().webhooks.constructEvent(
+    event = stripe.webhooks.constructEvent(
       body,
       sig || '',
       import.meta.env.VITE_STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET || ''
