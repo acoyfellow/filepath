@@ -7,6 +7,8 @@
   },
   "dependencies": {
     "@cloudflare/sandbox": "^0.7.0",
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^13.2.2",
     "bits-ui": "^2.15.5",
     "clsx": "^2.1.1",
     "cookie": "^1.1.1",
