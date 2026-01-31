@@ -51,12 +51,6 @@ export function initAuth(db: D1Database, env: any, baseURL: string) {
 
   authBaseURL = baseURL;
   authInstance = betterAuth({
-    trustedOrigins: [
-      "http://localhost:5173",
-      "https://myfilepath.com",
-      "https://*.myfilepath.com",
-      "https://*-filepath-app.coy.workers.dev",
-    ],
     database: drizzleAdapter(drizzleInstance, {
       provider: 'sqlite',
       schema: {

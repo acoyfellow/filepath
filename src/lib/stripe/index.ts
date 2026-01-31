@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 // Initialize Stripe with the secret key
 // In production, this should be loaded from environment variables
 const stripe = new Stripe(import.meta.env.VITE_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-11-15',
+  apiVersion: '2026-01-28.clover',
   typescript: true,
 });
 

@@ -120,6 +120,8 @@ export const apikey = sqliteTable(
     budgetCap: integer("budget_cap"),
     totalUsageMinutes: integer("total_usage_minutes").default(0),
     lastBilledAt: integer("last_billed_at", { mode: "timestamp" }),
+    // Secrets encryption
+    encryptedSecrets: text("encrypted_secrets"),
   },
   (table) => [
     index("apikey_key_idx").on(table.key),

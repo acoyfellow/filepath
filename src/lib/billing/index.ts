@@ -25,7 +25,7 @@ export async function deductUserCredits(userId: string, credits: number): Promis
   
   // First check if user has enough credits
   const users = await db.select().from(user).where(eq(user.id, userId));
-  if (users.length === 0 || users[0].creditBalance < credits) {
+  if (users.length === 0 || users[0].creditBalance === null || users[0].creditBalance < credits) {
     return false;
   }
   
@@ -49,7 +49,7 @@ export async function getUserCreditBalance(userId: string): Promise<number> {
     creditBalance: user.creditBalance
   }).from(user).where(eq(user.id, userId));
   
-  return users.length > 0 ? users[0].creditBalance : 0;
+  return users.length > 0 && users[0].creditBalance !== null ? users[0].creditBalance : 0;
 }
 
 /**
@@ -94,17 +94,17 @@ export async function deductApiKeyCredits(apiKeyId: string, credits: number): Pr
   const apiKey = apiKeys[0];
   
   // Check if API key has enough credits
-  if (apiKey.creditBalance < credits) {
+  if (apiKey.creditBalance === null || apiKey.creditBalance < credits) {
     return false;
   }
   
   // Check if user has enough credits
-  if (apiKey.userCreditBalance < credits) {
+  if (apiKey.userCreditBalance === null || apiKey.userCreditBalance < credits) {
     return false;
   }
   
   // Check budget cap if set
-  if (apiKey.budgetCap !== null && apiKey.creditBalance - credits < 0) {
+  if (apiKey.budgetCap !== null && (apiKey.creditBalance === null || apiKey.creditBalance - credits < 0)) {
     return false;
   }
   
@@ -142,7 +142,7 @@ export async function getApiKeyCreditBalance(apiKeyId: string): Promise<number> 
     creditBalance: apikey.creditBalance
   }).from(apikey).where(eq(apikey.id, apiKeyId));
   
-  return apiKeys.length > 0 ? apiKeys[0].creditBalance : 0;
+  return apiKeys.length > 0 && apiKeys[0].creditBalance !== null ? apiKeys[0].creditBalance : 0;
 }
 
 /**
