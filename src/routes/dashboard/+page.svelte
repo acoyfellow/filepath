@@ -115,7 +115,7 @@
       <div class="border-4 border-black p-12 text-center">
         <h3 class="text-2xl font-black mb-2">NO SESSIONS YET</h3>
         <p class="text-gray-600 mb-6">Create your first terminal session to get started</p>
-        <Button onclick={createNewSession} class="px-6 py-3">
+        <Button on:click={createNewSession} class="px-6 py-3">
           CREATE YOUR FIRST SESSION
         </Button>
       </div>
