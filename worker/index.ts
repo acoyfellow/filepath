@@ -178,7 +178,7 @@ type SessionState = {
 
 type Env = {
   SESSION_DO: DurableObjectNamespace<SessionDO>;
-  Sandbox: any; // Container binding
+  Sandbox: DurableObjectNamespace<Sandbox>; // Container binding
   API_WS_HOST?: string; // e.g. 'api.myfilepath.com'
 };
 
@@ -385,7 +385,7 @@ export default {
           // Create WebSocket pair for client connection
           const pair = new WebSocketPair();
           const [client, server] = Object.values(pair);
-          (server as any).accept();
+          server.accept();
           
           console.info('[terminal/ws]', 'connecting to ttyd', { terminalId });
           
@@ -423,7 +423,7 @@ export default {
           }
           
           const ttydWs = ttydResponse.webSocket;
-          (ttydWs as any).accept?.();
+          ttydWs?.accept?.();
           
           console.info('[terminal/ws]', 'connected to ttyd', { terminalId });
           
