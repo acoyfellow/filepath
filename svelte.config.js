@@ -7,10 +7,7 @@ const dev = process.env.NODE_ENV === 'development';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: { 
-		adapter: dev ? alchemy() : adapter(),
-    experimental: {
-			remoteFunctions: true
-		} 
+		adapter: dev ? alchemy() : adapter()
   },
   compilerOptions: {
 		experimental: {
