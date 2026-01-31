@@ -351,11 +351,14 @@ export default {
           
           // Start ttyd with bash (opencode can be added later)
           console.info('[terminal/start]', 'calling startProcess', { terminalId, command: 'ttyd -W -p 7681 bash' });
+          const startProcessStartTime = Date.now();
           try {
             ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
-            console.info('[terminal/start]', 'startProcess returned', { terminalId });
+            const startProcessDuration = Date.now() - startProcessStartTime;
+            console.info('[terminal/start]', 'startProcess returned', { terminalId, duration: startProcessDuration });
           } catch (error) {
-            console.error('[terminal/start]', 'startProcess failed', { terminalId, error: String(error), errorType: typeof error, errorKeys: typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object' });
+            const startProcessDuration = Date.now() - startProcessStartTime;
+            console.error('[terminal/start]', 'startProcess failed', { terminalId, error: String(error), errorType: typeof error, errorKeys: typeof error === 'object' && error !== null ? Object.keys(error) : 'Not an object', duration: startProcessDuration });
             throw error;
           }
           
