@@ -2,10 +2,13 @@ import { betterAuth, type Auth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
 import { apiKey } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
+import { emailOTP } from 'better-auth/plugins/email-otp';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey } from './schema';
 import { getRequestEvent } from '$app/server';
+import formData from 'form-data';
+import Mailgun from 'mailgun.js';
 
 import type { D1Database, DurableObjectNamespace, Fetcher } from '@cloudflare/workers-types';
 
@@ -101,6 +104,35 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
         rpID: baseURL.includes('localhost') ? 'localhost' : 'myfilepath.com',
         rpName: 'myfilepath',
         origin: baseURL,
+      }),
+      emailOTP({
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          // Only send emails for forget-password type
+          if (type !== 'forget-password') return;
+          
+          const mailgun = new Mailgun(formData);
+          const mg = mailgun.client({
+            username: 'api',
+            key: env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '',
+          });
+
+          const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
+          
+          try {
+            await mg.messages.create(domain, {
+              from: `MyFilePath <noreply@${domain}>`,
+              to: [email],
+              subject: 'Password Reset Request',
+              text: `You requested to reset your password. Use this code: ${otp}`,
+              html: `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
+            });
+          } catch (error) {
+            console.error('Error sending email:', error);
+            throw error;
+          }
+        },
+        otpLength: 6,
+        expiresIn: 60 * 10, // 10 minutes
       }),
     ],
   }) as unknown as Auth;
