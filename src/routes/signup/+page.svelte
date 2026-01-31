@@ -238,7 +238,7 @@
             
             <button
               type="button"
-              on:click={handlePasskeySignUp}
+              onclick={handlePasskeySignUp}
               disabled={isLoading}
               class="w-full px-4 py-3 font-black border-4 border-black bg-black text-white hover:bg-white hover:text-black disabled:opacity-50 mb-4"
             >
