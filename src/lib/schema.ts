@@ -138,7 +138,10 @@ export const apikey = sqliteTable(
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
     creditBalance: integer("credit_balance").default(0),
+    budgetCap: integer("budget_cap"),
     totalUsageMinutes: integer("total_usage_minutes").default(0),
+    encryptedSecrets: text("encrypted_secrets"),
+    metadata: text("metadata"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),

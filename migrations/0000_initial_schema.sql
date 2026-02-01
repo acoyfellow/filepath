@@ -86,7 +86,10 @@ CREATE TABLE "apikey" (
   "expires_at" INTEGER,
   "last_used_at" INTEGER,
   "credit_balance" INTEGER DEFAULT 0,
+  "budget_cap" INTEGER,
   "total_usage_minutes" INTEGER DEFAULT 0,
+  "encrypted_secrets" TEXT,
+  "metadata" TEXT,
   "created_at" INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
   "updated_at" INTEGER NOT NULL
 );
