@@ -7,7 +7,7 @@
 </svelte:head>
 
 <div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
-  <Nav current="docs" />
+  <Nav variant="centered" />
 
   <main class="max-w-2xl mx-auto px-6 py-12">
     <h1 class="text-neutral-100 text-xl font-medium mb-8">Documentation</h1>
