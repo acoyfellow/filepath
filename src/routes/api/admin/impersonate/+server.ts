@@ -11,7 +11,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   try {
-    const { userId } = await request.json();
+    const body: any = await request.json();
+    const { userId } = body;
     
     if (!userId) {
       return json({ error: 'User ID is required' }, { status: 400 });
@@ -29,11 +30,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      let errorData: any = {};
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // Ignore JSON parsing errors
+      }
       throw new Error(`Failed to impersonate user: ${response.status} ${response.statusText} - ${errorData.message || ''}`);
     }
     
-    const impersonatedSession = await response.json();
+    const impersonatedSession: any = await response.json();
 
     return json({ success: true, session: impersonatedSession });
   } catch (error) {

@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ request, locals }) => {
       throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
     }
     
-    const data = await response.json();
+    const data: any = await response.json();
     
     // Transform the data to match what the frontend expects
     const userData = data.users.map((user: any) => ({
