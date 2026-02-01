@@ -1,6 +1,10 @@
 import { relations, sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
+// ============================================
+// Better-Auth Core Tables (required)
+// ============================================
+
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
   name: text("name"),
@@ -10,15 +14,13 @@ export const user = sqliteTable("user", {
     .notNull(),
   image: text("image"),
   banned: integer("banned", { mode: "boolean" }).default(false),
-  role: text("role").default("user"),
-  stripeCustomerId: text("stripe_customer_id"),
-  creditBalance: integer("credit_balance").default(0),
+  role: text("role"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 });
 
@@ -32,7 +34,7 @@ export const session = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .$onUpdate(() => new Date())
       .notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
@@ -67,7 +69,7 @@ export const account = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .$onUpdate(() => new Date())
       .notNull(),
   },
   (table) => [index("account_userId_idx").on(table.userId)],
@@ -84,31 +86,16 @@ export const verification = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .$onUpdate(() => new Date())
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const userRelations = relations(user, ({ many }) => ({
-  sessions: many(session),
-  accounts: many(account),
-}));
+// ============================================
+// Better-Auth Plugin: Passkey
+// ============================================
 
-export const sessionRelations = relations(session, ({ one }) => ({
-  user: one(user, {
-    fields: [session.userId],
-    references: [user.id],
-  }),
-}));
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
-  }),
-}));
 export const passkey = sqliteTable(
   "passkey",
   {
@@ -124,7 +111,6 @@ export const passkey = sqliteTable(
     backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
     transports: text("transports"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    aaguid: text("aaguid"),
   },
   (table) => [
     index("passkey_user_id_idx").on(table.userId),
@@ -132,12 +118,11 @@ export const passkey = sqliteTable(
   ],
 );
 
-export const passkeyRelations = relations(passkey, ({ one }) => ({
-  user: one(user, {
-    fields: [passkey.userId],
-    references: [user.id],
-  }),
-}));export const apikey = sqliteTable(
+// ============================================
+// Better-Auth Plugin: API Key
+// ============================================
+
+export const apikey = sqliteTable(
   "apikey",
   {
     id: text("id").primaryKey(),
@@ -150,18 +135,12 @@ export const passkeyRelations = relations(passkey, ({ one }) => ({
       .references(() => user.id, { onDelete: "cascade" }),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
-    budgetCap: integer("budget_cap"),
-    creditBalance: integer("credit_balance").default(0),
-    totalUsageMinutes: integer("total_usage_minutes").default(0),
-    encryptedSecrets: text("encrypted_secrets"),
-    metadata: text("metadata", { mode: "json" }),
-    permissions: text("permissions", { mode: "json" }),
+    totalUsage: integer("total_usage").default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .$onUpdate(() => new Date())
       .notNull(),
   },
   (table) => [
@@ -169,6 +148,38 @@ export const passkeyRelations = relations(passkey, ({ one }) => ({
     index("apikey_prefix_idx").on(table.prefix),
   ],
 );
+
+// ============================================
+// Relations
+// ============================================
+
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+  passkeys: many(passkey),
+  apikeys: many(apikey),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id],
+  }),
+}));
+
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+  user: one(user, {
+    fields: [passkey.userId],
+    references: [user.id],
+  }),
+}));
 
 export const apikeyRelations = relations(apikey, ({ one }) => ({
   user: one(user, {
