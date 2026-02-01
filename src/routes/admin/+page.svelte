@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   
   let users = $state<Array<{ id: string; email: string; name: string | null; role: string; createdAt: Date }>>([]);
   let isLoading = $state(true);
@@ -25,8 +25,8 @@
         throw new Error('Failed to load users');
       }
       
-      const data = await response.json();
-      users = data.users || [];
+      const result = await response.json() as { users: typeof users };
+      users = result.users || [];
       isLoading = false;
     } catch (err) {
       console.error('Error loading users:', err);

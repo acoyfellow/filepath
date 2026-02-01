@@ -5,7 +5,7 @@
   
   // Load data from page.data
   let balance = 0;
-  let apiKeys: { id: string; name: string | null; prefix: string; budgetCap: number | null }[] = [];
+  let apiKeys: { id: string; name: string | null; prefix: string; budgetCap: number | null; creditBalance: number | null }[] = [];
   
   onMount(async () => {
     const data = $page.data;
@@ -28,26 +28,15 @@
         throw new Error('Failed to create checkout session');
       }
       
-      const { sessionId } = await response.json() as { sessionId: string; };
+      const { url } = await response.json() as { url: string };
       
-      // Redirect to Stripe checkout
-      const stripe = await (await import('@stripe/stripe-js')).loadStripe(
-        import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
-      );
-      
-      if (!stripe) {
-        console.error('Failed to load Stripe');
+      if (!url) {
+        console.error('No checkout URL returned');
         return;
       }
       
       // Redirect to Stripe checkout
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: sessionId
-      });
-      
-      if (error) {
-        console.error('Error redirecting to Stripe:', error);
-      }
+      window.location.href = url;
     } catch (err) {
       console.error('Error initiating purchase:', err);
     }
