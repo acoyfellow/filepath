@@ -6,13 +6,19 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ request, locals }) => {
   const session = await auth.api.getSession({ headers: request.headers });
   
-  if (!session || (session.user as any).role !== 'admin') {
+  if (!session || (session.user as unknown as { role?: string }).role !== 'admin') {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const body: any = await request.json();
-    const { userId } = body;
+    const body: unknown = await request.json();
+    
+    // Type guard for request body
+    if (typeof body !== 'object' || body === null || !('userId' in body) || typeof (body as { userId: unknown }).userId !== 'string') {
+      return json({ error: 'Invalid request body: userId is required' }, { status: 400 });
+    }
+    
+    const { userId } = body as { userId: string };
     
     if (!userId) {
       return json({ error: 'User ID is required' }, { status: 400 });
@@ -30,16 +36,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     });
     
     if (!response.ok) {
-      let errorData: any = {};
+      let errorData: unknown = {};
       try {
         errorData = await response.json();
       } catch (e) {
         // Ignore JSON parsing errors
       }
-      throw new Error(`Failed to impersonate user: ${response.status} ${response.statusText} - ${errorData.message || ''}`);
+      
+      // Type guard for error data
+      let errorMessage = '';
+      if (typeof errorData === 'object' && errorData !== null && 'message' in errorData && typeof (errorData as { message: unknown }).message === 'string') {
+        errorMessage = (errorData as { message: string }).message;
+      }
+      
+      throw new Error(`Failed to impersonate user: ${response.status} ${response.statusText} - ${errorMessage}`);
     }
     
-    const impersonatedSession: any = await response.json();
+    const impersonatedSession: unknown = await response.json();
 
     return json({ success: true, session: impersonatedSession });
   } catch (error) {

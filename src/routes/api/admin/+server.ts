@@ -6,7 +6,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ request, locals }) => {
   const session = await auth.api.getSession({ headers: request.headers });
   
-  if (!session || (session.user as any).role !== 'admin') {
+  if (!session || (session.user as unknown as { role?: string }).role !== 'admin') {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -25,15 +25,20 @@ export const GET: RequestHandler = async ({ request, locals }) => {
       throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
     }
     
-    const data: any = await response.json();
+    const data: unknown = await response.json();
+    
+    // Type guard for the response data
+    if (typeof data !== 'object' || data === null || !('users' in data) || !Array.isArray((data as { users: unknown[] }).users)) {
+      throw new Error('Invalid response format from auth service');
+    }
     
     // Transform the data to match what the frontend expects
-    const userData = data.users.map((user: any) => ({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role || 'user',
-      createdAt: user.createdAt
+    const userData = (data as { users: Array<Record<string, unknown>> }).users.map((user) => ({
+      id: typeof user.id === 'string' ? user.id : '',
+      email: typeof user.email === 'string' ? user.email : '',
+      name: typeof user.name === 'string' ? user.name : null,
+      role: typeof user.role === 'string' ? user.role : 'user',
+      createdAt: user.createdAt instanceof Date ? user.createdAt : new Date(String(user.createdAt))
     }));
 
     return json({ users: userData });
