@@ -46,12 +46,18 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
     const auth = initAuth(db, platform?.env, new URL(request.url).origin);
 
-    const apiKeyResult = await auth.api.verifyApiKey({
-      key: apiKey
-    });
+    let apiKeyResult;
+    try {
+      apiKeyResult = await auth.api.verifyApiKey({
+        key: apiKey
+      });
+    } catch (verifyErr) {
+      console.error('[orchestrator] API key verification error:', verifyErr);
+      throw error(401, 'Invalid API key');
+    }
 
-    if (!apiKeyResult.valid || !apiKeyResult.key) {
-      throw error(401, apiKeyResult.error?.message || 'Invalid API key');
+    if (!apiKeyResult?.valid || !apiKeyResult?.key) {
+      throw error(401, apiKeyResult?.error?.message || 'Invalid API key');
     }
 
     const metadata = apiKeyResult.key.metadata as {
