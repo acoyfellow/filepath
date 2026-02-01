@@ -9,6 +9,7 @@ export const user = sqliteTable("user", {
     .default(false)
     .notNull(),
   image: text("image"),
+  banned: integer("banned", { mode: "boolean" }).default(false),
   role: text("role").default("user"),
   stripeCustomerId: text("stripe_customer_id"),
   creditBalance: integer("credit_balance").default(0),
