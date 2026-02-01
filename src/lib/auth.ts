@@ -1,6 +1,6 @@
 import { betterAuth, type Auth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
-import { apiKey, mcp, multiSession, organization } from 'better-auth/plugins';
+import { apiKey, mcp, multiSession, organization, admin } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -157,6 +157,11 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
       }),
       organization({
         // Organization plugin configuration
+      }),
+      admin({
+        // Admin plugin configuration
+        adminRoles: ['admin'],
+        defaultRole: 'user',
       }),
     ],
   }) as unknown as Auth;
