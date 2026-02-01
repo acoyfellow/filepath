@@ -59,14 +59,16 @@
       <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Agent Interfaces</h2>
       <p class="text-sm text-neutral-500 mb-4">MCP-first. API-native. UI optional.</p>
       <div class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm overflow-x-auto">
-        <pre class="text-neutral-400 font-mono text-xs"># Agent executes task with automatic checkpointing
-POST /api/orchestrator
-Header: x-api-key: &lt;key&gt;
-Body: &lcub;sessionId: "abc-123", task: "npm test"&rcub;
+        <pre class="text-neutral-400 font-mono text-xs"># Session survives context limits
+POST /session/abc-123/exec
+Body: &lcub;command: "npm test"&rcub;
 
-# Container persists between calls
-# State resumes on next execution
-# Artifacts available at /session/:id/files/</pre>
+# 3 hours later, same session
+POST /session/abc-123/exec
+Body: &lcub;command: "cat test-results.json"&rcub;
+
+# Artifacts have addresses
+GET /session/abc-123/files/coverage/</pre>
       </div>
     </section>
 
