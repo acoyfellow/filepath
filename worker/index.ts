@@ -513,18 +513,79 @@ export default {
         }
       }
 
+      // Handle task execution: POST /task/{sessionId}
+      // This endpoint receives tasks from the orchestrator and executes them in a sandbox
+      if (pathname.match(/^\/task\/[^/]+$/) && request.method === 'POST') {
+        const parts = pathname.split('/');
+        const sessionId = parts[2];
+
+        if (!sessionId || sessionId.length > 50) {
+          return withCors(Response.json({ error: 'Invalid session ID' }, { status: 400 }));
+        }
+
+        // Parse request body
+        let body: { task: string; userId: string; apiKeyId: string };
+        try {
+          body = await request.json() as { task: string; userId: string; apiKeyId: string };
+        } catch {
+          return withCors(Response.json({ error: 'Invalid JSON body' }, { status: 400 }));
+        }
+
+        const { task, userId, apiKeyId } = body;
+
+        if (!task || typeof task !== 'string') {
+          return withCors(Response.json({ error: 'Missing or invalid task' }, { status: 400 }));
+        }
+
+        // Create a unique sandbox ID for this task
+        const sandboxId = `task-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${Date.now()}`;
+
+        try {
+          console.info('[task]', 'executing task', { sandboxId, task, userId, apiKeyId });
+
+          const sandbox = getSandbox(env.Sandbox, sandboxId);
+
+          // Execute the command and capture output
+          const execResult = await sandbox.exec(task);
+
+          console.info('[task]', 'task completed', { sandboxId, resultLength: execResult?.stdout?.length || 0 });
+
+          // Extract output - sandbox.exec returns { stdout, stderr, exitCode }
+          const stdout = execResult?.stdout || '';
+          const stderr = execResult?.stderr || '';
+          const exitCode = execResult?.exitCode ?? 0;
+
+          // Trim the result to remove trailing newlines
+          const result = stdout.trim() || stderr.trim();
+
+          return withCors(Response.json({
+            success: exitCode === 0,
+            result,
+            exitCode,
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
+          }));
+        } catch (error) {
+          console.error('[task]', 'task execution failed', { sandboxId, error: String(error) });
+          return withCors(Response.json(
+            { success: false, error: 'Task execution failed', message: String(error) },
+            { status: 500 }
+          ));
+        }
+      }
+
       // Handle session requests: /session/{sessionId}/*
       if (pathname.startsWith('/session/')) {
         const pathParts = pathname.split('/');
         const sessionId = pathParts[2];
-        
+
         if (!sessionId || sessionId.length > 50) {
           return new Response('Invalid session ID', { status: 400 });
         }
 
         const id = env.SESSION_DO.idFromName(sessionId);
         const session = env.SESSION_DO.get(id);
-        
+
         // Forward to DO with remaining path
         const doPath = '/' + pathParts.slice(3).join('/');
         const doUrl = new URL(doPath, request.url);
