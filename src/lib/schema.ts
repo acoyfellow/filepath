@@ -15,6 +15,8 @@ export const user = sqliteTable("user", {
   image: text("image"),
   banned: integer("banned", { mode: "boolean" }).default(false),
   role: text("role"),
+  creditBalance: integer("credit_balance").default(0),
+  stripeCustomerId: text("stripe_customer_id"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -135,7 +137,8 @@ export const apikey = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
-    totalUsage: integer("total_usage").default(0),
+    creditBalance: integer("credit_balance").default(0),
+    totalUsageMinutes: integer("total_usage_minutes").default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
