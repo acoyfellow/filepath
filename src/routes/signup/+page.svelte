@@ -2,23 +2,25 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { signIn, signUp } from '$lib/auth-client';
+  import { signUp } from '$lib/auth-client';
+  import Nav from '$lib/components/Nav.svelte';
+  import { X } from '@lucide/svelte';
   
   let email = $state('');
   let password = $state('');
   let confirmPassword = $state('');
   let isLoading = $state(false);
   let error = $state<string | null>(null);
-  let isSignUp = $state(true);
   
   onMount(() => {
-    // If user is already authenticated, redirect to dashboard
     if (page.data.user) {
       goto('/dashboard');
     }
   });
   
-  async function handleSubmit() {
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    
     if (!email.trim()) {
       error = 'Email is required';
       return;
@@ -29,45 +31,32 @@
       return;
     }
     
-    if (isSignUp) {
-      if (password !== confirmPassword) {
-        error = 'Passwords do not match';
-        return;
-      }
-      
-      if (password.length < 6) {
-        error = 'Password must be at least 6 characters';
-        return;
-      }
+    if (password !== confirmPassword) {
+      error = 'Passwords do not match';
+      return;
+    }
+    
+    if (password.length < 6) {
+      error = 'Password must be at least 6 characters';
+      return;
     }
     
     isLoading = true;
     error = null;
     
     try {
-      if (isSignUp) {
-        const result = await signUp.email({
-          email,
-          password,
-          name: email.split('@')[0]
-        });
-        
-        if (result.error) {
-          error = result.error.message || 'An error occurred';
-          return;
-        }
-        
-        goto('/dashboard');
-      } else {
-        const result = await signIn.email({ email, password });
-        
-        if (result.error) {
-          error = result.error.message || 'An error occurred';
-          return;
-        }
-        
-        goto('/dashboard');
+      const result = await signUp.email({
+        email,
+        password,
+        name: email.split('@')[0]
+      });
+      
+      if (result.error) {
+        error = result.error.message || 'An error occurred';
+        return;
       }
+      
+      goto('/dashboard');
     } catch (err) {
       error = 'An unexpected error occurred. Please try again.';
       console.error(err);
@@ -75,101 +64,85 @@
       isLoading = false;
     }
   }
-  
-  function toggleMode() {
-    isSignUp = !isSignUp;
-    error = null;
-  }
 </script>
 
 <svelte:head>
-  <title>{isSignUp ? 'Sign Up' : 'Sign In'} - myfilepath.com</title>
+  <title>Create Account - myfilepath.com</title>
 </svelte:head>
 
-<div class="min-h-screen bg-white flex items-center justify-center p-4">
-  <div class="w-full max-w-md border-4 border-black bg-white">
-    <div class="p-8">
-      <h1 class="text-3xl font-black mb-2 text-center">{isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}</h1>
-      <p class="text-gray-600 text-center mb-8">{isSignUp ? 'Start your AI agent journey' : 'Welcome back'}</p>
-      
-      {#if error}
-        <div class="bg-red-50 border-4 border-red-500 p-4 mb-6">
-          <p class="text-red-700 font-bold">{error}</p>
-        </div>
-      {/if}
-      
-      <form onsubmit={handleSubmit}>
-        <div class="mb-4">
-          <label for="email" class="block text-sm font-bold mb-2">EMAIL</label>
-          <input
-            id="email"
-            type="email"
-            bind:value={email}
-            class="w-full px-3 py-2 border-4 border-black focus:outline-none focus:ring-0"
-            placeholder="your@email.com"
-            autocomplete="email"
-          />
-        </div>
-        
-        <div class="mb-4">
-          <label for="password" class="block text-sm font-bold mb-2">PASSWORD</label>
-          <input
-            id="password"
-            type="password"
-            bind:value={password}
-            class="w-full px-3 py-2 border-4 border-black focus:outline-none focus:ring-0"
-            placeholder="••••••••"
-            autocomplete={isSignUp ? 'new-password' : 'current-password'}
-          />
-        </div>
-        
-        {#if isSignUp}
-          <div class="mb-6">
-            <label for="confirmPassword" class="block text-sm font-bold mb-2">CONFIRM PASSWORD</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              bind:value={confirmPassword}
-              class="w-full px-3 py-2 border-4 border-black focus:outline-none focus:ring-0"
-              placeholder="••••••••"
-              autocomplete="new-password"
-            />
-          </div>
-        {:else}
-          <div class="mb-6 text-right">
-            <a href="/forgot-password" class="text-sm font-bold underline">Forgot password?</a>
-          </div>
-        {/if}
-        
-        <button
-          type="submit"
-          disabled={isLoading}
-          class="w-full px-4 py-3 font-black border-4 border-black bg-black text-white hover:bg-white hover:text-black disabled:opacity-50 mb-4"
-        >
-          {isLoading ? 'PROCESSING...' : (isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN')}
-        </button>
-      </form>
-      
-      <div class="text-center mt-6">
-        <button 
-          onclick={toggleMode}
-          class="text-black font-bold underline"
-        >
-          {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
+  <Nav variant="centered" />
 
-<style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    background-color: #f5f5f5;
-  }
-  
-  :global(input) {
-    border-radius: 0 !important;
-  }
-</style>
+  <main class="max-w-sm mx-auto px-6 py-20">
+    <div class="text-center mb-8">
+      <svg width="48" height="48" viewBox="0 0 339 339" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-4">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M119.261 35C128.462 35.0001 137.256 38.8378 143.569 45.6083L160.108 63.3453C166.421 70.1159 175.215 73.9536 184.416 73.9536H298.583C317.039 73.9536 332 89.0902 332 107.762V270.191C332 288.863 317.039 304 298.583 304H41.417C22.9613 304 8 288.863 8 270.191V68.8087C8.0001 50.1368 22.9614 35 41.417 35H119.261ZM169.23 219.37V259.415H291.318V219.37H169.23ZM50.7361 111.182L110.398 171.838L51.027 226.311L79.9846 258.994L169.77 173.606L82.022 81.2961L50.7361 111.182Z" fill="currentColor"/>
+      </svg>
+      <h1 class="text-neutral-100 text-lg font-medium">Create your account</h1>
+    </div>
+
+    {#if error}
+      <div class="bg-red-900/50 border border-red-800 text-red-200 px-4 py-3 rounded mb-4 text-sm">
+        {error}
+      </div>
+    {/if}
+
+    <form class="space-y-4" on:submit|preventDefault={handleSubmit}>
+      <div>
+        <label for="email" class="block text-sm text-neutral-500 mb-2">Email</label>
+        <input 
+          id="email"
+          type="email" 
+          bind:value={email}
+          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          placeholder="you@example.com"
+          autocomplete="email"
+          disabled={isLoading}
+        />
+      </div>
+
+      <div>
+        <label for="password" class="block text-sm text-neutral-500 mb-2">Password</label>
+        <input 
+          id="password"
+          type="password" 
+          bind:value={password}
+          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          placeholder="••••••••"
+          autocomplete="new-password"
+          disabled={isLoading}
+        />
+      </div>
+
+      <div>
+        <label for="confirmPassword" class="block text-sm text-neutral-500 mb-2">Confirm Password</label>
+        <input 
+          id="confirmPassword"
+          type="password" 
+          bind:value={confirmPassword}
+          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          placeholder="••••••••"
+          autocomplete="new-password"
+          disabled={isLoading}
+        />
+      </div>
+
+      <button 
+        type="submit"
+        class="w-full bg-neutral-100 text-neutral-950 rounded px-4 py-3 font-medium hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isLoading}
+      >
+        {isLoading ? 'Creating account...' : 'Create account'}
+      </button>
+    </form>
+
+    <div class="mt-6 text-center text-sm">
+      <span class="text-neutral-500">Already have an account?</span>
+      <a href="/login" class="text-neutral-100 hover:underline ml-1">Sign in</a>
+    </div>
+  </main>
+
+  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
+    myfilepath.com
+  </footer>
+</div>
