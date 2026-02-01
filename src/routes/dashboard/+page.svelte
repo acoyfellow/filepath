@@ -10,9 +10,28 @@
   let error = $state<string | null>(null);
   
   onMount(async () => {
-    // TODO: Fetch real sessions from API
-    // For now, show empty state
-    isLoading = false;
+    try {
+      const response = await fetch('/api/session');
+      if (!response.ok) {
+        throw new Error('Failed to fetch sessions');
+      }
+      
+      const data = await response.json() as { sessions: Array<{ id: string; token: string; createdAt: string; updatedAt: string }> };
+      
+      // Transform sessions to match expected format
+      sessions = data.sessions.map(session => ({
+        id: session.token, // Use token as ID for URL routing
+        name: `Session ${session.token.substring(0, 8)}`,
+        createdAt: new Date(session.createdAt),
+        lastActive: new Date(session.updatedAt)
+      }));
+      
+      isLoading = false;
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+      error = 'Failed to load sessions';
+      isLoading = false;
+    }
   });
   
   async function createNewSession() {
