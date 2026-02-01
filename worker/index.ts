@@ -2,8 +2,8 @@ import { DurableObject } from 'cloudflare:workers'
 import { getSandbox, Sandbox } from '@cloudflare/sandbox'
 import type { Process } from '@cloudflare/sandbox'
 import { drizzle } from 'drizzle-orm/d1';
-import { session as sessionTable, user as userTable } from '../src/lib/schema';
-import { eq } from 'drizzle-orm';
+import { session as sessionTable, user as userTable, apikey as apikeyTable } from '../src/lib/schema';
+import { eq, sql } from 'drizzle-orm';
 
 
 // Re-export Sandbox for Container binding
@@ -545,14 +545,28 @@ export default {
             env?: Record<string, string>;
             shell?: string;
             defaultDir?: string;
-            apiKeyId?: string;
+            apiKeyId: string;
             userId?: string;
           };
 
-          const { task, timeout = 30000, env: envVars = {}, shell = 'bash', defaultDir = '/home/user' } = body;
+          const { task, timeout = 30000, env: envVars = {}, shell = 'bash', defaultDir = '/home/user', apiKeyId } = body;
 
           if (!task || typeof task !== 'string') {
             return withCors(Response.json({ error: 'Missing or invalid task' }, { status: 400 }));
+          }
+
+          if (!apiKeyId) {
+            return withCors(Response.json({ error: 'Missing API key ID' }, { status: 401 }));
+          }
+
+          const db = drizzle(env.DB);
+          const creditCheck = await checkApiKeyCredits(db, apiKeyId);
+
+          if (!creditCheck.hasCredits) {
+            return withCors(Response.json(
+              { error: 'Insufficient credits. Please add credits to your API key.' },
+              { status: 402 }
+            ));
           }
 
           const terminalId = `task-${sessionId.replace(/[^a-z0-9-]/gi, '')}`;
@@ -567,10 +581,13 @@ export default {
 
           const result = await sandbox.exec(task, execOptions);
 
+          await deductApiKeyCredits(db, apiKeyId, 1);
+
           return withCors(Response.json({
             success: true,
             result: result.stdout || result.stderr || '',
             exitCode: result.exitCode,
+            creditsRemaining: creditCheck.creditBalance ? creditCheck.creditBalance - 1 : 0,
           }));
         } catch (error) {
           console.error('[task] Error executing task:', error);
@@ -656,5 +673,66 @@ async function checkUserCredits(db: ReturnType<typeof drizzle>, sessionId: strin
   } catch (error) {
     console.error('[billing-check]', 'Error checking user credits:', error);
     return { hasCredits: false };
+  }
+}
+
+/**
+ * Check if an API key has sufficient credits for task execution
+ */
+async function checkApiKeyCredits(db: ReturnType<typeof drizzle>, apiKeyId: string): Promise<{
+  hasCredits: boolean;
+  creditBalance?: number;
+}> {
+  try {
+    const apiKeys = await db.select({
+      creditBalance: apikeyTable.creditBalance
+    }).from(apikeyTable).where(eq(apikeyTable.id, apiKeyId));
+
+    if (apiKeys.length === 0) {
+      return { hasCredits: false };
+    }
+
+    const apiKey = apiKeys[0];
+    const creditBalance = apiKey.creditBalance ?? 0;
+
+    return {
+      hasCredits: creditBalance >= 1,
+      creditBalance
+    };
+  } catch (error) {
+    console.error('[billing-check]', 'Error checking API key credits:', error);
+    return { hasCredits: false };
+  }
+}
+
+/**
+ * Deduct credits from an API key for task execution
+ */
+async function deductApiKeyCredits(db: ReturnType<typeof drizzle>, apiKeyId: string, credits: number): Promise<boolean> {
+  try {
+    const apiKeys = await db.select({
+      creditBalance: apikeyTable.creditBalance
+    }).from(apikeyTable).where(eq(apikeyTable.id, apiKeyId));
+
+    if (apiKeys.length === 0) {
+      return false;
+    }
+
+    const apiKey = apiKeys[0];
+    if (apiKey.creditBalance === null || apiKey.creditBalance < credits) {
+      return false;
+    }
+
+    await db.update(apikeyTable)
+      .set({
+        creditBalance: sql`${apikeyTable.creditBalance} - ${credits}`,
+        totalUsageMinutes: sql`${apikeyTable.totalUsageMinutes} + 1`
+      })
+      .where(eq(apikeyTable.id, apiKeyId));
+
+    return true;
+  } catch (error) {
+    console.error('[billing-check]', 'Error deducting API key credits:', error);
+    return false;
   }
 }
