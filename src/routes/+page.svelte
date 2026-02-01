@@ -1,12 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
 </script>
 
 <svelte:head>
   <title>myfilepath.com</title>
-  <meta name="description" content="Persistent containers for autonomous agent loops." />
+  <meta name="description" content="Where agents persist. Runs survive context limits. Artifacts remain. Recovery is expected." />
 </svelte:head>
 
 <div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
@@ -27,63 +24,90 @@
 
   <!-- Hero -->
   <main class="max-w-2xl mx-auto px-6 py-20">
-    <h1 class="text-neutral-100 text-xl font-medium mb-6">A home for autonomous work.</h1>
+    <h1 class="text-neutral-100 text-2xl font-medium mb-4">Where agents persist.</h1>
     
-    <p class="mb-10 leading-relaxed text-lg">
-      Persistent Linux containers for agent loops. 
-      Runs survive context limits. Artifacts remain. Recovery is expected.
+    <p class="mb-12 leading-relaxed text-lg text-neutral-400">
+      Runs survive context limits. Artifacts remain. Recovery is expected.<br/>
+      <span class="text-neutral-500">Humans supervise. Agents operate.</span>
     </p>
 
-    <!-- Capabilities -->
+    <!-- Guarantees -->
     <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Capabilities</h2>
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Guarantees</h2>
+      <ul class="space-y-3 text-sm">
+        <li class="flex gap-3">
+          <span class="text-neutral-600">→</span>
+          <span>Stateful execution resumes automatically after interruption</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-neutral-600">→</span>
+          <span>Artifacts have explicit addresses and persist indefinitely</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-neutral-600">→</span>
+          <span>Recovery is expected, not exceptional</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-neutral-600">→</span>
+          <span>Container state survives human context limits</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Agent Interfaces -->
+    <section class="mb-12">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Agent Interfaces</h2>
+      <p class="text-sm text-neutral-500 mb-4">MCP-first. API-native. UI optional.</p>
+      <div class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm overflow-x-auto">
+        <pre class="text-neutral-400 font-mono text-xs"># Agent executes task with automatic checkpointing
+POST /api/orchestrator
+Header: x-api-key: &lt;key&gt;
+Body: &lcub;sessionId: "abc-123", task: "npm test"&rcub;
+
+# Container persists between calls
+# State resumes on next execution
+# Artifacts available at /session/:id/files/</pre>
+      </div>
+    </section>
+
+    <!-- Execution Environment -->
+    <section class="mb-12">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Execution Environment</h2>
       <ul class="space-y-2 text-sm">
-        <li>• Full shell access <span class="text-neutral-500 font-mono">(bash, git, npm, etc)</span></li>
-        <li>• Filesystem persists across sessions</li>
-        <li>• Background processes supported</li>
-        <li>• Health checks between runs</li>
-        <li>• Handoff protocol for context limits</li>
+        <li>• Linux containers with full shell access <span class="text-neutral-600 font-mono">(bash, git, npm, python)</span></li>
+        <li>• Filesystem persists across execution contexts</li>
+        <li>• Background processes and long-running jobs</li>
+        <li>• Health checks and automatic recovery</li>
+        <li>• Handoff protocol for context window limits</li>
       </ul>
     </section>
 
     <!-- Pricing -->
     <section class="mb-12">
       <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Pricing</h2>
-      <div class="text-sm space-y-1">
-        <p><span class="text-neutral-100 font-mono">$0.01/min</span> active compute</p>
-        <p><span class="text-neutral-100 font-mono">$0.00/min</span> idle (container sleeps)</p>
-        <p class="text-neutral-500">Prepaid credits. Human approves spend.</p>
+      <div class="text-sm space-y-2">
+        <p><span class="text-neutral-100 font-mono">$0.01/min</span> while executing</p>
+        <p><span class="text-neutral-100 font-mono">$0.00/min</span> while idle (container sleeps)</p>
+        <p class="text-neutral-500 text-xs">Prepaid credits. Human approves spend threshold.</p>
       </div>
     </section>
 
-    <!-- API -->
+    <!-- Boundaries -->
     <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">API</h2>
-      <div class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm overflow-x-auto">
-        <pre class="text-neutral-400 font-mono"><code>POST /api/orchestrator
-Header: x-api-key: &lt;key&gt;
-Body: {JSON.stringify({sessionId: "string", task: "string"})}
-
-Response: {JSON.stringify({success: true, result: "..."})}</code></pre>
-      </div>
-    </section>
-
-    <!-- Limits -->
-    <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Limits</h2>
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Boundaries</h2>
       <ul class="space-y-1 text-sm text-neutral-500">
         <li>• No GPU (yet)</li>
-        <li>• 2GB RAM max</li>
+        <li>• 2GB RAM per container</li>
         <li>• Cloudflare network egress</li>
-        <li>• Container sleeps after 5min idle</li>
+        <li>• Sleep after 5min idle (state preserved)</li>
       </ul>
     </section>
 
     <!-- CTA -->
     <section class="border-t border-neutral-800 pt-8">
-      <a href="/login" class="text-neutral-100 hover:underline">→ Get started</a>
+      <a href="/login" class="text-neutral-100 hover:underline">→ Start executing</a>
       <span class="text-neutral-600 ml-4">or</span>
-      <a href="/docs" class="text-neutral-400 hover:underline ml-2">read docs</a>
+      <a href="/docs" class="text-neutral-400 hover:underline ml-2">read the spec</a>
     </section>
   </main>
 
