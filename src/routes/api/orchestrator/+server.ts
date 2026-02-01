@@ -21,6 +21,23 @@ export const POST: RequestHandler = async ({ request, platform }) => {
     throw error(401, 'Missing x-api-key header');
   }
 
+  let body: OrchestratorRequest;
+  try {
+    body = await request.json();
+  } catch {
+    throw error(400, 'Invalid JSON body');
+  }
+
+  const { sessionId, task, timeout = 30000 } = body;
+
+  if (!sessionId || typeof sessionId !== 'string') {
+    throw error(400, 'Missing or invalid sessionId');
+  }
+
+  if (!task || typeof task !== 'string') {
+    throw error(400, 'Missing or invalid task');
+  }
+
   try {
     const db = platform?.env?.DB;
     if (!db) {
@@ -35,23 +52,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
     if (!apiKeyResult.valid || !apiKeyResult.key) {
       throw error(401, apiKeyResult.error?.message || 'Invalid API key');
-    }
-
-    let body: OrchestratorRequest;
-    try {
-      body = await request.json();
-    } catch {
-      throw error(400, 'Invalid JSON body');
-    }
-
-    const { sessionId, task, timeout = 30000 } = body;
-
-    if (!sessionId || typeof sessionId !== 'string') {
-      throw error(400, 'Missing or invalid sessionId');
-    }
-
-    if (!task || typeof task !== 'string') {
-      throw error(400, 'Missing or invalid task');
     }
 
     const metadata = apiKeyResult.key.metadata as {
@@ -69,7 +69,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       throw error(500, 'Worker service not available');
     }
 
-    // Call worker task endpoint via service binding with internal path
     const taskUrl = new URL(request.url);
     taskUrl.pathname = `/task/${sessionId}`;
 
