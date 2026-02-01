@@ -35,13 +35,13 @@
     
     // Handle navigation away from page
     afterNavigate(() => {
-      if (ws) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
       }
     });
     
     return () => {
-      if (ws) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
       }
     };
