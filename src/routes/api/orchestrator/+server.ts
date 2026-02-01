@@ -69,26 +69,23 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       throw error(500, 'Worker service not available');
     }
 
-    const taskRequest = new Request(
-      `https://internal/task/${sessionId}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          task,
-          timeout,
-          env: envVars,
-          shell,
-          defaultDir,
-          apiKeyId: apiKeyResult.key.id,
-          userId: apiKeyResult.key.userId,
-        }),
-      }
-    );
+    // Call worker task endpoint via service binding with internal path
+    const taskUrl = new URL(request.url);
+    taskUrl.pathname = `/task/${sessionId}`;
 
-    const taskResponse = await worker.fetch(taskRequest);
+    const taskResponse = await worker.fetch(new Request(taskUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task,
+        timeout,
+        env: envVars,
+        shell,
+        defaultDir,
+        apiKeyId: apiKeyResult.key.id,
+        userId: apiKeyResult.key.userId,
+      }),
+    }));
 
     if (!taskResponse.ok) {
       const errorBody = await taskResponse.text();
