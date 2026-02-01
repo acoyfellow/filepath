@@ -8,6 +8,8 @@ CREATE TABLE "user" (
   "image" TEXT,
   "banned" INTEGER DEFAULT 0,
   "role" TEXT,
+  "credit_balance" INTEGER DEFAULT 0,
+  "stripe_customer_id" TEXT,
   "created_at" INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
   "updated_at" INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
@@ -83,17 +85,11 @@ CREATE TABLE "apikey" (
   "user_id" TEXT NOT NULL REFERENCES "user"("id") ON DELETE cascade,
   "expires_at" INTEGER,
   "last_used_at" INTEGER,
-  "total_usage" INTEGER DEFAULT 0,
+  "credit_balance" INTEGER DEFAULT 0,
+  "total_usage_minutes" INTEGER DEFAULT 0,
   "created_at" INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
   "updated_at" INTEGER NOT NULL
 );
 
 CREATE INDEX "apikey_user_id_idx" ON "apikey" ("user_id");
 CREATE INDEX "apikey_prefix_idx" ON "apikey" ("prefix");
-
--- Metadata table for Drizzle
-CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "hash" TEXT NOT NULL UNIQUE,
-  "created_at" INTEGER DEFAULT (cast(unixepoch('subsecond') * 1000 as integer))
-);
