@@ -25,9 +25,8 @@ export function getDrizzle(): ReturnType<typeof drizzle> {
 
 interface AuthEnv {
   BETTER_AUTH_SECRET?: string;
-  SESSION_DO?: DurableObjectNamespace;
-  WORKER?: Fetcher;
-  DB?: D1Database;
+  MAILGUN_API_KEY?: string;
+  MAILGUN_DOMAIN?: string;
   [key: string]: unknown;
 }
 
