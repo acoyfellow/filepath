@@ -99,6 +99,8 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_URL: isProd 
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
+    MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
+    MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },
   // Custom routing: terminal and session endpoints go to worker
   // This matches the working React version's architecture
