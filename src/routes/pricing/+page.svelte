@@ -100,7 +100,10 @@
     </section>
   </main>
 
-  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
-    myfilepath.com
+  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono space-y-2">
+    <div>myfilepath.com</div>
+    <div class="text-neutral-500">
+      <a href="https://github.com/acoyfellow/filepath" class="hover:text-neutral-300 transition-colors">Open source on GitHub</a>
+    </div>
   </footer>
 </div>
