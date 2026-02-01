@@ -131,7 +131,7 @@
                 <td class="py-2 px-4 font-mono text-sm">
                   {apiKey.prefix}
                 </td>
-                <td class="py-2 px-4">N/A</td>
+                <td class="py-2 px-4">{apiKey.creditBalance !== null ? `${apiKey.creditBalance} credits` : 'N/A'}</td>
                 <td class="py-2 px-4">
                   {apiKey.budgetCap !== null ? `${apiKey.budgetCap} credits` : 'No cap'}
                 </td>
