@@ -106,6 +106,7 @@
           bind:value={password}
           class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
           placeholder="********"
+          autocomplete="current-password"
           required
           disabled={isLoading}
         />
