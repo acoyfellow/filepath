@@ -12,14 +12,16 @@ export const GET: RequestHandler = async ({ request, locals }) => {
 
   try {
     // Get all users from the database
-    const users = await auth.api.listUsers();
+    const users = await auth.api.listUsers({
+      fetchOptions: { headers: request.headers }
+    });
     
     // Transform the data to match what the frontend expects
     const userData = users.map(user => ({
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: user.role || 'user',
       createdAt: user.createdAt
     }));
 
