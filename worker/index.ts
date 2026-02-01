@@ -517,18 +517,68 @@ export default {
       if (pathname.startsWith('/session/')) {
         const pathParts = pathname.split('/');
         const sessionId = pathParts[2];
-        
+
         if (!sessionId || sessionId.length > 50) {
           return new Response('Invalid session ID', { status: 400 });
         }
 
         const id = env.SESSION_DO.idFromName(sessionId);
         const session = env.SESSION_DO.get(id);
-        
-        // Forward to DO with remaining path
+
         const doPath = '/' + pathParts.slice(3).join('/');
         const doUrl = new URL(doPath, request.url);
         return await session.fetch(new Request(doUrl, request));
+      }
+
+      const taskMatch = pathname.match(/^\/task\/([^\/]+)$/);
+      if (taskMatch && request.method === 'POST') {
+        const sessionId = taskMatch[1];
+
+        if (!sessionId || sessionId.length > 50) {
+          return withCors(Response.json({ error: 'Invalid session ID' }, { status: 400 }));
+        }
+
+        try {
+          const body = await request.json() as {
+            task: string;
+            timeout?: number;
+            env?: Record<string, string>;
+            shell?: string;
+            defaultDir?: string;
+            apiKeyId?: string;
+            userId?: string;
+          };
+
+          const { task, timeout = 30000, env: envVars = {}, shell = 'bash', defaultDir = '/home/user' } = body;
+
+          if (!task || typeof task !== 'string') {
+            return withCors(Response.json({ error: 'Missing or invalid task' }, { status: 400 }));
+          }
+
+          const terminalId = `task-${sessionId.replace(/[^a-z0-9-]/gi, '')}`;
+
+          const sandbox = getSandbox(env.Sandbox, terminalId);
+
+          const execOptions = {
+            env: envVars,
+            cwd: defaultDir,
+            timeout,
+          };
+
+          const result = await sandbox.exec(task, execOptions);
+
+          return withCors(Response.json({
+            success: true,
+            result: result.stdout || result.stderr || '',
+            exitCode: result.exitCode,
+          }));
+        } catch (error) {
+          console.error('[task] Error executing task:', error);
+          return withCors(Response.json(
+            { success: false, error: String(error) },
+            { status: 500 }
+          ));
+        }
       }
 
       return new Response("Not found", { status: 404 });
