@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { getDrizzle } from '$lib/auth';
-import { session as sessionTable } from '$lib/schema';
+import { session as sessionTable, user as userTable } from '$lib/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -25,6 +25,20 @@ export const POST: RequestHandler = async ({ locals }) => {
   try {
     const db = getDrizzle();
     
+    // Check user's credit balance before creating session
+    const users = await db.select().from(userTable).where(eq(userTable.id, locals.user.id));
+    if (users.length === 0) {
+      throw error(404, 'User not found');
+    }
+    
+    const user = users[0];
+    const creditBalance = user.creditBalance || 0;
+    
+    // Check if user has at least $10 (1000 credits)
+    if (creditBalance < 1000) {
+      throw error(402, 'Insufficient credits. Please add credits to your account to create a session. Minimum $10 (1000 credits) required.');
+    }
+    
     // Create a new session for the user
     const sessionToken = generateId(32);
     const newSession = {
@@ -46,6 +60,9 @@ export const POST: RequestHandler = async ({ locals }) => {
       message: 'Session created successfully' 
     });
   } catch (err) {
+    if (err instanceof Error && err.message.includes('Insufficient credits')) {
+      throw error(402, err.message);
+    }
     console.error('Error creating session:', err);
     throw error(500, 'Failed to create session');
   }
