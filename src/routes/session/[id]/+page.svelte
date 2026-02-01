@@ -16,7 +16,7 @@
   let terminalStatus = $state<Record<string, string>>({
     tab1: 'ready'
   });
-  let ws: WebSocket | null = $state(null);
+  let ws = $state<WebSocket | null>(null);
   
   // Terminal iframe refs
   let iframeRefs = $state<Record<string, HTMLIFrameElement | null>>({});
