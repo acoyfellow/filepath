@@ -15,6 +15,32 @@ function generateId(length: number): string {
 }
 
 /**
+ * GET /api/session - Get all sessions for the authenticated user
+ */
+export const GET: RequestHandler = async ({ locals }) => {
+  if (!locals.user) {
+    throw error(401, 'Unauthorized');
+  }
+  
+  try {
+    const db = getDrizzle();
+    
+    // Get all sessions for the user
+    const sessions = await db.select({
+      id: sessionTable.id,
+      token: sessionTable.token,
+      createdAt: sessionTable.createdAt,
+      updatedAt: sessionTable.updatedAt
+    }).from(sessionTable).where(eq(sessionTable.userId, locals.user.id));
+    
+    return json({ sessions });
+  } catch (err) {
+    console.error('Error fetching sessions:', err);
+    throw error(500, 'Failed to fetch sessions');
+  }
+};
+
+/**
  * POST /api/session - Create a new session for the authenticated user
  */
 export const POST: RequestHandler = async ({ locals }) => {
