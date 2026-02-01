@@ -117,11 +117,11 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
           const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
           
           // Type assertion for Mailgun client methods
-          const typedMg = mg as any;
+          const mgClient = mg;
           
           try {
             if (type === 'forget-password') {
-              await typedMg.messages.create(domain, {
+              await mgClient.messages.create(domain, {
                 from: `MyFilePath <support@${domain}>`,
                 to: [email],
                 subject: 'Password Reset Request',
@@ -130,7 +130,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
               });
             } else if (type === 'email-verification') {
               // Welcome email for new users
-              await typedMg.messages.create(domain, {
+              await mgClient.messages.create(domain, {
                 from: `MyFilePath <support@${domain}>`,
                 to: [email],
                 subject: 'Welcome to MyFilePath!',
