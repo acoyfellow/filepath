@@ -1,4 +1,53 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import { signIn } from '$lib/auth-client';
+  
+  let email = $state('');
+  let password = $state('');
+  let isLoading = $state(false);
+  let error = $state<string | null>(null);
+  
+  onMount(() => {
+    // If user is already authenticated, redirect to dashboard
+    if (page.data.user) {
+      goto('/dashboard');
+    }
+  });
+  
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    
+    if (!email.trim()) {
+      error = 'Email is required';
+      return;
+    }
+    
+    if (!password.trim()) {
+      error = 'Password is required';
+      return;
+    }
+    
+    isLoading = true;
+    error = null;
+    
+    try {
+      const result = await signIn.email({ email, password });
+      
+      if (result.error) {
+        error = result.error.message || 'Invalid email or password';
+        return;
+      }
+      
+      goto('/dashboard');
+    } catch (err) {
+      error = 'An unexpected error occurred. Please try again.';
+      console.error(err);
+    } finally {
+      isLoading = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -29,16 +78,23 @@
       <h1 class="text-neutral-100 text-lg font-medium">Sign in to myfilepath.com</h1>
     </div>
 
-    <form class="space-y-4" method="POST">
+    {#if error}
+      <div class="bg-red-900/50 border border-red-800 text-red-200 px-4 py-3 rounded mb-4 text-sm">
+        {error}
+      </div>
+    {/if}
+
+    <form class="space-y-4" on:submit|preventDefault={handleSubmit}>
       <div>
         <label for="email" class="block text-sm text-neutral-500 mb-2">Email</label>
         <input 
           id="email"
           type="email" 
-          name="email"
+          bind:value={email}
           class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
           placeholder="you@example.com"
           required
+          disabled={isLoading}
         />
       </div>
       
@@ -47,23 +103,25 @@
         <input 
           id="password"
           type="password" 
-          name="password"
+          bind:value={password}
           class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
           placeholder="********"
           required
+          disabled={isLoading}
         />
       </div>
 
       <button 
         type="submit"
-        class="w-full bg-neutral-100 text-neutral-950 rounded px-4 py-3 font-medium hover:bg-neutral-200 transition-colors"
+        class="w-full bg-neutral-100 text-neutral-950 rounded px-4 py-3 font-medium hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isLoading}
       >
-        Sign in
+        {isLoading ? 'Signing in...' : 'Sign in'}
       </button>
     </form>
 
     <div class="mt-6 text-center text-sm">
-      <span class="text-neutral-500">Do not have an account?</span>
+      <span class="text-neutral-500">Don't have an account?</span>
       <a href="/signup" class="text-neutral-100 hover:underline ml-1">Sign up</a>
     </div>
 
