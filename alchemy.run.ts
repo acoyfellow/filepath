@@ -46,12 +46,14 @@ const DB = await D1Database(`${projectName}-db`, {
 });
 
 // Container for terminal sandboxes
+// Platform set to linux/amd64 because Cloudflare sandbox image only supports AMD64
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
   adopt: true,
   build: {
     context: ".",
     dockerfile: "Dockerfile",
+    platform: "linux/amd64",
   },
   instanceType: "standard",
   maxInstances: 15,
