@@ -9,8 +9,8 @@
 
 
 
-<!-- <div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans relative z-10 pointer-events-none">
-  <div class="bg-black min-h-screen  z-0 absolute inset-0 opacity-10">
+ <div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans relative z-10 ">
+  <!-- <div class="bg-black min-h-screen  z-0 absolute inset-0 opacity-10">
   <img src="/bg.jpg" alt="Background" class="absolute inset-0 w-full h-full object-cover z-0"/>
   <div class="absolute bottom-0 left-0 w-full h-1/2 bg-linear-to-t from-neutral-950 to-transparent z-10"></div>
 </div> -->
@@ -102,9 +102,9 @@ GET /session/abc-123/files/coverage/</pre>
 
     <!-- CTA -->
     <section class="border-t border-neutral-800 pt-8">
-      <a href="/login" class="text-neutral-100 hover:underline">→ Start executing</a>
-      <span class="text-neutral-600 ml-4">or</span>
-      <a href="/docs" class="text-neutral-400 hover:underline ml-2">read the spec</a>
+      <a href="/docs" class="text-neutral-400 hover:underline ml-2">read the docs</a>
+      <span class="text-neutral-600 mx-4">or</span>
+      <a href="/login" class="text-neutral-100 hover:underline">Start executing → </a>
     </section>
   </main>
 
@@ -114,7 +114,7 @@ GET /session/abc-123/files/coverage/</pre>
     <div class="text-neutral-500">
       <a href="https://github.com/acoyfellow/filepath" class="hover:text-neutral-300 transition-colors">Open source on GitHub</a>
       <span class="mx-2">•</span>
-      <span>Hosted: $0.01/min while executing</span>
+      <span>Hosted: <span class="text-neutral-100 font-mono">$0.01/min</span> per active container</span>
     </div>
   </footer>
 </div>
