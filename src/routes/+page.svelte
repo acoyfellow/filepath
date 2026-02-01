@@ -9,11 +9,11 @@
 
 
 
-<div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans relative z-10">
+<!-- <div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans relative z-10 pointer-events-none">
   <div class="bg-black min-h-screen  z-0 absolute inset-0 opacity-10">
   <img src="/bg.jpg" alt="Background" class="absolute inset-0 w-full h-full object-cover z-0"/>
   <div class="absolute bottom-0 left-0 w-full h-1/2 bg-linear-to-t from-neutral-950 to-transparent z-10"></div>
-</div>
+</div> -->
 
   <Nav variant="centered" />
 
