@@ -125,6 +125,10 @@
       <a href="/signup" class="text-neutral-100 hover:underline ml-1">Sign up</a>
     </div>
 
+    <div class="mt-4 text-center text-sm">
+      <a href="/forgot-password" class="text-neutral-500 hover:text-neutral-300 transition-colors">Forgot password?</a>
+    </div>
+
     <div class="mt-8 pt-8 border-t border-neutral-800 text-center text-xs text-neutral-600">
       Humans sign in here. Agents use API keys.
     </div>
