@@ -39,3 +39,27 @@ if [ "$ERRORS" -gt 0 ] 2>/dev/null; then
   exit 1
 fi
 echo "✅ Build passes"
+
+echo ""
+echo "=== GITHUB ACTIONS ==="
+LATEST_RUN=$(gh run list --limit 1 --json conclusion,headBranch,name,databaseId,createdAt 2>/dev/null)
+if [ -n "$LATEST_RUN" ]; then
+  CONCLUSION=$(echo "$LATEST_RUN" | jq -r '.[0].conclusion // "in_progress"')
+  BRANCH=$(echo "$LATEST_RUN" | jq -r '.[0].headBranch')
+  RUN_ID=$(echo "$LATEST_RUN" | jq -r '.[0].databaseId')
+  
+  if [ "$CONCLUSION" = "failure" ]; then
+    echo "❌ Latest deploy FAILED on $BRANCH (run $RUN_ID)"
+    echo ""
+    echo "Debug with: gh run view $RUN_ID --log 2>/dev/null | tail -50"
+    echo ""
+    # Show the actual error
+    gh run view $RUN_ID --log 2>/dev/null | grep -A5 "error\|ERROR\|failed" | head -20
+  elif [ "$CONCLUSION" = "success" ]; then
+    echo "✅ Latest deploy succeeded on $BRANCH"
+  else
+    echo "⏳ Deploy in progress on $BRANCH"
+  fi
+else
+  echo "⚠️ Could not check GitHub Actions (gh not configured?)"
+fi

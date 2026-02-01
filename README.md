@@ -129,3 +129,36 @@ if (!wsHeaders.get('Sec-WebSocket-Protocol')) {
 }
 const wsRequest = new Request(wsUrl, { headers: wsHeaders, method: 'GET' });
 ```
+
+## GitHub Actions Debugging
+
+Deploy runs on every push. Check status and debug failures:
+
+```bash
+# List recent runs
+gh run list --limit 5
+
+# View logs for a failed run
+gh run view <RUN_ID> --log 2>/dev/null | tail -100
+
+# Quick failure diagnosis
+gh run view <RUN_ID> --log 2>/dev/null | grep -A5 "error\|ERROR\|failed" | head -30
+
+# Re-run a failed workflow
+gh run rerun <RUN_ID>
+```
+
+**Common failures:**
+
+1. **Alchemy state decryption error** - `ALCHEMY_PASSWORD` mismatch between local and GH secrets
+   - Fix: Ensure `.env` ALCHEMY_PASSWORD matches the GitHub secret
+   - Or reset state: delete alchemy state in Cloudflare and redeploy
+
+2. **Type errors** - Build fails on tsc
+   - Fix: Run `npx tsc --noEmit` locally and fix errors before pushing
+
+3. **Missing secrets** - Environment variables not set
+   - Check: `gh secret list` to see configured secrets
+   - Required: ALCHEMY_PASSWORD, ALCHEMY_STATE_TOKEN, CLOUDFLARE_*, BETTER_AUTH_SECRET
+
+**The health check (`gates/health.sh`) automatically checks GH Actions status.**
