@@ -107,8 +107,8 @@ export const APP = await SvelteKit(`${projectName}-app`, {
       async fetch(request, env, ctx) {
         const url = new URL(request.url);
         
-        // Route terminal/* and session/* to worker (like the React version)
-        // Worker handles: HTML pages, WebSocket, start/close endpoints
+        // Route terminal/*, session/* to worker
+        // Worker handles: HTML pages, WebSocket, start/close endpoints, task execution
         if (
           url.pathname.startsWith('/terminal/') ||
           url.pathname.startsWith('/session/') ||
