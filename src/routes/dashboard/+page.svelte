@@ -18,31 +18,31 @@
   async function createNewSession() {
     try {
       // Check user's credit balance before creating session
-      const response = await fetch('/api/billing/balance');
-      if (!response.ok) {
+      const balanceResponse = await fetch('/api/billing/balance');
+      if (!balanceResponse.ok) {
         throw new Error('Failed to check credit balance');
       }
       
-      const { balance } = await response.json();
+      const balanceData = await balanceResponse.json() as { balance: number };
       
       // Check if user has at least $10 (1000 credits)
-      if (balance < 1000) {
+      if (balanceData.balance < 1000) {
         error = 'Insufficient credits. Please add credits to your account to create a session. Minimum $10 (1000 credits) required.';
         return;
       }
       
       // Call API to create a new session
-      const response = await fetch('/api/session', { method: 'POST' });
+      const sessionResponse = await fetch('/api/session', { method: 'POST' });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+      if (!sessionResponse.ok) {
+        const errorData = await sessionResponse.json().catch(() => ({})) as { message?: string };
         throw new Error(errorData.message || 'Failed to create session');
       }
       
-      const { sessionId } = await response.json();
+      const sessionData = await sessionResponse.json() as { sessionId: string };
       
       // Navigate to the new session
-      goto(`/session/${sessionId}`);
+      goto(`/session/${sessionData.sessionId}`);
     } catch (err) {
       console.error('Error creating session:', err);
       error = 'Failed to create session. Please try again.';
