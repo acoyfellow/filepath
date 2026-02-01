@@ -31,19 +31,18 @@
         return;
       }
       
-      // In a real implementation, we would call an API to create a new session
-      const newSessionId = 'session-' + (sessions.length + 1);
-      const newSession = {
-        id: newSessionId,
-        name: 'New Session ' + (sessions.length + 1),
-        createdAt: new Date(),
-        lastActive: new Date()
-      };
+      // Call API to create a new session
+      const response = await fetch('/api/session', { method: 'POST' });
       
-      sessions = [newSession, ...sessions];
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to create session');
+      }
+      
+      const { sessionId } = await response.json();
       
       // Navigate to the new session
-      goto(`/session/${newSessionId}`);
+      goto(`/session/${sessionId}`);
     } catch (err) {
       console.error('Error creating session:', err);
       error = 'Failed to create session. Please try again.';
