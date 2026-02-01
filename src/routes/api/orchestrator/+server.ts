@@ -1,5 +1,7 @@
 import { json, error } from '@sveltejs/kit';
-import { initAuth } from '$lib/auth';
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import { apikey } from '$lib/schema';
 import type { RequestHandler } from './$types';
 
 interface OrchestratorRequest {
@@ -14,10 +16,61 @@ interface OrchestratorResponse {
   error?: string;
 }
 
-export const POST: RequestHandler = async ({ request, platform }) => {
-  const apiKey = request.headers.get('x-api-key');
+async function hashApiKey(key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(key);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  if (!apiKey) {
+async function verifyApiKey(
+  db: ReturnType<typeof drizzle>,
+  key: string
+): Promise<{
+  valid: boolean;
+  key?: typeof apikey.$inferSelect;
+  error?: { message: string };
+}> {
+  try {
+    const hashedKey = await hashApiKey(key);
+
+    const keys = await db
+      .select()
+      .from(apikey)
+      .where(eq(apikey.hashedKey, hashedKey))
+      .limit(1);
+
+    if (keys.length === 0) {
+      return { valid: false, error: { message: 'Invalid API key' } };
+    }
+
+    const keyRecord = keys[0];
+
+    if (keyRecord.expiresAt && keyRecord.expiresAt.getTime() < Date.now()) {
+      return { valid: false, error: { message: 'API key has expired' } };
+    }
+
+    if (keyRecord.creditBalance !== null && keyRecord.creditBalance <= 0) {
+      return { valid: false, error: { message: 'Insufficient credits' } };
+    }
+
+    await db
+      .update(apikey)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(apikey.id, keyRecord.id));
+
+    return { valid: true, key: keyRecord };
+  } catch (err) {
+    console.error('[orchestrator] Error verifying API key:', err);
+    return { valid: false, error: { message: 'Error verifying API key' } };
+  }
+}
+
+export const POST: RequestHandler = async ({ request, platform }) => {
+  const apiKeyHeader = request.headers.get('x-api-key');
+
+  if (!apiKeyHeader) {
     throw error(401, 'Missing x-api-key header');
   }
 
@@ -44,31 +97,23 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       throw error(500, 'Database not available');
     }
 
-    const auth = initAuth(db, platform?.env, new URL(request.url).origin);
+    const drizzleDb = drizzle(db);
+    const apiKeyResult = await verifyApiKey(drizzleDb, apiKeyHeader);
 
-    let apiKeyResult;
-    try {
-      apiKeyResult = await auth.api.verifyApiKey({
-        key: apiKey
-      });
-    } catch (verifyErr) {
-      console.error('[orchestrator] API key verification error:', verifyErr);
-      throw error(401, 'Invalid API key');
+    if (!apiKeyResult.valid || !apiKeyResult.key) {
+      throw error(401, apiKeyResult.error?.message || 'Invalid API key');
     }
 
-    if (!apiKeyResult?.valid || !apiKeyResult?.key) {
-      throw error(401, apiKeyResult?.error?.message || 'Invalid API key');
-    }
-
-    const metadata = apiKeyResult.key.metadata as {
+    const keyRecord = apiKeyResult.key;
+    const metadata = (keyRecord.metadata || {}) as {
       secrets?: Record<string, string>;
       shell?: string;
       defaultDir?: string;
-    } | undefined;
+    };
 
-    const envVars = metadata?.secrets || {};
-    const shell = metadata?.shell || 'bash';
-    const defaultDir = metadata?.defaultDir || '/home/user';
+    const envVars = metadata.secrets || {};
+    const shell = metadata.shell || 'bash';
+    const defaultDir = metadata.defaultDir || '/home/user';
 
     const worker = platform?.env?.WORKER;
     if (!worker) {
@@ -87,8 +132,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
         env: envVars,
         shell,
         defaultDir,
-        apiKeyId: apiKeyResult.key.id,
-        userId: apiKeyResult.key.userId,
+        apiKeyId: keyRecord.id,
+        userId: keyRecord.userId,
       }),
     }));
 
@@ -98,7 +143,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
     }
 
     const result = await taskResponse.json() as OrchestratorResponse;
-
     return json(result);
 
   } catch (err) {

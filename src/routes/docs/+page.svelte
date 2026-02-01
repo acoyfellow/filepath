@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { PUBLIC_APP_NAME } from '$env/static/public';
 </script>
 
 <svelte:head>
-  <title>Docs - {PUBLIC_APP_NAME}</title>
+  <title>Docs - myfilepath.com</title>
 </svelte:head>
 
 <div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
@@ -13,7 +12,7 @@
       <svg width="24" height="24" viewBox="0 0 339 339" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path fill-rule="evenodd" clip-rule="evenodd" d="M119.261 35C128.462 35.0001 137.256 38.8378 143.569 45.6083L160.108 63.3453C166.421 70.1159 175.215 73.9536 184.416 73.9536H298.583C317.039 73.9536 332 89.0902 332 107.762V270.191C332 288.863 317.039 304 298.583 304H41.417C22.9613 304 8 288.863 8 270.191V68.8087C8.0001 50.1368 22.9614 35 41.417 35H119.261ZM169.23 219.37V259.415H291.318V219.37H169.23ZM50.7361 111.182L110.398 171.838L51.027 226.311L79.9846 258.994L169.77 173.606L82.022 81.2961L50.7361 111.182Z" fill="currentColor"/>
       </svg>
-      <span class="text-neutral-100 font-medium">{PUBLIC_APP_NAME}</span>
+      <span class="text-neutral-100 font-medium">myfilepath.com</span>
     </a>
     <div class="flex gap-6 text-sm">
       <a href="/docs" class="text-neutral-100">docs</a>
@@ -38,7 +37,7 @@
         <li>
           <span class="text-neutral-500">3.</span> Agent calls orchestrator API:
           <div class="bg-neutral-900 border border-neutral-800 rounded p-4 mt-2 overflow-x-auto">
-            <pre class="text-neutral-400 font-mono text-xs"><code>curl -X POST https://{PUBLIC_APP_NAME}/api/orchestrator \
+            <pre class="text-neutral-400 font-mono text-xs"><code>curl -X POST https://myfilepath.com/api/orchestrator \
   -H "x-api-key: fp_xxxx" \
   -H "Content-Type: application/json" \
   -d '{JSON.stringify({sessionId: "my-session", task: "echo hello"})}'</code></pre>
@@ -137,6 +136,6 @@
   </main>
 
   <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
-    {PUBLIC_APP_NAME}
+    myfilepath.com
   </footer>
 </div>
