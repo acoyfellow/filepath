@@ -100,14 +100,16 @@
         <div>
           <h3 class="font-mono text-sm text-neutral-100 mb-2">Headers</h3>
           <table class="w-full text-sm">
-            <tr class="border-b border-neutral-800">
-              <td class="py-2 font-mono text-neutral-400">x-api-key</td>
-              <td class="py-2 text-neutral-500">Required. Your API key.</td>
-            </tr>
-            <tr class="border-b border-neutral-800">
-              <td class="py-2 font-mono text-neutral-400">Content-Type</td>
-              <td class="py-2 text-neutral-500">application/json</td>
-            </tr>
+            <tbody>
+              <tr class="border-b border-neutral-800">
+                <td class="py-2 font-mono text-neutral-400">x-api-key</td>
+                <td class="py-2 text-neutral-500">Required. Your API key.</td>
+              </tr>
+              <tr class="border-b border-neutral-800">
+                <td class="py-2 font-mono text-neutral-400">Content-Type</td>
+                <td class="py-2 text-neutral-500">application/json</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
