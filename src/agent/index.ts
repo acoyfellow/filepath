@@ -1,7 +1,5 @@
 import { Agent } from 'agents';
 import type { Env } from '../types';
-import { executeTask } from './workflows/execute-task';
-import { createSession } from './workflows/create-session';
 
 /**
  * TaskAgent handles incoming requests from agents (API key auth)
@@ -74,7 +72,7 @@ export class TaskAgent extends Agent<Env> {
     }
     
     // Trigger workflow
-    const workflowId = await this.runWorkflow('executeTask', {
+    const workflowId = await this.runWorkflow('EXECUTE_TASK', {
       userId: auth.userId!,
       sessionId: body.sessionId,
       task: body.task,
@@ -98,7 +96,7 @@ export class TaskAgent extends Agent<Env> {
     }
     
     // Trigger workflow
-    const workflowId = await this.runWorkflow('createSession', {
+    const workflowId = await this.runWorkflow('CREATE_SESSION', {
       userId: auth.userId!,
     });
     
@@ -118,16 +116,12 @@ export class TaskAgent extends Agent<Env> {
     progress: { type: string; data: unknown }
   ): Promise<void> {
     // Broadcast progress to all connected clients
-    this.broadcast({
+    this.broadcast(JSON.stringify({
       workflowName: name,
       workflowId: id,
       ...progress,
-    });
+    }));
   }
 }
 
-// Export workflow functions
-export const workflows = {
-  executeTask,
-  createSession,
-};
+

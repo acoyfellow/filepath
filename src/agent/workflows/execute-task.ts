@@ -1,5 +1,6 @@
-import type { WorkflowContext, WorkflowParams } from 'agents';
+import { AgentWorkflow, type AgentWorkflowStep } from 'agents/workflows';
 import type { Env } from '../../types';
+import type { TaskAgent } from '../index';
 
 interface ExecuteTaskParams {
   userId: string;
@@ -16,60 +17,51 @@ interface ExecuteTaskParams {
  * 3. Streams output back to the agent
  * 4. Tracks state in SQLite
  */
-export async function executeTask(
-  params: ExecuteTaskParams,
-  context: WorkflowContext<Env>
-): Promise<{ success: boolean; result?: string; error?: string }> {
-  const { userId, sessionId, task } = params;
-  
-  // Get workflow state
-  const state = context.state;
-  
-  try {
-    // Store task start
-    await state.set('startedAt', Date.now());
-    await state.set('userId', userId);
-    await state.set('sessionId', sessionId);
-    await state.set('task', task);
-    await state.set('status', 'running');
+export class ExecuteTaskWorkflow extends AgentWorkflow<
+  TaskAgent,
+  ExecuteTaskParams,
+  { status: string; output?: string },
+  Env
+> {
+  async run(
+    event: { payload: ExecuteTaskParams },
+    step: AgentWorkflowStep
+  ): Promise<{ success: boolean; result?: string; error?: string }> {
+    const { userId, sessionId, task } = event.payload;
     
-    // Broadcast progress
-    context.broadcast({
-      type: 'task-started',
-      data: { sessionId, task },
-    });
+    // Report start
+    await this.reportProgress({ status: 'started' });
     
-    // TODO: Get or create container
-    // For now, simulate execution
-    await context.sleep(1000); // Sleep for 1 second
-    
-    const result = `Task executed: ${task}`;
-    
-    // Update state
-    await state.set('status', 'completed');
-    await state.set('completedAt', Date.now());
-    await state.set('result', result);
-    
-    // Broadcast completion
-    context.broadcast({
-      type: 'task-completed',
-      data: { sessionId, result },
-    });
-    
-    return { success: true, result };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    // Update state
-    await state.set('status', 'failed');
-    await state.set('error', errorMessage);
-    
-    // Broadcast error
-    context.broadcast({
-      type: 'task-failed',
-      data: { sessionId, error: errorMessage },
-    });
-    
-    return { success: false, error: errorMessage };
+    try {
+      // Step 1: Get or create container
+      const containerId = await step.do('get-or-create-container', async () => {
+        // TODO: Get existing container from state or create new one
+        // For now, mock it
+        await this.reportProgress({ status: 'creating-container' });
+        return `container-${Date.now()}`;
+      });
+      
+      // Step 2: Execute task
+      const result = await step.do('execute-task', async () => {
+        await this.reportProgress({ status: 'executing', output: `Running: ${task}` });
+        
+        // TODO: Actually execute in container
+        // For now, simulate execution
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        return `Task completed: ${task}`;
+      });
+      
+      // Report completion
+      await this.reportProgress({ status: 'completed', output: result });
+      
+      return { success: true, result };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      await this.reportProgress({ status: 'failed', output: errorMessage });
+      
+      return { success: false, error: errorMessage };
+    }
   }
 }
