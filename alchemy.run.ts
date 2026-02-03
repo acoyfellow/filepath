@@ -3,13 +3,14 @@ import alchemy from "alchemy";
 import {
   SvelteKit,
   Worker,
+  DurableObjectNamespace,
   D1Database,
   Container
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore } from "alchemy/state";
 
-// Remove SessionDO import - no longer using Durable Objects for orchestration
+import type { TaskAgent } from "./src/agent/index.ts";
 
 const password = process.env.ALCHEMY_PASSWORD;
 if (!password) {
@@ -30,7 +31,12 @@ const prefix = isProd ? projectName : `${app.stage}-${projectName}`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 
-// Note: Removed Durable Objects - Agents SDK Workflows handle state now
+// Task Agent Durable Object (Agents SDK)
+const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-agent`, {
+  className: "TaskAgent",
+  scriptName: `${prefix}-worker`,
+  sqlite: true
+});
 
 // D1 database for auth + metadata
 const DB = await D1Database(`${projectName}-db`, {
@@ -61,6 +67,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   bindings: {
+    TaskAgent: TASK_AGENT_DO,
     Sandbox,
     DB,
   },
