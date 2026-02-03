@@ -3,14 +3,13 @@ import alchemy from "alchemy";
 import {
   SvelteKit,
   Worker,
-  DurableObjectNamespace,
   D1Database,
   Container
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore } from "alchemy/state";
 
-import type { SessionDO } from "./worker/index.ts";
+// Remove SessionDO import - no longer using Durable Objects for orchestration
 
 const password = process.env.ALCHEMY_PASSWORD;
 if (!password) {
@@ -31,12 +30,7 @@ const prefix = isProd ? projectName : `${app.stage}-${projectName}`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 
-// Durable Object for session state
-const SESSION_DO = DurableObjectNamespace<SessionDO>(`${projectName}-session-do`, {
-  className: "SessionDO",
-  scriptName: `${prefix}-worker`,
-  sqlite: true
-});
+// Note: Removed Durable Objects - Agents SDK Workflows handle state now
 
 // D1 database for auth + metadata
 const DB = await D1Database(`${projectName}-db`, {
@@ -59,15 +53,14 @@ const Sandbox = await Container(`${projectName}-sandbox`, {
   maxInstances: 15,
 });
 
-// Worker that hosts Durable Objects
+// Worker using Agents SDK
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
-  entrypoint: "./worker/index.ts",
+  entrypoint: "./worker/agent.ts",
   compatibilityDate: "2025-11-15",
   compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   bindings: {
-    SESSION_DO,
     Sandbox,
     DB,
   },
@@ -78,6 +71,8 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
   env: {
     API_WS_HOST: isProd ? "api.myfilepath.com" : "",
+    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
+    BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
   },
 });
 
@@ -86,7 +81,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${prefix}-app`,
   domains: isProd ? ["myfilepath.com"] : [],
   bindings: {
-    SESSION_DO,
     WORKER,
     DB,
   },
