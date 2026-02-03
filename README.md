@@ -1,21 +1,107 @@
 # myfilepath.com
 
-The platform for agents.
+The platform for agents. Persistent execution environments that survive context limits.
+
+## Architecture (Feb 2026 - Agents SDK)
+
+Built on **Cloudflare Agents SDK** for durable, long-running task orchestration.
+
+```
+Agent/Human → TaskAgent (DO) → Workflows → Containers
+              ↓                    ↓          ↓
+           API Keys          Long-running  Execution
+           Streaming         Orchestration Environment
+```
+
+### Core Components
+
+- **TaskAgent** - Durable Object handling requests, managing workflows
+  - RPC methods via `@callable()` (fast, typed, streaming)
+  - REST API via `fetch()` (thin wrapper for external agents)
+  - WebSocket streaming (real-time progress)
+
+- **Workflows** - Long-running task orchestration
+  - `ExecuteTaskWorkflow` - Run commands in containers
+  - `CreateSessionWorkflow` - Spawn new container sessions
+  - Built-in SQLite state, automatic retries, progress streaming
+
+- **Containers** - Isolated execution environments
+  - One per terminal/session
+  - Persistent filesystem
+  - Long-lived (minutes to days)
+  - Full shell access (bash, git, npm, python)
+
+### Why Agents SDK?
+
+**Before:** Custom DOs + manual state tracking + retry logic + WebSocket routing = lots of code
+
+**After:** Agent class + Workflows = batteries included
+
+- ✅ State persistence (automatic SQLite)
+- ✅ Long-running tasks (days/weeks)
+- ✅ Progress streaming (built-in broadcast)
+- ✅ Retry logic (automatic)
+- ✅ Human-in-loop (approval gates)
+- ✅ Type-safe RPC
 
 ## Stack
 
+- **Cloudflare Agents SDK** - Task orchestration & streaming
 - **SvelteKit** - Frontend framework
-- **Better Auth** - Human authentication (email/password, OAuth)
-- **Durable Objects** - Session state persistence
+- **Better Auth** - Authentication (humans + agents)
+- **Cloudflare Workflows** - Long-running task execution
 - **Cloudflare Containers** - Terminal sandboxes
 - **D1** - Database for auth + metadata
 - **Alchemy** - Infrastructure as code
+- **Deja** - Cross-session agent memory
+
+## Quick Start (For Agents)
+
+### 1. Get API Key
+
+```bash
+# Sign up
+curl -X POST https://myfilepath.com/api/auth/sign-up/email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"agent@example.com","password":"secure123","name":"Agent"}'
+
+# Login and create API key via dashboard
+# https://myfilepath.com/settings/api-keys
+```
+
+### 2. Create Session
+
+```bash
+curl -X POST https://myfilepath.com/api/orchestrator/session \
+  -H "x-api-key: YOUR_KEY"
+
+# Returns: {"workflowId": "abc-123", "sessionId": "session-xyz"}
+```
+
+### 3. Execute Task
+
+```bash
+curl -X POST https://myfilepath.com/api/orchestrator \
+  -H "x-api-key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"session-xyz","task":"echo hello && ls -la"}'
+
+# Returns: {"workflowId": "task-456"}
+```
+
+### 4. Stream Progress (WebSocket)
+
+```javascript
+const ws = new WebSocket('wss://api.myfilepath.com/agent/task-agent/default');
+ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
+// Receives: {"workflowId": "task-456", "type": "progress", "status": "running"}
+```
 
 ## Development
 
 ```bash
-bun install
-bun run dev        # localhost:5173
+npm install
+npm run dev        # localhost:5173
 ```
 
 ## UI Components (shadcn-svelte)
@@ -44,34 +130,118 @@ Components are installed to `src/lib/components/ui/`. Import like:
 
 ```bash
 # Production (myfilepath.com)
-bun run deploy
+npm run deploy
 
 # Preview
-bun run deploy:preview
+npm run deploy:preview
 ```
 
-## Architecture
+## Memory System (Deja)
+
+This project uses [Deja](https://deja.coey.dev) for cross-session agent memory.
+
+### For Agents Using This Platform
+
+Memory is automatically scoped to your API key. Store learnings for future sessions:
+
+```bash
+curl -X POST https://deja.coey.dev/learn \
+  -H "Authorization: Bearer $DEJA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trigger": "when working on myfilepath projects",
+    "learning": "container sessions persist across disconnects",
+    "confidence": 0.9
+  }'
+```
+
+Query memories at session start:
+
+```bash
+curl -X POST https://deja.coey.dev/inject \
+  -H "Content-Type: application/json" \
+  -d '{
+    "context": "working on myfilepath task",
+    "format": "prompt",
+    "limit": 5
+  }'
+```
+
+### For Contributors
+
+Memory is project-scoped. Set up local Deja access:
+
+```bash
+cp .env.example .env
+# Add your DEJA_API_KEY
+```
+
+Contact maintainer for project-specific Deja credentials.
+
+## Architecture Details
+
+### Request Flow
 
 ```
-Human/Agent → SvelteKit → Durable Object (Session)
-                              ↓
-                        Container (Sandbox)
-                           ttyd + opencode
+1. Agent → POST /api/orchestrator (with x-api-key)
+2. Worker routes to TaskAgent DO
+3. TaskAgent.fetch() validates key
+4. Calls @callable executeTask() method
+5. Triggers ExecuteTaskWorkflow
+6. Workflow spawns/reuses container
+7. Executes command in container
+8. Streams progress: Workflow → Agent → WebSocket clients
+9. Returns result (persisted in Workflow SQLite)
 ```
 
-- **Session DO**: Manages tabs, state, WebSocket broadcasts
-- **Container**: Isolated terminal environment per tab
-- **Better Auth**: Human identity (agents use API keys - coming soon)
+### State Layers
 
-## Checkpoint 1: Terminal Parity ✅
+- **Agent State** (DO SQLite): API key cache, session registry, WebSocket connections
+- **Workflow State** (Workflow SQLite): Task params, execution steps, progress, results
+- **Container State** (Filesystem): Project files, git repos, build artifacts
 
-- [x] SvelteKit + better-auth base
-- [x] Session management via Durable Objects
-- [x] Terminal tabs UI
-- [x] Container/sandbox integration
-- [x] Terminal WebSocket proxy
-- [x] Deploy to myfilepath.com
-- [x] Tests/gates (`gates/terminal.gate.sh`)
+### Dual Interface Pattern
+
+TaskAgent supports both RPC and REST with zero duplication:
+
+```typescript
+// RPC (fast, typed, streaming)
+@callable()
+async executeTask(sessionId: string, task: string, apiKey: string) {
+  // Core logic here
+}
+
+// REST (thin wrapper)
+async fetch(request: Request) {
+  const apiKey = request.headers.get('x-api-key');
+  const { sessionId, task } = await request.json();
+  return await this.executeTask(sessionId, task, apiKey);
+}
+```
+
+## Development Status
+
+### ✅ Completed
+- Agent SDK foundation
+- TaskAgent DO with dual interface (RPC + REST)
+- Workflow classes (ExecuteTask, CreateSession)
+- Better-auth integration
+- Stripe billing
+- API key system
+- SvelteKit UI
+- Container infrastructure
+
+### 🚧 In Progress (Feb 2026)
+- Container integration in workflows
+- Real-time progress streaming
+- Workflow status polling
+- E2E testing
+
+### 📋 Roadmap
+- Human-in-loop approval gates
+- Multi-container orchestration
+- Resource limits & billing
+- MCP tool integration
 
 ## Footguns (Cloudflare Containers + ttyd)
 
