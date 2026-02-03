@@ -11,6 +11,7 @@
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
     "@stripe/stripe-js": "^8.7.0",
+    "agents": "^0.3.7",
     "bits-ui": "^2.15.5",
     "clsx": "^2.1.1",
     "cookie": "^1.1.1",
