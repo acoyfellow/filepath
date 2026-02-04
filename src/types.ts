@@ -1,5 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
-import type { Sandbox } from '@cloudflare/sandbox';
+import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
 
 /**
  * Cloudflare Worker environment bindings
@@ -9,7 +8,8 @@ export interface Env {
   DB: D1Database;
   
   // Container binding for sandboxes
-  Sandbox: typeof Sandbox;
+  // Using any to avoid complex Sandbox type recursion
+  Sandbox: DurableObjectNamespace<any>;
   
   // Environment variables
   BETTER_AUTH_SECRET: string;
