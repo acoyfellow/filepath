@@ -1,9 +1,17 @@
 import { AgentWorkflow, type AgentWorkflowStep } from 'agents/workflows';
 import type { Env } from '../../types';
 import type { TaskAgent } from '../index';
+import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 
 interface CreateSessionParams {
   userId: string;
+  sessionId: string;
+}
+
+interface CreateSessionProgress {
+  status: 'creating' | 'starting-terminal' | 'ready' | 'failed';
+  sessionId?: string;
+  wsUrl?: string;
 }
 
 /**
@@ -12,42 +20,69 @@ interface CreateSessionParams {
  * This workflow:
  * 1. Spawns a new container
  * 2. Starts ttyd for terminal access
- * 3. Returns session info
+ * 3. Returns session info with WebSocket URL
  */
 export class CreateSessionWorkflow extends AgentWorkflow<
-  TaskAgent,
+  any, // TaskAgent - using any to avoid type recursion
   CreateSessionParams,
-  { status: string; sessionId?: string },
+  CreateSessionProgress,
   Env
 > {
   async run(
     event: { payload: CreateSessionParams },
     step: AgentWorkflowStep
-  ): Promise<{ success: boolean; sessionId?: string; error?: string }> {
-    const { userId } = event.payload;
+  ): Promise<{ success: boolean; sessionId?: string; wsUrl?: string; error?: string }> {
+    const { userId, sessionId } = event.payload;
     
     try {
       // Report start
       await this.reportProgress({ status: 'creating' });
       
       // Step 1: Create container
-      const sessionId = await step.do('create-container', async () => {
-        // TODO: Actually create container via Cloudflare Containers API
-        // For now, generate mock ID
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return `session-${Date.now()}`;
+      const container = await step.do('create-container', async () => {
+        // Use sessionId as container ID
+        const containerId = `container-${sessionId}`;
+        
+        // Get sandbox (creates if doesn't exist)
+        // @ts-expect-error - Sandbox type recursion issue, works at runtime
+        const sandbox = getSandbox((this.env as Env).Sandbox, containerId);
+        
+        // Note: Container hostname/endpoint is not directly accessible
+        // We'll use the session ID to access it later
+        return {
+          id: containerId,
+        };
       });
       
-      // Step 2: Start ttyd
-      await step.do('start-ttyd', async () => {
-        // TODO: Start ttyd in container
-        await new Promise(resolve => setTimeout(resolve, 200));
+      // Step 2: Start ttyd for terminal access
+      const wsUrl = await step.do('start-ttyd', async () => {
+        await this.reportProgress({ status: 'starting-terminal' });
+        
+        const sandbox = getSandbox((this.env as Env).Sandbox, container.id);
+        
+        // Start ttyd on port 7681
+        await sandbox.startProcess('ttyd -W -p 7681 bash');
+        
+        // WebSocket URL will be proxied through the worker
+        // Format: wss://api.myfilepath.com/terminal/{sessionId}/ws
+        return `wss://api.myfilepath.com/terminal/${sessionId}/ws`;
       });
+      
+      // Step 3: Store session info (no workflow state needed - using Cloudflare Containers built-in persistence)
       
       // Report completion
-      await this.reportProgress({ status: 'ready', sessionId });
+      await this.reportProgress({
+        status: 'ready',
+        sessionId,
+        wsUrl,
+      });
       
-      return { success: true, sessionId };
+      return {
+        success: true,
+        sessionId,
+        wsUrl,
+      };
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       
