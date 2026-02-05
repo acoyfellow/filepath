@@ -31,11 +31,10 @@ Agent instructions for the myfilepath.com codebase.
 
 ## 🐛 Known Issues
 
-### Stripe Checkout Configuration
-**Status:** Needs Stripe test mode setup  
-**Issue:** Checkout fails to create session  
-**Location:** `/settings/billing`  
-**Workaround:** Use test-credits endpoint for development testing
+### ~~Stripe Checkout Configuration~~
+**Status:** ✅ RESOLVED (Feb 5, 2026)  
+**Fix:** Added STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET to GH Actions and alchemy.run.ts  
+**Test:** Checkout opens Stripe test mode page successfully
 
 ### ~~API Key Creation Fails via UI~~
 **Status:** ✅ RESOLVED (Feb 5, 2026)  
@@ -50,33 +49,38 @@ Agent instructions for the myfilepath.com codebase.
 | 1. Landing | ✅ | Beautiful landing page renders |
 | 2. Signup | ✅ | Form works (use input events for programmatic fill) |
 | 3. Dashboard | ✅ | Shows sessions, getting started guide |
-| 4. Stripe | ⚠️ | Checkout fails - needs Stripe test mode config |
-| 5. Credits | ⏭️ | Skipped (needs Stripe) |
+| 4. Stripe | ✅ | Checkout opens in test mode, payment methods shown |
+| 5. Credits | ✅ | Can add via DB or Stripe webhook |
 | 6. Create Session | ✅ | Credit check works - shows "Insufficient credits" error |
 | 7. Terminal | ✅ | Page loads, terminal tab interface works |
 | 8. API Keys | ✅ | Creation works! Key shows in list |
 | 9. API Test | ✅ | Key validates! Returns "Insufficient credits" (expected) |
-| 10-12 | ⏭️ | Needs credits to test execution |
+| 10-12 | 🔄 | Worker routing fix deployed, needs validation |
 
 **Screenshots:** `/home/exedev/myfilepath-new/e2e-screenshots/`
 - `01-landing.png` - Landing page
-- `02-signup-form.png` - Signup form
+- `02-signup-form.png` - Signup form  
 - `03-dashboard.png` - Dashboard with session
-- `04-billing.png` - Billing page with credit options
-- `06-create-session-credits.png` - Credit check error
-- `07-terminal.png` - Terminal view
-- `08-api-key-created.png` - API key creation success
+- `04-stripe-checkout.png` - Stripe checkout (TEST MODE)
+- `05-credits-arrived.png` - Credits balance showing 1000
+- `07-terminal-view.png` - Terminal view with tabs
+- `08-api-key-created-2.png` - API key creation success
 
-**API Key Test:**
+**Working API Key:**
 ```bash
-curl -X POST https://myfilepath.com/api/orchestrator \
-  -H "x-api-key: mfp_NalNEdke..." \
-  -H "Content-Type: application/json" \
-  -d '{"sessionId":"test","task":"echo hello"}'
-# Returns: {"message":"Insufficient credits"} ✅
+mfp_mETJpsXIYzSZmUxqWTMJKPQyFXobSOreFpRKShqwOFkDdYxtjTgnORKlGGaSaHyo
 ```
 
-**Remaining:** Configure Stripe test mode to unlock billing flow
+**Recent Fixes (Feb 5, 2026):**
+- ✅ STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET in GH Actions
+- ✅ API key validation passes through to worker
+- ✅ Worker now uses routeAgentRequest for DO routing
+- 🔄 TaskAgent DO name issue fix deployed
+
+**Remaining for Complete E2E:**
+1. Validate task execution after latest fix
+2. Test credit deduction during execution
+3. Implement account deletion (Step 12)
 
 ## Architecture Overview
 
