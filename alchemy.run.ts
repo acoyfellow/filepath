@@ -40,14 +40,14 @@ const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-age
 
 // D1 database for auth + metadata
 // Manually created to bypass Alchemy state cache bug
-// Database ID: 11c62299-1d8c-418f-b250-ff2598c699c6
+// Database UUID: 11c62299-1d8c-418f-b250-ff2598c699c6
 // Migrations applied via: wrangler d1 execute filepath-db --file=migrations/0000_initial_schema.sql --remote
 const DB = {
   type: "d1" as const,
-  id: "filepath-db",
+  id: "11c62299-1d8c-418f-b250-ff2598c699c6", // Must be the UUID, not the name
   name: "filepath-db",
   dev: {
-    id: "filepath-db",
+    id: "11c62299-1d8c-418f-b250-ff2598c699c6",
     remote: true,
   },
   jurisdiction: "us" as const,
