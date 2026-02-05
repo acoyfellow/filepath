@@ -129,14 +129,26 @@ export const apikey = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name"),
-    start: text("start").notNull(),
-    prefix: text("prefix").notNull(),
-    hashedKey: text("hashed_key").notNull(),
+    start: text("start"),
+    prefix: text("prefix"),
+    key: text("key").notNull(),  // hashed key - better-auth expects 'key'
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
-    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    // Better-auth required fields
+    enabled: integer("enabled", { mode: "boolean" }).default(true),
+    rateLimitEnabled: integer("rate_limit_enabled", { mode: "boolean" }).default(true),
+    rateLimitTimeWindow: integer("rate_limit_time_window"),
+    rateLimitMax: integer("rate_limit_max"),
+    requestCount: integer("request_count").default(0),
+    remaining: integer("remaining"),
+    refillInterval: integer("refill_interval"),
+    refillAmount: integer("refill_amount"),
+    lastRefillAt: integer("last_refill_at", { mode: "timestamp_ms" }),
+    lastRequest: integer("last_request", { mode: "timestamp_ms" }),
+    permissions: text("permissions"),
+    // Custom myfilepath fields
     creditBalance: integer("credit_balance").default(0),
     budgetCap: integer("budget_cap"),
     totalUsageMinutes: integer("total_usage_minutes").default(0),
@@ -146,12 +158,13 @@ export const apikey = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .$onUpdate(() => new Date())
       .notNull(),
   },
   (table) => [
     index("apikey_user_id_idx").on(table.userId),
-    index("apikey_prefix_idx").on(table.prefix),
+    index("apikey_key_idx").on(table.key),
   ],
 );
 

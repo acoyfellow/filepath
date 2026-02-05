@@ -126,7 +126,7 @@ export class TaskAgent extends Agent<Env, AgentState> {
         expiresAt: apikey.expiresAt,
       })
       .from(apikey)
-      .where(eq(apikey.hashedKey, hashedKey))
+      .where(eq(apikey.key, hashedKey))
       .limit(1);
     
     if (results.length === 0) {

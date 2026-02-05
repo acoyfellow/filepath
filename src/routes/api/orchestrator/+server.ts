@@ -38,7 +38,7 @@ async function verifyApiKey(
     const keys = await db
       .select()
       .from(apikey)
-      .where(eq(apikey.hashedKey, hashedKey))
+      .where(eq(apikey.key, hashedKey))
       .limit(1);
 
     if (keys.length === 0) {
@@ -57,7 +57,7 @@ async function verifyApiKey(
 
     await db
       .update(apikey)
-      .set({ lastUsedAt: new Date() })
+      .set({ lastRequest: new Date() })
       .where(eq(apikey.id, keyRecord.id));
 
     return { valid: true, key: keyRecord };
