@@ -1,13 +1,13 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * myfilepath.com PRD
  * 
  * Simpler approach: Just run bash gates in sequence until one fails.
  * 
- * Run with: bun run prd.ts
+ * Run with: npx tsx prd.ts
  */
 
-import { $ } from "bun";
+import { execSync } from "child_process";
 
 const BASE_URL = process.env.BASE_URL || "https://myfilepath.com";
 
@@ -54,7 +54,7 @@ for (const story of stories) {
   console.log(`   Gate: ${story.gateFile}`);
 
   try {
-    await $`bash ${story.gateFile} ${BASE_URL}`.quiet();
+    execSync(`bash ${story.gateFile} ${BASE_URL}`, { stdio: "pipe" });
     console.log(`   ✅ PASSED\n`);
   } catch (e) {
     console.error(`   ❌ FAILED\n`);
