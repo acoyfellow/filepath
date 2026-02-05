@@ -39,13 +39,19 @@ const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-age
 });
 
 // D1 database for auth + metadata
-// TEMPORARY: Commented out to bypass state cache issue
-// Will re-enable after fresh state deploy
-const DB_NAME = `${prefix}-db`;
-const DB_ID = "11c62299-1d8c-418f-b250-ff2598c699c6";
-
-// Manually bind D1 via wrangler.toml or worker config
-const DB = null as any; // Placeholder
+// Manually created to bypass Alchemy state cache bug
+// Database ID: 11c62299-1d8c-418f-b250-ff2598c699c6
+// Migrations applied via: wrangler d1 execute filepath-db --file=migrations/0000_initial_schema.sql --remote
+const DB = {
+  type: "d1" as const,
+  id: "filepath-db",
+  name: "filepath-db",
+  dev: {
+    id: "filepath-db",
+    remote: true,
+  },
+  jurisdiction: "us" as const,
+} as any;
 
 // Container for terminal sandboxes
 // Platform set to linux/amd64 because Cloudflare sandbox image only supports AMD64
