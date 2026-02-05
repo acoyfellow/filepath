@@ -68,7 +68,7 @@ Agent instructions for the myfilepath.com codebase.
 | 8. API Keys | ✅ | Creation works, key shows in list |
 | 9. API Test | ✅ | Task execution successful! Returns workflowId |
 | 10-11. Billing | ✅ | Shows credits, API keys with budgets |
-| 12. Delete Account | ❌ | Feature not implemented yet |
+| 12. Delete Account | ✅ | Page added, deleteUser enabled in better-auth |
 
 **Screenshots:** `/home/exedev/myfilepath-new/e2e-screenshots/`
 - `final-01-landing.png` - Landing page
@@ -97,9 +97,16 @@ $ curl -X POST https://myfilepath.com/api/orchestrator \
 ```
 
 **Remaining:**
-1. Implement account deletion (Step 12)
+1. ~~Implement account deletion (Step 12)~~ ✅ Done
 2. Add per-minute credit deduction during container execution
 3. Production container execution with real billing
+
+**Commits from E2E Session (Feb 5, 2026):**
+- `10a3638` - fix: API key creditBalance should default to NULL (unlimited)
+- `30dc4f5` - docs: Update E2E test results and bug status
+- `3f35c64` - feat: Add account deletion page (Step 12)
+- `2c7128e` - fix: Add destructive color CSS variable for delete button styling
+- `2111e5f` - fix: Enable deleteUser in better-auth config
 
 ## Architecture Overview
 
