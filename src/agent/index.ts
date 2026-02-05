@@ -180,6 +180,12 @@ export class TaskAgent extends Agent<Env, AgentState> {
    * Extracts API key from header and routes to @callable methods.
    */
   async fetch(request: Request): Promise<Response> {
+    // Set agent name from partykit headers (required for Agent SDK)
+    const roomName = request.headers.get('x-partykit-room');
+    if (roomName) {
+      await this.setName(roomName);
+    }
+    
     const url = new URL(request.url);
     
     // Handle CORS preflight
