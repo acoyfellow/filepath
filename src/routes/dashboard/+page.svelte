@@ -104,6 +104,12 @@
       >
         BILLING
       </a>
+      <a
+        href="/settings/account"
+        class="px-4 py-2 font-black border-4 border-black hover:bg-black hover:text-white"
+      >
+        ACCOUNT
+      </a>
       <!-- Passkey UI hidden for now - better UX needed -->
       <span class="px-3 py-2 font-mono text-sm border-4 border-black">{page.data.user?.email}</span>
       <button
