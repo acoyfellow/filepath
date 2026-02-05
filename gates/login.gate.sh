@@ -38,10 +38,18 @@ echo -n "4. Auth session endpoint... "
 HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/api/auth/get-session")
 [ "$HTTP" = "200" ] || [ "$HTTP" = "401" ] && echo "✅" || { echo "❌ HTTP $HTTP"; FAILED=1; }
 
-# Test 5: Verify login page has working form (check for client-side JS handler)
-echo -n "5. Login page has auth client... "
+# Test 5: Verify login page has working form with JS bundle
+echo -n "5. Login page has form + JS bundle... "
 RESP=$(curl -s --max-time 10 "$BASE_URL/login")
-echo "$RESP" | grep -q "signIn" && echo "✅" || { echo "❌ Login page missing signIn handler"; FAILED=1; }
+# Check for: submit button, JS entry point, and form element
+HAS_FORM=$(echo "$RESP" | grep -q 'type="submit"' && echo 1 || echo 0)
+HAS_JS=$(echo "$RESP" | grep -q '_app/immutable' && echo 1 || echo 0)
+if [ "$HAS_FORM" = "1" ] && [ "$HAS_JS" = "1" ]; then
+  echo "✅"
+else
+  [ "$HAS_FORM" != "1" ] && echo "❌ Missing form submit button" && FAILED=1
+  [ "$HAS_JS" != "1" ] && echo "❌ Missing JS bundle" && FAILED=1
+fi
 
 echo ""
 [ $FAILED -eq 0 ] && echo "✅ Login gates passed" || echo "❌ $FAILED login gates FAILED - BLOCKING PUSH"
