@@ -26,16 +26,36 @@ export { Sandbox } from '@cloudflare/sandbox';
 // Worker fetch handler routes to Agent Durable Object
 export default {
   async fetch(request: Request, env: Env & { TaskAgent: DurableObjectNamespace }, ctx: ExecutionContext): Promise<Response> {
-    // Use routeAgentRequest to properly route to Agent with name set
-    const response = await routeAgentRequest(request, env, {
-      cors: true,
-    });
+    const url = new URL(request.url);
     
-    if (response) {
-      return response;
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+        },
+      });
     }
     
-    // Fallback: if routeAgentRequest didn't handle it, route manually
+    // Route /api/orchestrator to TaskAgent DO directly
+    if (url.pathname.startsWith('/api/orchestrator')) {
+      const id = env.TaskAgent.idFromName('default');
+      const agent = env.TaskAgent.get(id);
+      return agent.fetch(request);
+    }
+    
+    // Route /agents/* via routeAgentRequest for proper SDK handling
+    if (url.pathname.startsWith('/agents/')) {
+      const response = await routeAgentRequest(request, env, {
+        cors: true,
+      });
+      if (response) return response;
+    }
+    
+    // Default: route to TaskAgent
     const id = env.TaskAgent.idFromName('default');
     const agent = env.TaskAgent.get(id);
     return agent.fetch(request);
