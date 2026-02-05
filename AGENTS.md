@@ -31,37 +31,40 @@ Agent instructions for the myfilepath.com codebase.
 
 ## 🐛 Known Issues
 
-### API Key Creation Fails via UI
-**Status:** Needs investigation  
-**Location:** `/settings/api-keys` page  
-**Issue:** Creating API key shows "Failed to create API key"  
-**Root cause:** The better-auth `/api/auth/api-key/create` endpoint returns 401  
-**Workaround:** TBD - session may not be properly passed to the endpoint
+### Stripe Checkout Configuration
+**Status:** Needs Stripe test mode setup  
+**Issue:** Checkout fails to create session  
+**Location:** `/settings/billing`  
+**Workaround:** Use test-credits endpoint for development testing
 
-### Stripe Checkout Fails
-**Status:** Expected in dev environment  
-**Issue:** "Failed to create checkout session" error  
-**Root cause:** Stripe configuration or customer ID may not be set up for test users
+### ~~API Key Creation Fails via UI~~
+**Status:** ✅ RESOLVED (Feb 5, 2026)  
+**Fix:** Aligned apikey schema with better-auth requirements (hashed_key → key, added missing fields)
 
-## ✅ E2E Testing Results (Feb 2026)
+## ✅ E2E Testing Results (Feb 5, 2026)
 
-**Test Account:** `test-1770322688@example.com` / `TestPass123!`
+**Test Account:** `test-1770324253@example.com` / `TestPass123!`
 
 | Step | Status | Notes |
 |------|--------|-------|
 | 1. Landing | ✅ | Renders correctly |
 | 2. Signup | ✅ | Form works, account created |
 | 3. Dashboard | ✅ | Shows sessions, navigation works |
-| 4. Stripe | ⚠️ | Checkout session creation fails |
+| 4. Stripe | ⚠️ | Checkout needs Stripe test mode config |
 | 5. Credits | ⏭️ | Skipped (needs Stripe) |
 | 6. Create Session | ✅ | Existing session visible |
 | 7. Terminal | ✅ | Page loads, WebSocket connects |
-| 8. API Keys | ⚠️ | Page loads, creation fails |
-| 9-12 | ⏭️ | Needs working API keys & billing |
+| 8. API Keys | ✅ | Creation works! Key created successfully |
+| 9. API Test | ✅ | Key validated! Returns "Insufficient credits" (expected) |
+| 10-12 | ⏭️ | Needs credits to test execution |
 
-**Form Validation Bug: RESOLVED** - Signup and login forms work correctly
+**Key Fixes Made:**
+- Added `/api/billing/checkout` endpoint (was missing)
+- Aligned apikey schema with better-auth (hashed_key → key, added fields)
+- Fixed API key hashing to use base64url (matching better-auth)
+- Created migration 0002 for production DB
 
-**Priority:** Fix API key creation to unblock API testing
+**Next Steps:** Configure Stripe test mode to enable billing flow
 
 ## Architecture Overview
 
