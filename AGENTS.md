@@ -42,7 +42,7 @@ Agent instructions for the myfilepath.com codebase.
 
 ## ✅ E2E Testing Results (Feb 5, 2026 - Complete)
 
-**Latest Test Account:** `test-e2e-1770330939@example.com` / `TestPass123!`
+**Latest Test Account:** `test-e2e-1770331512@example.com` / `TestPass123!`
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -59,19 +59,19 @@ Agent instructions for the myfilepath.com codebase.
 | 12. Delete Account | ❌ | Feature not implemented yet |
 
 **Screenshots:** `/home/exedev/myfilepath-new/e2e-screenshots/`
-- `01-landing.png` - Landing page
-- `02-signup-form.png` - Signup form  
-- `03-dashboard.png` - Dashboard with session
-- `04-stripe-checkout.png` - Stripe checkout (TEST MODE)
-- `05-credits-arrived.png` - Credits balance showing 1000
-- `06-session-terminal.png` - New session created
-- `08-api-key-created.png` - API key creation success
-- `08-api-keys-list.png` - API keys list view
-- `10-billing-with-keys.png` - Billing page with API keys & budgets
+- `final-01-landing.png` - Landing page
+- `final-02-signup.png` - Signup form  
+- `final-03-dashboard.png` - Dashboard with session
+- `final-04-stripe-checkout.png` - Stripe checkout (TEST MODE)
+- `final-05-credits-arrived.png` - Credits balance showing 1000
+- `final-06-07-terminal.png` - Session/Terminal view
+- `final-08-api-key-created.png` - API key creation success
+- `final-08-api-keys-list.png` - API keys list view
+- `final-10-11-billing-with-keys.png` - Billing page with API keys & budgets
 
 **Working API Key:**
 ```bash
-mfp_mETJpsXIYzSZmUxqWTMJKPQyFXobSOreFpRKShqwOFkDdYxtjTgnORKlGGaSaHyo
+mfp_vsmviEEmMPUUbFRaUpQJJDIptMwnUOaVwFLpJcSzVNzVfBGBJCDqbliSLdZyojXu
 ```
 
 **API Test Result (Feb 5, 2026):**
@@ -79,9 +79,9 @@ mfp_mETJpsXIYzSZmUxqWTMJKPQyFXobSOreFpRKShqwOFkDdYxtjTgnORKlGGaSaHyo
 $ curl -X POST https://myfilepath.com/api/orchestrator \
   -H "x-api-key: $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"...","task":"echo hello"}'
+  -d '{"sessionId":"4aw0jFCFJmchSBl17QP5DaHKeQVFP5xF","task":"echo Hello from E2E test"}'
 
-{"success":true,"workflowId":"9RJJZorMq3VW5nJQcj6PM"}
+{"success":true,"workflowId":"79vQxrUSt0ncb7KG8Wsdx"}
 ```
 
 **Remaining:**
