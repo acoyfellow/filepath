@@ -136,13 +136,18 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       throw error(500, 'Worker service not available');
     }
 
+    // Call the worker's /api/orchestrator endpoint (TaskAgent DO)
     const taskUrl = new URL(request.url);
-    taskUrl.pathname = `/task/${sessionId}`;
+    taskUrl.pathname = '/api/orchestrator';
 
     const taskResponse = await worker.fetch(new Request(taskUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-api-key': apiKeyHeader, // Pass through API key for worker validation
+      },
       body: JSON.stringify({
+        sessionId,
         task,
         timeout,
         env: envVars,
