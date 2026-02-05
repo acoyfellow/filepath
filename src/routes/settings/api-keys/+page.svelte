@@ -177,7 +177,7 @@
                 <div>
                   <p class="font-bold text-lg">{key.name || 'Unnamed'}</p>
                   <p class="font-mono text-sm text-gray-500">
-                    {key.prefix || ''}{key.start || ''}{'•'.repeat(10)}
+                    {key.start || ''}{'•'.repeat(10)}
                   </p>
                   <p class="text-xs text-gray-400 mt-1">
                     Created {new Date(key.createdAt).toLocaleDateString()}
