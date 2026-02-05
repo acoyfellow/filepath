@@ -7,6 +7,7 @@
  * - Container management (via existing Sandbox binding)
  */
 
+import { routeAgentRequest } from 'agents';
 import { TaskAgent } from '../src/agent';
 import { ExecuteTaskWorkflow } from '../src/agent/workflows/execute-task';
 import { CreateSessionWorkflow } from '../src/agent/workflows/create-session';
@@ -25,11 +26,18 @@ export { Sandbox } from '@cloudflare/sandbox';
 // Worker fetch handler routes to Agent Durable Object
 export default {
   async fetch(request: Request, env: Env & { TaskAgent: DurableObjectNamespace }, ctx: ExecutionContext): Promise<Response> {
-    // Get Agent Durable Object ID (for now, use a single agent instance)
+    // Use routeAgentRequest to properly route to Agent with name set
+    const response = await routeAgentRequest(request, env, {
+      cors: true,
+    });
+    
+    if (response) {
+      return response;
+    }
+    
+    // Fallback: if routeAgentRequest didn't handle it, route manually
     const id = env.TaskAgent.idFromName('default');
     const agent = env.TaskAgent.get(id);
-    
-    // Forward request to Agent DO
     return agent.fetch(request);
   },
 };
