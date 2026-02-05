@@ -5,7 +5,8 @@ import {
   Worker,
   DurableObjectNamespace,
   // D1Database, // Commented out - using manual binding to avoid state cache issues
-  Container
+  Container,
+  Workflow
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore } from "alchemy/state";
@@ -67,6 +68,18 @@ const Sandbox = await Container(`${projectName}-sandbox`, {
   maxInstances: 15,
 });
 
+// Workflows for long-running tasks (Agents SDK)
+// Workflow names must match exports in worker/agent.ts
+const EXECUTE_TASK = Workflow(`${projectName}-execute-task`, {
+  className: 'ExecuteTaskWorkflow',
+  scriptName: `${prefix}-worker`,
+});
+
+const CREATE_SESSION = Workflow(`${projectName}-create-session`, {
+  className: 'CreateSessionWorkflow',
+  scriptName: `${prefix}-worker`,
+});
+
 // Worker using Agents SDK
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
@@ -82,6 +95,8 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     TaskAgent: TASK_AGENT_DO,
     Sandbox,
     DB,
+    EXECUTE_TASK,
+    CREATE_SESSION,
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
   url: true,
