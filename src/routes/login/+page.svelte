@@ -72,7 +72,7 @@
       </div>
     {/if}
 
-    <form class="space-y-4" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+    <form class="space-y-4" onsubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
       <div>
         <label for="email" class="block text-sm text-neutral-500 mb-2">Email</label>
         <input 
