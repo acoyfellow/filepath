@@ -40,9 +40,16 @@ Agent instructions for the myfilepath.com codebase.
 **Status:** ✅ RESOLVED (Feb 5, 2026)  
 **Fix:** Aligned apikey schema with better-auth requirements (hashed_key → key, added missing fields)
 
-## ✅ E2E Testing Results (Feb 5, 2026 - Complete)
+### API Key budgetCap Not Saved on Create
+**Status:** 🐛 Known Issue (Feb 5, 2026)
+**Symptom:** Creating API key with budgetCap in UI fails with "Failed to create API key"
+**Cause:** better-auth's apiKey plugin doesn't support custom fields in create() method
+**Workaround:** Create key without budgetCap, then manually set via D1 or billing page
+**Fix needed:** Either extend better-auth plugin or use separate API to set budgetCap after creation
 
-**Latest Test Account:** `test-e2e-1770331512@example.com` / `TestPass123!`
+## ✅ E2E Testing Results (Feb 5, 2026 - Latest)
+
+**Latest Test Account:** `test-e2e-1770332176@example.com` / `TestPass123!`
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -71,7 +78,7 @@ Agent instructions for the myfilepath.com codebase.
 
 **Working API Key:**
 ```bash
-mfp_vsmviEEmMPUUbFRaUpQJJDIptMwnUOaVwFLpJcSzVNzVfBGBJCDqbliSLdZyojXu
+mfp_yrmCPfTESIaAqYcyQhGlqaaMElLvZpMrCUZDBhSTAgFphCkpHIUgTxEyNbNrqCPc
 ```
 
 **API Test Result (Feb 5, 2026):**
@@ -79,9 +86,9 @@ mfp_vsmviEEmMPUUbFRaUpQJJDIptMwnUOaVwFLpJcSzVNzVfBGBJCDqbliSLdZyojXu
 $ curl -X POST https://myfilepath.com/api/orchestrator \
   -H "x-api-key: $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"4aw0jFCFJmchSBl17QP5DaHKeQVFP5xF","task":"echo Hello from E2E test"}'
+  -d '{"sessionId":"mzBvC7kka0EavOeU2bTxEdCPsWlU6Jxy","task":"echo Hello from E2E test"}'
 
-{"success":true,"workflowId":"79vQxrUSt0ncb7KG8Wsdx"}
+{"success":true,"workflowId":"rA4QoV8Ru43H3r6P7McS3"}
 ```
 
 **Remaining:**
