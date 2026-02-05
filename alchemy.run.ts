@@ -4,7 +4,7 @@ import {
   SvelteKit,
   Worker,
   DurableObjectNamespace,
-  D1Database,
+  // D1Database, // Commented out - using manual binding to avoid state cache issues
   Container
 } from "alchemy/cloudflare";
 
