@@ -4,12 +4,26 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+:root {
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+}
+
 body {
   font-family: 'Space Grotesk', monospace;
   line-height: 1.2;
   font-weight: 400;
   color: #000;
   background-color: #fff;
+}
+
+/* Destructive button color class */
+.bg-destructive {
+  background-color: hsl(0 84% 60%);
+}
+
+.bg-destructive:hover {
+  background-color: hsl(0 84% 55%);
 }
 
 /* Futuristic Brutalist Animations */
