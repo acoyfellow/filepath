@@ -1,5 +1,7 @@
 # Deployment Guide - myfilepath.com
 
+Last updated: Feb 5, 2026
+
 ## Quick Deploy
 
 ```bash
@@ -137,7 +139,70 @@ Infrastructure is defined in `alchemy.run.ts`. Changes deploy automatically.
 
 ## Post-Deploy Verification
 
+### Manual Checks
 1. **Site loads:** https://myfilepath.com
 2. **Auth works:** Can login/signup
 3. **Dashboard loads:** https://myfilepath.com/dashboard
 4. **API responds:** `curl https://myfilepath.com/api/health`
+
+### Automated Verification Script
+
+```bash
+#!/bin/bash
+# post-deploy-check.sh
+
+echo "Checking myfilepath.com deployment..."
+
+# Check site loads
+if curl -s -o /dev/null -w "%{http_code}" https://myfilepath.com | grep -q "200"; then
+  echo "✅ Site loads"
+else
+  echo "❌ Site down"
+  exit 1
+fi
+
+# Check auth endpoint
+if curl -s https://myfilepath.com/api/auth/session | grep -q "session"; then
+  echo "✅ Auth endpoint responds"
+else
+  echo "⚠️ Auth endpoint issue"
+fi
+
+echo "Deployment verified!"
+```
+
+## Emergency Procedures
+
+### Site Down
+
+1. Check GitHub Actions for failed deploy:
+   ```bash
+   gh run list --limit 5
+   ```
+
+2. Check Cloudflare status:
+   ```bash
+   npx wrangler deployments list
+   ```
+
+3. Rollback if needed:
+   ```bash
+   npx wrangler rollback
+   ```
+
+4. Check logs:
+   ```bash
+   npx wrangler tail --format pretty
+   ```
+
+### Auth Issues
+
+1. Verify D1 database is accessible
+2. Check better-auth secret matches
+3. Check session cookie domain
+
+### Billing Issues
+
+1. Verify Stripe webhook secret
+2. Check Stripe dashboard for webhook deliveries
+3. Check D1 for credit balance records
