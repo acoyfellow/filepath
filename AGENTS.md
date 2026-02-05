@@ -304,3 +304,30 @@ npx wrangler dev --local
 2. Real API key validation
 3. Progress streaming to clients
 4. E2E agent test automation
+
+## Post-E2E TODO List
+
+### Phase 2: Polish & UX (After Gates Pass)
+
+**Unified Branding**
+- **Priority:** After E2E testing complete
+- **Goal:** Match internal pages to homepage aesthetic
+- **Pages to update:**
+  - Dashboard / "YOUR SESSIONS" page
+  - Settings pages (API keys, billing, profile)
+  - Session detail pages
+  - Any other internal UI
+- **Match:** Typography, colors, spacing, button styles from landing page
+- **Files:**
+  - `src/routes/dashboard/+page.svelte`
+  - `src/routes/settings/**/*.svelte`
+  - `src/routes/session/[id]/+page.svelte`
+- **Current issue:** Inconsistent styling across app
+- **Desired:** Professional, cohesive brand experience throughout
+
+**Order:**
+1. ✅ Fix critical bugs (form validation)
+2. ✅ E2E testing (12-step journey)
+3. ✅ All gates pass
+4. 🔜 Unified branding update
+
