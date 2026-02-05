@@ -77,6 +77,11 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
       autoSignIn: true,
       requireEmailVerification: false,
     },
+    user: {
+      deleteUser: {
+        enabled: true,
+      },
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // 1 day
