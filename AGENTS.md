@@ -17,16 +17,17 @@ Agent instructions for the myfilepath.com codebase.
 - Stripe billing (checkout, webhooks, credits)
 - Secrets encryption (AES-GCM)
 - Agents SDK foundation (TaskAgent DO)
-- Workflow classes defined
+- Workflow classes with real container integration
+- **PRD system with gates** (`prd.ts` + gates/*.gate.sh)
 
 🔄 **In Progress:**
-- Container integration in workflows
+- Fixing gate failures (login, API keys, orchestrator)
 - Real API key validation
 - Progress streaming
 
 ❌ **Not Done:**
-- E2E agent test automation
-- Production container execution
+- E2E agent test automation (north-star gate)
+- Production container execution verification
 
 ## Architecture Overview
 
@@ -76,12 +77,54 @@ npx tsc --noEmit
 # Health check (comprehensive)
 bash gates/health.sh
 
+# PRD gates (verify all features work)
+bun run prd.ts
+
 # Local dev
 npm run dev
 
 # Deploy
 npm run deploy
 ```
+
+## PRD System (Build in Reverse)
+
+**Philosophy:** Define what should work (prd.ts), verify reality (gates), iterate until gates pass.
+
+### Gate Files
+
+| Story | Gate File | Status |
+|-------|-----------|--------|
+| user-signup | `gates/signup.gate.sh` | ✅ Passing |
+| user-login | `gates/login.gate.sh` | ❌ Failing |
+| api-key-creation | `gates/api-e2e.gate.sh` | ❓ Unknown |
+| container-creation | `gates/terminal.gate.sh` | ❓ Unknown |
+| orchestrator-execute | `gates/orchestrator.gate.sh` | ❓ Unknown |
+| north-star (E2E) | `gates/full-user-lifecycle.gate.sh` | ❌ Failing |
+
+### Running Gates
+
+```bash
+# Run all gates in dependency order
+bun run prd.ts
+
+# Run specific gate
+bash gates/signup.gate.sh https://myfilepath.com
+
+# CI runs gates before deploy
+# See .github/workflows/deploy.yml
+```
+
+### Gate Execution Order
+
+1. **user-signup** - Must pass before login
+2. **user-login** - Must pass before API keys
+3. **api-key-creation** - Must pass before containers
+4. **container-creation** - Must pass before orchestrator
+5. **orchestrator-execute** - Must pass before E2E
+6. **north-star** - Full E2E flow
+
+**Stop on first failure.** Fix that gate before moving forward.
 
 ## Code Style Requirements
 
