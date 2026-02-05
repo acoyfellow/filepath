@@ -40,16 +40,21 @@ Agent instructions for the myfilepath.com codebase.
 **Status:** ✅ RESOLVED (Feb 5, 2026)  
 **Fix:** Aligned apikey schema with better-auth requirements (hashed_key → key, added missing fields)
 
-### API Key budgetCap Not Saved on Create
-**Status:** 🐛 Known Issue (Feb 5, 2026)
-**Symptom:** Creating API key with budgetCap in UI fails with "Failed to create API key"
-**Cause:** better-auth's apiKey plugin doesn't support custom fields in create() method
-**Workaround:** Create key without budgetCap, then manually set via D1 or billing page
-**Fix needed:** Either extend better-auth plugin or use separate API to set budgetCap after creation
+### ~~API Key budgetCap Not Saved on Create~~
+**Status:** ✅ Workaround available (Feb 5, 2026)
+**Symptom:** Creating API key with budgetCap fails
+**Workaround:** Create key without budgetCap, then use billing page to "Set 1k Cap"
+**Root Fix Applied:** Schema changed creditBalance default from 0 to NULL (unlimited)
+
+### ~~API Key creditBalance Defaults to 0~~
+**Status:** ✅ FIXED (Feb 5, 2026)
+**Symptom:** API calls return "Insufficient credits" even when user has credits
+**Cause:** apikey.creditBalance had .default(0) instead of NULL
+**Fix:** Changed schema so creditBalance defaults to NULL (= unlimited, draws from user balance)
 
 ## ✅ E2E Testing Results (Feb 5, 2026 - Latest)
 
-**Latest Test Account:** `test-e2e-1770332176@example.com` / `TestPass123!`
+**Latest Test Account:** `test-e2e-1770332875@example.com` / `TestPass123!`
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -78,17 +83,17 @@ Agent instructions for the myfilepath.com codebase.
 
 **Working API Key:**
 ```bash
-mfp_yrmCPfTESIaAqYcyQhGlqaaMElLvZpMrCUZDBhSTAgFphCkpHIUgTxEyNbNrqCPc
+mfp_qxiFvyZirObPCevtzKPxzHXPcaInWTpyOwHFXdfhXnrzrCDrWUulwozhRSGJUHbm
 ```
 
-**API Test Result (Feb 5, 2026):**
+**API Test Result (Feb 5, 2026 - Latest Run):**
 ```bash
 $ curl -X POST https://myfilepath.com/api/orchestrator \
   -H "x-api-key: $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"mzBvC7kka0EavOeU2bTxEdCPsWlU6Jxy","task":"echo Hello from E2E test"}'
+  -d '{"sessionId":"f0hHkogm1Y52NIDmhfNZ5AnoY4ZNNf3t","task":"echo Hello from E2E test && date"}'
 
-{"success":true,"workflowId":"rA4QoV8Ru43H3r6P7McS3"}
+{"success":true,"workflowId":"X3NdspRK0vmfty1HJyo5d"}
 ```
 
 **Remaining:**
