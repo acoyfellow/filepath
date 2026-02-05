@@ -74,6 +74,10 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   compatibilityDate: "2025-11-15",
   compatibilityFlags: ["nodejs_compat"],
   adopt: true,
+  bundle: {
+    // Mark "ai" (vercel AI SDK) as external - optional dep from agents package
+    external: ["ai"],
+  },
   bindings: {
     TaskAgent: TASK_AGENT_DO,
     Sandbox,
