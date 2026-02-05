@@ -1,6 +1,6 @@
 # Integration Status - myfilepath.com
 
-Last updated: Feb 2026
+Last updated: Feb 5, 2026
 
 ## ✅ Fully Integrated
 
@@ -78,9 +78,12 @@ Last updated: Feb 2026
   - Verifies completion
 
 ### Deja Memory
-- **Status:** ❌ Backend issues
-- **Notes:** Learn endpoint returning errors
-- **Dependency:** Needs deja.coey.dev fix
+- **Status:** ❌ Backend bug (blocking)
+- **Error:** `this.client.prepare is not a function`
+- **Endpoint:** POST https://deja.coey.dev/learn
+- **Impact:** Cannot store agent memories programmatically
+- **Workaround:** None - requires backend fix
+- **See:** `docs/KNOWN-ISSUES.md`
 
 ### MCP Tools
 - **Status:** ❌ Configured but not active
