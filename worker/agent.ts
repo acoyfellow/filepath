@@ -28,10 +28,18 @@ function routeToTaskAgent(request: Request, env: Env & { TaskAgent: DurableObjec
   const id = env.TaskAgent.idFromName(name);
   const agent = env.TaskAgent.get(id);
   
-  // Clone request and add partykit headers that set the agent's .name property
-  const req = new Request(request);
-  req.headers.set('x-partykit-room', name);
-  req.headers.set('x-partykit-namespace', 'task-agent');
+  // Create new headers with partykit room header (sets Agent.name)
+  const headers = new Headers(request.headers);
+  headers.set('x-partykit-room', name);
+  headers.set('x-partykit-namespace', 'task-agent');
+  
+  // Create new request with updated headers
+  const req = new Request(request.url, {
+    method: request.method,
+    headers,
+    body: request.body,
+    redirect: request.redirect,
+  });
   
   return agent.fetch(req);
 }
