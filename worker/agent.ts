@@ -23,6 +23,19 @@ export const CREATE_SESSION = CreateSessionWorkflow;
 // Re-export Sandbox for Container binding
 export { Sandbox } from '@cloudflare/sandbox';
 
+// Helper to route to TaskAgent with proper name headers set
+function routeToTaskAgent(request: Request, env: Env & { TaskAgent: DurableObjectNamespace }, name = 'default'): Promise<Response> {
+  const id = env.TaskAgent.idFromName(name);
+  const agent = env.TaskAgent.get(id);
+  
+  // Clone request and add partykit headers that set the agent's .name property
+  const req = new Request(request);
+  req.headers.set('x-partykit-room', name);
+  req.headers.set('x-partykit-namespace', 'task-agent');
+  
+  return agent.fetch(req);
+}
+
 // Worker fetch handler routes to Agent Durable Object
 export default {
   async fetch(request: Request, env: Env & { TaskAgent: DurableObjectNamespace }, ctx: ExecutionContext): Promise<Response> {
@@ -40,11 +53,9 @@ export default {
       });
     }
     
-    // Route /api/orchestrator to TaskAgent DO directly
+    // Route /api/orchestrator to TaskAgent DO with proper name headers
     if (url.pathname.startsWith('/api/orchestrator')) {
-      const id = env.TaskAgent.idFromName('default');
-      const agent = env.TaskAgent.get(id);
-      return agent.fetch(request);
+      return routeToTaskAgent(request, env, 'default');
     }
     
     // Route /agents/* via routeAgentRequest for proper SDK handling
@@ -55,9 +66,7 @@ export default {
       if (response) return response;
     }
     
-    // Default: route to TaskAgent
-    const id = env.TaskAgent.idFromName('default');
-    const agent = env.TaskAgent.get(id);
-    return agent.fetch(request);
+    // Default: route to TaskAgent with proper headers
+    return routeToTaskAgent(request, env, 'default');
   },
 };
