@@ -21,13 +21,30 @@ Agent instructions for the myfilepath.com codebase.
 - **PRD system with gates** (`prd.ts` + gates/*.gate.sh)
 
 🔄 **In Progress:**
-- Fixing gate failures (login, API keys, orchestrator)
+- **CRITICAL BUG:** Form validation on all auth pages (see below)
+- E2E user journey testing (12-step flow with screenshots)
 - Real API key validation
 - Progress streaming
 
 ❌ **Not Done:**
-- E2E agent test automation (north-star gate)
 - Production container execution verification
+
+## 🐛 Known Bugs
+
+### CRITICAL: Form Validation Bug
+**Status:** Blocking all UI auth flows  
+**Location:** All auth forms (login, signup, password reset)  
+**Issue:** "Email is required" error shows even when email is filled  
+**Impact:** Users cannot sign up or log in via UI  
+**Workaround:** API endpoints work perfectly  
+**Files to check:**
+- `src/routes/login/+page.svelte`
+- `src/routes/signup/+page.svelte`  
+- `src/routes/reset-password/+page.svelte`
+- Form submission handlers (better-auth client hooks)
+- Svelte 5 form data binding
+
+**Priority:** Fix this BEFORE E2E testing
 
 ## Architecture Overview
 
@@ -86,6 +103,31 @@ npm run dev
 # Deploy
 npm run deploy
 ```
+
+## E2E Testing Plan (12-Step Journey)
+
+**Goal:** Complete user flow with screenshots proving everything works
+
+### The Journey:
+1. 🏠 Landing page
+2. 📝 Sign up (email/password)
+3. 🏡 Dashboard - empty state ($0 credits)
+4. 💳 Stripe checkout ($10 = 1000 credits)
+5. 🎉 **Credits arrive** (webhook test - $0 → $10)
+6. 🆕 Create session (container spawn)
+7. 🖥️ Terminal view (ttyd interface)
+8. ⚙️ Settings → API Keys (create key)
+9. 🔌 API test (curl with key)
+10. 📊 **Credits deducting** (real-time)
+11. 💸 **Spending test** ($0.01/min rate)
+12. 🗑️ **Delete account** (verify can't log in)
+
+**Key Tests:**
+- Stripe webhook processes payment
+- Credits deduct per minute  
+- Account deletion works
+
+**Test Account Pattern:** `test-{timestamp}@example.com` / `TestPass123!`
 
 ## PRD System (Build in Reverse)
 
