@@ -4,7 +4,7 @@
 
 set -e
 
-BASE_URL="${BASE_URL:-http://localhost:5173}"
+BASE_URL="${1:-${BASE_URL:-http://localhost:5173}}"
 API_URL="$BASE_URL/api"
 
 echo "🔌 API E2E INTEGRATION TESTS"
@@ -31,9 +31,10 @@ AUTH_ENDPOINTS=(
 )
 
 for endpoint in "${AUTH_ENDPOINTS[@]}"; do
-  # Check if endpoint exists (returns 400 for GET, which is expected for POST-only)
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL$endpoint" 2>/dev/null || echo "000")
-  if [ "$STATUS" = "400" ] || [ "$STATUS" = "405" ] || [ "$STATUS" = "200" ]; then
+  # Check if endpoint exists - use POST since these are POST-only endpoints
+  # 400/401/422 = endpoint exists but bad request (expected)
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL$endpoint" -H "Content-Type: application/json" -d '{}' 2>/dev/null || echo "000")
+  if [ "$STATUS" = "400" ] || [ "$STATUS" = "401" ] || [ "$STATUS" = "422" ] || [ "$STATUS" = "200" ]; then
     echo "✅ $endpoint (status: $STATUS)"
   else
     echo "❌ $endpoint (status: $STATUS)"
