@@ -46,7 +46,7 @@ export class ExecuteTaskWorkflow extends AgentWorkflow<
         
         // Get sandbox for this session's container
         const containerId = `container-${sessionId}`;
-        const sandbox = getSandbox((this.env as Env).Sandbox, containerId);
+        const sandbox = getSandbox((this.env as Env).Sandbox as any, containerId);
         
         // Execute the command
         const result = await sandbox.exec(task);
