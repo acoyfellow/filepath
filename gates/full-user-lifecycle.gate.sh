@@ -4,7 +4,7 @@
 
 set -e
 
-BASE_URL="${BASE_URL:-http://localhost:5173}"
+BASE_URL="${1:-${BASE_URL:-http://localhost:5173}}"
 TEST_EMAIL="test-$(date +%s)@example.com"
 TEST_PASSWORD="TestPass123!"
 
