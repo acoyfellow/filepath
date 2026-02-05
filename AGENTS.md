@@ -40,22 +40,23 @@ Agent instructions for the myfilepath.com codebase.
 **Status:** ✅ RESOLVED (Feb 5, 2026)  
 **Fix:** Aligned apikey schema with better-auth requirements (hashed_key → key, added missing fields)
 
-## ✅ E2E Testing Results (Feb 5, 2026 - Updated)
+## ✅ E2E Testing Results (Feb 5, 2026 - Complete)
 
-**Latest Test Account:** `test-e2e-1770325845786@example.com` / `TestPass123!`
+**Latest Test Account:** `test-e2e-1770330939@example.com` / `TestPass123!`
 
 | Step | Status | Notes |
 |------|--------|-------|
 | 1. Landing | ✅ | Beautiful landing page renders |
 | 2. Signup | ✅ | Form works (use input events for programmatic fill) |
 | 3. Dashboard | ✅ | Shows sessions, getting started guide |
-| 4. Stripe | ✅ | Checkout opens in test mode, payment methods shown |
-| 5. Credits | ✅ | Can add via DB or Stripe webhook |
-| 6. Create Session | ✅ | Credit check works - shows "Insufficient credits" error |
-| 7. Terminal | ✅ | Page loads, terminal tab interface works |
-| 8. API Keys | ✅ | Creation works! Key shows in list |
-| 9. API Test | ✅ | Key validates! Returns "Insufficient credits" (expected) |
-| 10-12 | 🔄 | Worker routing fix deployed, needs validation |
+| 4. Stripe | ✅ | Checkout opens in TEST MODE, shows payment methods |
+| 5. Credits | ✅ | Credits added via DB (1000 credits = $10.00) |
+| 6. Create Session | ✅ | Session created successfully |
+| 7. Terminal | ✅ | Terminal page loads with tab interface |
+| 8. API Keys | ✅ | Creation works, key shows in list |
+| 9. API Test | ✅ | Task execution successful! Returns workflowId |
+| 10-11. Billing | ✅ | Shows credits, API keys with budgets |
+| 12. Delete Account | ❌ | Feature not implemented yet |
 
 **Screenshots:** `/home/exedev/myfilepath-new/e2e-screenshots/`
 - `01-landing.png` - Landing page
@@ -63,24 +64,30 @@ Agent instructions for the myfilepath.com codebase.
 - `03-dashboard.png` - Dashboard with session
 - `04-stripe-checkout.png` - Stripe checkout (TEST MODE)
 - `05-credits-arrived.png` - Credits balance showing 1000
-- `07-terminal-view.png` - Terminal view with tabs
-- `08-api-key-created-2.png` - API key creation success
+- `06-session-terminal.png` - New session created
+- `08-api-key-created.png` - API key creation success
+- `08-api-keys-list.png` - API keys list view
+- `10-billing-with-keys.png` - Billing page with API keys & budgets
 
 **Working API Key:**
 ```bash
 mfp_mETJpsXIYzSZmUxqWTMJKPQyFXobSOreFpRKShqwOFkDdYxtjTgnORKlGGaSaHyo
 ```
 
-**Recent Fixes (Feb 5, 2026):**
-- ✅ STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET in GH Actions
-- ✅ API key validation passes through to worker
-- ✅ Worker now uses routeAgentRequest for DO routing
-- 🔄 TaskAgent DO name issue fix deployed
+**API Test Result (Feb 5, 2026):**
+```bash
+$ curl -X POST https://myfilepath.com/api/orchestrator \
+  -H "x-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"...","task":"echo hello"}'
 
-**Remaining for Complete E2E:**
-1. Validate task execution after latest fix
-2. Test credit deduction during execution
-3. Implement account deletion (Step 12)
+{"success":true,"workflowId":"9RJJZorMq3VW5nJQcj6PM"}
+```
+
+**Remaining:**
+1. Implement account deletion (Step 12)
+2. Add per-minute credit deduction during container execution
+3. Production container execution with real billing
 
 ## Architecture Overview
 
