@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import { json, error, text } from '@sveltejs/kit';
-import { stripe } from '$lib/stripe';
+import { constructWebhookEvent } from '$lib/stripe';
 import { addUserCredits } from '$lib/billing';
 import { getDrizzle } from '$lib/auth';
 import { user } from '$lib/schema';
@@ -17,11 +17,16 @@ export const POST: RequestHandler = async ({ request, platform }) => {
   let event: Stripe.Event;
   
   try {
+    // Get env from platform (Cloudflare)
+    const env = platform?.env as { STRIPE_SECRET_KEY?: string; STRIPE_WEBHOOK_SECRET?: string } | undefined;
+    const webhookSecret = env?.STRIPE_WEBHOOK_SECRET || import.meta.env.VITE_STRIPE_WEBHOOK_SECRET || '';
+    
     // Verify webhook signature
-    event = stripe.webhooks.constructEvent(
+    event = constructWebhookEvent(
       body,
       sig || '',
-      import.meta.env.VITE_STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET || ''
+      webhookSecret,
+      env
     );
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
