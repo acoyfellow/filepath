@@ -39,6 +39,7 @@ const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-age
 });
 
 // D1 database for auth + metadata
+// Note: After fresh DB creation, update ALCHEMY_STATE_TOKEN to clear cached state
 const DB = await D1Database(`${projectName}-db`, {
   name: `${prefix}-db`,
   migrationsDir: "migrations",
