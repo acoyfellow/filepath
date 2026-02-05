@@ -149,7 +149,7 @@ export const apikey = sqliteTable(
     lastRequest: integer("last_request", { mode: "timestamp_ms" }),
     permissions: text("permissions"),
     // Custom myfilepath fields
-    creditBalance: integer("credit_balance").default(0),
+    creditBalance: integer("credit_balance"),  // NULL = unlimited (inherits from user)
     budgetCap: integer("budget_cap"),
     totalUsageMinutes: integer("total_usage_minutes").default(0),
     encryptedSecrets: text("encrypted_secrets"),
