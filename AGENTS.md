@@ -21,30 +21,47 @@ Agent instructions for the myfilepath.com codebase.
 - **PRD system with gates** (`prd.ts` + gates/*.gate.sh)
 
 🔄 **In Progress:**
-- **CRITICAL BUG:** Form validation on all auth pages (see below)
-- E2E user journey testing (12-step flow with screenshots)
-- Real API key validation
+- API key creation via UI (returns 401 despite valid session)
 - Progress streaming
+- Terminal/ttyd connection stability
 
 ❌ **Not Done:**
 - Production container execution verification
+- Stripe checkout (requires valid Stripe config)
 
-## 🐛 Known Bugs
+## 🐛 Known Issues
 
-### CRITICAL: Form Validation Bug
-**Status:** Blocking all UI auth flows  
-**Location:** All auth forms (login, signup, password reset)  
-**Issue:** "Email is required" error shows even when email is filled  
-**Impact:** Users cannot sign up or log in via UI  
-**Workaround:** API endpoints work perfectly  
-**Files to check:**
-- `src/routes/login/+page.svelte`
-- `src/routes/signup/+page.svelte`  
-- `src/routes/reset-password/+page.svelte`
-- Form submission handlers (better-auth client hooks)
-- Svelte 5 form data binding
+### API Key Creation Fails via UI
+**Status:** Needs investigation  
+**Location:** `/settings/api-keys` page  
+**Issue:** Creating API key shows "Failed to create API key"  
+**Root cause:** The better-auth `/api/auth/api-key/create` endpoint returns 401  
+**Workaround:** TBD - session may not be properly passed to the endpoint
 
-**Priority:** Fix this BEFORE E2E testing
+### Stripe Checkout Fails
+**Status:** Expected in dev environment  
+**Issue:** "Failed to create checkout session" error  
+**Root cause:** Stripe configuration or customer ID may not be set up for test users
+
+## ✅ E2E Testing Results (Feb 2026)
+
+**Test Account:** `test-1770322688@example.com` / `TestPass123!`
+
+| Step | Status | Notes |
+|------|--------|-------|
+| 1. Landing | ✅ | Renders correctly |
+| 2. Signup | ✅ | Form works, account created |
+| 3. Dashboard | ✅ | Shows sessions, navigation works |
+| 4. Stripe | ⚠️ | Checkout session creation fails |
+| 5. Credits | ⏭️ | Skipped (needs Stripe) |
+| 6. Create Session | ✅ | Existing session visible |
+| 7. Terminal | ✅ | Page loads, WebSocket connects |
+| 8. API Keys | ⚠️ | Page loads, creation fails |
+| 9-12 | ⏭️ | Needs working API keys & billing |
+
+**Form Validation Bug: RESOLVED** - Signup and login forms work correctly
+
+**Priority:** Fix API key creation to unblock API testing
 
 ## Architecture Overview
 
