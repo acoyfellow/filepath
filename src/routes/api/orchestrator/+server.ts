@@ -16,12 +16,28 @@ interface OrchestratorResponse {
   error?: string;
 }
 
+// Base64url encode (RFC 4648 §5, no padding)
+function base64UrlEncode(data: Uint8Array): string {
+  let base64 = '';
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  for (let i = 0; i < data.length; i += 3) {
+    const b1 = data[i];
+    const b2 = data[i + 1] ?? 0;
+    const b3 = data[i + 2] ?? 0;
+    base64 += chars[b1 >> 2];
+    base64 += chars[((b1 & 3) << 4) | (b2 >> 4)];
+    if (i + 1 < data.length) base64 += chars[((b2 & 15) << 2) | (b3 >> 6)];
+    if (i + 2 < data.length) base64 += chars[b3 & 63];
+  }
+  return base64.replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+// Hash API key using same algorithm as better-auth (SHA-256 + base64url)
 async function hashApiKey(key: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return base64UrlEncode(new Uint8Array(hashBuffer));
 }
 
 async function verifyApiKey(
