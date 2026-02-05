@@ -8,7 +8,7 @@ import type { RequestHandler } from './$types';
 /**
  * POST /api/billing/checkout - Create a Stripe checkout session
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
   if (!locals.user) {
     throw error(401, 'Unauthorized');
   }
@@ -29,13 +29,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       throw error(404, 'User not found');
     }
     
+    // Get env from platform (Cloudflare) - type-safe access
+    const env = platform?.env as { STRIPE_SECRET_KEY?: string } | undefined;
+    
     // Create Stripe checkout session
     const checkoutSession = await createCheckoutSession(
       fullUser.stripeCustomerId || '',
       session.user.email || '',
       creditAmount,
       `${import.meta.env.VITE_PUBLIC_URL || 'https://myfilepath.com'}/settings/billing/success`,
-      `${import.meta.env.VITE_PUBLIC_URL || 'https://myfilepath.com'}/settings/billing`
+      `${import.meta.env.VITE_PUBLIC_URL || 'https://myfilepath.com'}/settings/billing`,
+      env
     );
     
     // Return the URL for the frontend to redirect

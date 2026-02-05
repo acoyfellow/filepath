@@ -1,18 +1,21 @@
 import Stripe from 'stripe';
 
-let stripeInstance: Stripe | null = null;
+const stripeCache = new Map<string, Stripe>();
 
-export function getStripe(): Stripe {
-  if (!stripeInstance) {
-    const secretKey = import.meta.env.STRIPE_SECRET_KEY;
-    if (!secretKey) {
-      throw new Error('STRIPE_SECRET_KEY environment variable is required');
-    }
-    stripeInstance = new Stripe(secretKey, {
-      apiVersion: '2026-01-28.clover',
-    });
+export function getStripe(env?: { STRIPE_SECRET_KEY?: string }): Stripe {
+  // Try to get secret key from env parameter first, then import.meta.env
+  const secretKey = env?.STRIPE_SECRET_KEY || import.meta.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is required');
   }
-  return stripeInstance;
+  
+  // Cache by key to avoid creating multiple instances
+  if (!stripeCache.has(secretKey)) {
+    stripeCache.set(secretKey, new Stripe(secretKey, {
+      apiVersion: '2026-01-28.clover',
+    }));
+  }
+  return stripeCache.get(secretKey)!;
 }
 
 // Product and Price IDs (created in Stripe dashboard/API)
@@ -24,9 +27,10 @@ export async function createCheckoutSession(
   customerEmail: string,
   creditAmount: number,
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
+  env?: { STRIPE_SECRET_KEY?: string }
 ): Promise<Stripe.Checkout.Session> {
-  const stripe = getStripe();
+  const stripe = getStripe(env);
   
   // Calculate quantity based on credit amount ($10 for 1000 credits)
   const quantity = Math.max(1, Math.floor(creditAmount / 1000));
@@ -48,24 +52,28 @@ export async function createCheckoutSession(
   });
 }
 
-export async function getCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session> {
-  return getStripe().checkout.sessions.retrieve(sessionId);
+export async function getCheckoutSession(sessionId: string, env?: { STRIPE_SECRET_KEY?: string }): Promise<Stripe.Checkout.Session> {
+  return getStripe(env).checkout.sessions.retrieve(sessionId);
 }
 
 export function constructWebhookEvent(
   payload: string | Buffer,
   signature: string,
-  webhookSecret: string
+  webhookSecret: string,
+  env?: { STRIPE_SECRET_KEY?: string }
 ): Stripe.Event {
-  return getStripe().webhooks.constructEvent(payload, signature, webhookSecret);
+  return getStripe(env).webhooks.constructEvent(payload, signature, webhookSecret);
 }
 
 // For direct access when needed
-export const stripe = {
-  get instance() { return getStripe(); },
-  get customers() { return getStripe().customers; },
-  get products() { return getStripe().products; },
-  get prices() { return getStripe().prices; },
-  get checkout() { return getStripe().checkout; },
-  get webhooks() { return getStripe().webhooks; },
-};
+export function createStripeClient(env?: { STRIPE_SECRET_KEY?: string }) {
+  const stripe = getStripe(env);
+  return {
+    instance: stripe,
+    customers: stripe.customers,
+    products: stripe.products,
+    prices: stripe.prices,
+    checkout: stripe.checkout,
+    webhooks: stripe.webhooks,
+  };
+}
