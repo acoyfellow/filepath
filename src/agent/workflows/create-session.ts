@@ -1,12 +1,7 @@
 import { AgentWorkflow, type AgentWorkflowStep } from 'agents/workflows';
-import type { Env } from '../../types';
+import type { Env, CreateSessionParams } from '../../types';
 import type { TaskAgent } from '../index';
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
-
-interface CreateSessionParams {
-  userId: string;
-  sessionId: string;
-}
 
 interface CreateSessionProgress {
   status: 'creating' | 'starting-terminal' | 'ready' | 'failed';

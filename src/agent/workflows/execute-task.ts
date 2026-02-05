@@ -1,12 +1,6 @@
 import { AgentWorkflow, type AgentWorkflowStep } from 'agents/workflows';
-import type { Env } from '../../types';
+import type { Env, ExecuteTaskParams } from '../../types';
 import { getSandbox } from '@cloudflare/sandbox';
-
-interface ExecuteTaskParams {
-  userId: string;
-  sessionId: string;
-  task: string;
-}
 
 interface ExecuteTaskProgress {
   status: 'starting' | 'executing' | 'completed' | 'failed';
