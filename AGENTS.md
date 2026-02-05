@@ -96,11 +96,11 @@ npm run deploy
 | Story | Gate File | Status |
 |-------|-----------|--------|
 | user-signup | `gates/signup.gate.sh` | ✅ Passing |
-| user-login | `gates/login.gate.sh` | ❌ Failing |
-| api-key-creation | `gates/api-e2e.gate.sh` | ❓ Unknown |
-| container-creation | `gates/terminal.gate.sh` | ❓ Unknown |
-| orchestrator-execute | `gates/orchestrator.gate.sh` | ❓ Unknown |
-| north-star (E2E) | `gates/full-user-lifecycle.gate.sh` | ❌ Failing |
+| user-login | `gates/login.gate.sh` | ✅ Passing |
+| api-key-creation | `gates/api-e2e.gate.sh` | ✅ Passing |
+| container-creation | `gates/terminal.gate.sh` | ✅ Passing |
+| orchestrator-execute | `gates/orchestrator.gate.sh` | ✅ Passing |
+| north-star (E2E) | `gates/full-user-lifecycle.gate.sh` | ✅ Passing |
 
 ### Running Gates
 
