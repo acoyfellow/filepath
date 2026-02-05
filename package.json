@@ -72,7 +72,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "test": "bun run gates/prd.ts"
+    "test": "bun run prd.ts",
+    "prd": "bun run prd.ts",
+    "prd:loop": "bun run prd.ts --loop"
   },
   "type": "module"
 }
