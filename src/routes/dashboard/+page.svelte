@@ -151,7 +151,10 @@
         {#each sessions as session (session.id)}
           <div 
             class="border-4 border-black hover:bg-gray-50 cursor-pointer"
+            role="button"
+            tabindex="0"
             onclick={() => goto(`/session/${session.id}`)}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') goto(`/session/${session.id}`); }}
           >
             <div class="p-6">
               <div class="flex justify-between items-start mb-4">
