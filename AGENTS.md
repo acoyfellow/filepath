@@ -21,13 +21,13 @@ Agent instructions for the myfilepath.com codebase.
 - **PRD system with gates** (`prd.ts` + gates/*.gate.sh)
 
 🔄 **In Progress:**
-- API key creation via UI (returns 401 despite valid session)
 - Progress streaming
 - Terminal/ttyd connection stability
+- Stripe checkout (needs test mode config)
 
 ❌ **Not Done:**
-- Production container execution verification
-- Stripe checkout (requires valid Stripe config)
+- Production container execution with credits
+- Account deletion flow
 
 ## 🐛 Known Issues
 
@@ -41,30 +41,42 @@ Agent instructions for the myfilepath.com codebase.
 **Status:** ✅ RESOLVED (Feb 5, 2026)  
 **Fix:** Aligned apikey schema with better-auth requirements (hashed_key → key, added missing fields)
 
-## ✅ E2E Testing Results (Feb 5, 2026)
+## ✅ E2E Testing Results (Feb 5, 2026 - Updated)
 
-**Test Account:** `test-1770324253@example.com` / `TestPass123!`
+**Latest Test Account:** `test-e2e-1770325845786@example.com` / `TestPass123!`
 
 | Step | Status | Notes |
 |------|--------|-------|
-| 1. Landing | ✅ | Renders correctly |
-| 2. Signup | ✅ | Form works, account created |
-| 3. Dashboard | ✅ | Shows sessions, navigation works |
-| 4. Stripe | ⚠️ | Checkout needs Stripe test mode config |
+| 1. Landing | ✅ | Beautiful landing page renders |
+| 2. Signup | ✅ | Form works (use input events for programmatic fill) |
+| 3. Dashboard | ✅ | Shows sessions, getting started guide |
+| 4. Stripe | ⚠️ | Checkout fails - needs Stripe test mode config |
 | 5. Credits | ⏭️ | Skipped (needs Stripe) |
-| 6. Create Session | ✅ | Existing session visible |
-| 7. Terminal | ✅ | Page loads, WebSocket connects |
-| 8. API Keys | ✅ | Creation works! Key created successfully |
-| 9. API Test | ✅ | Key validated! Returns "Insufficient credits" (expected) |
+| 6. Create Session | ✅ | Credit check works - shows "Insufficient credits" error |
+| 7. Terminal | ✅ | Page loads, terminal tab interface works |
+| 8. API Keys | ✅ | Creation works! Key shows in list |
+| 9. API Test | ✅ | Key validates! Returns "Insufficient credits" (expected) |
 | 10-12 | ⏭️ | Needs credits to test execution |
 
-**Key Fixes Made:**
-- Added `/api/billing/checkout` endpoint (was missing)
-- Aligned apikey schema with better-auth (hashed_key → key, added fields)
-- Fixed API key hashing to use base64url (matching better-auth)
-- Created migration 0002 for production DB
+**Screenshots:** `/home/exedev/myfilepath-new/e2e-screenshots/`
+- `01-landing.png` - Landing page
+- `02-signup-form.png` - Signup form
+- `03-dashboard.png` - Dashboard with session
+- `04-billing.png` - Billing page with credit options
+- `06-create-session-credits.png` - Credit check error
+- `07-terminal.png` - Terminal view
+- `08-api-key-created.png` - API key creation success
 
-**Next Steps:** Configure Stripe test mode to enable billing flow
+**API Key Test:**
+```bash
+curl -X POST https://myfilepath.com/api/orchestrator \
+  -H "x-api-key: mfp_NalNEdke..." \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"test","task":"echo hello"}'
+# Returns: {"message":"Insufficient credits"} ✅
+```
+
+**Remaining:** Configure Stripe test mode to unlock billing flow
 
 ## Architecture Overview
 
