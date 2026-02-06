@@ -25,3 +25,7 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 dist/
+
+# Screenshots and previews
+e2e-screenshots/
+preview/
