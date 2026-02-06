@@ -228,7 +228,7 @@ bash gates/production/terminal-start.gate.sh https://myfilepath.com
 **CI Integration:** The `production-gates` job runs after deploy in `.github/workflows/deploy.yml`.
 Requires GH secrets: `TEST_EMAIL`, `TEST_PASSWORD`, `TEST_API_KEY`.
 
-**Status (Feb 6, 2026): ✅ All 4 production gates passing in CI (run 21747344914)**
+**Status (Feb 6, 2026): ✅ All 4 production gates passing in CI (runs 21747344914, 21747563059)** + local verification
 
 ### Running Gates
 
