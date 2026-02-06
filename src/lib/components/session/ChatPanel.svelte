@@ -4,14 +4,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Separator } from '$lib/components/ui/separator';
   import { tick } from 'svelte';
-
-  export interface ChatMessage {
-    id: string;
-    role: 'user' | 'agent';
-    content: string;
-    timestamp: number;
-    status?: 'sending' | 'complete' | 'error';
-  }
+  import type { ChatMessage } from '$lib/types/session';
 
   interface Props {
     agentName: string;
@@ -116,7 +109,7 @@
 
 {#if collapsed}
   <!-- Collapsed thin bar -->
-  <div class="flex h-full w-10 flex-col items-center border-x border-neutral-800 bg-neutral-950">
+  <div class="flex h-full w-full flex-col items-center bg-neutral-950">
     <button
       onclick={onToggleCollapse}
       class="flex w-full items-center justify-center py-3 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
@@ -136,7 +129,7 @@
   </div>
 {:else}
   <!-- Expanded chat panel -->
-  <div class="flex h-full min-w-0 flex-1 flex-col border-x border-neutral-800 bg-neutral-950">
+  <div class="flex h-full w-full min-w-0 flex-col bg-neutral-950">
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
       <div class="flex items-center gap-2.5">

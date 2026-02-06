@@ -22,7 +22,7 @@
   let activeWorker = $derived(workers.find((w) => w.id === activeWorkerId) ?? null);
 </script>
 
-<div class="flex h-full flex-col bg-neutral-950">
+<div class="flex h-full w-full flex-col bg-neutral-950">
   {#if workers.length === 0}
     <!-- Empty state -->
     <div class="flex flex-1 items-center justify-center">
