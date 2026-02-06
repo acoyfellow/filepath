@@ -77,12 +77,20 @@
         <h1 class="text-neutral-100 text-xl font-medium mb-1">Your sessions</h1>
         <p class="text-sm text-neutral-500">Manage your agent execution environments</p>
       </div>
-      <button
-        onclick={createNewSession}
-        class="px-4 py-2 text-sm font-medium bg-neutral-100 text-neutral-950 rounded hover:bg-white transition-colors cursor-pointer"
-      >
-        + new session
-      </button>
+      <div class="flex items-center gap-3">
+        <button
+          onclick={() => goto('/session/new')}
+          class="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded hover:bg-emerald-500 transition-colors cursor-pointer"
+        >
+          + new session
+        </button>
+        <button
+          onclick={createNewSession}
+          class="px-4 py-2 text-sm font-medium bg-neutral-800 text-neutral-300 border border-neutral-700 rounded hover:bg-neutral-700 transition-colors cursor-pointer"
+        >
+          quick terminal
+        </button>
+      </div>
     </div>
     
     {#if error}
