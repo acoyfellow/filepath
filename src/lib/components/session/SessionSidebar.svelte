@@ -174,7 +174,7 @@
         size="icon-sm"
         class="text-red-400 hover:bg-red-950 hover:text-red-300"
         onclick={onStopSession}
-        disabled={session.status === 'stopped' || session.status === 'draft'}
+        disabled={session.status !== 'running' && session.status !== 'starting'}
         aria-label="Stop session"
       >
         <span class="text-sm">⏹</span>
@@ -205,7 +205,7 @@
           size="sm"
           class="w-full"
           onclick={onStopSession}
-          disabled={session.status === 'stopped'}
+          disabled={session.status === 'error'}
         >
           ⏹ Stop Session
         </Button>
