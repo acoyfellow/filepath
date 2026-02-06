@@ -42,8 +42,8 @@
       
       const balanceData = await balanceResponse.json() as { balance: number };
       
-      if (balanceData.balance < 1000) {
-        error = 'Insufficient credits. Please add credits to your account to create a session. Minimum $10 (1000 credits) required.';
+      if (balanceData.balance < 1) {
+        error = 'Insufficient credits. Please add credits to your account to create a session.';
         return;
       }
       
