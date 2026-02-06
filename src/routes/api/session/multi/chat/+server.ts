@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { getDrizzle } from '$lib/auth';
-import { multiAgentSession } from '$lib/schema';
+import { multiAgentSession, agentSlot } from '$lib/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -46,6 +46,17 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       throw error(403, 'Forbidden');
     }
 
+    // Verify slotId belongs to this session
+    const slots = await db
+      .select()
+      .from(agentSlot)
+      .where(eq(agentSlot.id, body.slotId));
+
+    if (slots.length === 0 || slots[0]?.sessionId !== body.sessionId) {
+      throw error(404, 'Agent slot not found in this session');
+    }
+
+    // TODO: Route message to actual agent container via WebSocket/RPC
     return json({ success: true, messageId: crypto.randomUUID() });
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'status' in err) {

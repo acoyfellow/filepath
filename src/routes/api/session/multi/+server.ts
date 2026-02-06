@@ -1,12 +1,10 @@
 import { json, error } from '@sveltejs/kit';
 import { getDrizzle } from '$lib/auth';
 import { multiAgentSession, agentSlot, user as userTable } from '$lib/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-interface AgentConfig {
-  [key: string]: unknown;
-}
+import type { AgentConfig } from '$lib/types/session';
 
 interface CreateMultiSessionBody {
   name: string;
@@ -61,10 +59,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
       .where(eq(agentSlot.sessionId, sessionId));
 
     return json({
-      session: {
-        ...mas,
-        config: undefined,
-      },
+      session: mas,
       slots: slots.map((s) => ({
         ...s,
         config: JSON.parse(s.config),
