@@ -3,6 +3,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
   import { getAgent } from '$lib/agents/catalog';
+  import { statusColors } from './status-colors';
   import type { AgentSlot, MultiAgentSession } from '$lib/types/session';
 
   interface Props {
@@ -24,14 +25,6 @@
     onSelectSlot,
     onStopSession,
   }: Props = $props();
-
-  const statusColors: Record<AgentSlot['status'], string> = {
-    pending: 'bg-neutral-500',
-    starting: 'bg-amber-500 animate-pulse',
-    running: 'bg-emerald-500',
-    stopped: 'bg-neutral-600',
-    error: 'bg-red-500',
-  };
 
   const sessionStatusVariant: Record<MultiAgentSession['status'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
     draft: 'outline',
