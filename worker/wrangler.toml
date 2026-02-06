@@ -1,0 +1,29 @@
+name = "filepath-worker"
+main = "../.alchemy/out/filepath-worker/agent.js"
+compatibility_date = "2025-11-15"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[vars]
+API_WS_HOST = "api.myfilepath.com"
+BETTER_AUTH_SECRET = "52c058ced518cc556b0b9a1e0fc1ad2cf32a5b55ef07e4d7a278696e235b4908"
+BETTER_AUTH_URL = "https://myfilepath.com"
+
+[[d1_databases]]
+binding = "DB"
+database_id = "11c62299-1d8c-418f-b250-ff2598c699c6"
+database_name = "filepath-db"
+
+[[durable_objects.bindings]]
+name = "TaskAgent"
+class_name = "TaskAgent"
+
+[[durable_objects.bindings]]
+name = "Sandbox"
+class_name = "Sandbox"
+
+# Note: Workflows (EXECUTE_TASK, CREATE_SESSION) and Container (Sandbox)
+# bindings are managed via alchemy and the CF API. This config is for
+# deploying code updates only.
