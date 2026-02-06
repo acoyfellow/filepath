@@ -235,35 +235,6 @@
       </div>
     {/if}
 
-    {#if session.status === 'draft' || (session.status === 'starting' && isStarting)}
-      <!-- Pre-start overlay -->
-      <div class="flex flex-1 items-center justify-center">
-        <div class="text-center space-y-6 max-w-md">
-          <div class="text-6xl">{orchestratorSlot ? '🚀' : '⚙️'}</div>
-          <h2 class="text-xl font-semibold text-neutral-100">{session.name}</h2>
-          {#if session.description}
-            <p class="text-sm text-neutral-400">{session.description}</p>
-          {/if}
-          <div class="text-sm text-neutral-500">
-            {slots.length} agent{slots.length !== 1 ? 's' : ''} configured
-            ({workerSlots.length} worker{workerSlots.length !== 1 ? 's' : ''})
-          </div>
-          {#if isStarting}
-            <div class="flex flex-col items-center gap-3">
-              <div class="size-8 animate-spin rounded-full border-2 border-neutral-600 border-t-emerald-500"></div>
-              <p class="text-sm text-neutral-400">Starting containers…</p>
-            </div>
-          {:else}
-            <button
-              onclick={handleStartSession}
-              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-emerald-500"
-            >
-              ▶ Start Session
-            </button>
-          {/if}
-        </div>
-      </div>
-    {:else}
     <div class="flex-1 overflow-hidden">
       <PaneGroup direction="horizontal" autoSaveId="session-panels">
         <!-- Left: Sidebar Pane -->
@@ -275,7 +246,9 @@
             {selectedSlotId}
             onToggleCollapse={() => sidebarCollapsed = !sidebarCollapsed}
             onSelectSlot={handleSelectSlot}
+            onStartSession={handleStartSession}
             onStopSession={handleStopSession}
+            {isStarting}
           />
         </Pane>
 
@@ -309,7 +282,6 @@
         </Pane>
       </PaneGroup>
     </div>
-    {/if}
   </div>
 {:else}
   <!-- Legacy Single-Terminal Layout -->
