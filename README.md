@@ -1,334 +1,142 @@
 # myfilepath.com
 
-The platform for agents. Persistent execution environments that survive context limits.
+The platform for agents. Multi-agent orchestration with persistent execution environments.
 
-## Architecture (Feb 2026 - Agents SDK)
+## What It Does
 
-Built on **Cloudflare Agents SDK** for durable, long-running task orchestration.
+Users configure multi-agent sessions — pick an orchestrator and workers from a catalog of coding agents (Shelley, Claude Code, Codex, etc.), give them a task and a git repo, and watch them work in parallel in isolated containers.
+
+## Architecture
 
 ```
-Agent/Human → TaskAgent (DO) → Workflows → Containers
-              ↓                    ↓          ↓
-           API Keys          Long-running  Execution
-           Streaming         Orchestration Environment
+User → Wizard → Multi-Agent Session → Agent Slots → Containers
+                     ↓                     ↓            ↓
+               D1 metadata          Config/Status   Execution
+               Conductor API        Model/Router    (ttyd+bash)
 ```
 
-### Core Components
+### Stack
 
-- **TaskAgent** - Durable Object handling requests, managing workflows
-  - RPC methods via `@callable()` (fast, typed, streaming)
-  - REST API via `fetch()` (thin wrapper for external agents)
-  - WebSocket streaming (real-time progress)
+- **Cloudflare Workers** — Hosting, edge compute
+- **Agents SDK** — Durable Objects, Workflows
+- **Alchemy** — Infrastructure as code (NOT wrangler)
+- **SvelteKit** — Frontend (Svelte 5 syntax)
+- **D1** — SQLite database (auth, sessions, agent slots)
+- **Better Auth** — Email/password + API keys
+- **Stripe** — Prepaid credits ($0.01/min)
+- **Cloudflare Containers** — Isolated execution (ttyd terminal)
 
-- **Workflows** - Long-running task orchestration
-  - `ExecuteTaskWorkflow` - Run commands in containers
-  - `CreateSessionWorkflow` - Spawn new container sessions
-  - Built-in SQLite state, automatic retries, progress streaming
+### Agent Catalog
 
-- **Containers** - Isolated execution environments
-  - One per terminal/session
-  - Persistent filesystem
-  - Long-lived (minutes to days)
-  - Full shell access (bash, git, npm, python)
+| Agent | Icon | Roles | Default Model |
+|-------|------|-------|---------------|
+| Shelley | 🐚 | orchestrator, worker | claude-sonnet-4 |
+| Pi | 🥧 | orchestrator, worker | claude-sonnet-4 |
+| Claude Code | 🤖 | orchestrator, worker | claude-sonnet-4 |
+| OpenCode | 📖 | worker | claude-sonnet-4 |
+| Codex | 📜 | worker | o3 |
+| Amp | ⚡ | worker | claude-sonnet-4 |
+| Custom | 🔧 | orchestrator, worker | claude-sonnet-4 |
 
-### Why Agents SDK?
+## Key Pages
 
-**Before:** Custom DOs + manual state tracking + retry logic + WebSocket routing = lots of code
+| Route | Purpose |
+|-------|--------|
+| `/` | Landing page (redirects to dashboard if logged in) |
+| `/signup`, `/login` | Auth |
+| `/dashboard` | Session list (legacy terminals + multi-agent) |
+| `/session/new` | Multi-agent session wizard |
+| `/session/[id]` | 3-panel view: sidebar, chat, worker tabs |
+| `/settings/api-keys` | API key management |
+| `/settings/billing` | Credits, Stripe checkout |
+| `/pricing` | Pricing page |
+| `/docs` | Documentation |
 
-**After:** Agent class + Workflows = batteries included
+## API Endpoints
 
-- ✅ State persistence (automatic SQLite)
-- ✅ Long-running tasks (days/weeks)
-- ✅ Progress streaming (built-in broadcast)
-- ✅ Retry logic (automatic)
-- ✅ Human-in-loop (approval gates)
-- ✅ Type-safe RPC
-
-## Stack
-
-- **Cloudflare Agents SDK** - Task orchestration & streaming
-- **SvelteKit** - Frontend framework
-- **Better Auth** - Authentication (humans + agents)
-- **Cloudflare Workflows** - Long-running task execution
-- **Cloudflare Containers** - Terminal sandboxes
-- **D1** - Database for auth + metadata
-- **Alchemy** - Infrastructure as code
-- **Deja** - Cross-session agent memory
-
-## Quick Start (For Agents)
-
-### 1. Get API Key
-
-```bash
-# Sign up
-curl -X POST https://myfilepath.com/api/auth/sign-up/email \
-  -H "Content-Type: application/json" \
-  -d '{"email":"agent@example.com","password":"secure123","name":"Agent"}'
-
-# Login and create API key via dashboard
-# https://myfilepath.com/settings/api-keys
-```
-
-### 2. Create Session
-
-```bash
-curl -X POST https://myfilepath.com/api/orchestrator/session \
-  -H "x-api-key: YOUR_KEY"
-
-# Returns: {"workflowId": "abc-123", "sessionId": "session-xyz"}
-```
-
-### 3. Execute Task
-
-```bash
-curl -X POST https://myfilepath.com/api/orchestrator \
-  -H "x-api-key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"sessionId":"session-xyz","task":"echo hello && ls -la"}'
-
-# Returns: {"workflowId": "task-456"}
-```
-
-### 4. Stream Progress (WebSocket)
-
-```javascript
-const ws = new WebSocket('wss://api.myfilepath.com/agent/task-agent/default');
-ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
-// Receives: {"workflowId": "task-456", "type": "progress", "status": "running"}
-```
+| Endpoint | Method | Auth | Purpose |
+|----------|--------|------|--------|
+| `/api/session/multi` | POST | Cookie | Create multi-agent session |
+| `/api/session/multi?id=X` | GET | Cookie | Get session + slots |
+| `/api/session/multi/list` | GET | Cookie | List user's sessions |
+| `/api/session/multi/chat` | POST | Cookie | Send message to agent |
+| `/api/session/multi/stop` | POST | Cookie | Stop session |
+| `/api/orchestrator` | POST | x-api-key | Execute task (legacy) |
+| `/api/billing/checkout` | POST | Cookie | Stripe checkout |
+| `/api/billing/balance` | GET | Cookie | Credit balance |
 
 ## Development
 
 ```bash
-npm install
-npm run dev        # localhost:5173
+bun install
+bun run dev        # localhost:5173
+
+# Build check (ALWAYS before commit)
+bunx tsc --noEmit
+
+# Health check
+bash gates/health.sh
+
+# Deploy (uses Alchemy, never wrangler)
+bun run deploy
 ```
 
-## UI Components (shadcn-svelte)
-
-We use [shadcn-svelte](https://shadcn-svelte.com/) for UI components.
-
-```bash
-# Add a new component
-bunx shadcn-svelte@latest add [component-name] -y
-
-# Examples:
-bunx shadcn-svelte@latest add button -y
-bunx shadcn-svelte@latest add card input label dialog -y
-```
-
-Components are installed to `src/lib/components/ui/`. Import like:
-
-```svelte
-<script>
-  import { Button } from "$lib/components/ui/button";
-  import * as Card from "$lib/components/ui/card";
-</script>
-```
-
-## Deploy
-
-```bash
-# Production (myfilepath.com)
-npm run deploy
-
-# Preview
-npm run deploy:preview
-```
-
-## Memory System (Deja)
-
-This project uses [Deja](https://deja.coey.dev) for cross-session agent memory.
-
-### For Agents Using This Platform
-
-Memory is automatically scoped to your API key. Store learnings for future sessions:
-
-```bash
-curl -X POST https://deja.coey.dev/learn \
-  -H "Authorization: Bearer $DEJA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "trigger": "when working on myfilepath projects",
-    "learning": "container sessions persist across disconnects",
-    "confidence": 0.9
-  }'
-```
-
-Query memories at session start:
-
-```bash
-curl -X POST https://deja.coey.dev/inject \
-  -H "Content-Type: application/json" \
-  -d '{
-    "context": "working on myfilepath task",
-    "format": "prompt",
-    "limit": 5
-  }'
-```
-
-### For Contributors
-
-Memory is project-scoped. Set up local Deja access:
-
-```bash
-cp .env.example .env
-# Add your DEJA_API_KEY
-```
-
-Contact maintainer for project-specific Deja credentials.
-
-## Architecture Details
-
-### Request Flow
+## Key Directories
 
 ```
-1. Agent → POST /api/orchestrator (with x-api-key)
-2. Worker routes to TaskAgent DO
-3. TaskAgent.fetch() validates key
-4. Calls @callable executeTask() method
-5. Triggers ExecuteTaskWorkflow
-6. Workflow spawns/reuses container
-7. Executes command in container
-8. Streams progress: Workflow → Agent → WebSocket clients
-9. Returns result (persisted in Workflow SQLite)
+src/
+├── agent/                    # Durable Objects + Workflows
+│   ├── task-agent.ts         # Main DO (dual RPC+REST interface)
+│   └── workflows/            # ExecuteTask, CreateSession
+├── lib/
+│   ├── agents/catalog.ts     # Agent registry (7 agents)
+│   ├── types/session.ts      # AgentSlot, MultiAgentSession, ModelId, etc.
+│   ├── types/conductor.ts    # Conductor interface (orchestration API)
+│   ├── components/session/   # ChatPanel, SessionSidebar, WorkerTabs
+│   ├── components/wizard/    # StepBasics, StepOrchestrator, StepWorkers, StepReview
+│   ├── schema.ts             # Drizzle schema (D1)
+│   └── auth.ts               # Better-auth config
+├── routes/
+│   ├── session/new/          # Wizard page
+│   ├── session/[id]/         # 3-panel session view
+│   ├── dashboard/            # Session list
+│   ├── api/session/multi/    # Multi-agent CRUD endpoints
+│   └── settings/             # API keys, billing, account
+gates/                        # Health checks + production gates
+alchemy.run.ts                # Infrastructure config
 ```
 
-### State Layers
+## Current Sprint: Multi-Agent Orchestration
 
-- **Agent State** (DO SQLite): API key cache, session registry, WebSocket connections
-- **Workflow State** (Workflow SQLite): Task params, execution steps, progress, results
-- **Container State** (Filesystem): Project files, git repos, build artifacts
+### ✅ Done
+- Agent catalog with 7 agent types
+- Session creation wizard (4-step: basics → orchestrator → workers → review)
+- 3-panel session view (sidebar, chat, worker tabs with iframes)
+- D1 schema: `multi_agent_session` + `agent_slot` tables
+- Full CRUD API for multi-agent sessions
+- Conductor type interface (typed orchestration API)
+- Shared components (AgentConfigEditor, status colors)
+- All legacy features working (auth, billing, terminals, API keys, production gates)
 
-### Dual Interface Pattern
+### 🔄 In Progress
+- Container spin-up for agent slots (slot → container mapping)
+- Actual agent execution inside containers
+- Progress streaming from agents to UI
+- Per-minute credit deduction during execution
 
-TaskAgent supports both RPC and REST with zero duplication:
+### ❌ Not Started
+- Real conductor implementation (currently types only)
+- Inter-agent communication (orchestrator ↔ workers)
+- Git repo cloning into containers
+- Session pause/resume
+- E2E multi-agent test automation
 
-```typescript
-// RPC (fast, typed, streaming)
-@callable()
-async executeTask(sessionId: string, task: string, apiKey: string) {
-  // Core logic here
-}
+## Footguns
 
-// REST (thin wrapper)
-async fetch(request: Request) {
-  const apiKey = request.headers.get('x-api-key');
-  const { sessionId, task } = await request.json();
-  return await this.executeTask(sessionId, task, apiKey);
-}
-```
-
-## Development Status
-
-### ✅ Completed
-- Agent SDK foundation
-- TaskAgent DO with dual interface (RPC + REST)
-- Workflow classes (ExecuteTask, CreateSession)
-- Better-auth integration
-- Stripe billing
-- API key system
-- SvelteKit UI
-- Container infrastructure
-
-### 🚧 In Progress (Feb 2026)
-- Container integration in workflows
-- Real-time progress streaming
-- Workflow status polling
-- E2E testing
-
-### 📋 Roadmap
-- Human-in-loop approval gates
-- Multi-container orchestration
-- Resource limits & billing
-- MCP tool integration
-
-## Footguns (Cloudflare Containers + ttyd)
-
-These cost hours to debug. Don't repeat them.
-
-### 1. ttyd requires initial size message
-
-WebSocket connects but terminal shows nothing? ttyd waits for a size message before sending output.
-
-```typescript
-// After connecting to ttyd via sandbox.wsConnect:
-await new Promise(r => setTimeout(r, 100));
-ttydWs.send(JSON.stringify({ columns: 80, rows: 24 }));
-```
-
-### 2. Skip waitForPort in production
-
-`sandbox.waitForPort()` is unreliable and times out. Let the WebSocket retry loop handle ttyd startup instead.
-
-```typescript
-// DON'T do this in prod:
-await ttyd.waitForPort(7681, { mode: 'tcp', timeout: 60000 }); // Will timeout!
-
-// DO: Just start the process and let WS retries handle it
-const ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
-```
-
-### 3. Worker needs compatibility flags for Containers
-
-```typescript
-// alchemy.run.ts
-await Worker('worker', {
-  compatibilityDate: "2025-11-15",
-  compatibilityFlags: ["nodejs_compat"],
-  observability: { enabled: true },  // For debugging
-  // ...
-});
-```
-
-### 4. SvelteKit cannot proxy WebSocket
-
-Architecture must be:
-- **HTTP** → SvelteKit → Worker (via server routes or service binding)
-- **WebSocket** → Worker directly (api.myfilepath.com)
-
-The terminal HTML page must connect WS to the API domain, not same origin.
-
-### 5. Preserve request headers in wsConnect
-
-```typescript
-// Copy original request headers for ttyd handshake:
-const wsHeaders = new Headers(request.headers);
-if (!wsHeaders.get('Sec-WebSocket-Protocol')) {
-  wsHeaders.set('Sec-WebSocket-Protocol', 'tty');
-}
-const wsRequest = new Request(wsUrl, { headers: wsHeaders, method: 'GET' });
-```
-
-## GitHub Actions Debugging
-
-Deploy runs on every push. Check status and debug failures:
-
-```bash
-# List recent runs
-gh run list --limit 5
-
-# View logs for a failed run
-gh run view <RUN_ID> --log 2>/dev/null | tail -100
-
-# Quick failure diagnosis
-gh run view <RUN_ID> --log 2>/dev/null | grep -A5 "error\|ERROR\|failed" | head -30
-
-# Re-run a failed workflow
-gh run rerun <RUN_ID>
-```
-
-**Common failures:**
-
-1. **Alchemy state decryption error** - `ALCHEMY_PASSWORD` mismatch between local and GH secrets
-   - Fix: Ensure `.env` ALCHEMY_PASSWORD matches the GitHub secret
-   - Or reset state: delete alchemy state in Cloudflare and redeploy
-
-2. **Type errors** - Build fails on tsc
-   - Fix: Run `npx tsc --noEmit` locally and fix errors before pushing
-
-3. **Missing secrets** - Environment variables not set
-   - Check: `gh secret list` to see configured secrets
-   - Required: ALCHEMY_PASSWORD, ALCHEMY_STATE_TOKEN, CLOUDFLARE_*, BETTER_AUTH_SECRET
-
-**The health check (`gates/health.sh`) automatically checks GH Actions status.**
+1. **Use `bun`/`bunx`**, not npm/npx
+2. **Use Alchemy**, not wrangler — `alchemy.run.ts` is the config
+3. **Svelte 5 syntax** — `onclick={fn}` not `on:click={fn}`
+4. **ttyd needs size message** — send `{columns:80, rows:24}` on WS connect
+5. **Skip `waitForPort`** in production — let WS retry handle ttyd startup
+6. **SvelteKit can't proxy WebSocket** — terminal WS goes direct to worker
+7. **`noUncheckedIndexedAccess`** — `arr[0]` is `T | undefined`

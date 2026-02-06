@@ -4,398 +4,175 @@ Agent instructions for the myfilepath.com codebase.
 
 ## Project Context
 
-**Product:** myfilepath.com - The platform for agents  
-**Goal:** Orchestration layer + coey.dev ecosystem integration  
-**Architecture:** Cloudflare Agents SDK with dual interface pattern
+**Product:** myfilepath.com — Multi-agent orchestration platform  
+**Stack:** Cloudflare Workers + Agents SDK + SvelteKit + D1 + Alchemy  
+**Sprint:** Multi-agent session orchestration (Feb 2026)
 
 ## Current Status (Feb 2026)
 
 ✅ **Working:**
-- Build passes (`npx tsc --noEmit` clean)
-- SvelteKit UI (landing, auth, dashboard, settings)
+- Build passes (`bunx tsc --noEmit` clean)
+- SvelteKit UI (landing, auth, dashboard, wizard, session view, settings)
 - Better-auth (email/password, API keys)
 - Stripe billing (checkout, webhooks, credits)
 - Secrets encryption (AES-GCM)
-- Agents SDK foundation (TaskAgent DO)
-- Workflow classes with real container integration
-- **PRD system with gates** (`prd.ts` + gates/*.gate.sh)
+- Agents SDK foundation (TaskAgent DO + Workflows)
+- Terminal containers (ttyd + Cloudflare Containers)
+- Production gates in CI (visual regression, terminal, credit, billing)
+- Agent catalog (7 agent types: shelley, pi, opencode, codex, amp, claude-code, custom)
+- Multi-agent DB schema (`multi_agent_session` + `agent_slot` tables)
+- Multi-agent CRUD API (`/api/session/multi/*`)
+- Session wizard (4-step: basics → orchestrator → workers → review)
+- 3-panel session view (sidebar, chat panel, worker tabs)
+- Conductor type interface (typed orchestration API)
+- Shared components (AgentConfigEditor, statusColors, ChatMessage)
 
 🔄 **In Progress:**
-- Progress streaming
-- ~~Terminal container startup (sandbox.startProcess hangs)~~ ✅ FIXED: Worker Sandbox binding was pointing to stale DO namespace. Fixed via CF API to use `filepath-filepath-sandbox-runner` namespace (`02e6cb8e`).
-- Per-minute credit deduction during container execution
+- Container spin-up for agent slots
+- Agent execution inside containers
+- Progress streaming from agents to UI
+- Per-minute credit deduction
 
-❌ **Not Done:**
-- Production container execution with credits
-- Account deletion flow
+❌ **Not Started:**
+- Real conductor implementation (types exist, no runtime yet)
+- Inter-agent communication (orchestrator ↔ workers)
+- Git repo cloning into containers
+- Session pause/resume
+- E2E multi-agent test
 
-## 🐛 Known Issues
-
-### ~~Stripe Checkout Configuration~~
-**Status:** ✅ RESOLVED (Feb 5, 2026)  
-**Fix:** Added STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET to GH Actions and alchemy.run.ts  
-**Test:** Checkout opens Stripe test mode page successfully
-
-### ~~API Key Creation Fails via UI~~
-**Status:** ✅ RESOLVED (Feb 5, 2026)  
-**Fix:** Aligned apikey schema with better-auth requirements (hashed_key → key, added missing fields)
-
-### ~~API Key budgetCap Not Saved on Create~~
-**Status:** ✅ Workaround available (Feb 5, 2026)
-**Symptom:** Creating API key with budgetCap fails
-**Workaround:** Create key without budgetCap, then use billing page to "Set 1k Cap"
-**Root Fix Applied:** Schema changed creditBalance default from 0 to NULL (unlimited)
-
-### ~~API Key creditBalance Defaults to 0~~
-**Status:** ✅ FIXED (Feb 5, 2026)
-**Symptom:** API calls return "Insufficient credits" even when user has credits
-**Cause:** apikey.creditBalance had .default(0) instead of NULL
-**Fix:** Changed schema so creditBalance defaults to NULL (= unlimited, draws from user balance)
-
-## ✅ E2E Testing Results (Feb 5, 2026 - Latest)
-
-**Latest Test Account:** `test-e2e-1770332875@example.com` / `TestPass123!`
-
-| Step | Status | Notes |
-|------|--------|-------|
-| 1. Landing | ✅ | Beautiful landing page renders |
-| 2. Signup | ✅ | Form works (use input events for programmatic fill) |
-| 3. Dashboard | ✅ | Shows sessions, getting started guide |
-| 4. Stripe | ✅ | Checkout opens in TEST MODE, shows payment methods |
-| 5. Credits | ✅ | Credits added via DB (1000 credits = $10.00) |
-| 6. Create Session | ✅ | Session created successfully |
-| 7. Terminal | ✅ | Terminal page loads with tab interface |
-| 8. API Keys | ✅ | Creation works, key shows in list |
-| 9. API Test | ✅ | Task execution successful! Returns workflowId |
-| 10-11. Billing | ✅ | Shows credits, API keys with budgets |
-| 12. Delete Account | ✅ | Page added, deleteUser enabled in better-auth |
-
-**Screenshots:** `/home/exedev/myfilepath-new/e2e-screenshots/`
-- `final-01-landing.png` - Landing page
-- `final-02-signup.png` - Signup form  
-- `final-03-dashboard.png` - Dashboard with session
-- `final-04-stripe-checkout.png` - Stripe checkout (TEST MODE)
-- `final-05-credits-arrived.png` - Credits balance showing 1000
-- `final-06-07-terminal.png` - Session/Terminal view
-- `final-08-api-key-created.png` - API key creation success
-- `final-08-api-keys-list.png` - API keys list view
-- `final-10-11-billing-with-keys.png` - Billing page with API keys & budgets
-
-**Working API Key:**
-```bash
-mfp_qxiFvyZirObPCevtzKPxzHXPcaInWTpyOwHFXdfhXnrzrCDrWUulwozhRSGJUHbm
-```
-
-**API Test Result (Feb 5, 2026 - Latest Run):**
-```bash
-$ curl -X POST https://myfilepath.com/api/orchestrator \
-  -H "x-api-key: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"sessionId":"f0hHkogm1Y52NIDmhfNZ5AnoY4ZNNf3t","task":"echo Hello from E2E test && date"}'
-
-{"success":true,"workflowId":"X3NdspRK0vmfty1HJyo5d"}
-```
-
-**Remaining:**
-1. ~~Implement account deletion (Step 12)~~ ✅ Done
-2. Add per-minute credit deduction during container execution
-3. Production container execution with real billing
-
-**Commits from E2E Session (Feb 5, 2026):**
-- `10a3638` - fix: API key creditBalance should default to NULL (unlimited)
-- `30dc4f5` - docs: Update E2E test results and bug status
-- `3f35c64` - feat: Add account deletion page (Step 12)
-- `2c7128e` - fix: Add destructive color CSS variable for delete button styling
-- `2111e5f` - fix: Enable deleteUser in better-auth config
-
-## Architecture Overview
+## Architecture
 
 ```
-Agent/Human → TaskAgent (DO) → Workflows → Containers
-              ↓                    ↓          ↓
-           API Keys          Long-running  Execution
-           Streaming         Orchestration Environment
+User → Wizard → Multi-Agent Session → Agent Slots → Containers
+                     ↓                     ↓            ↓
+               D1 metadata          Config/Status   Execution
+               Conductor API        Model/Router    (ttyd+bash)
 ```
 
 ### Core Components
 
-| Component | Purpose | File |
-|-----------|---------|------|
-| TaskAgent | Durable Object for request handling | `src/agent/task-agent.ts` |
-| ExecuteTaskWorkflow | Run commands in containers | `src/agent/workflows/execute-task.ts` |
-| CreateSessionWorkflow | Spawn container sessions | `src/agent/workflows/create-session.ts` |
-| Containers | Isolated execution (ttyd + bash) | Cloudflare Containers |
+| Component | File | Purpose |
+|-----------|------|---------|
+| TaskAgent | `src/agent/task-agent.ts` | Main DO (dual RPC+REST interface) |
+| ExecuteTaskWorkflow | `src/agent/workflows/execute-task.ts` | Run commands in containers |
+| CreateSessionWorkflow | `src/agent/workflows/create-session.ts` | Spawn container sessions |
+| Agent Catalog | `src/lib/agents/catalog.ts` | Registry of 7 agent types |
+| Session Types | `src/lib/types/session.ts` | AgentSlot, MultiAgentSession, ModelId |
+| Conductor | `src/lib/types/conductor.ts` | Orchestration API interface |
+| Wizard | `src/lib/components/wizard/` | 4-step session creation |
+| Session View | `src/lib/components/session/` | 3-panel layout |
 
 ### Dual Interface Pattern
 
-TaskAgent provides both RPC and REST with zero duplication:
-
 ```typescript
-// RPC - primary interface (@callable methods)
+// @callable = primary interface (RPC, typed, streaming)
 @callable()
-async executeTask(sessionId: string, task: string, apiKey: string) {
-  // Core logic
-}
+async executeTask(sessionId: string, task: string, apiKey: string) { ... }
 
-// REST - thin wrapper extracts API key, calls RPC
+// fetch() = thin REST wrapper
 async fetch(request: Request) {
   const apiKey = request.headers.get('x-api-key');
-  const { sessionId, task } = await request.json();
   return await this.executeTask(sessionId, task, apiKey);
 }
 ```
 
-**Why:** Single source of truth in `@callable` methods. REST is just routing.
-
-## Development Commands
+## Development
 
 ```bash
-# Build check (ALWAYS run before commit)
-npx tsc --noEmit
-
-# Health check (comprehensive)
-bash gates/health.sh
-
-# PRD gates (verify all features work)
-bun run prd.ts
-
-# Local dev
-npm run dev
-
-# Deploy
-npm run deploy
+bun install
+bun run dev          # localhost:5173
+bunx tsc --noEmit    # Build check (ALWAYS before commit)
+bash gates/health.sh # Full health check
+bun run deploy       # Deploy via Alchemy
 ```
 
-## E2E Testing Plan (12-Step Journey)
-
-**Goal:** Complete user flow with screenshots proving everything works
-
-### The Journey:
-1. 🏠 Landing page
-2. 📝 Sign up (email/password)
-3. 🏡 Dashboard - empty state ($0 credits)
-4. 💳 Stripe checkout ($10 = 1000 credits)
-5. 🎉 **Credits arrive** (webhook test - $0 → $10)
-6. 🆕 Create session (container spawn)
-7. 🖥️ Terminal view (ttyd interface)
-8. ⚙️ Settings → API Keys (create key)
-9. 🔌 API test (curl with key)
-10. 📊 **Credits deducting** (real-time)
-11. 💸 **Spending test** ($0.01/min rate)
-12. 🗑️ **Delete account** (verify can't log in)
-
-**Key Tests:**
-- Stripe webhook processes payment
-- Credits deduct per minute  
-- Account deletion works
-
-**Test Account Pattern:** `test-{timestamp}@example.com` / `TestPass123!`
-
-## PRD System (Build in Reverse)
-
-**Philosophy:** Define what should work (prd.ts), verify reality (gates), iterate until gates pass.
-
-### Gate Files
-
-| Story | Gate File | Status |
-|-------|-----------|--------|
-| user-signup | `gates/signup.gate.sh` | ✅ Passing |
-| user-login | `gates/login.gate.sh` | ✅ Passing |
-| api-key-creation | `gates/api-e2e.gate.sh` | ✅ Passing |
-| container-creation | `gates/terminal.gate.sh` | ✅ Passing |
-| orchestrator-execute | `gates/orchestrator.gate.sh` | ✅ Passing |
-| north-star (E2E) | `gates/full-user-lifecycle.gate.sh` | ✅ Passing |
-
-### Production Gates (Post-Deploy)
-
-Run automatically in CI after every deploy to main:
-
-| Gate | File | What it tests |
-|------|------|---------------|
-| Visual Regression | `gates/production/visual-regression.gate.sh` | All pages render (public + auth'd), content markers |
-| Terminal Start | `gates/production/terminal-start.gate.sh` | Login → create session → load terminal page |
-| Credit Deduction | `gates/production/credit-deduction.gate.sh` | Balance endpoint, auth enforcement, API key validation |
-| Billing Webhook | `gates/production/billing-webhook.gate.sh` | Stripe checkout, webhook endpoint, billing page |
-
-```bash
-# Run all production gates
-bash gates/production/run-all.sh https://myfilepath.com
-
-# Run individual gate
-bash gates/production/terminal-start.gate.sh https://myfilepath.com
-```
-
-**CI Integration:** The `production-gates` job runs after deploy in `.github/workflows/deploy.yml`.
-Requires GH secrets: `TEST_EMAIL`, `TEST_PASSWORD`, `TEST_API_KEY`.
-
-**Status (Feb 6, 2026): ✅ All 4 production gates passing in CI (runs 21747344914, 21747563059)** + local verification
-
-### Running Gates
-
-```bash
-# Run all gates in dependency order
-bun run prd.ts
-
-# Run specific gate
-bash gates/signup.gate.sh https://myfilepath.com
-
-# CI runs gates before deploy
-# See .github/workflows/deploy.yml
-```
-
-### Gate Execution Order
-
-1. **user-signup** - Must pass before login
-2. **user-login** - Must pass before API keys
-3. **api-key-creation** - Must pass before containers
-4. **container-creation** - Must pass before orchestrator
-5. **orchestrator-execute** - Must pass before E2E
-6. **north-star** - Full E2E flow
-
-**Stop on first failure.** Fix that gate before moving forward.
-
-## Code Style Requirements
+## Code Rules
 
 ### Svelte 5 Syntax (CRITICAL)
-
 ```svelte
-<!-- ❌ WRONG - Svelte 4 -->
-<button on:click={handler}>Click</button>
-<form on:submit|preventDefault={submit}>...
-
-<!-- ✅ RIGHT - Svelte 5 -->
-<button onclick={handler}>Click</button>
-<form onsubmit={(e) => { e.preventDefault(); submit(); }}>...
+<!-- ❌ WRONG --><button on:click={fn}>   <!-- ✅ RIGHT --><button onclick={fn}>
+<!-- ❌ WRONG --><form on:submit|preventDefault>  <!-- ✅ RIGHT --><form onsubmit={(e) => { e.preventDefault(); ... }}>
 ```
 
-### TypeScript Rules
-
-- No explicit `any` - use `unknown`, generics, or specific types
+### TypeScript
+- No explicit `any` — use `unknown`, generics, or specific types
 - No implicit returns in non-void functions
 - `arr[0]` is `T | undefined` (noUncheckedIndexedAccess)
 
 ### Commit Discipline
-
-1. Run `npx tsc --noEmit` before every commit
-2. Commit after EVERY file change (not "frequently")
-3. Use descriptive commit messages
+1. Run `bunx tsc --noEmit` before every commit
+2. Commit after EVERY file change
+3. Descriptive commit messages
 
 ## Key Files
 
 ```
 src/
 ├── agent/
-│   ├── task-agent.ts         # Main Durable Object
-│   └── workflows/
-│       ├── execute-task.ts   # Command execution
-│       └── create-session.ts # Container spawning
+│   ├── task-agent.ts            # Main Durable Object
+│   └── workflows/               # ExecuteTask, CreateSession
 ├── lib/
-│   ├── auth/                 # Better-auth config
-│   ├── crypto/secrets.ts     # AES-GCM encryption
-│   └── server/               # Server utilities
+│   ├── agents/catalog.ts        # 7 agent types
+│   ├── types/session.ts         # AgentSlot, MultiAgentSession, etc.
+│   ├── types/conductor.ts       # Conductor orchestration interface
+│   ├── components/session/      # ChatPanel, SessionSidebar, WorkerTabs
+│   ├── components/wizard/       # StepBasics, StepOrchestrator, StepWorkers, StepReview
+│   ├── schema.ts                # Drizzle D1 schema
+│   └── auth.ts                  # Better-auth config
 ├── routes/
-│   ├── api/                  # API endpoints
-│   ├── dashboard/            # Session management
-│   ├── session/[id]/         # Terminal UI
-│   └── settings/             # API keys, billing
-alchemy.run.ts                # Infrastructure config
-gates/health.sh               # Pre-commit checks
+│   ├── session/new/             # Wizard page
+│   ├── session/[id]/            # 3-panel session view
+│   ├── dashboard/               # Session list
+│   ├── api/session/multi/       # CRUD endpoints
+│   └── settings/                # API keys, billing, account
+gates/                           # Health + production gates
+alchemy.run.ts                   # Infrastructure config (NOT wrangler)
 ```
 
 ## API Endpoints
 
 | Endpoint | Method | Auth | Purpose |
-|----------|--------|------|--------|
-| `/api/orchestrator` | POST | x-api-key | Execute task |
-| `/api/orchestrator/session` | POST | x-api-key | Create session |
-| `/api/auth/*` | - | Cookie | Better-auth routes |
-| `/api/billing/*` | POST | Cookie | Stripe integration |
+|----------|--------|------|---------|
+| `/api/session/multi` | POST | Cookie | Create multi-agent session |
+| `/api/session/multi?id=X` | GET | Cookie | Get session + slots |
+| `/api/session/multi/list` | GET | Cookie | List sessions |
+| `/api/session/multi/chat` | POST | Cookie | Message an agent |
+| `/api/session/multi/stop` | POST | Cookie | Stop session |
+| `/api/orchestrator` | POST | x-api-key | Execute task (legacy) |
+| `/api/billing/checkout` | POST | Cookie | Stripe checkout |
+| `/api/billing/balance` | GET | Cookie | Credit balance |
 
-## Footguns
+## Gates
 
-### ttyd requires initial size message
-WebSocket connects but terminal shows nothing? Send size first:
-```typescript
-ttydWs.send(JSON.stringify({ columns: 80, rows: 24 }));
-```
-
-### Skip waitForPort in production
-`sandbox.waitForPort()` times out. Let WebSocket retry handle ttyd startup.
-
-### SvelteKit cannot proxy WebSocket
-- HTTP → SvelteKit → Worker (OK)
-- WebSocket → Worker directly (required)
-
-## Debugging
-
-```bash
-# Check GitHub Actions
-gh run list --limit 5
-gh run view <RUN_ID> --log 2>/dev/null | tail -100
-
-# Check Cloudflare logs
-npx wrangler tail --format pretty
-
-# Local container testing
-npx wrangler dev --local
-```
-
-## Integration Points
-
-- **coey.dev** - Parent ecosystem
-- **Deja** - Cross-session agent memory
-- **Stripe** - Payment processing
-- **D1** - Auth & metadata storage
-- **Cloudflare Containers** - Execution sandboxes
-
-## Sprint Priorities
-
-1. Container integration in ExecuteTaskWorkflow
-2. Real API key validation
-3. Progress streaming to clients
-4. E2E agent test automation
-
-## Post-E2E TODO List
-
-### Phase 2: Polish & UX (After Gates Pass)
-
-**Unified Branding**
-- **Priority:** After E2E testing complete
-- **Goal:** Match internal pages to homepage aesthetic
-- **Pages to update:**
-  - Dashboard / "YOUR SESSIONS" page
-  - Settings pages (API keys, billing, profile)
-  - Session detail pages
-  - Any other internal UI
-- **Match:** Typography, colors, spacing, button styles from landing page
-- **Files:**
-  - `src/routes/dashboard/+page.svelte`
-  - `src/routes/settings/**/*.svelte`
-  - `src/routes/session/[id]/+page.svelte`
-- **Current issue:** Inconsistent styling across app
-- **Desired:** Professional, cohesive brand experience throughout
-
-**Order:**
-1. ✅ Fix critical bugs (form validation)
-2. ✅ E2E testing (12-step journey)
-3. ✅ All gates pass
-4. 🔜 Unified branding update
-
+| Gate | File | Status |
+|------|------|--------|
+| Health | `gates/health.sh` | ✅ |
+| Signup | `gates/signup.gate.sh` | ✅ |
+| Login | `gates/login.gate.sh` | ✅ |
+| API Keys | `gates/api-e2e.gate.sh` | ✅ |
+| Terminal | `gates/terminal.gate.sh` | ✅ |
+| Orchestrator | `gates/orchestrator.gate.sh` | ✅ |
+| Full E2E | `gates/full-user-lifecycle.gate.sh` | ✅ |
+| Production (CI) | `gates/production/run-all.sh` | ✅ |
 
 ## ⚠️ CRITICAL: Use Alchemy, NOT Wrangler
 
-**Project uses Alchemy for all deployments.**
+- ❌ `wrangler deploy`, `wrangler.toml`
+- ✅ `bun run deploy` (runs `alchemy deploy`)
+- Config lives in `alchemy.run.ts`
 
-❌ **NEVER use:**
-- `wrangler deploy`
-- `wrangler.toml` configuration
-- Direct Cloudflare CLI commands for deployment
+## Footguns
 
-✅ **ALWAYS use:**
-- `alchemy dev` - Local development
-- `alchemy deploy` - Deploy to production
-- `alchemy deploy --stage prod` - Production deployment
-- Configuration in `alchemy.run.ts`, NOT wrangler.toml
+1. **ttyd needs size message** — send `{columns:80, rows:24}` on WS connect
+2. **Skip `waitForPort`** in prod — let WS retry handle ttyd startup
+3. **SvelteKit can't proxy WebSocket** — terminal WS goes direct to worker
+4. **Sandbox binding** — must point to correct container namespace (was stale, fixed)
+5. **Use `bun`/`bunx`** not npm/npx
 
-**Why:** Alchemy manages the full deployment pipeline including D1, Durable Objects, bindings, and Cloudflare resources. Using wrangler directly will break the deployment.
+## Sprint Priorities (Next)
 
+1. Wire agent slots to real containers (slot.containerId → running container)
+2. Agent execution — start agent binary in container, stream output
+3. Chat → agent routing (ChatPanel → API → container stdin)
+4. Credit deduction per minute of container runtime
+5. Conductor runtime implementation (beyond types)
