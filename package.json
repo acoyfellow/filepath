@@ -40,6 +40,7 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "gateproof": "^0.2.2",
+    "paneforge": "^1.0.2",
     "playwright": "^1.58.1",
     "svelte": "^5.49.1",
     "svelte-check": "^4.3.6",
