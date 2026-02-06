@@ -22,7 +22,7 @@ Agent instructions for the myfilepath.com codebase.
 
 🔄 **In Progress:**
 - Progress streaming
-- Terminal container startup (sandbox.startProcess hangs; 30s timeout added)
+- ~~Terminal container startup (sandbox.startProcess hangs)~~ ✅ FIXED: Worker Sandbox binding was pointing to stale DO namespace. Fixed via CF API to use `filepath-filepath-sandbox-runner` namespace (`02e6cb8e`).
 - Per-minute credit deduction during container execution
 
 ❌ **Not Done:**
