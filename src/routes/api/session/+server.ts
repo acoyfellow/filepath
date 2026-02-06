@@ -60,9 +60,9 @@ export const POST: RequestHandler = async ({ locals }) => {
     const user = users[0];
     const creditBalance = user.creditBalance || 0;
     
-    // Check if user has at least $10 (1000 credits)
-    if (creditBalance < 1000) {
-      throw error(402, 'Insufficient credits. Please add credits to your account to create a session. Minimum $10 (1000 credits) required.');
+    // Check if user has at least 1 credit
+    if (creditBalance < 1) {
+      throw error(402, 'Insufficient credits. Please add credits to your account to create a session.');
     }
     
     // Create a new session for the user

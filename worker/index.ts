@@ -365,6 +365,13 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
         const db = drizzle(env.DB);
         const creditCheck = await checkUserCredits(db, sessionId);
         
+        if (!creditCheck.authenticated) {
+          return withCors(Response.json(
+            { error: 'Unauthorized', message: 'Invalid or expired session.' },
+            { status: 401 }
+          ));
+        }
+        
         if (!creditCheck.hasCredits) {
           return withCors(Response.json(
             { error: 'Insufficient credits', message: 'Please add credits to your account to start a terminal session.' },
@@ -624,41 +631,26 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
 /**
  * Check if a user has sufficient credits to start a terminal session
  * @param db - Drizzle database instance
- * @param sessionId - Session ID to check
- * @returns { hasCredits: boolean, userId?: string, creditBalance?: number }
+ * @param sessionId - Session ID (token) to check
+ * @returns { authenticated: boolean, hasCredits: boolean, userId?: string, creditBalance?: number }
  */
 async function checkUserCredits(db: ReturnType<typeof drizzle>, sessionId: string): Promise<{ 
+  authenticated: boolean;
   hasCredits: boolean; 
   userId?: string; 
   creditBalance?: number 
 }> {
   try {
-    // Get session from database
-    const sessions = await db.select().from(sessionTable).where(eq(sessionTable.token, sessionId));
+    // Get session from database (try token first, then ID)
+    let sessions = await db.select().from(sessionTable).where(eq(sessionTable.token, sessionId));
     
     if (sessions.length === 0) {
-      // If not found by token, try by ID
-      const sessionsById = await db.select().from(sessionTable).where(eq(sessionTable.id, sessionId));
-      if (sessionsById.length === 0) {
-        return { hasCredits: false };
-      }
-      const session = sessionsById[0];
-      
-      // Get user
-      const users = await db.select().from(userTable).where(eq(userTable.id, session.userId));
-      if (users.length === 0) {
-        return { hasCredits: false };
-      }
-      
-      const user = users[0];
-      const creditBalance = user.creditBalance || 0;
-      
-      // Check if user has at least 1000 credits ($10 minimum)
-      return { 
-        hasCredits: creditBalance >= 1000, 
-        userId: user.id, 
-        creditBalance 
-      };
+      sessions = await db.select().from(sessionTable).where(eq(sessionTable.id, sessionId));
+    }
+    
+    if (sessions.length === 0) {
+      console.warn('[billing-check]', 'Session not found:', sessionId.substring(0, 8) + '...');
+      return { authenticated: false, hasCredits: false };
     }
     
     const session = sessions[0];
@@ -666,21 +658,23 @@ async function checkUserCredits(db: ReturnType<typeof drizzle>, sessionId: strin
     // Get user
     const users = await db.select().from(userTable).where(eq(userTable.id, session.userId));
     if (users.length === 0) {
-      return { hasCredits: false };
+      console.warn('[billing-check]', 'User not found for session:', sessionId.substring(0, 8) + '...');
+      return { authenticated: false, hasCredits: false };
     }
     
     const user = users[0];
     const creditBalance = user.creditBalance || 0;
     
-    // Check if user has at least 1000 credits ($10 minimum)
-      return { 
-        hasCredits: creditBalance >= 1000, 
-        userId: user.id, 
-        creditBalance 
-      };
+    // Require at least 1 credit to start a terminal
+    return { 
+      authenticated: true,
+      hasCredits: creditBalance >= 1, 
+      userId: user.id, 
+      creditBalance 
+    };
   } catch (error) {
     console.error('[billing-check]', 'Error checking user credits:', error);
-    return { hasCredits: false };
+    return { authenticated: false, hasCredits: false };
   }
 }
 
