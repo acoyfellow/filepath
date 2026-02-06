@@ -81,10 +81,15 @@ function renderTerminalPage(sessionId: string, tabId: string, apiWsHost?: string
       }
 
       // Start terminal
+      terminal.writeln('  Requesting container...');
       fetch(httpBase + '/terminal/${sessionId}/${tabId}/start', { method: 'POST' })
         .then(function(res) {
-          if (!res.ok) throw new Error('Start failed: ' + res.status);
-          terminal.writeln('  Terminal started, connecting...\\r\\n');
+          if (!res.ok) {
+            if (res.status === 401) throw new Error('Session expired. Please create a new session.');
+            if (res.status === 402) throw new Error('Insufficient credits. Add credits in billing settings.');
+            throw new Error('Start failed (HTTP ' + res.status + ')');
+          }
+          terminal.writeln('  Container started, connecting...\\r\\n');
           connect();
         })
         .catch(function(err) {
@@ -392,11 +397,17 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
           
           console.info('[terminal/start]', 'starting', { terminalId });
           
-          // Start ttyd with bash (opencode can be added later)
+          // Start ttyd with bash - with 30s timeout to avoid hanging
           console.info('[terminal/start]', 'calling startProcess', { terminalId, command: 'ttyd -W -p 7681 bash' });
           const startProcessStartTime = Date.now();
           try {
-            ttyd = await sandbox.startProcess('ttyd -W -p 7681 bash');
+            const timeoutPromise = new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Container startup timed out after 30s')), 30000)
+            );
+            ttyd = await Promise.race([
+              sandbox.startProcess('ttyd -W -p 7681 bash'),
+              timeoutPromise
+            ]);
             const startProcessDuration = Date.now() - startProcessStartTime;
             console.info('[terminal/start]', 'startProcess returned', { terminalId, duration: startProcessDuration });
           } catch (error) {
