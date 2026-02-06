@@ -12,6 +12,7 @@
   import type { AgentType, AgentConfig, ModelId, RouterId } from '$lib/types/session';
 
   interface WorkerEntry {
+    id: string;
     agentType: AgentType;
     name: string;
     config: AgentConfig;
@@ -20,9 +21,9 @@
   interface Props {
     workers: WorkerEntry[];
     onAdd: (agentType: AgentType) => void;
-    onRemove: (index: number) => void;
-    onUpdateName: (index: number, name: string) => void;
-    onUpdateConfig: (index: number, config: AgentConfig) => void;
+    onRemove: (id: string) => void;
+    onUpdateName: (id: string, name: string) => void;
+    onUpdateConfig: (id: string, config: AgentConfig) => void;
   }
 
   let { workers, onAdd, onRemove, onUpdateName, onUpdateConfig }: Props = $props();
@@ -31,35 +32,44 @@
 
 
 
-  let expandedIndex = $state<number | null>(null);
+  let expandedId = $state<string | null>(null);
   let showPicker = $state(false);
 
-  // Per-worker env var input state, keyed by worker index
-  let envKeyInputs = $state<Record<number, string>>({});
-  let envValueInputs = $state<Record<number, string>>({});
+  // Per-worker env var input state, keyed by worker id
+  let envKeyInputs = $state<Record<string, string>>({});
+  let envValueInputs = $state<Record<string, string>>({});
 
-  function getEnvPairs(index: number) {
-    return Object.entries(workers[index].config.envVars ?? {}).map(([key, value]) => ({ key, value }));
+  function findWorker(id: string): WorkerEntry | undefined {
+    return workers.find((w) => w.id === id);
   }
 
-  function addWorkerEnvVar(index: number) {
-    const key = (envKeyInputs[index] ?? '').trim();
-    const value = (envValueInputs[index] ?? '').trim();
+  function getEnvPairs(id: string) {
+    const worker = findWorker(id);
+    return Object.entries(worker?.config.envVars ?? {}).map(([key, value]) => ({ key, value }));
+  }
+
+  function addWorkerEnvVar(id: string) {
+    const key = (envKeyInputs[id] ?? '').trim();
+    const value = (envValueInputs[id] ?? '').trim();
     if (!key) return;
-    const existing = workers[index].config.envVars ?? {};
-    onUpdateConfig(index, { ...workers[index].config, envVars: { ...existing, [key]: value } });
-    envKeyInputs[index] = '';
-    envValueInputs[index] = '';
+    const worker = findWorker(id);
+    if (!worker) return;
+    const existing = worker.config.envVars ?? {};
+    onUpdateConfig(id, { ...worker.config, envVars: { ...existing, [key]: value } });
+    envKeyInputs[id] = '';
+    envValueInputs[id] = '';
   }
 
-  function removeWorkerEnvVar(index: number, key: string) {
-    const existing = { ...(workers[index].config.envVars ?? {}) };
+  function removeWorkerEnvVar(id: string, key: string) {
+    const worker = findWorker(id);
+    if (!worker) return;
+    const existing = { ...(worker.config.envVars ?? {}) };
     delete existing[key];
-    onUpdateConfig(index, { ...workers[index].config, envVars: existing });
+    onUpdateConfig(id, { ...worker.config, envVars: existing });
   }
 
-  function toggleExpanded(index: number) {
-    expandedIndex = expandedIndex === index ? null : index;
+  function toggleExpanded(id: string) {
+    expandedId = expandedId === id ? null : id;
   }
 
   function handleAdd(agentType: AgentType) {
@@ -67,17 +77,23 @@
     showPicker = false;
   }
 
-  function updateWorkerModel(index: number, value: string) {
-    onUpdateConfig(index, { ...workers[index].config, model: value as ModelId });
+  function updateWorkerModel(id: string, value: string) {
+    const worker = findWorker(id);
+    if (!worker) return;
+    onUpdateConfig(id, { ...worker.config, model: value as ModelId });
   }
 
-  function updateWorkerRouter(index: number, value: string) {
-    onUpdateConfig(index, { ...workers[index].config, router: value as RouterId });
+  function updateWorkerRouter(id: string, value: string) {
+    const worker = findWorker(id);
+    if (!worker) return;
+    onUpdateConfig(id, { ...worker.config, router: value as RouterId });
   }
 
-  function updateWorkerSystemPrompt(index: number, e: Event) {
+  function updateWorkerSystemPrompt(id: string, e: Event) {
+    const worker = findWorker(id);
+    if (!worker) return;
     const target = e.target as HTMLTextAreaElement;
-    onUpdateConfig(index, { ...workers[index].config, systemPrompt: target.value });
+    onUpdateConfig(id, { ...worker.config, systemPrompt: target.value });
   }
 </script>
 
@@ -96,9 +112,9 @@
     </div>
   {:else}
     <div class="space-y-3">
-      {#each workers as worker, index (index)}
+      {#each workers as worker (worker.id)}
         {@const agent = getAgent(worker.agentType)}
-        {@const isExpanded = expandedIndex === index}
+        {@const isExpanded = expandedId === worker.id}
         <Card.Root class="bg-neutral-900 border-neutral-700">
           <Card.Header class="pb-3">
             <div class="flex items-center justify-between">
@@ -116,7 +132,7 @@
                   variant="ghost"
                   size="sm"
                   class="text-neutral-400 hover:text-white h-8 px-2 text-xs"
-                  onclick={() => toggleExpanded(index)}
+                  onclick={() => toggleExpanded(worker.id)}
                 >
                   {isExpanded ? '▲ Collapse' : '▼ Configure'}
                 </Button>
@@ -124,7 +140,7 @@
                   variant="ghost"
                   size="sm"
                   class="text-neutral-500 hover:text-red-400 h-8 w-8 p-0"
-                  onclick={() => onRemove(index)}
+                  onclick={() => onRemove(worker.id)}
                 >
                   ✕
                 </Button>
@@ -142,7 +158,7 @@
                 <Input
                   value={worker.name}
                   oninput={(e: Event) =>
-                    onUpdateName(index, (e.target as HTMLInputElement).value)}
+                    onUpdateName(worker.id, (e.target as HTMLInputElement).value)}
                   placeholder="Worker name"
                   class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500"
                 />
@@ -155,7 +171,7 @@
                   <Select.Root
                     type="single"
                     value={worker.config.model}
-                    onValueChange={(v: string) => updateWorkerModel(index, v)}
+                    onValueChange={(v: string) => updateWorkerModel(worker.id, v)}
                   >
                     <Select.Trigger
                       class="w-full bg-neutral-900 border-neutral-700 text-white"
@@ -177,7 +193,7 @@
                   <Select.Root
                     type="single"
                     value={worker.config.router}
-                    onValueChange={(v: string) => updateWorkerRouter(index, v)}
+                    onValueChange={(v: string) => updateWorkerRouter(worker.id, v)}
                   >
                     <Select.Trigger
                       class="w-full bg-neutral-900 border-neutral-700 text-white"
@@ -199,7 +215,7 @@
                 <Label class="text-neutral-300">System Prompt</Label>
                 <Textarea
                   value={worker.config.systemPrompt ?? ''}
-                  oninput={(e: Event) => updateWorkerSystemPrompt(index, e)}
+                  oninput={(e: Event) => updateWorkerSystemPrompt(worker.id, e)}
                   placeholder="Optional system prompt for this worker..."
                   rows={3}
                   class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500 resize-none"
@@ -210,9 +226,9 @@
               <div class="space-y-3">
                 <Label class="text-neutral-300">Environment Variables</Label>
 
-                {#if getEnvPairs(index).length > 0}
+                {#if getEnvPairs(worker.id).length > 0}
                   <div class="space-y-2">
-                    {#each getEnvPairs(index) as pair (pair.key)}
+                    {#each getEnvPairs(worker.id) as pair (pair.key)}
                       <div class="flex items-center gap-2">
                         <code class="rounded bg-neutral-800 px-2 py-1 text-sm text-emerald-400 min-w-[120px]">
                           {pair.key}
@@ -225,7 +241,7 @@
                           variant="ghost"
                           size="sm"
                           class="text-neutral-500 hover:text-red-400 h-8 w-8 p-0"
-                          onclick={() => removeWorkerEnvVar(index, pair.key)}
+                          onclick={() => removeWorkerEnvVar(worker.id, pair.key)}
                         >
                           ✕
                         </Button>
@@ -238,8 +254,8 @@
                   <div class="space-y-1 flex-1">
                     <Label class="text-xs text-neutral-500">Key</Label>
                     <Input
-                      value={envKeyInputs[index] ?? ''}
-                      oninput={(e: Event) => (envKeyInputs[index] = (e.target as HTMLInputElement).value)}
+                      value={envKeyInputs[worker.id] ?? ''}
+                      oninput={(e: Event) => (envKeyInputs[worker.id] = (e.target as HTMLInputElement).value)}
                       placeholder="API_KEY"
                       class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500 h-9"
                     />
@@ -247,8 +263,8 @@
                   <div class="space-y-1 flex-1">
                     <Label class="text-xs text-neutral-500">Value</Label>
                     <Input
-                      value={envValueInputs[index] ?? ''}
-                      oninput={(e: Event) => (envValueInputs[index] = (e.target as HTMLInputElement).value)}
+                      value={envValueInputs[worker.id] ?? ''}
+                      oninput={(e: Event) => (envValueInputs[worker.id] = (e.target as HTMLInputElement).value)}
                       placeholder="sk-..."
                       class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500 h-9"
                     />
@@ -257,7 +273,7 @@
                     variant="outline"
                     size="sm"
                     class="border-neutral-700 text-neutral-300 hover:bg-neutral-800 h-9"
-                    onclick={() => addWorkerEnvVar(index)}
+                    onclick={() => addWorkerEnvVar(worker.id)}
                   >
                     Add
                   </Button>
