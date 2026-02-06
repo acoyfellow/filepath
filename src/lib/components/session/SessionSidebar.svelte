@@ -13,7 +13,9 @@
     selectedSlotId: string | null;
     onToggleCollapse: () => void;
     onSelectSlot: (slotId: string) => void;
+    onStartSession: () => void;
     onStopSession: () => void;
+    isStarting?: boolean;
   }
 
   let {
@@ -23,7 +25,9 @@
     selectedSlotId,
     onToggleCollapse,
     onSelectSlot,
+    onStartSession,
     onStopSession,
+    isStarting = false,
   }: Props = $props();
 
   const sessionStatusVariant: Record<MultiAgentSession['status'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -185,15 +189,27 @@
         <span class="text-sm">←</span>
       </Button>
     {:else}
-      <Button
-        variant="destructive"
-        size="sm"
-        class="w-full"
-        onclick={onStopSession}
-        disabled={session.status === 'stopped' || session.status === 'draft'}
-      >
-        ⏹ Stop Session
-      </Button>
+      {#if session.status === 'draft' || session.status === 'stopped'}
+        <Button
+          variant="default"
+          size="sm"
+          class="w-full bg-emerald-600 hover:bg-emerald-500"
+          onclick={onStartSession}
+          disabled={isStarting}
+        >
+          {isStarting ? '⏳ Starting…' : '▶ Start Session'}
+        </Button>
+      {:else}
+        <Button
+          variant="destructive"
+          size="sm"
+          class="w-full"
+          onclick={onStopSession}
+          disabled={session.status === 'stopped'}
+        >
+          ⏹ Stop Session
+        </Button>
+      {/if}
       <Button
         variant="ghost"
         size="sm"
