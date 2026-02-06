@@ -58,8 +58,9 @@ export class CreateSessionWorkflow extends AgentWorkflow<
         await sandbox.startProcess('ttyd -W -p 7681 bash');
         
         // WebSocket URL will be proxied through the worker
-        // Format: wss://api.myfilepath.com/terminal/{sessionId}/ws
-        return `wss://api.myfilepath.com/terminal/${sessionId}/ws`;
+        // API_WS_HOST is set in alchemy.run.ts (e.g. 'api.myfilepath.com')
+        const wsHost = (this.env as Env).API_WS_HOST || 'api.myfilepath.com';
+        return `wss://${wsHost}/terminal/${sessionId}/ws`;
       });
       
       // Step 3: Store session info (no workflow state needed - using Cloudflare Containers built-in persistence)
