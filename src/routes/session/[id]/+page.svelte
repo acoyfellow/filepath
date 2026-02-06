@@ -1,20 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
-  import { get } from 'svelte/store';
+  import { page } from '$app/state';
   import Nav from '$lib/components/Nav.svelte';
   import SessionSidebar from '$lib/components/session/SessionSidebar.svelte';
   import ChatPanel from '$lib/components/session/ChatPanel.svelte';
   import WorkerTabs from '$lib/components/session/WorkerTabs.svelte';
-  import type { MultiAgentSession, AgentSlot } from '$lib/types/session';
+  import { PaneGroup, Pane, Handle } from '$lib/components/ui/resizable';
+  import type { MultiAgentSession, AgentSlot, ChatMessage } from '$lib/types/session';
 
   // Session data
-  let sessionId = $state('');
+  let sessionId = $derived(page.params.id ?? '');
   let session = $state<MultiAgentSession | null>(null);
   let slots = $state<AgentSlot[]>([]);
   let isMultiAgent = $state(false);
   let isLoading = $state(true);
+  let errorMessage = $state<string | null>(null);
 
   // Panel state
   let sidebarCollapsed = $state(false);
@@ -23,13 +24,6 @@
   let activeWorkerId = $state<string | null>(null);
 
   // Chat state
-  interface ChatMessage {
-    id: string;
-    role: 'user' | 'agent';
-    content: string;
-    timestamp: number;
-    status?: 'sending' | 'complete' | 'error';
-  }
   let chatMessages = $state<ChatMessage[]>([]);
   let isConnected = $state(false);
 
@@ -43,7 +37,6 @@
   let workerSlots = $derived(slots.filter(s => s.role === 'worker'));
 
   onMount(() => {
-    sessionId = get(page).params.id || '';
     if (!sessionId) {
       goto('/dashboard');
       return;
@@ -52,6 +45,7 @@
   });
 
   async function loadSession() {
+    errorMessage = null;
     try {
       // Try multi-agent endpoint first
       const multiRes = await fetch(`/api/session/multi?id=${sessionId}`);
@@ -80,14 +74,17 @@
       const legacyRes = await fetch(`/api/session/${sessionId}`);
       if (legacyRes.ok) {
         // Legacy mode — no multi-agent data, just show terminal
+      } else {
+        errorMessage = `Failed to load session (${legacyRes.status})`;
       }
     } catch {
-      // Legacy fetch also failed
+      errorMessage = 'Failed to connect to the server. Please check your connection.';
     }
     isLoading = false;
   }
 
   async function handleSendMessage(content: string) {
+    errorMessage = null;
     const msg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -111,10 +108,11 @@
       chatMessages = chatMessages.map(m =>
         m.id === msg.id ? { ...m, status: 'complete' as const } : m
       );
-    } catch {
+    } catch (err) {
       chatMessages = chatMessages.map(m =>
         m.id === msg.id ? { ...m, status: 'error' as const } : m
       );
+      errorMessage = err instanceof Error ? err.message : 'Failed to send message';
     }
   }
 
@@ -127,6 +125,7 @@
   }
 
   async function handleStopSession() {
+    errorMessage = null;
     try {
       const res = await fetch('/api/session/multi/stop', {
         method: 'POST',
@@ -134,14 +133,18 @@
         body: JSON.stringify({ sessionId }),
       });
       if (!res.ok) throw new Error(`Stop request failed: ${res.status}`);
-    } catch {
-      // Still update local state so the UI reflects the intent
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : 'Failed to stop session';
     }
     if (session) {
       session = { ...session, status: 'stopped' };
     }
     slots = slots.map(s => ({ ...s, status: 'stopped' as const }));
     isConnected = false;
+  }
+
+  function dismissError() {
+    errorMessage = null;
   }
 
   function getTerminalUrl(slot: AgentSlot): string {
@@ -160,7 +163,7 @@
     return `/terminal/${sessionId}/tab?tab=${tabId}`;
   }
 
-  async function addTab() {
+  function addTab() {
     const newTabId = `tab${tabs.length + 1}`;
     tabs = [...tabs, { id: newTabId, name: `Terminal ${tabs.length + 1}` }];
     activeTabId = newTabId;
@@ -188,49 +191,88 @@
     </div>
   </div>
 {:else if isMultiAgent && session}
-  <!-- Multi-Agent 3-Panel Layout -->
+  <!-- Multi-Agent 3-Panel Resizable Layout -->
   <div class="h-screen flex flex-col bg-neutral-950">
     <Nav variant="session" sessionId={sessionId} />
-    <div class="flex-1 flex overflow-hidden">
-      <!-- Left: Sidebar -->
-      <SessionSidebar
-        {session}
-        {slots}
-        collapsed={sidebarCollapsed}
-        {selectedSlotId}
-        onToggleCollapse={() => sidebarCollapsed = !sidebarCollapsed}
-        onSelectSlot={handleSelectSlot}
-        onStopSession={handleStopSession}
-      />
 
-      <!-- Center: Chat Panel -->
-      {#if orchestratorSlot}
-        <ChatPanel
-          agentName={orchestratorSlot.name}
-          agentIcon="🤖"
-          messages={chatMessages}
-          collapsed={chatCollapsed}
-          {isConnected}
-          onSendMessage={handleSendMessage}
-          onToggleCollapse={() => chatCollapsed = !chatCollapsed}
-        />
-      {/if}
-
-      <!-- Right: Worker Tabs -->
-      <div class="flex-1 min-w-0">
-        <WorkerTabs
-          workers={workerSlots}
-          {activeWorkerId}
-          onSelectWorker={(id) => activeWorkerId = id}
-          {getTerminalUrl}
-        />
+    <!-- Error banner -->
+    {#if errorMessage}
+      <div class="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-sm text-red-300">
+        <span class="shrink-0">⚠️</span>
+        <span class="flex-1">{errorMessage}</span>
+        <button
+          onclick={dismissError}
+          class="shrink-0 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-200"
+        >
+          Dismiss
+        </button>
       </div>
+    {/if}
+
+    <div class="flex-1 overflow-hidden">
+      <PaneGroup direction="horizontal" autoSaveId="session-panels">
+        <!-- Left: Sidebar Pane -->
+        <Pane defaultSize={20} minSize={10}>
+          <SessionSidebar
+            {session}
+            {slots}
+            collapsed={sidebarCollapsed}
+            {selectedSlotId}
+            onToggleCollapse={() => sidebarCollapsed = !sidebarCollapsed}
+            onSelectSlot={handleSelectSlot}
+            onStopSession={handleStopSession}
+          />
+        </Pane>
+
+        <Handle withHandle />
+
+        <!-- Center: Chat Pane -->
+        {#if orchestratorSlot}
+          <Pane defaultSize={35} minSize={15}>
+            <ChatPanel
+              agentName={orchestratorSlot.name}
+              agentIcon="🤖"
+              messages={chatMessages}
+              collapsed={chatCollapsed}
+              {isConnected}
+              onSendMessage={handleSendMessage}
+              onToggleCollapse={() => chatCollapsed = !chatCollapsed}
+            />
+          </Pane>
+
+          <Handle withHandle />
+        {/if}
+
+        <!-- Right: Worker Tabs Pane -->
+        <Pane defaultSize={45} minSize={15}>
+          <WorkerTabs
+            workers={workerSlots}
+            {activeWorkerId}
+            onSelectWorker={(id) => activeWorkerId = id}
+            {getTerminalUrl}
+          />
+        </Pane>
+      </PaneGroup>
     </div>
   </div>
 {:else}
   <!-- Legacy Single-Terminal Layout -->
   <div class="h-screen flex flex-col bg-neutral-950 text-neutral-300">
-    <Nav variant="session" sessionId={sessionId} email={get(page).data?.user?.email || ''} />
+    <Nav variant="session" sessionId={sessionId} />
+
+    <!-- Error banner -->
+    {#if errorMessage}
+      <div class="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-sm text-red-300">
+        <span class="shrink-0">⚠️</span>
+        <span class="flex-1">{errorMessage}</span>
+        <button
+          onclick={dismissError}
+          class="shrink-0 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-200"
+        >
+          Dismiss
+        </button>
+      </div>
+    {/if}
 
     <!-- Tabs -->
     <div class="flex items-center gap-0 px-4 border-b border-neutral-800 bg-neutral-900/50">
@@ -254,8 +296,8 @@
             <span
               role="button"
               tabindex="0"
-              onclick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-              onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); closeTab(tab.id); } }}
+              onclick={(e: MouseEvent) => { e.stopPropagation(); closeTab(tab.id); }}
+              onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') { e.stopPropagation(); closeTab(tab.id); } }}
               class="ml-1 text-neutral-600 hover:text-neutral-300 cursor-pointer"
             >
               ×

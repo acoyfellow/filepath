@@ -55,7 +55,7 @@
 </script>
 
 <aside
-  class="flex h-full flex-col border-r border-neutral-800 bg-neutral-900 transition-all duration-200 {collapsed ? 'w-12' : 'w-64'}"
+  class="flex h-full w-full flex-col bg-neutral-900"
 >
   <!-- Session header -->
   <div class="flex items-center gap-2 border-b border-neutral-800 p-3 {collapsed ? 'justify-center' : 'justify-between'}">
