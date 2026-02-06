@@ -7,4 +7,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends ttyd && \
 
 # Expose port for ttyd
 EXPOSE 7681
-# Force rebuild 1769902868
+# Force rebuild 1738849800
