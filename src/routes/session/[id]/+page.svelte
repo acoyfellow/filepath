@@ -172,7 +172,10 @@
 
   function getTerminalUrl(slot: AgentSlot): string {
     if (slot.containerId) {
-      return `/terminal/${slot.containerId}/tab?tab=main`;
+      // Route to worker's agent-terminal endpoint via the session proxy.
+      // SvelteKit /api/session/* → worker /session/* → redirected to /agent-terminal/*
+      // The containerId IS the sandbox name (no makeTerminalId transform).
+      return `/api/session/agent-terminal/${slot.containerId}`;
     }
     return '';
   }

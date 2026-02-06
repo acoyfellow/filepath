@@ -62,12 +62,14 @@ export default {
       });
     }
     
-    // Route terminal/*, session/*, debug/* to terminal handler
+    // Route terminal/*, agent-terminal/*, session/*, debug/*, start-agent-slots to terminal handler
     // These are container/sandbox requests that don't need API key auth
     if (
       url.pathname.startsWith('/terminal/') ||
+      url.pathname.startsWith('/agent-terminal/') ||
       url.pathname.startsWith('/session/') ||
-      url.pathname === '/debug/container'
+      url.pathname === '/debug/container' ||
+      url.pathname === '/start-agent-slots'
     ) {
       return handleTerminalRequest(request, env as any);
     }
