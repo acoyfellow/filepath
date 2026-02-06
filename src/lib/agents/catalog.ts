@@ -76,7 +76,7 @@ export const AGENT_CATALOG: Record<AgentType, AgentCatalogEntry> = {
 export const AGENT_LIST = Object.values(AGENT_CATALOG);
 
 export function getAgent(id: AgentType): AgentCatalogEntry {
-  return AGENT_CATALOG[id];
+  return AGENT_CATALOG[id] ?? AGENT_CATALOG.custom;
 }
 
 export function getAgentsByRole(role: 'orchestrator' | 'worker'): AgentCatalogEntry[] {
