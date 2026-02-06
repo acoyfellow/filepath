@@ -6,7 +6,7 @@
  *   ~/bin/worker  - start/stop/list loops
  *   ~/bin/conv    - manage conversations
  *   ~/bin/ctx     - context window management
- *   ~/bin/steerer - auto-commit, error watch
+ *   ~/bin/steerer - auto-commit, error watch (merged into Conductor)
  *   deja API      - cross-session memory
  *   shelley API   - conversation CRUD
  * 
@@ -226,7 +226,7 @@ export interface SessionSearch {
 }
 
 // ============================================================
-// Health & Steerer (~/bin/steerer + gates/health.sh equivalent)
+// Health (~/bin/steerer + gates/health.sh — folded into Conductor)
 // ============================================================
 
 export type HealthStatus = 'healthy' | 'warning' | 'error';
@@ -237,17 +237,6 @@ export interface HealthCheck {
   uncommitted: { count: number; files?: string[] };
   syntax: { passing: boolean; issues?: string[] };
   warnings: string[];
-}
-
-export interface Steerer {
-  /** Run health check on a directory */
-  healthCheck(dir: string): Promise<HealthCheck>;
-  
-  /** Auto-commit orphaned work */
-  rescueOrphans(dir: string): Promise<{ committed: boolean; files?: string[] }>;
-  
-  /** Check and report type errors */
-  typeCheck(dir: string): Promise<{ passing: boolean; errors: string[] }>;
 }
 
 // ============================================================
@@ -271,9 +260,19 @@ export interface Conductor {
   context: ContextManager;
   memory: MemoryManager;
   search: SessionSearch;
-  steerer: Steerer;
   
-  // ---- High-level convenience methods ----
+  // ---- Health & observation (the "steering") ----
+  
+  /** Run health check on a directory */
+  healthCheck(dir: string): Promise<HealthCheck>;
+  
+  /** Auto-commit orphaned work */
+  rescueOrphans(dir: string): Promise<{ committed: boolean; files?: string[] }>;
+  
+  /** Check and report type errors */
+  typeCheck(dir: string): Promise<{ passing: boolean; errors: string[] }>;
+  
+  // ---- High-level session lifecycle ----
   
   /** Get full status overview (what you'd see in a dashboard) */
   status(): Promise<ConductorStatus>;
