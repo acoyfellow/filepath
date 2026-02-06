@@ -142,7 +142,7 @@
       <div class="flex items-center gap-2.5">
         <span class="text-lg">{agentIcon}</span>
         <div>
-          <h2 class="text-sm font-semibold text-neutral-100">Orchestrator</h2>
+          <h2 class="text-sm font-semibold text-neutral-100">{agentName}</h2>
           <div class="flex items-center gap-1.5">
             <span class="text-xs text-neutral-400">{agentName}</span>
             <Badge
