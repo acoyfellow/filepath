@@ -13,6 +13,15 @@ export { Sandbox }
 const activeTerminals = new Set<string>();
 const terminalProcesses = new Map<string, Process>();
 
+// Build a lowercase terminal ID from session + tab (hostnames are case-insensitive)
+function makeTerminalId(sessionId: string, tabId: string): string {
+  return `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`.toLowerCase();
+}
+
+function makeTaskTerminalId(sessionId: string): string {
+  return `task-${sessionId.replace(/[^a-z0-9-]/gi, '')}`.toLowerCase();
+}
+
 // CORS headers for cross-origin requests from myfilepath.com
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -364,7 +373,7 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
         const parts = pathname.split('/');
         const sessionId = parts[2];
         const tabId = parts[3];
-        const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
+        const terminalId = makeTerminalId(sessionId, tabId);
         
         // Check user credits before starting terminal
         const db = drizzle(env.DB);
@@ -447,7 +456,7 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
         const parts = pathname.split('/');
         const sessionId = parts[2];
         const tabId = parts[3];
-        const terminalId = `t-${sessionId.replace(/[^a-z0-9-]/gi, '')}-${tabId.replace(/[^a-z0-9-]/gi, '')}`;
+        const terminalId = makeTerminalId(sessionId, tabId);
         
         try {
           const sandbox = getSandbox(env.Sandbox, terminalId);
@@ -596,7 +605,7 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
             ));
           }
 
-          const terminalId = `task-${sessionId.replace(/[^a-z0-9-]/gi, '')}`;
+          const terminalId = makeTaskTerminalId(sessionId);
 
           const sandbox = getSandbox(env.Sandbox, terminalId);
 
