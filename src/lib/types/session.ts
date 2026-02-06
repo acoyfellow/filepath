@@ -81,3 +81,12 @@ export interface SessionWizardState {
     config: AgentConfig;
   }>;
 }
+
+/** A chat message in a session */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  timestamp: number;
+  status?: 'sending' | 'complete' | 'error';
+}
