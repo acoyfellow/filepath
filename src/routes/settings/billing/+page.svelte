@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
+  import Nav from '$lib/components/Nav.svelte';
   
-  // Load data from page.data
   let balance = 0;
   let apiKeys: { id: string; name: string | null; prefix: string; budgetCap: number | null; creditBalance: number | null }[] = [];
   
@@ -13,7 +13,6 @@
     apiKeys = data.apiKeys;
   });
   
-  // Function to initiate credit purchase
   async function purchaseCredits(amount: number) {
     try {
       const response = await fetch('/api/billing/checkout', {
@@ -35,14 +34,12 @@
         return;
       }
       
-      // Redirect to Stripe checkout
       window.location.href = url;
     } catch (err) {
       console.error('Error initiating purchase:', err);
     }
   }
   
-  // Function to set budget cap for an API key
   async function setBudgetCap(apiKeyId: string, cap: number | null) {
     try {
       const response = await fetch(`/api/billing/apikey/${apiKeyId}/budget`, {
@@ -57,7 +54,6 @@
         throw new Error('Failed to set budget cap');
       }
       
-      // Refresh data
       invalidateAll();
     } catch (err) {
       console.error('Error setting budget cap:', err);
@@ -65,86 +61,98 @@
   }
 </script>
 
-<div class="container mx-auto px-4 py-8">
-  <h1 class="text-2xl font-bold mb-6">Billing & Credits</h1>
-  
-  <div class="mb-8">
-    <h2 class="text-xl font-semibold mb-4">Credit Balance</h2>
-    <div class="bg-white rounded-lg shadow p-6 mb-4">
-      <p class="text-3xl font-bold text-blue-600">{balance} credits</p>
-      <p class="text-gray-600">${(balance * 0.01).toFixed(2)} USD value</p>
-    </div>
-    
-    <h3 class="text-lg font-medium mb-3">Purchase Credits</h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-      <button 
-        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        onclick={() => purchaseCredits(1000)}
-      >
-        1,000 credits - $10.00
-      </button>
-      <button 
-        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        onclick={() => purchaseCredits(2500)}
-      >
-        2,500 credits - $25.00
-      </button>
-      <button 
-        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        onclick={() => purchaseCredits(5000)}
-      >
-        5,000 credits - $50.00
-      </button>
-    </div>
-    <p class="text-sm text-gray-600">Minimum purchase: 1,000 credits ($10.00)</p>
-  </div>
-  
-  <div>
-    <h2 class="text-xl font-semibold mb-4">API Keys & Budgets</h2>
-    {#if apiKeys.length > 0}
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white rounded-lg shadow">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="py-2 px-4 text-left">Name</th>
-              <th class="py-2 px-4 text-left">Key</th>
-              <th class="py-2 px-4 text-left">Credits</th>
-              <th class="py-2 px-4 text-left">Budget Cap</th>
-              <th class="py-2 px-4 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each apiKeys as apiKey}
-              <tr class="border-b">
-                <td class="py-2 px-4">{apiKey.name || 'Unnamed Key'}</td>
-                <td class="py-2 px-4 font-mono text-sm">
-                  {apiKey.prefix}
-                </td>
-                <td class="py-2 px-4">{apiKey.creditBalance !== null ? `${apiKey.creditBalance} credits` : 'N/A'}</td>
-                <td class="py-2 px-4">
-                  {apiKey.budgetCap !== null ? `${apiKey.budgetCap} credits` : 'No cap'}
-                </td>
-                <td class="py-2 px-4">
-                  <button 
-                    class="text-blue-500 hover:text-blue-700 mr-2"
-                    onclick={() => setBudgetCap(apiKey.id, 1000)}
-                  >
-                    Set 1k Cap
-                  </button>
-                  <button 
-                    class="text-blue-500 hover:text-blue-700"
-                    onclick={() => setBudgetCap(apiKey.id, null)}
-                  >
-                    Remove Cap
-                  </button>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+<div class="min-h-screen bg-neutral-950 text-neutral-300">
+  <Nav variant="dashboard" current="billing" email={($page).data?.user?.email} />
+
+  <main class="max-w-3xl mx-auto px-6 py-12">
+    <div class="flex items-center justify-between mb-10">
+      <div>
+        <h1 class="text-neutral-100 text-xl font-medium mb-1">Billing & credits</h1>
+        <p class="text-sm text-neutral-500">Manage your balance and spending limits</p>
       </div>
-    {:else}
-      <p class="text-gray-600">You don't have any API keys yet.</p>
-    {/if}
-  </div>
+      <a href="/dashboard" class="px-4 py-2 text-sm text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors">← back</a>
+    </div>
+
+    <!-- Balance -->
+    <section class="mb-10">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Credit balance</h2>
+      <div class="bg-neutral-900 border border-neutral-800 rounded p-6">
+        <p class="text-3xl text-neutral-100 font-mono font-medium">{balance} <span class="text-neutral-500 text-sm">credits</span></p>
+        <p class="text-neutral-500 text-sm mt-1">${(balance * 0.01).toFixed(2)} USD value</p>
+      </div>
+    </section>
+
+    <!-- Purchase -->
+    <section class="mb-10">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Purchase credits</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <button 
+          class="bg-neutral-900 border border-neutral-800 rounded p-4 text-left hover:border-neutral-600 transition-colors cursor-pointer group"
+          onclick={() => purchaseCredits(1000)}
+        >
+          <p class="text-neutral-100 font-mono font-medium">1,000</p>
+          <p class="text-neutral-500 text-sm">$10.00</p>
+        </button>
+        <button 
+          class="bg-neutral-900 border border-neutral-800 rounded p-4 text-left hover:border-neutral-600 transition-colors cursor-pointer group"
+          onclick={() => purchaseCredits(2500)}
+        >
+          <p class="text-neutral-100 font-mono font-medium">2,500</p>
+          <p class="text-neutral-500 text-sm">$25.00</p>
+        </button>
+        <button 
+          class="bg-neutral-900 border border-neutral-800 rounded p-4 text-left hover:border-neutral-600 transition-colors cursor-pointer group"
+          onclick={() => purchaseCredits(5000)}
+        >
+          <p class="text-neutral-100 font-mono font-medium">5,000</p>
+          <p class="text-neutral-500 text-sm">$50.00</p>
+        </button>
+      </div>
+      <p class="text-xs text-neutral-600 mt-3">Minimum purchase: 1,000 credits ($10.00)</p>
+    </section>
+
+    <!-- API Key Budgets -->
+    <section>
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Key budgets</h2>
+      {#if apiKeys.length > 0}
+        <div class="space-y-3">
+          {#each apiKeys as apiKey}
+            <div class="bg-neutral-900 border border-neutral-800 rounded p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-neutral-200 font-medium text-sm">{apiKey.name || 'Unnamed Key'}</p>
+                  <p class="font-mono text-xs text-neutral-600 mt-1">{apiKey.prefix}</p>
+                </div>
+                <div class="flex items-center gap-4 text-sm">
+                  <div class="text-right">
+                    <p class="text-neutral-400 font-mono text-xs">{apiKey.creditBalance !== null ? `${apiKey.creditBalance} credits` : '—'}</p>
+                    <p class="text-neutral-600 text-xs">{apiKey.budgetCap !== null ? `cap: ${apiKey.budgetCap}` : 'no cap'}</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button 
+                      class="px-2 py-1 text-xs text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors cursor-pointer"
+                      onclick={() => setBudgetCap(apiKey.id, 1000)}
+                    >
+                      1k cap
+                    </button>
+                    <button 
+                      class="px-2 py-1 text-xs text-neutral-500 border border-neutral-800 rounded hover:border-neutral-600 transition-colors cursor-pointer"
+                      onclick={() => setBudgetCap(apiKey.id, null)}
+                    >
+                      remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="border border-neutral-800 rounded p-6 text-center">
+          <p class="text-neutral-500 text-sm">No API keys yet.</p>
+          <a href="/settings/api-keys" class="text-neutral-400 text-sm hover:underline mt-1 inline-block">Create one →</a>
+        </div>
+      {/if}
+    </section>
+  </main>
 </div>
