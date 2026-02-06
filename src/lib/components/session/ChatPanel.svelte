@@ -137,7 +137,7 @@
         <div>
           <h2 class="text-sm font-semibold text-neutral-100">{agentName}</h2>
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-neutral-400">{agentName}</span>
+            <span class="text-xs text-neutral-400">Orchestrator</span>
             <Badge
               variant={isConnected ? 'default' : 'outline'}
               class="text-[10px] {isConnected ? 'bg-emerald-600 text-white' : 'border-neutral-600 text-neutral-500'}"
