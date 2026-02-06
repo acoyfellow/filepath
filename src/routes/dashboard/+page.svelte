@@ -5,26 +5,65 @@
   import { signOut } from '$lib/auth-client';
   import Nav from '$lib/components/Nav.svelte';
   
-  let sessions = $state<Array<{ id: string; name: string; createdAt: Date; lastActive: Date }>>([]);
+  interface DashboardSession {
+    id: string;
+    name: string;
+    description?: string;
+    type: 'legacy' | 'multi-agent';
+    status: string;
+    agentCount: number;
+    createdAt: Date;
+    lastActive: Date;
+  }
+
+  let sessions = $state<DashboardSession[]>([]);
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   
   onMount(async () => {
     try {
-      const response = await fetch('/api/session');
-      if (!response.ok) {
-        throw new Error('Failed to fetch sessions');
+      // Fetch both legacy and multi-agent sessions in parallel
+      const [legacyRes, multiRes] = await Promise.all([
+        fetch('/api/session'),
+        fetch('/api/session/multi/list'),
+      ]);
+
+      const allSessions: DashboardSession[] = [];
+
+      if (legacyRes.ok) {
+        const data = await legacyRes.json() as { sessions: Array<{ id: string; token: string; createdAt: string; updatedAt: string }> };
+        for (const s of data.sessions) {
+          allSessions.push({
+            id: s.token,
+            name: `Terminal ${s.token.substring(0, 8)}`,
+            type: 'legacy',
+            status: 'running',
+            agentCount: 0,
+            createdAt: new Date(s.createdAt),
+            lastActive: new Date(s.updatedAt),
+          });
+        }
       }
-      
-      const data = await response.json() as { sessions: Array<{ id: string; token: string; createdAt: string; updatedAt: string }> };
-      
-      sessions = data.sessions.map(session => ({
-        id: session.token,
-        name: `Session ${session.token.substring(0, 8)}`,
-        createdAt: new Date(session.createdAt),
-        lastActive: new Date(session.updatedAt)
-      }));
-      
+
+      if (multiRes.ok) {
+        const data = await multiRes.json() as { sessions: Array<{ id: string; name: string; description?: string; status: string; slotCount: number; createdAt: number; updatedAt: number }> };
+        for (const s of data.sessions) {
+          allSessions.push({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            type: 'multi-agent',
+            status: s.status,
+            agentCount: s.slotCount,
+            createdAt: new Date(s.createdAt),
+            lastActive: new Date(s.updatedAt),
+          });
+        }
+      }
+
+      // Sort by most recently active
+      allSessions.sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
+      sessions = allSessions;
       isLoading = false;
     } catch (err) {
       console.error('Error fetching sessions:', err);
@@ -127,12 +166,22 @@
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                <span class="w-2 h-2 rounded-full {session.status === 'running' ? 'bg-emerald-500' : session.status === 'stopped' ? 'bg-neutral-500' : session.status === 'error' ? 'bg-red-500' : 'bg-amber-500'}"></span>
                 <h3 class="text-neutral-100 font-medium">{session.name}</h3>
+                {#if session.type === 'multi-agent'}
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                    {session.agentCount} agent{session.agentCount !== 1 ? 's' : ''}
+                  </span>
+                {:else}
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700 font-mono">terminal</span>
+                {/if}
               </div>
               <span class="text-neutral-600 text-xs font-mono group-hover:text-neutral-400 transition-colors">open →</span>
             </div>
-            <div class="mt-3 ml-5 flex gap-6 text-xs text-neutral-500 font-mono">
+            {#if session.description}
+              <p class="mt-2 ml-5 text-sm text-neutral-500 line-clamp-1">{session.description}</p>
+            {/if}
+            <div class="mt-2 ml-5 flex gap-6 text-xs text-neutral-500 font-mono">
               <span>{session.id.substring(0, 16)}…</span>
               <span>created {session.createdAt.toLocaleDateString()}</span>
               <span>active {session.lastActive.toLocaleDateString()}</span>

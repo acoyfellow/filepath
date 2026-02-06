@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { getDrizzle } from '$lib/auth';
 import { multiAgentSession, agentSlot, user as userTable } from '$lib/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 interface AgentConfig {
