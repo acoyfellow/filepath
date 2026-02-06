@@ -313,8 +313,17 @@ export class SessionDO extends DurableObject {
   }
 }
 
+export async function handleRequest(request: Request, env: Env): Promise<Response> {
+  return _fetchHandler(request, env);
+}
+
 export default {
   async fetch(request: Request, env: Env) {
+    return _fetchHandler(request, env);
+  }
+};
+
+async function _fetchHandler(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
@@ -610,8 +619,7 @@ export default {
         }
       );
     }
-  }
-};
+}
 
 /**
  * Check if a user has sufficient credits to start a terminal session

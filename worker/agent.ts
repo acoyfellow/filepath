@@ -11,6 +11,7 @@ import { routeAgentRequest } from 'agents';
 import { TaskAgent } from '../src/agent';
 import { ExecuteTaskWorkflow } from '../src/agent/workflows/execute-task';
 import { CreateSessionWorkflow } from '../src/agent/workflows/create-session';
+import { handleRequest as handleTerminalRequest } from './index';
 import type { Env } from '../src/types';
 
 // Export the Agent as a Durable Object
@@ -59,6 +60,16 @@ export default {
           'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
         },
       });
+    }
+    
+    // Route terminal/*, session/*, debug/* to terminal handler
+    // These are container/sandbox requests that don't need API key auth
+    if (
+      url.pathname.startsWith('/terminal/') ||
+      url.pathname.startsWith('/session/') ||
+      url.pathname === '/debug/container'
+    ) {
+      return handleTerminalRequest(request, env as any);
     }
     
     // Route /api/orchestrator to TaskAgent DO with proper name headers
