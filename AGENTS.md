@@ -22,8 +22,8 @@ Agent instructions for the myfilepath.com codebase.
 
 🔄 **In Progress:**
 - Progress streaming
-- Terminal/ttyd connection stability
-- Stripe checkout (needs test mode config)
+- Terminal container startup (sandbox.startProcess hangs; 30s timeout added)
+- Per-minute credit deduction during container execution
 
 ❌ **Not Done:**
 - Production container execution with credits
@@ -227,6 +227,8 @@ bash gates/production/terminal-start.gate.sh https://myfilepath.com
 
 **CI Integration:** The `production-gates` job runs after deploy in `.github/workflows/deploy.yml`.
 Requires GH secrets: `TEST_EMAIL`, `TEST_PASSWORD`, `TEST_API_KEY`.
+
+**Status (Feb 6, 2026): ✅ All 4 production gates passing in CI (run 21746921257)**
 
 ### Running Gates
 
