@@ -6,6 +6,7 @@
   import { Label } from '$lib/components/ui/label';
   import { Textarea } from '$lib/components/ui/textarea';
   import { getAgentsByRole } from '$lib/agents/catalog';
+  import { MODEL_OPTIONS, ROUTER_OPTIONS } from '$lib/agents/options';
   import type { AgentType, AgentConfig, ModelId, RouterId } from '$lib/types/session';
 
   interface Props {
@@ -19,20 +20,7 @@
 
   const orchestrators = getAgentsByRole('orchestrator');
 
-  const MODEL_OPTIONS: { value: ModelId; label: string }[] = [
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4' },
-    { value: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'o3', label: 'o3' },
-    { value: 'deepseek-r1', label: 'DeepSeek R1' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  ];
 
-  const ROUTER_OPTIONS: { value: RouterId; label: string }[] = [
-    { value: 'direct', label: 'Direct' },
-    { value: 'openrouter', label: 'OpenRouter' },
-    { value: 'fireworks', label: 'Fireworks' },
-  ];
 
   // Local state for env var editor
   let envKeyInput = $state('');

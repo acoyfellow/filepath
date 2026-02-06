@@ -8,6 +8,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
   import { getAgentsByRole, getAgent } from '$lib/agents/catalog';
+  import { MODEL_OPTIONS, ROUTER_OPTIONS } from '$lib/agents/options';
   import type { AgentType, AgentConfig, ModelId, RouterId } from '$lib/types/session';
 
   interface WorkerEntry {
@@ -28,23 +29,34 @@
 
   const workerAgents = getAgentsByRole('worker');
 
-  const MODEL_OPTIONS: { value: ModelId; label: string }[] = [
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4' },
-    { value: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'o3', label: 'o3' },
-    { value: 'deepseek-r1', label: 'DeepSeek R1' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  ];
 
-  const ROUTER_OPTIONS: { value: RouterId; label: string }[] = [
-    { value: 'direct', label: 'Direct' },
-    { value: 'openrouter', label: 'OpenRouter' },
-    { value: 'fireworks', label: 'Fireworks' },
-  ];
 
   let expandedIndex = $state<number | null>(null);
   let showPicker = $state(false);
+
+  // Per-worker env var input state, keyed by worker index
+  let envKeyInputs = $state<Record<number, string>>({});
+  let envValueInputs = $state<Record<number, string>>({});
+
+  function getEnvPairs(index: number) {
+    return Object.entries(workers[index].config.envVars ?? {}).map(([key, value]) => ({ key, value }));
+  }
+
+  function addWorkerEnvVar(index: number) {
+    const key = (envKeyInputs[index] ?? '').trim();
+    const value = (envValueInputs[index] ?? '').trim();
+    if (!key) return;
+    const existing = workers[index].config.envVars ?? {};
+    onUpdateConfig(index, { ...workers[index].config, envVars: { ...existing, [key]: value } });
+    envKeyInputs[index] = '';
+    envValueInputs[index] = '';
+  }
+
+  function removeWorkerEnvVar(index: number, key: string) {
+    const existing = { ...(workers[index].config.envVars ?? {}) };
+    delete existing[key];
+    onUpdateConfig(index, { ...workers[index].config, envVars: existing });
+  }
 
   function toggleExpanded(index: number) {
     expandedIndex = expandedIndex === index ? null : index;
@@ -192,6 +204,64 @@
                   rows={3}
                   class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500 resize-none"
                 />
+              </div>
+
+              <!-- Environment Variables -->
+              <div class="space-y-3">
+                <Label class="text-neutral-300">Environment Variables</Label>
+
+                {#if getEnvPairs(index).length > 0}
+                  <div class="space-y-2">
+                    {#each getEnvPairs(index) as pair (pair.key)}
+                      <div class="flex items-center gap-2">
+                        <code class="rounded bg-neutral-800 px-2 py-1 text-sm text-emerald-400 min-w-[120px]">
+                          {pair.key}
+                        </code>
+                        <span class="text-neutral-500">=</span>
+                        <code class="rounded bg-neutral-800 px-2 py-1 text-sm text-neutral-300 flex-1 truncate">
+                          {pair.value}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="text-neutral-500 hover:text-red-400 h-8 w-8 p-0"
+                          onclick={() => removeWorkerEnvVar(index, pair.key)}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+
+                <div class="flex items-end gap-2">
+                  <div class="space-y-1 flex-1">
+                    <Label class="text-xs text-neutral-500">Key</Label>
+                    <Input
+                      value={envKeyInputs[index] ?? ''}
+                      oninput={(e: Event) => (envKeyInputs[index] = (e.target as HTMLInputElement).value)}
+                      placeholder="API_KEY"
+                      class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500 h-9"
+                    />
+                  </div>
+                  <div class="space-y-1 flex-1">
+                    <Label class="text-xs text-neutral-500">Value</Label>
+                    <Input
+                      value={envValueInputs[index] ?? ''}
+                      oninput={(e: Event) => (envValueInputs[index] = (e.target as HTMLInputElement).value)}
+                      placeholder="sk-..."
+                      class="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500 h-9"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="border-neutral-700 text-neutral-300 hover:bg-neutral-800 h-9"
+                    onclick={() => addWorkerEnvVar(index)}
+                  >
+                    Add
+                  </Button>
+                </div>
               </div>
             </Card.Content>
           {/if}
