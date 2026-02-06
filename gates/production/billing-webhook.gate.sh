@@ -43,7 +43,7 @@ fi
 echo -n "2. Checkout endpoint (authenticated)... "
 CHECKOUT_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/billing/checkout" \
   -H "Content-Type: application/json" \
-  -d '{"amount": 1000}' \
+  -d '{"creditAmount": 1000}' \
   -b "$COOKIE_JAR" --max-time 15 2>&1)
 CHECKOUT_HTTP=$(echo "$CHECKOUT_RESP" | tail -1)
 CHECKOUT_BODY=$(echo "$CHECKOUT_RESP" | sed '$d')
@@ -64,7 +64,7 @@ fi
 echo -n "3. Checkout without auth blocked... "
 UNAUTH_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/billing/checkout" \
   -H "Content-Type: application/json" \
-  -d '{"amount": 1000}' --max-time 10)
+  -d '{"creditAmount": 1000}' --max-time 10)
 if [ "$UNAUTH_HTTP" = "401" ] || [ "$UNAUTH_HTTP" = "403" ]; then
   echo "PASS (HTTP $UNAUTH_HTTP)"
 else
