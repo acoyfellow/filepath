@@ -357,3 +357,21 @@ npx wrangler dev --local
 3. ✅ All gates pass
 4. 🔜 Unified branding update
 
+
+## ⚠️ CRITICAL: Use Alchemy, NOT Wrangler
+
+**Project uses Alchemy for all deployments.**
+
+❌ **NEVER use:**
+- `wrangler deploy`
+- `wrangler.toml` configuration
+- Direct Cloudflare CLI commands for deployment
+
+✅ **ALWAYS use:**
+- `alchemy dev` - Local development
+- `alchemy deploy` - Deploy to production
+- `alchemy deploy --stage prod` - Production deployment
+- Configuration in `alchemy.run.ts`, NOT wrangler.toml
+
+**Why:** Alchemy manages the full deployment pipeline including D1, Durable Objects, bindings, and Cloudflare resources. Using wrangler directly will break the deployment.
+
