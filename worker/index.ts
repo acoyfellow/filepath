@@ -42,6 +42,116 @@ function withCors(response: Response): Response {
 }
 
 // Render terminal HTML page with xterm.js
+/**
+ * Render terminal page for a pre-started agent container.
+ * No /start call needed — container already has ttyd running.
+ */
+function renderAgentTerminalPage(containerId: string, apiWsHost?: string): Response {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Terminal</title>
+  <link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@6.0.0/css/xterm.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+    #terminal { height: 100%; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="https://unpkg.com/@xterm/xterm@6.0.0/lib/xterm.js"></script>
+  <script src="https://unpkg.com/@xterm/addon-fit@0.11.0/lib/addon-fit.js"></script>
+  <script>
+    (function() {
+      var terminal = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'monospace',
+        theme: { background: '#000000', foreground: '#ffffff', cursor: '#ffffff' }
+      });
+      var fitAddon = new FitAddon.FitAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.open(document.getElementById('terminal'));
+      fitAddon.fit();
+
+      terminal.write('\\x1b[2J\\x1b[H');
+      terminal.writeln('\\r\\n  Connecting to agent container...\\r\\n');
+
+      var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var apiWsHost = ${JSON.stringify(apiWsHost || '')};
+      var wsHost = apiWsHost || window.location.host;
+      var textEncoder = new TextEncoder();
+      var CMD_OUTPUT = '0';
+      var retries = 0;
+      var maxRetries = 10;
+      var ws = null;
+
+      function connect() {
+        var wsUrl = protocol + '//' + wsHost + '/agent-terminal/${containerId}/ws';
+        ws = new WebSocket(wsUrl);
+        ws.binaryType = 'arraybuffer';
+
+        ws.addEventListener('open', function() {
+          retries = 0;
+          terminal.writeln('  Connected.\\r\\n');
+          ws.send(JSON.stringify({ columns: terminal.cols, rows: terminal.rows }));
+        });
+
+        ws.addEventListener('message', function(event) {
+          if (event.data instanceof ArrayBuffer) {
+            var view = new Uint8Array(event.data);
+            if (view.length > 0 && view[0] === CMD_OUTPUT.charCodeAt(0)) {
+              terminal.write(view.slice(1));
+            }
+          } else if (typeof event.data === 'string') {
+            if (event.data.charCodeAt(0) === CMD_OUTPUT.charCodeAt(0)) {
+              terminal.write(event.data.slice(1));
+            }
+          }
+        });
+
+        ws.addEventListener('close', function() {
+          if (retries < maxRetries) {
+            retries++;
+            terminal.writeln('\\r\\n  Reconnecting (' + retries + '/' + maxRetries + ')...');
+            setTimeout(connect, 1000 * retries);
+          } else {
+            terminal.writeln('\\r\\n  Connection lost.');
+          }
+        });
+
+        ws.addEventListener('error', function() {});
+
+        terminal.onData(function(data) {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            var payload = new Uint8Array(data.length + 1);
+            payload[0] = CMD_OUTPUT.charCodeAt(0);
+            payload.set(textEncoder.encode(data), 1);
+            ws.send(payload);
+          }
+        });
+
+        terminal.onResize(function(size) {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ columns: size.cols, rows: size.rows }));
+          }
+        });
+      }
+
+      connect();
+
+      window.addEventListener('resize', function() { fitAddon.fit(); });
+    })();
+  </script>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders },
+  });
+}
+
 function renderTerminalPage(sessionId: string, tabId: string, apiWsHost?: string): Response {
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -389,6 +499,74 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
 
           return withCors(Response.json({ success: true, results }));
         } catch (err) {
+          return withCors(Response.json({ error: String(err) }, { status: 500 }));
+        }
+      }
+
+      // Handle agent-terminal page: /agent-terminal/{containerId}
+      // Serves xterm.js page that connects to a pre-started container directly
+      const agentTerminalMatch = pathname.match(/^\/agent-terminal\/([a-z0-9-]+)$/);
+      if (agentTerminalMatch && request.method === 'GET') {
+        const containerId = agentTerminalMatch[1] ?? '';
+        const apiWsHost = env.API_WS_HOST;
+        return renderAgentTerminalPage(containerId, apiWsHost);
+      }
+
+      // Handle agent-terminal WebSocket: /agent-terminal/{containerId}/ws
+      const agentTerminalWsMatch = pathname.match(/^\/agent-terminal\/([a-z0-9-]+)\/ws$/);
+      if (agentTerminalWsMatch && request.headers.get('Upgrade') === 'websocket') {
+        const containerId = agentTerminalWsMatch[1] ?? '';
+        try {
+          // Use containerId directly as sandbox name (no makeTerminalId transform)
+          const sandbox = getSandbox(env.Sandbox, containerId);
+
+          const pair = new WebSocketPair();
+          const [client, server] = Object.values(pair);
+          server.accept();
+
+          const wsUrl = new URL(request.url);
+          wsUrl.pathname = '/ws';
+          const wsHeaders = new Headers(request.headers);
+          if (!wsHeaders.get('Sec-WebSocket-Protocol')) {
+            wsHeaders.set('Sec-WebSocket-Protocol', 'tty');
+          }
+          const wsRequest = new Request(wsUrl.toString(), {
+            headers: wsHeaders,
+            method: 'GET',
+          });
+
+          let ttydResponse: Response & { webSocket?: WebSocket } | null = null;
+          for (let attempt = 0; attempt < 20; attempt++) {
+            try {
+              ttydResponse = await sandbox.wsConnect(wsRequest, 7681) as Response & { webSocket?: WebSocket };
+              if (ttydResponse.status === 101 && ttydResponse.webSocket) break;
+            } catch (e) {
+              console.warn('[agent-terminal/ws]', 'wsConnect attempt failed', { attempt, error: String(e) });
+            }
+            await new Promise(r => setTimeout(r, 500));
+          }
+
+          if (!ttydResponse || ttydResponse.status !== 101 || !ttydResponse.webSocket) {
+            server.close(1011, 'ttyd connection failed');
+            return new Response('ttyd connection failed', { status: 502 });
+          }
+
+          const ttydWs = ttydResponse.webSocket;
+          ttydWs?.accept?.();
+
+          // Relay: client ↔ ttyd
+          server.addEventListener('message', (event) => {
+            try { ttydWs.send(event.data); } catch { /* ignore */ }
+          });
+          ttydWs.addEventListener('message', (event: MessageEvent) => {
+            try { server.send(event.data); } catch { /* ignore */ }
+          });
+          server.addEventListener('close', () => { try { ttydWs.close(); } catch { /* */ } });
+          ttydWs.addEventListener('close', () => { try { server.close(); } catch { /* */ } });
+
+          return new Response(null, { status: 101, webSocket: client });
+        } catch (err) {
+          console.error('[agent-terminal/ws]', err);
           return withCors(Response.json({ error: String(err) }, { status: 500 }));
         }
       }
