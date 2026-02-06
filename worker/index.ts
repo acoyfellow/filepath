@@ -358,6 +358,41 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
         }
       }
 
+      // Start containers for multi-agent session slots
+      if (pathname === '/start-agent-slots' && request.method === 'POST') {
+        try {
+          const body = await request.json() as {
+            slots: Array<{ id: string; containerId: string }>;
+          };
+
+          if (!body.slots || !Array.isArray(body.slots)) {
+            return withCors(Response.json({ error: 'slots array required' }, { status: 400 }));
+          }
+
+          const results: Array<{ slotId: string; containerId: string; status: string; error?: string }> = [];
+
+          for (const slot of body.slots) {
+            try {
+              const sandbox = getSandbox(env.Sandbox, slot.containerId);
+              await sandbox.startProcess('ttyd -W -p 7681 bash');
+              results.push({ slotId: slot.id, containerId: slot.containerId, status: 'running' });
+            } catch (err) {
+              console.error(`Failed to start container ${slot.containerId}:`, err);
+              results.push({
+                slotId: slot.id,
+                containerId: slot.containerId,
+                status: 'error',
+                error: String(err),
+              });
+            }
+          }
+
+          return withCors(Response.json({ success: true, results }));
+        } catch (err) {
+          return withCors(Response.json({ error: String(err) }, { status: 500 }));
+        }
+      }
+
       // Handle terminal HTML page: /terminal/{sessionId}/tab?tab={tabId}
       // This serves the xterm.js page that connects to the terminal
       const terminalPageMatch = pathname.match(/^\/terminal\/([^/]+)\/tab$/);
