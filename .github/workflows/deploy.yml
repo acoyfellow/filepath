@@ -55,6 +55,32 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
 
+      - name: Fix Sandbox binding
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Alchemy's Container() creates a new container app each deploy, but the
+          # working container is filepath-filepath-sandbox-runner (ns: 02e6cb8e).
+          # This post-deploy step fixes the Worker binding to point at the working namespace.
+          SETTINGS=$(curl -s "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/filepath-worker/settings" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+          
+          CURRENT_NS=$(echo "$SETTINGS" | jq -r '.result.bindings[] | select(.name == "Sandbox") | .namespace_id')
+          CORRECT_NS="02e6cb8e19d3494f99f676ee143f83a6"
+          
+          if [ "$CURRENT_NS" != "$CORRECT_NS" ]; then
+            echo "Fixing Sandbox binding: $CURRENT_NS -> $CORRECT_NS"
+            NEW_BINDINGS=$(echo "$SETTINGS" | jq "[.result.bindings[] | if .name == \"Sandbox\" then .namespace_id = \"$CORRECT_NS\" else . end]")
+            RESULT=$(curl -s -X PATCH "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/filepath-worker/settings" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -F "settings={\"bindings\": $(echo "$NEW_BINDINGS")}")
+            echo "$RESULT" | jq '{success: .success, errors: .errors}'
+          else
+            echo "Sandbox binding already correct"
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy Preview
         if: github.ref != 'refs/heads/main'
         run: bun run deploy:preview
