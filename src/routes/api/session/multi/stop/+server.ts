@@ -39,6 +39,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       throw error(403, 'Forbidden');
     }
 
+    // Idempotent: already stopped is a no-op
+    if (sessions[0].status === 'stopped') {
+      return json({ success: true, alreadyStopped: true });
+    }
+
     // Update session status to stopped
     await db
       .update(multiAgentSession)

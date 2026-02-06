@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { getDrizzle } from '$lib/auth';
 import { multiAgentSession, agentSlot } from '$lib/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, count } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 /**
@@ -15,8 +15,8 @@ export const GET: RequestHandler = async ({ locals }) => {
   try {
     const db = getDrizzle();
 
-    // Get all sessions for this user with slot counts
-    const sessions = await db
+    // Get all sessions for this user with slot counts (single query with LEFT JOIN)
+    const sessionsWithCounts = await db
       .select({
         id: multiAgentSession.id,
         name: multiAgentSession.name,
@@ -24,24 +24,13 @@ export const GET: RequestHandler = async ({ locals }) => {
         status: multiAgentSession.status,
         createdAt: multiAgentSession.createdAt,
         updatedAt: multiAgentSession.updatedAt,
+        slotCount: count(agentSlot.id),
       })
       .from(multiAgentSession)
+      .leftJoin(agentSlot, eq(agentSlot.sessionId, multiAgentSession.id))
       .where(eq(multiAgentSession.userId, locals.user.id))
+      .groupBy(multiAgentSession.id)
       .orderBy(desc(multiAgentSession.updatedAt));
-
-    // Get slot counts for each session
-    const sessionsWithCounts = await Promise.all(
-      sessions.map(async (s) => {
-        const slots = await db
-          .select({ id: agentSlot.id })
-          .from(agentSlot)
-          .where(eq(agentSlot.sessionId, s.id));
-        return {
-          ...s,
-          slotCount: slots.length,
-        };
-      })
-    );
 
     return json({ sessions: sessionsWithCounts });
   } catch (err) {
