@@ -206,6 +206,28 @@ npm run deploy
 | orchestrator-execute | `gates/orchestrator.gate.sh` | ✅ Passing |
 | north-star (E2E) | `gates/full-user-lifecycle.gate.sh` | ✅ Passing |
 
+### Production Gates (Post-Deploy)
+
+Run automatically in CI after every deploy to main:
+
+| Gate | File | What it tests |
+|------|------|---------------|
+| Visual Regression | `gates/production/visual-regression.gate.sh` | All pages render (public + auth'd), content markers |
+| Terminal Start | `gates/production/terminal-start.gate.sh` | Login → create session → load terminal page |
+| Credit Deduction | `gates/production/credit-deduction.gate.sh` | Balance endpoint, auth enforcement, API key validation |
+| Billing Webhook | `gates/production/billing-webhook.gate.sh` | Stripe checkout, webhook endpoint, billing page |
+
+```bash
+# Run all production gates
+bash gates/production/run-all.sh https://myfilepath.com
+
+# Run individual gate
+bash gates/production/terminal-start.gate.sh https://myfilepath.com
+```
+
+**CI Integration:** The `production-gates` job runs after deploy in `.github/workflows/deploy.yml`.
+Requires GH secrets: `TEST_EMAIL`, `TEST_PASSWORD`, `TEST_API_KEY`.
+
 ### Running Gates
 
 ```bash
