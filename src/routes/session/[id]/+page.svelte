@@ -53,28 +53,41 @@
 
   async function loadSession() {
     try {
-      // Try to load multi-agent session data
-      const res = await fetch(`/api/session/${sessionId}`);
-      if (res.ok) {
-        const data = await res.json() as { session?: MultiAgentSession; slots?: AgentSlot[]; legacy?: boolean };
-        if (data.session && data.slots) {
+      // Try multi-agent endpoint first
+      const multiRes = await fetch(`/api/session/multi?id=${sessionId}`);
+      if (multiRes.ok) {
+        const data = await multiRes.json() as { session?: MultiAgentSession; slots?: AgentSlot[] };
+        if (data.session && data.slots && data.slots.length > 0) {
           session = data.session;
           slots = data.slots;
           isMultiAgent = true;
+          isConnected = true;
           // Select first worker if any
           const firstWorker = workerSlots[0];
           if (firstWorker) {
             activeWorkerId = firstWorker.id;
           }
+          isLoading = false;
+          return;
         }
       }
     } catch {
-      // Fall back to legacy mode
+      // Multi endpoint failed, try legacy
+    }
+
+    try {
+      // Fall back to legacy single-session endpoint
+      const legacyRes = await fetch(`/api/session/${sessionId}`);
+      if (legacyRes.ok) {
+        // Legacy mode — no multi-agent data, just show terminal
+      }
+    } catch {
+      // Legacy fetch also failed
     }
     isLoading = false;
   }
 
-  function handleSendMessage(content: string) {
+  async function handleSendMessage(content: string) {
     const msg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -83,7 +96,26 @@
       status: 'sending',
     };
     chatMessages = [...chatMessages, msg];
-    // TODO: Send via WebSocket/API
+
+    try {
+      const res = await fetch('/api/session/multi/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          slotId: orchestratorSlot?.id ?? selectedSlotId,
+          message: content,
+        }),
+      });
+      if (!res.ok) throw new Error(`Chat request failed: ${res.status}`);
+      chatMessages = chatMessages.map(m =>
+        m.id === msg.id ? { ...m, status: 'complete' as const } : m
+      );
+    } catch {
+      chatMessages = chatMessages.map(m =>
+        m.id === msg.id ? { ...m, status: 'error' as const } : m
+      );
+    }
   }
 
   function handleSelectSlot(slotId: string) {
@@ -95,10 +127,21 @@
   }
 
   async function handleStopSession() {
-    // TODO: API call to stop session
+    try {
+      const res = await fetch('/api/session/multi/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (!res.ok) throw new Error(`Stop request failed: ${res.status}`);
+    } catch {
+      // Still update local state so the UI reflects the intent
+    }
     if (session) {
       session = { ...session, status: 'stopped' };
     }
+    slots = slots.map(s => ({ ...s, status: 'stopped' as const }));
+    isConnected = false;
   }
 
   function getTerminalUrl(slot: AgentSlot): string {
