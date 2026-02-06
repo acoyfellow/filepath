@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getAgent } from '$lib/agents/catalog';
+  import { statusColors } from './status-colors';
   import type { AgentSlot } from '$lib/types/session';
 
   interface Props {
@@ -11,15 +12,7 @@
 
   let { workers, activeWorkerId, onSelectWorker, getTerminalUrl }: Props = $props();
 
-  const statusColors: Record<AgentSlot['status'], string> = {
-    pending: 'bg-neutral-500',
-    starting: 'bg-amber-500 animate-pulse',
-    running: 'bg-emerald-500',
-    stopped: 'bg-neutral-600',
-    error: 'bg-red-500',
-  };
 
-  let activeWorker = $derived(workers.find((w) => w.id === activeWorkerId) ?? null);
 </script>
 
 <div class="flex h-full w-full flex-col bg-neutral-950">
@@ -52,36 +45,40 @@
       {/each}
     </div>
 
-    <!-- Content area -->
+    <!-- Content area: all workers rendered, hidden via CSS to preserve iframe state -->
     <div class="relative flex-1">
-      {#if activeWorker}
-        {#if activeWorker.status === 'running' && activeWorker.containerId}
-          <iframe
-            src={getTerminalUrl(activeWorker)}
-            class="absolute inset-0 h-full w-full border-0"
-            title="{activeWorker.name} terminal"
-          ></iframe>
-        {:else if activeWorker.status === 'starting'}
-          <div class="flex h-full flex-col items-center justify-center gap-3">
-            <div class="size-6 animate-spin rounded-full border-2 border-neutral-600 border-t-emerald-500"></div>
-            <p class="text-sm text-neutral-400">Starting worker...</p>
-          </div>
-        {:else if activeWorker.status === 'pending'}
-          <div class="flex h-full items-center justify-center">
-            <p class="text-sm text-neutral-500">Waiting to start...</p>
-          </div>
-        {:else if activeWorker.status === 'error'}
-          <div class="flex h-full flex-col items-center justify-center gap-2">
-            <span class="text-2xl">⚠️</span>
-            <p class="text-sm text-red-400">Worker encountered an error</p>
-            <p class="text-xs text-neutral-500">Try stopping and restarting the session</p>
-          </div>
-        {:else if activeWorker.status === 'stopped'}
-          <div class="flex h-full items-center justify-center">
-            <p class="text-sm text-neutral-500">Worker stopped</p>
-          </div>
-        {/if}
-      {:else}
+      {#each workers as worker (worker.id)}
+        <div class="absolute inset-0" class:hidden={activeWorkerId !== worker.id}>
+          {#if worker.status === 'running' && worker.containerId}
+            <iframe
+              src={getTerminalUrl(worker)}
+              class="h-full w-full border-0"
+              title="{worker.name} terminal"
+            ></iframe>
+          {:else if worker.status === 'starting'}
+            <div class="flex h-full flex-col items-center justify-center gap-3">
+              <div class="size-6 animate-spin rounded-full border-2 border-neutral-600 border-t-emerald-500"></div>
+              <p class="text-sm text-neutral-400">Starting worker...</p>
+            </div>
+          {:else if worker.status === 'pending'}
+            <div class="flex h-full items-center justify-center">
+              <p class="text-sm text-neutral-500">Waiting to start...</p>
+            </div>
+          {:else if worker.status === 'error'}
+            <div class="flex h-full flex-col items-center justify-center gap-2">
+              <span class="text-2xl">⚠️</span>
+              <p class="text-sm text-red-400">Worker encountered an error</p>
+              <p class="text-xs text-neutral-500">Try stopping and restarting the session</p>
+            </div>
+          {:else if worker.status === 'stopped'}
+            <div class="flex h-full items-center justify-center">
+              <p class="text-sm text-neutral-500">Worker stopped</p>
+            </div>
+          {/if}
+        </div>
+      {/each}
+
+      {#if !activeWorkerId}
         <div class="flex h-full items-center justify-center">
           <p class="text-sm text-neutral-500">Select a worker tab</p>
         </div>
