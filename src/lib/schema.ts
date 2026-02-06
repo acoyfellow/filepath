@@ -177,6 +177,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   passkeys: many(passkey),
   apikeys: many(apikey),
+  multiAgentSessions: many(multiAgentSession),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -204,5 +205,81 @@ export const apikeyRelations = relations(apikey, ({ one }) => ({
   user: one(user, {
     fields: [apikey.userId],
     references: [user.id],
+  }),
+}));
+
+// ============================================
+// Multi-Agent Sessions
+// ============================================
+
+export const multiAgentSession = sqliteTable(
+  "multi_agent_session",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    gitRepoUrl: text("git_repo_url"),
+    status: text("status").notNull().default("draft"),
+    orchestratorSlotId: text("orchestrator_slot_id"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("multi_agent_session_user_id_idx").on(table.userId),
+    index("multi_agent_session_status_idx").on(table.status),
+  ],
+);
+
+export const agentSlot = sqliteTable(
+  "agent_slot",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => multiAgentSession.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    agentType: text("agent_type").notNull(),
+    name: text("name").notNull(),
+    config: text("config").notNull().default("{}"),
+    containerId: text("container_id"),
+    status: text("status").notNull().default("pending"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("agent_slot_session_id_idx").on(table.sessionId),
+    index("agent_slot_status_idx").on(table.status),
+  ],
+);
+
+// ============================================
+// Multi-Agent Relations
+// ============================================
+
+export const multiAgentSessionRelations = relations(multiAgentSession, ({ one, many }) => ({
+  user: one(user, {
+    fields: [multiAgentSession.userId],
+    references: [user.id],
+  }),
+  agentSlots: many(agentSlot),
+}));
+
+export const agentSlotRelations = relations(agentSlot, ({ one }) => ({
+  session: one(multiAgentSession, {
+    fields: [agentSlot.sessionId],
+    references: [multiAgentSession.id],
   }),
 }));
