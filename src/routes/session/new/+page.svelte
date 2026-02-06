@@ -15,6 +15,7 @@
   let description = $state('');
   let gitRepoUrl = $state('');
   let isLaunching = $state(false);
+  let launchError = $state<string | null>(null);
 
   // Orchestrator
   let orchestratorType = $state<AgentType | null>(null);
@@ -24,7 +25,7 @@
   });
 
   // Workers
-  let workers = $state<Array<{ agentType: AgentType; name: string; config: AgentConfig }>>([]);
+  let workers = $state<Array<{ id: string; agentType: AgentType; name: string; config: AgentConfig }>>([]);
 
   // Step validation
   let canProceed = $derived.by(() => {
@@ -73,6 +74,7 @@
   function handleAddWorker(agentType: AgentType) {
     const entry = AGENT_CATALOG[agentType];
     workers = [...workers, {
+      id: crypto.randomUUID(),
       agentType,
       name: `Worker ${workers.length + 1}`,
       config: {
@@ -82,16 +84,16 @@
     }];
   }
 
-  function handleRemoveWorker(index: number) {
-    workers = workers.filter((_, i) => i !== index);
+  function handleRemoveWorker(id: string) {
+    workers = workers.filter((w) => w.id !== id);
   }
 
-  function handleUpdateWorkerName(index: number, newName: string) {
-    workers = workers.map((w, i) => i === index ? { ...w, name: newName } : w);
+  function handleUpdateWorkerName(id: string, newName: string) {
+    workers = workers.map((w) => w.id === id ? { ...w, name: newName } : w);
   }
 
-  function handleUpdateWorkerConfig(index: number, config: AgentConfig) {
-    workers = workers.map((w, i) => i === index ? { ...w, config } : w);
+  function handleUpdateWorkerConfig(id: string, config: AgentConfig) {
+    workers = workers.map((w) => w.id === id ? { ...w, config } : w);
   }
 
   async function handleLaunch() {
@@ -123,6 +125,7 @@
       goto(`/session/${data.sessionId}`);
     } catch (err) {
       console.error('Launch failed:', err);
+      launchError = err instanceof Error ? err.message : 'Failed to create session';
       isLaunching = false;
     }
   }
@@ -137,14 +140,15 @@
       {#each stepLabels as label, i}
         {@const stepNum = (i + 1) as 1 | 2 | 3 | 4}
         <button
-          onclick={() => { if (stepNum < step || (stepNum === step)) return; /* can't skip ahead */ }}
-          class="flex items-center"
+          onclick={() => { if (stepNum < step) step = stepNum; }}
+          class="flex items-center {stepNum <= step ? 'cursor-pointer' : 'cursor-default'}"
           disabled={stepNum > step}
+          aria-disabled={stepNum > step}
         >
           <div class="flex items-center gap-2">
             <div
               class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors
-                {stepNum === step ? 'bg-emerald-500 text-white' : stepNum < step ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-neutral-800 text-neutral-500 border border-neutral-700'}"
+                {stepNum === step ? 'bg-emerald-500 text-white' : stepNum < step ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/40' : 'bg-neutral-800 text-neutral-500 border border-neutral-700'}"
             >
               {#if stepNum < step}
                 ✓
@@ -194,6 +198,20 @@
         />
       {/if}
     </div>
+
+    <!-- Error Display -->
+    {#if launchError}
+      <div class="mt-6 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <div class="flex items-center gap-2">
+          <span class="shrink-0">⚠</span>
+          <span>{launchError}</span>
+          <button
+            onclick={() => (launchError = null)}
+            class="ml-auto shrink-0 text-red-400 hover:text-red-300"
+          >✕</button>
+        </div>
+      </div>
+    {/if}
 
     <!-- Navigation Buttons -->
     <div class="flex justify-between mt-6">
