@@ -179,3 +179,57 @@ export const POST: RequestHandler = async ({ locals, request }) => {
     throw error(500, 'Failed to create multi-agent session');
   }
 };
+
+/**
+ * DELETE /api/session/multi?id=X - Delete a multi-agent session
+ */
+export const DELETE: RequestHandler = async ({ locals, url }) => {
+  if (!locals.user) {
+    throw error(401, 'Unauthorized');
+  }
+
+  const sessionId = url.searchParams.get('id');
+  if (!sessionId) {
+    throw error(400, 'Missing required query parameter: id');
+  }
+
+  try {
+    const db = getDrizzle();
+
+    const sessions = await db
+      .select()
+      .from(multiAgentSession)
+      .where(eq(multiAgentSession.id, sessionId));
+
+    if (sessions.length === 0) {
+      throw error(404, 'Multi-agent session not found');
+    }
+
+    const mas = sessions[0];
+
+    // Ensure the session belongs to the requesting user
+    if (mas.userId !== locals.user.id) {
+      throw error(403, 'Forbidden');
+    }
+
+    // Only allow deletion of draft or stopped sessions
+    if (mas.status !== 'draft' && mas.status !== 'stopped') {
+      throw error(
+        409,
+        `Cannot delete a session with status "${mas.status}". Only draft or stopped sessions can be deleted.`,
+      );
+    }
+
+    // Delete associated agent slots first, then the session
+    await db.delete(agentSlot).where(eq(agentSlot.sessionId, sessionId));
+    await db.delete(multiAgentSession).where(eq(multiAgentSession.id, sessionId));
+
+    return json({ success: true });
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'status' in err) {
+      throw err;
+    }
+    console.error('Error deleting multi-agent session:', err);
+    throw error(500, 'Failed to delete multi-agent session');
+  }
+};

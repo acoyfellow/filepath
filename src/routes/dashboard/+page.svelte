@@ -72,6 +72,26 @@
     }
   });
   
+  async function deleteSession(session: DashboardSession, event: MouseEvent) {
+    event.stopPropagation();
+    if (!confirm(`Delete session "${session.name}"? This cannot be undone.`)) return;
+
+    try {
+      const endpoint = session.type === 'multi-agent'
+        ? `/api/session/multi?id=${encodeURIComponent(session.id)}`
+        : `/api/session?id=${encodeURIComponent(session.id)}`;
+      const res = await fetch(endpoint, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(data.message || 'Failed to delete session');
+      }
+      sessions = sessions.filter((s) => s.id !== session.id);
+    } catch (err) {
+      console.error('Error deleting session:', err);
+      error = err instanceof Error ? err.message : 'Failed to delete session';
+    }
+  }
+
   async function createNewSession() {
     try {
       const balanceResponse = await fetch('/api/billing/balance');
@@ -176,7 +196,18 @@
                   <span class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700 font-mono">terminal</span>
                 {/if}
               </div>
-              <span class="text-neutral-600 text-xs font-mono group-hover:text-neutral-400 transition-colors">open →</span>
+              <div class="flex items-center gap-2">
+                {#if session.type === 'multi-agent' && (session.status === 'draft' || session.status === 'stopped')}
+                  <button
+                    onclick={(e: MouseEvent) => deleteSession(session, e)}
+                    class="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/50 rounded transition-all cursor-pointer"
+                    title="Delete session"
+                  >
+                    ✕ delete
+                  </button>
+                {/if}
+                <span class="text-neutral-600 text-xs font-mono group-hover:text-neutral-400 transition-colors">open →</span>
+              </div>
             </div>
             {#if session.description}
               <p class="mt-2 ml-5 text-sm text-neutral-500 line-clamp-1">{session.description}</p>
