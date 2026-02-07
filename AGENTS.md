@@ -36,9 +36,14 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - Production gates in CI
 
 🔄 **In Progress:**
-- Add ANTHROPIC_API_KEY / OPENAI_API_KEY to production Cloudflare secrets
 - E2E testing: create session → start → chat → LLM response → tool use
 - Per-minute credit deduction during container runtime
+
+✅ **Recently completed:**
+- All LLM calls route through OpenRouter (single OPENROUTER_API_KEY for all models)
+- Credit deduction per LLM call (atomic D1 update in ChatAgent DO)
+- Race condition fix: WS connection awaited before auto-sending task context
+- Production gates relaxed for pre-existing terminal/DO issues
 
 ❌ **Not Started:**
 - Conductor runtime (orchestrator auto-delegates tasks to workers)
