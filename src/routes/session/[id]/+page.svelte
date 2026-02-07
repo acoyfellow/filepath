@@ -157,21 +157,47 @@
         const data = await res.json().catch(() => ({ message: `Start failed: ${res.status}` }));
         throw new Error((data as { message?: string }).message || `Start failed: ${res.status}`);
       }
+
       // Reload session data to get updated statuses
       await loadSession();
 
-      // Auto-send task context to the orchestrator
-      if (session && orchestratorChatClient?.isConnected) {
-        const parts: string[] = [];
-        if (session.name) parts.push(`**Task:** ${session.name}`);
-        if (session.description) parts.push(session.description);
-        if (session.gitRepoUrl) parts.push(`**Git repo:** ${session.gitRepoUrl}`);
-        if (workerSlots.length > 0) {
-          const workerNames = workerSlots.map(w => w.name).join(', ');
-          parts.push(`**Workers available:** ${workerNames}`);
+      // If the session is still starting, poll until it becomes running or error
+      if (session?.status === 'starting') {
+        const pollIntervalMs = 2000;
+        const maxWaitMs = 30000;
+        let elapsed = 0;
+
+        while (elapsed < maxWaitMs && session?.status === 'starting') {
+          await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));
+          elapsed += pollIntervalMs;
+          await loadSession();
         }
-        if (parts.length > 0) {
-          orchestratorChatClient.sendMessage(parts.join('\n\n'));
+
+        if (session?.status === 'starting') {
+          throw new Error('Session took too long to start. Please try again.');
+        }
+        if (session?.status === 'error') {
+          throw new Error('Session failed to start.');
+        }
+      }
+
+      // Wait for the orchestrator WebSocket to be connected before sending
+      if (session && orchestratorChatClient) {
+        const connected = await orchestratorChatClient.waitForConnection(5000);
+        if (connected) {
+          const parts: string[] = [];
+          if (session.name) parts.push(`**Task:** ${session.name}`);
+          if (session.description) parts.push(session.description);
+          if (session.gitRepoUrl) parts.push(`**Git repo:** ${session.gitRepoUrl}`);
+          if (workerSlots.length > 0) {
+            const workerNames = workerSlots.map(w => w.name).join(', ');
+            parts.push(`**Workers available:** ${workerNames}`);
+          }
+          if (parts.length > 0) {
+            orchestratorChatClient.sendMessage(parts.join('\n\n'));
+          }
+        } else {
+          console.warn('[session] orchestrator WebSocket did not connect in time');
         }
       }
     } catch (err) {
