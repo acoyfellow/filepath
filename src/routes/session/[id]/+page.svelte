@@ -29,6 +29,7 @@
 
   // Chat clients — one per slot (orchestrator + workers)
   let chatClients = $state<Record<string, AgentChatClient>>({});
+  let creditWarning = $state('');
   let orchestratorChatClient = $derived(orchestratorSlot ? chatClients[orchestratorSlot.id] ?? null : null);
 
   // Legacy terminal state (for non-multi-agent sessions)
@@ -107,7 +108,20 @@
       const data = await res.json() as {
         session: { id: string; status: string };
         slots: Array<{ id: string; status: string; containerId: string | null }>;
+        billing?: { deducted: number; balance: number; insufficientCredits: boolean };
       };
+
+      // Handle billing — auto-stop if credits depleted
+      if (data.billing?.insufficientCredits) {
+        console.warn('[session] Credits depleted — stopping session');
+        creditWarning = 'Credits depleted. Session will stop.';
+        void handleStopSession();
+        return;
+      } else if (data.billing && data.billing.balance < 10) {
+        creditWarning = `Low credits: ${data.billing.balance} remaining`;
+      } else {
+        creditWarning = '';
+      }
 
       // Update session status
       if (session) {
@@ -407,6 +421,14 @@
         >
           Dismiss
         </button>
+      </div>
+    {/if}
+    <!-- Credit warning banner -->
+    {#if creditWarning}
+      <div class="flex items-center gap-2 border-b border-amber-900/50 bg-amber-950/50 px-4 py-2 text-sm text-amber-300">
+        <span class="shrink-0">💰</span>
+        <span class="flex-1">{creditWarning}</span>
+        <a href="/settings/billing" class="shrink-0 rounded bg-amber-800/50 px-2 py-0.5 text-xs text-amber-200 hover:bg-amber-800">Add Credits</a>
       </div>
     {/if}
 
