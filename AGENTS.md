@@ -28,19 +28,22 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - **ChatAgent DO** — `AIChatAgent` subclass with Anthropic/OpenAI providers, model mapping
 - **Svelte 5 chat client** — runes-based WS adapter for AIChatAgent protocol (432 lines)
 - **ChatPanel + WorkerTabs** wired to ChatAgent DOs via WebSocket
+- **Per-slot chat clients** — orchestrator + every worker gets own ChatAgent DO
+- **WorkerTabs** — chat/terminal/split view mode toggle per worker
+- **Container tool use** — `execute_command` tool via getSandbox for LLM shell access
+- **Server-side chat API** — `/api/session/multi/chat` routes messages to ChatAgent DOs
+- **Auto task context** — session name/description/repo sent to orchestrator on start
 - Production gates in CI
 
-🔄 **In Progress (worker loop `aichat-refactor` is on this):**
-- Session start → ChatAgent DO creation per slot
-- Chat/terminal/split view modes in WorkerTabs
-- Full e2e: create session → start → chat streams → see output
+🔄 **In Progress:**
+- Add ANTHROPIC_API_KEY / OPENAI_API_KEY to production Cloudflare secrets
+- E2E testing: create session → start → chat → LLM response → tool use
+- Per-minute credit deduction during container runtime
 
 ❌ **Not Started:**
-- Real credit deduction (mock returns hardcoded 9500)
-- Conductor runtime (types exist, no orchestrator↔worker communication)
+- Conductor runtime (orchestrator auto-delegates tasks to workers)
 - Git repo cloning into containers
-- Agent execution (LLM drives container commands autonomously)
-- Status polling / real-time updates
+- Status polling / real-time slot status updates
 - Session pause/resume
 
 ## Architecture
