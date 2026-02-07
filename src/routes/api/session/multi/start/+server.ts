@@ -102,7 +102,7 @@ export const POST: RequestHandler = async ({ locals, request, platform }) => {
           new Request('https://internal/start-agent-slots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slots: slotContainers }),
+            body: JSON.stringify({ slots: slotContainers, gitRepoUrl: sess.gitRepoUrl ?? undefined }),
           }),
         );
 
