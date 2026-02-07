@@ -7,7 +7,8 @@
   import ChatPanel from '$lib/components/session/ChatPanel.svelte';
   import WorkerTabs from '$lib/components/session/WorkerTabs.svelte';
   import { PaneGroup, Pane, Handle } from '$lib/components/ui/resizable';
-  import type { MultiAgentSession, AgentSlot, ChatMessage } from '$lib/types/session';
+  import type { MultiAgentSession, AgentSlot } from '$lib/types/session';
+  import { createAgentChatClient, type AgentChatClient } from '$lib/agents/chat-client';
 
   // Session data
   let sessionId = $derived(page.params.id ?? '');
@@ -23,9 +24,8 @@
   let selectedSlotId = $state<string | null>(null);
   let activeWorkerId = $state<string | null>(null);
 
-  // Chat state
-  let chatMessages = $state<ChatMessage[]>([]);
-  let isConnected = $state(false);
+  // Chat client (connected to ChatAgent DO via WebSocket)
+  let chatClient = $state<AgentChatClient | null>(null);
 
   // Legacy terminal state (for non-multi-agent sessions)
   let tabs = $state<Array<{id: string, name: string}>>([{ id: 'tab1', name: 'Terminal 1' }]);
@@ -55,12 +55,13 @@
           session = data.session;
           slots = data.slots;
           isMultiAgent = true;
-          isConnected = true;
           // Select first worker if any
           const firstWorker = workerSlots[0];
           if (firstWorker) {
             activeWorkerId = firstWorker.id;
           }
+          // Initialize chat client for orchestrator slot
+          initChatClient();
           isLoading = false;
           return;
         }
@@ -83,37 +84,47 @@
     isLoading = false;
   }
 
-  async function handleSendMessage(content: string) {
-    errorMessage = null;
-    const msg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-      status: 'sending',
-    };
-    chatMessages = [...chatMessages, msg];
-
-    try {
-      const res = await fetch('/api/session/multi/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          slotId: orchestratorSlot?.id ?? selectedSlotId,
-          message: content,
-        }),
-      });
-      if (!res.ok) throw new Error(`Chat request failed: ${res.status}`);
-      chatMessages = chatMessages.map(m =>
-        m.id === msg.id ? { ...m, status: 'complete' as const } : m
-      );
-    } catch (err) {
-      chatMessages = chatMessages.map(m =>
-        m.id === msg.id ? { ...m, status: 'error' as const } : m
-      );
-      errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+  /**
+   * Initialize the chat client connecting to the orchestrator's ChatAgent DO.
+   */
+  function initChatClient() {
+    // Disconnect existing client if any
+    if (chatClient) {
+      chatClient.disconnect();
     }
+
+    const orch = orchestratorSlot;
+    if (!orch) return;
+
+    // Determine worker URL — in production, the worker is at api.myfilepath.com
+    // In dev, it's the same host (SvelteKit proxies to worker)
+    const workerUrl = typeof window !== 'undefined' && window.location.hostname === 'myfilepath.com'
+      ? 'https://api.myfilepath.com'
+      : typeof window !== 'undefined'
+        ? window.location.origin
+        : '';
+
+    chatClient = createAgentChatClient({
+      workerUrl,
+      agentName: `chat-${orch.id}`,
+      initialState: {
+        slotId: orch.id,
+        sessionId,
+        agentType: orch.agentType,
+        model: orch.config.model,
+        systemPrompt: orch.config.systemPrompt || '',
+      },
+    });
+  }
+
+  function handleSendMessage(content: string) {
+    if (!chatClient) return;
+    chatClient.sendMessage(content);
+  }
+
+  function handleCancel() {
+    if (!chatClient) return;
+    chatClient.cancel();
   }
 
   function handleSelectSlot(slotId: string) {
@@ -163,7 +174,10 @@
       session = { ...session, status: 'stopped' };
     }
     slots = slots.map(s => ({ ...s, status: 'stopped' as const }));
-    isConnected = false;
+    if (chatClient) {
+      chatClient.disconnect();
+      chatClient = null;
+    }
   }
 
   function dismissError() {
@@ -261,11 +275,13 @@
             <ChatPanel
               agentName={orchestratorSlot.name}
               agentIcon="🤖"
-              messages={chatMessages}
+              messages={chatClient?.messages ?? []}
               collapsed={chatCollapsed}
-              {isConnected}
+              isConnected={chatClient?.isConnected ?? false}
+              status={chatClient?.status ?? 'ready'}
               onSendMessage={handleSendMessage}
               onToggleCollapse={() => chatCollapsed = !chatCollapsed}
+              onCancel={handleCancel}
             />
           </Pane>
 
