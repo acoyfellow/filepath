@@ -398,6 +398,15 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
   }
 
   /**
+   * Push updated state to the ChatAgent DO (e.g., after containerId is assigned).
+   */
+  function updateState(state: Record<string, unknown>) {
+    if (client && isConnected) {
+      client.setState(state);
+    }
+  }
+
+  /**
    * Disconnect the WebSocket.
    */
   function disconnect() {
@@ -424,6 +433,7 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
     sendMessage,
     cancel,
     clearHistory,
+    updateState,
     disconnect,
     reconnect: connect,
   };
