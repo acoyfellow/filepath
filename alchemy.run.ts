@@ -168,6 +168,11 @@ export const APP = await SvelteKit(`${projectName}-app`, {
           return svelteKitHandler.fetch(request, env, ctx);
         }
         
+        // Route /agents/* to worker for Agent SDK WebSocket connections
+        if (url.pathname.startsWith('/agents/')) {
+          return env.WORKER.fetch(request);
+        }
+        
         // Route terminal/* and legacy /api/session/* to worker
         // Worker handles: terminal HTML pages, WebSocket, start/close, task execution
         if (
