@@ -182,10 +182,11 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 
         if (session && session.credit_balance < CREDITS_PER_CALL) {
           console.warn(`[ChatAgent] Insufficient credits before LLM call, session=${sessionId}`);
-          return new Response(JSON.stringify({ error: 'Insufficient credits. Please add credits to continue.' }), {
-            status: 402,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          // Return as plain text — SDK wraps it as an assistant message
+          return new Response(
+            '⚠️ **Insufficient credits.** Please add credits in Settings → Billing to continue using the assistant.',
+            { headers: { 'Content-Type': 'text/plain' } },
+          );
         }
       } catch (err) {
         console.error('[ChatAgent] Credit check failed:', err instanceof Error ? err.message : err);
@@ -199,10 +200,10 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to initialize model';
       console.error(`[ChatAgent] model init error: ${msg}`);
-      return new Response(JSON.stringify({ error: msg }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        `⚠️ **Configuration error:** ${msg}`,
+        { headers: { 'Content-Type': 'text/plain' } },
+      );
     }
 
     const result = streamText({
