@@ -305,7 +305,7 @@ type SessionState = {
   activeTabId: string;
 };
 
-type Env = {
+export type TerminalEnv = {
   SESSION_DO: DurableObjectNamespace<SessionDO>;
   Sandbox: DurableObjectNamespace<Sandbox>; // Container binding
   DB: D1Database; // Database binding
