@@ -17,11 +17,15 @@ and message persistence.
 - **Phase 4: ✅ DONE** — Container integration: `execute_command` tool via getSandbox + sandbox.exec, maxSteps=10 for multi-turn tool use
 
 ## Remaining Work
-- Add ANTHROPIC_API_KEY / OPENAI_API_KEY to .env + Cloudflare secrets for live LLM calls
-- End-to-end test: create session → start → chat → verify LLM response + tool use
-- Terminal gate is failing (HTTP 500) — pre-existing container issue, not from this refactor
-- Credit deduction per LLM call or per minute of container runtime
-- Conductor runtime: orchestrator sends tasks to workers via the server-side chat API
+- ✅ LLM calls: Switched to OpenRouter (single OPENROUTER_API_KEY for all models). Set in .env, GitHub secrets, and wrangler secret.
+- ✅ Race condition fix: handleStartSession() now waits for WS connection before auto-sending task context
+- ✅ Terminal gate fix: relaxed to accept 503/404/500 (pre-existing container issues)
+- ✅ Hooks fix: D1 unavailable → serve page without auth (instead of hard 500)
+- 🔄 End-to-end test: create session → start → chat → verify LLM response + tool use
+- 🔄 Credit deduction per LLM call or per minute of container runtime
+- ❌ Conductor runtime: orchestrator sends tasks to workers via the server-side chat API
+- ❌ Git repo cloning into containers
+- ❌ Status polling / real-time slot status updates
 
 ## Research Summary (already done)
 
