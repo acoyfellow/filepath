@@ -56,6 +56,11 @@ const DEFAULT_SYSTEM_PROMPT = `You are an AI coding assistant running inside a c
  * Streaming is handled via the WS chat protocol (cf_agent_use_chat_*).
  */
 export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
+  /** Get the container ID associated with this agent slot (if running). */
+  get containerId(): string | undefined {
+    return this.state?.containerId;
+  }
+
   /**
    * Called by the SDK when the client sends a chat message.
    * `this.messages` is already populated with the full conversation
@@ -69,12 +74,17 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     const modelId: ModelId = agentState?.model ?? 'claude-sonnet-4';
     const systemPrompt = agentState?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
+    console.log(
+      `[ChatAgent] onChatMessage slot=${agentState?.slotId ?? 'unknown'} model=${modelId} messages=${this.messages.length}`,
+    );
+
     let model;
     try {
       model = getModel(modelId, this.env);
     } catch (err) {
       // Return error as a text response so the client sees it
       const msg = err instanceof Error ? err.message : 'Failed to initialize model';
+      console.error(`[ChatAgent] model init error: ${msg}`);
       return new Response(JSON.stringify({ error: msg }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
