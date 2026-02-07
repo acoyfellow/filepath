@@ -136,7 +136,10 @@ You can help with programming tasks, answer questions, and assist with software 
 
 When you have a container available, use the execute_command tool to run shell commands.
 Always check the output of commands and handle errors gracefully.
-Prefer small, focused commands over long scripts.`;
+Prefer small, focused commands over long scripts.
+
+If a git repository was cloned for this session, it will be at /workspace.
+Start by checking if /workspace exists and what's in it with: ls -la /workspace`;
 
 const ORCHESTRATOR_SYSTEM_PROMPT = `You are an AI orchestrator managing a team of worker agents.
 Your job is to decompose complex tasks into subtasks and delegate them to workers.
@@ -159,7 +162,10 @@ Best practices:
 - Send clear, specific instructions to each worker
 - Check worker progress periodically
 - If a worker encounters issues, try re-delegating or adjusting the task
-- Summarize the combined results when all workers finish`;
+- Summarize the combined results when all workers finish
+
+If a git repository was cloned for this session, it will be at /workspace in each container.
+You can tell workers to look there for the codebase.`;
 
 /**
  * ChatAgent — AIChatAgent-based DO for real LLM conversations.

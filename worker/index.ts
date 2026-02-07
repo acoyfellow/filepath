@@ -482,6 +482,7 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
         try {
           const body = await request.json() as {
             slots: Array<{ id: string; containerId: string }>;
+            gitRepoUrl?: string;
           };
 
           if (!body.slots || !Array.isArray(body.slots)) {
@@ -494,6 +495,28 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
             try {
               const sandbox = getSandbox(env.Sandbox, slot.containerId);
               await sandbox.startProcess('ttyd -W -p 7681 bash');
+
+              // Clone git repo if configured
+              if (body.gitRepoUrl) {
+                try {
+                  // Wait briefly for bash to be ready
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  const cloneCmd = `git clone ${body.gitRepoUrl} /workspace 2>&1 || echo 'CLONE_FAILED'`;
+                  const cloneResult = await sandbox.exec(cloneCmd);
+                  const output = typeof cloneResult === 'string' ? cloneResult : String(cloneResult);
+                  if (output.includes('CLONE_FAILED')) {
+                    console.warn(`[start-agent-slots] Git clone warning for ${slot.containerId}: ${output}`);
+                  } else {
+                    // Set working directory to the cloned repo
+                    await sandbox.exec('cd /workspace && pwd').catch(() => {});
+                    console.log(`[start-agent-slots] Cloned ${body.gitRepoUrl} into ${slot.containerId}:/workspace`);
+                  }
+                } catch (cloneErr) {
+                  // Don't fail the slot start if clone fails — agent can retry
+                  console.warn(`[start-agent-slots] Git clone failed for ${slot.containerId}:`, cloneErr);
+                }
+              }
+
               results.push({ slotId: slot.id, containerId: slot.containerId, status: 'running' });
             } catch (err) {
               console.error(`Failed to start container ${slot.containerId}:`, err);
