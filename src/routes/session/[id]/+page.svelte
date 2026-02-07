@@ -197,17 +197,31 @@
     const url = await loadWorkerUrl();
 
     for (const slot of slots) {
+      const isOrchestrator = slot.role === 'orchestrator';
+      const initialState: Record<string, unknown> = {
+        slotId: slot.id,
+        sessionId,
+        agentType: slot.agentType,
+        model: slot.config.model,
+        systemPrompt: slot.config.systemPrompt || '',
+        containerId: slot.containerId || undefined,
+      };
+
+      // Orchestrators get conductor tools (worker info)
+      if (isOrchestrator) {
+        initialState.isOrchestrator = true;
+        initialState.workers = workerSlots.map(w => ({
+          slotId: w.id,
+          name: w.name,
+          agentType: w.agentType,
+          status: w.status,
+        }));
+      }
+
       chatClients[slot.id] = createAgentChatClient({
         workerUrl: url,
         agentName: `chat-${slot.id}`,
-        initialState: {
-          slotId: slot.id,
-          sessionId,
-          agentType: slot.agentType,
-          model: slot.config.model,
-          systemPrompt: slot.config.systemPrompt || '',
-          containerId: slot.containerId || undefined,
-        },
+        initialState,
       });
     }
   }

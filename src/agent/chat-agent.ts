@@ -7,6 +7,14 @@ import { getSandbox } from '@cloudflare/sandbox';
 import type { Env } from '../types';
 import type { ModelId } from '$lib/types/session';
 
+/** Worker slot info available to the orchestrator */
+export interface WorkerSlotInfo {
+  slotId: string;
+  name: string;
+  agentType: string;
+  status: string;
+}
+
 /** State stored in the DO for this chat agent instance */
 export interface ChatAgentState {
   slotId: string;
@@ -15,6 +23,10 @@ export interface ChatAgentState {
   model: ModelId;
   systemPrompt: string;
   containerId?: string;
+  /** Whether this is an orchestrator slot (has conductor tools) */
+  isOrchestrator?: boolean;
+  /** Worker slots this orchestrator can delegate to */
+  workers?: WorkerSlotInfo[];
 }
 
 /**
@@ -126,6 +138,29 @@ When you have a container available, use the execute_command tool to run shell c
 Always check the output of commands and handle errors gracefully.
 Prefer small, focused commands over long scripts.`;
 
+const ORCHESTRATOR_SYSTEM_PROMPT = `You are an AI orchestrator managing a team of worker agents.
+Your job is to decompose complex tasks into subtasks and delegate them to workers.
+
+You have these tools:
+- **list_workers**: See all available workers and their current status
+- **delegate_task**: Send a specific task to a worker
+- **read_worker_messages**: Check a worker's progress and results
+- **execute_command**: Run commands in your own container (if available)
+
+Workflow:
+1. When given a task, analyze it and break it into independent subtasks
+2. Use list_workers to see available workers
+3. Use delegate_task to assign subtasks to appropriate workers
+4. Monitor progress with read_worker_messages
+5. Synthesize results and report back to the user
+
+Best practices:
+- Assign tasks to workers based on their type/specialization
+- Send clear, specific instructions to each worker
+- Check worker progress periodically
+- If a worker encounters issues, try re-delegating or adjusting the task
+- Summarize the combined results when all workers finish`;
+
 /**
  * ChatAgent — AIChatAgent-based DO for real LLM conversations.
  *
@@ -141,16 +176,17 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 
   /**
    * Build tools available to the LLM.
-   * If a container is assigned, includes execute_command for shell access.
+   * - All agents with a container get execute_command for shell access.
+   * - Orchestrators additionally get delegate_task, list_workers, read_worker_messages.
    */
   private getTools(): ToolSet {
+    const tools: ToolSet = {};
     const cid = this.containerId;
-    if (!cid) return {};
-
     const env = this.env;
 
-    return {
-      execute_command: tool({
+    // Container tools (for any agent with a container)
+    if (cid) {
+      tools.execute_command = tool({
         description: 'Execute a shell command in the agent\'s container. Returns stdout, stderr, and exit code.',
         parameters: z.object({
           command: z.string().describe('The shell command to execute'),
@@ -160,7 +196,6 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
         execute: async ({ command, cwd, timeout }) => {
           console.log(`[ChatAgent] exec in ${cid}: ${command}`);
           try {
-            // getSandbox expects the Sandbox binding — cast to avoid complex type
             const sandbox = getSandbox(
               env.Sandbox as Parameters<typeof getSandbox>[0],
               cid,
@@ -180,8 +215,180 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
             return { stdout: '', stderr: msg, exitCode: 1 };
           }
         },
-      }),
-    };
+      });
+    }
+
+    // Conductor tools (orchestrator only)
+    const agentState = this.state;
+    if (agentState?.isOrchestrator && agentState.workers) {
+      const workers = agentState.workers;
+
+      tools.list_workers = tool({
+        description: 'List all available workers, their types, and current status.',
+        parameters: z.object({}),
+        execute: async () => {
+          // Re-fetch live statuses from D1
+          const liveStatuses = await this.getWorkerStatuses(workers);
+          return { workers: liveStatuses };
+        },
+      });
+
+      tools.delegate_task = tool({
+        description: 'Send a task to a worker agent. The worker will process it autonomously. Returns confirmation that the task was sent.',
+        parameters: z.object({
+          slotId: z.string().describe('The worker slot ID to send the task to (from list_workers)'),
+          task: z.string().describe('A clear, specific task description for the worker'),
+        }),
+        execute: async ({ slotId, task }) => {
+          const worker = workers.find(w => w.slotId === slotId);
+          if (!worker) {
+            return { success: false, error: `Worker with slotId ${slotId} not found` };
+          }
+          return this.delegateToWorker(slotId, worker.name, task);
+        },
+      });
+
+      tools.read_worker_messages = tool({
+        description: 'Read the recent messages from a worker\'s conversation to check their progress or results.',
+        parameters: z.object({
+          slotId: z.string().describe('The worker slot ID to read messages from'),
+          limit: z.number().optional().describe('Max number of recent messages to read (default: 10)'),
+        }),
+        execute: async ({ slotId, limit }) => {
+          return this.readWorkerMessages(slotId, limit ?? 10);
+        },
+      });
+    }
+
+    return tools;
+  }
+
+  /**
+   * Fetch live worker statuses from D1.
+   */
+  private async getWorkerStatuses(workers: WorkerSlotInfo[]): Promise<WorkerSlotInfo[]> {
+    const db = this.env.DB;
+    if (!db || workers.length === 0) return workers;
+
+    try {
+      // Fetch current slot statuses from D1
+      const slotIds = workers.map(w => w.slotId);
+      const placeholders = slotIds.map(() => '?').join(',');
+      const rows = await db.prepare(
+        `SELECT id, status FROM agent_slot WHERE id IN (${placeholders})`
+      ).bind(...slotIds).all<{ id: string; status: string }>();
+
+      const statusMap = new Map<string, string>();
+      for (const row of rows.results) {
+        statusMap.set(row.id, row.status);
+      }
+
+      return workers.map(w => ({
+        ...w,
+        status: statusMap.get(w.slotId) ?? w.status,
+      }));
+    } catch (err) {
+      console.error('[ChatAgent] Failed to fetch worker statuses:', err);
+      return workers;
+    }
+  }
+
+  /**
+   * Send a task message to a worker's ChatAgent DO.
+   */
+  private async delegateToWorker(
+    slotId: string,
+    workerName: string,
+    task: string,
+  ): Promise<{ success: boolean; error?: string; workerName: string }> {
+    try {
+      const agentName = `chat-${slotId}`;
+      const doId = this.env.ChatAgent.idFromName(agentName);
+      const workerDO = this.env.ChatAgent.get(doId);
+
+      // Send via the Agents SDK HTTP interface
+      const chatPayload = {
+        messages: [
+          {
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            parts: [{ type: 'text' as const, text: `[Task from Orchestrator]\n\n${task}` }],
+          },
+        ],
+      };
+
+      const headers = new Headers({
+        'Content-Type': 'application/json',
+        'x-partykit-room': agentName,
+        'x-partykit-namespace': 'chat-agent',
+      });
+
+      const res = await workerDO.fetch(
+        new Request(`https://internal/agents/chat-agent/${agentName}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(chatPayload),
+        }),
+      );
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => `Status ${res.status}`);
+        console.error(`[ChatAgent] delegate to ${workerName} failed: ${errText}`);
+        return { success: false, error: errText, workerName };
+      }
+
+      console.log(`[ChatAgent] delegated task to ${workerName} (${slotId})`);
+      return { success: true, workerName };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ChatAgent] delegate error: ${msg}`);
+      return { success: false, error: msg, workerName };
+    }
+  }
+
+  /**
+   * Read recent messages from a worker's ChatAgent DO.
+   */
+  private async readWorkerMessages(
+    slotId: string,
+    limit: number,
+  ): Promise<{ messages: Array<{ role: string; text: string }>; error?: string }> {
+    try {
+      const agentName = `chat-${slotId}`;
+      const doId = this.env.ChatAgent.idFromName(agentName);
+      const workerDO = this.env.ChatAgent.get(doId);
+
+      const headers = new Headers({
+        'x-partykit-room': agentName,
+        'x-partykit-namespace': 'chat-agent',
+      });
+
+      // Fetch messages via GET endpoint
+      const res = await workerDO.fetch(
+        new Request(`https://internal/agents/chat-agent/${agentName}/messages`, {
+          method: 'GET',
+          headers,
+        }),
+      );
+
+      if (!res.ok) {
+        return { messages: [], error: `Failed to fetch: ${res.status}` };
+      }
+
+      const data = await res.json() as Array<{ role?: string; parts?: Array<{ type?: string; text?: string }> }>;
+      const messages = data
+        .slice(-limit)
+        .map((m) => {
+          const text = m.parts?.map(p => p.text ?? '').join('') ?? '';
+          return { role: m.role ?? 'unknown', text };
+        })
+        .filter(m => m.text.length > 0);
+
+      return { messages };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { messages: [], error: msg };
+    }
   }
 
   /**
@@ -195,7 +402,8 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
   ): Promise<Response> {
     const agentState = this.state;
     const modelId: ModelId = agentState?.model ?? 'claude-sonnet-4';
-    const systemPrompt = agentState?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+    const defaultPrompt = agentState?.isOrchestrator ? ORCHESTRATOR_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT;
+    const systemPrompt = agentState?.systemPrompt || defaultPrompt;
     const tools = this.getTools();
     const hasTools = Object.keys(tools).length > 0;
 
