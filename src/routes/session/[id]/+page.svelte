@@ -24,6 +24,9 @@
   let selectedSlotId = $state<string | null>(null);
   let activeWorkerId = $state<string | null>(null);
 
+  // Status polling
+  let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+
   // Chat clients — one per slot (orchestrator + workers)
   let chatClients = $state<Record<string, AgentChatClient>>({});
   let orchestratorChatClient = $derived(orchestratorSlot ? chatClients[orchestratorSlot.id] ?? null : null);
@@ -44,8 +47,9 @@
     }
     loadSession();
 
-    // Cleanup on unmount: disconnect all chat clients
+    // Cleanup on unmount: stop polling + disconnect all chat clients
     return () => {
+      stopPolling();
       for (const client of Object.values(chatClients)) {
         client.disconnect();
       }
@@ -91,6 +95,65 @@
     }
     isLoading = false;
   }
+
+  /**
+   * Lightweight status poll — updates session + slot statuses without
+   * re-fetching configs or re-initialising chat clients.
+   */
+  async function pollStatus() {
+    try {
+      const res = await fetch(`/api/session/multi/status?id=${sessionId}`);
+      if (!res.ok) return;
+      const data = await res.json() as {
+        session: { id: string; status: string };
+        slots: Array<{ id: string; status: string; containerId: string | null }>;
+      };
+
+      // Update session status
+      if (session) {
+        session = { ...session, status: data.session.status as MultiAgentSession['status'] };
+      }
+
+      // Update each slot's status & containerId
+      slots = slots.map((s) => {
+        const fresh = data.slots.find((r) => r.id === s.id);
+        if (!fresh) return s;
+        return {
+          ...s,
+          status: fresh.status as AgentSlot['status'],
+          containerId: fresh.containerId ?? s.containerId,
+        };
+      });
+    } catch {
+      // Silently ignore poll failures — next tick will retry
+    }
+  }
+
+  /** Start periodic status polling (idempotent). */
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(() => {
+      void pollStatus();
+    }, 5000);
+  }
+
+  /** Stop periodic status polling (idempotent). */
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  // React to session status changes: start/stop polling automatically
+  $effect(() => {
+    const s = session?.status;
+    if (s === 'running' || s === 'starting') {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  });
 
   // Worker URL for WebSocket connections, loaded from server config
   let workerUrl = $state('');
