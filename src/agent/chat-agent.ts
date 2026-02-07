@@ -36,13 +36,13 @@ export interface ChatAgentState {
  *
  * Fallback chain: CF AI Gateway → OpenRouter → direct OpenAI
  */
-const MODEL_CONFIG: Record<ModelId, { provider: 'openai' | 'anthropic'; model: string }> = {
+const MODEL_CONFIG: Record<ModelId, { provider: 'openai' | 'anthropic' | 'openrouter'; model: string }> = {
   'claude-sonnet-4': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
   'claude-opus-4-6': { provider: 'anthropic', model: 'claude-opus-4-20250610' },
   'gpt-4o': { provider: 'openai', model: 'gpt-4o' },
   'o3': { provider: 'openai', model: 'o3' },
-  'deepseek-r1': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' }, // TODO: route via OpenRouter
-  'gemini-2.5-pro': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' }, // TODO: route via OpenRouter
+  'deepseek-r1': { provider: 'openrouter', model: 'deepseek/deepseek-r1' },
+  'gemini-2.5-pro': { provider: 'openrouter', model: 'google/gemini-2.5-pro' },
 };
 
 /**
@@ -68,6 +68,19 @@ function getModel(modelId: ModelId, env: Env) {
   }
 
   const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+
+  // OpenRouter-native models (DeepSeek, Gemini, etc.)
+  if (config.provider === 'openrouter') {
+    if (!env.OPENROUTER_API_KEY) {
+      throw new Error(
+        `No OPENROUTER_API_KEY set for model ${modelId}. This model requires OpenRouter.`
+      );
+    }
+    return createOpenAI({
+      apiKey: env.OPENROUTER_API_KEY,
+      baseURL: 'https://openrouter.ai/api/v1',
+    })(config.model);
+  }
 
   // For OpenAI models: CF Gateway → direct OpenAI → OpenRouter
   if (config.provider === 'openai' && env.OPENAI_API_KEY) {
