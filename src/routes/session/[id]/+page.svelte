@@ -171,10 +171,12 @@
 
   // Sync containerId updates from polling to chat clients
   // When polling updates a slot's containerId, push it to the DO so execute_command works
+  const syncedContainerIds = new Map<string, string>();
   $effect(() => {
     for (const slot of slots) {
       const client = chatClients[slot.id];
-      if (client && slot.containerId) {
+      if (client && slot.containerId && syncedContainerIds.get(slot.id) !== slot.containerId) {
+        syncedContainerIds.set(slot.id, slot.containerId);
         client.updateState({ containerId: slot.containerId });
       }
     }
