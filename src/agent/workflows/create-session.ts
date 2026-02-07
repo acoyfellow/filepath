@@ -39,7 +39,7 @@ export class CreateSessionWorkflow extends AgentWorkflow<
         const containerId = `container-${sessionId}`;
         
         // Get sandbox (creates if doesn't exist)
-        const sandbox = getSandbox((this.env as Env).Sandbox as any, containerId);
+        const sandbox = getSandbox((this.env as Env).Sandbox as DurableObjectNamespace<Sandbox>, containerId);
         
         // Note: Container hostname/endpoint is not directly accessible
         // We'll use the session ID to access it later
@@ -52,7 +52,7 @@ export class CreateSessionWorkflow extends AgentWorkflow<
       const wsUrl = await step.do('start-ttyd', async () => {
         await this.reportProgress({ status: 'starting-terminal' });
         
-        const sandbox = getSandbox((this.env as Env).Sandbox as any, container.id);
+        const sandbox = getSandbox((this.env as Env).Sandbox as DurableObjectNamespace<Sandbox>, container.id);
         
         // Start ttyd on port 7681
         await sandbox.startProcess('ttyd -W -p 7681 bash');

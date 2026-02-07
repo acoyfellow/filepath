@@ -1,6 +1,6 @@
 import { AgentWorkflow, type AgentWorkflowStep } from 'agents/workflows';
 import type { Env, ExecuteTaskParams } from '../../types';
-import { getSandbox } from '@cloudflare/sandbox';
+import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 
 interface ExecuteTaskProgress {
   status: 'starting' | 'executing' | 'completed' | 'failed';
@@ -46,7 +46,7 @@ export class ExecuteTaskWorkflow extends AgentWorkflow<
         
         // Get sandbox for this session's container
         const containerId = `container-${sessionId}`;
-        const sandbox = getSandbox((this.env as Env).Sandbox as any, containerId);
+        const sandbox = getSandbox((this.env as Env).Sandbox as DurableObjectNamespace<Sandbox>, containerId);
         
         // Execute the command
         const result = await sandbox.exec(task);
