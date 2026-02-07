@@ -215,6 +215,13 @@
    * Each slot gets its own ChatAgent DO instance.
    */
   async function initChatClients() {
+    // Skip if we already have clients for all current slots
+    const existingIds = Object.keys(chatClients);
+    const slotIds = slots.map(s => s.id);
+    if (existingIds.length > 0 && slotIds.every(id => existingIds.includes(id))) {
+      return; // Clients already initialized for these slots
+    }
+
     // Disconnect all existing clients
     for (const client of Object.values(chatClients)) {
       client.disconnect();
