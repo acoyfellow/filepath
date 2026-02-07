@@ -18,6 +18,7 @@
     onSendMessage: (content: string) => void;
     onToggleCollapse: () => void;
     onCancel?: () => void;
+    onReconnect?: () => void;
   }
 
   let {
@@ -31,6 +32,7 @@
     onSendMessage,
     onToggleCollapse,
     onCancel,
+    onReconnect,
   }: Props = $props();
 
   let inputValue = $state('');
@@ -151,10 +153,18 @@
             <span class="text-xs text-neutral-400">{label}</span>
             <Badge
               variant={isConnected ? 'default' : 'outline'}
-              class="text-[10px] {isStreaming ? 'bg-amber-600 text-white' : isConnected ? 'bg-emerald-600 text-white' : 'border-neutral-600 text-neutral-500'}"
+              class="text-[10px] {isStreaming ? 'bg-amber-600 text-white' : isConnected ? 'bg-emerald-600 text-white' : 'border-red-700 text-red-400'}"
             >
               {isStreaming ? 'Streaming' : isConnected ? 'Connected' : 'Disconnected'}
             </Badge>
+            {#if !isConnected && onReconnect}
+              <button
+                onclick={onReconnect}
+                class="text-[10px] text-blue-400 hover:text-blue-300 underline"
+              >
+                Reconnect
+              </button>
+            {/if}
           </div>
         </div>
       </div>

@@ -465,6 +465,7 @@
               onSendMessage={handleSendMessage}
               onToggleCollapse={() => chatCollapsed = !chatCollapsed}
               onCancel={handleCancel}
+              onReconnect={() => orchestratorChatClient?.reconnect()}
             />
           </Pane>
 
