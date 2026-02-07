@@ -159,6 +159,21 @@
       }
       // Reload session data to get updated statuses
       await loadSession();
+
+      // Auto-send task context to the orchestrator
+      if (session && orchestratorChatClient?.isConnected) {
+        const parts: string[] = [];
+        if (session.name) parts.push(`**Task:** ${session.name}`);
+        if (session.description) parts.push(session.description);
+        if (session.gitRepoUrl) parts.push(`**Git repo:** ${session.gitRepoUrl}`);
+        if (workerSlots.length > 0) {
+          const workerNames = workerSlots.map(w => w.name).join(', ');
+          parts.push(`**Workers available:** ${workerNames}`);
+        }
+        if (parts.length > 0) {
+          orchestratorChatClient.sendMessage(parts.join('\n\n'));
+        }
+      }
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : 'Failed to start session';
     }
