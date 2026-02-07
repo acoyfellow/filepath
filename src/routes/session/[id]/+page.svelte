@@ -155,6 +155,17 @@
     }
   });
 
+  // Sync containerId updates from polling to chat clients
+  // When polling updates a slot's containerId, push it to the DO so execute_command works
+  $effect(() => {
+    for (const slot of slots) {
+      const client = chatClients[slot.id];
+      if (client && slot.containerId) {
+        client.updateState({ containerId: slot.containerId });
+      }
+    }
+  });
+
   // Worker URL for WebSocket connections, loaded from server config
   let workerUrl = $state('');
 
