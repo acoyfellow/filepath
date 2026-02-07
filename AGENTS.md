@@ -53,10 +53,10 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - Credit deduction per LLM call (atomic D1 update in ChatAgent DO)
 - WebSocket cleanup on page unmount
 
-⚠️ **BLOCKER:**
-- No valid LLM API key. OPENCODE_ZEN_API_KEY is NOT an OpenRouter key (returns 401).
-- Need: `ANTHROPIC_API_KEY` from console.anthropic.com, or `OPENROUTER_API_KEY` from openrouter.ai
-- Add to: `.env`, GitHub Actions secrets, and `wrangler secret put` on `filepath-worker`
+✅ **Resolved (was BLOCKER):**
+- OPENROUTER_API_KEY and OPENAI_API_KEY both valid and deployed
+- All models route through: CF AI Gateway → OpenRouter (Anthropic/DeepSeek/Gemini) or direct OpenAI (GPT-4o/O3)
+- OPENAI_API_KEY added to GitHub Actions deploy workflow
 
 ❌ **Not Started:**
 - Git repo cloning into containers
