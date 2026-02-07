@@ -69,7 +69,7 @@ User → Wizard → Multi-Agent Session → Agent Slots → Containers
 
 ```bash
 bun install
-bun run dev        # localhost:5173
+bun run dev        # runs `alchemy dev` — spins up SvelteKit (5173) + CF worker (DOs, containers, WS)
 
 # Build check (ALWAYS before commit)
 bunx tsc --noEmit
