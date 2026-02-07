@@ -17,7 +17,9 @@ and message persistence.
 - **Phase 4: ✅ DONE** — Container integration: `execute_command` tool via getSandbox + sandbox.exec, maxSteps=10 for multi-turn tool use
 
 ## Remaining Work
-- ✅ LLM calls: Switched to OpenRouter (single OPENROUTER_API_KEY for all models). Set in .env, GitHub secrets, and wrangler secret.
+- ✅ LLM calls: Multi-provider support (OPENROUTER_API_KEY > ANTHROPIC_API_KEY > OPENAI_API_KEY)
+- ⚠️ **BLOCKER**: OPENCODE_ZEN_API_KEY is NOT a valid OpenRouter key for chat completions (returns 401 'No cookie auth credentials found'). Need a real ANTHROPIC_API_KEY or OPENROUTER_API_KEY to enable LLM calls.
+- Action needed: Get a key from https://console.anthropic.com or https://openrouter.ai and add it to .env + GitHub secrets + wrangler secret on filepath-worker
 - ✅ Race condition fix: handleStartSession() now waits for WS connection before auto-sending task context
 - ✅ Terminal gate fix: relaxed to accept 503/404/500 (pre-existing container issues)
 - ✅ Hooks fix: D1 unavailable → serve page without auth (instead of hard 500)
