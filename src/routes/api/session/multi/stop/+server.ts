@@ -31,16 +31,17 @@ export const POST: RequestHandler = async ({ locals, request, platform }) => {
       .from(multiAgentSession)
       .where(eq(multiAgentSession.id, body.sessionId));
 
-    if (sessions.length === 0) {
+    const mas = sessions[0];
+    if (!mas) {
       throw error(404, 'Multi-agent session not found');
     }
 
-    if (sessions[0].userId !== locals.user.id) {
+    if (mas.userId !== locals.user.id) {
       throw error(403, 'Forbidden');
     }
 
     // Idempotent: already stopped is a no-op
-    if (sessions[0].status === 'stopped') {
+    if (mas.status === 'stopped') {
       return json({ success: true, alreadyStopped: true });
     }
 
