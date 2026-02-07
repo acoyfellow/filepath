@@ -2,120 +2,120 @@
 
 Agent instructions for the myfilepath.com codebase.
 
-## Project Context
+## North Star
 
-**Product:** myfilepath.com — Multi-agent orchestration platform  
-**Stack:** Cloudflare Workers + Agents SDK + SvelteKit + D1 + Alchemy  
-**Sprint:** Multi-agent session orchestration (Feb 2026)
+**Users configure sessions with an orchestrator + workers from an agent catalog, give them a task and a git repo, and watch them work in parallel in isolated containers.**
 
-## Current Status (Feb 2026)
+This is NOT a chatbot. The product is autonomous agents collaborating on real code in real containers.
+
+## Stack
+
+Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alchemy
+
+## Current Status (Feb 7, 2026)
 
 ✅ **Working:**
-- Build passes (`bunx tsc --noEmit` clean)
-- SvelteKit UI (landing, auth, dashboard, wizard, session view, settings)
+- SvelteKit UI: landing, auth, dashboard, wizard, session view, settings
 - Better-auth (email/password, API keys)
 - Stripe billing (checkout, webhooks, credits)
-- Secrets encryption (AES-GCM)
-- Agents SDK foundation (TaskAgent DO + Workflows)
-- Terminal containers (ttyd + Cloudflare Containers)
-- Production gates in CI (visual regression, terminal, credit, billing)
-- Agent catalog (7 agent types: shelley, pi, opencode, codex, amp, claude-code, custom)
+- Agent catalog (7 types: shelley, pi, claude-code, opencode, codex, amp, custom)
 - Multi-agent DB schema (`multi_agent_session` + `agent_slot` tables)
-- Multi-agent CRUD API (`/api/session/multi/*`)
+- Multi-agent CRUD API (`/api/session/multi/*` — create, get, list, start, stop, chat)
 - Session wizard (4-step: basics → orchestrator → workers → review)
-- 3-panel session view (sidebar, chat panel, worker tabs)
-- Conductor type interface (typed orchestration API)
-- Shared components (AgentConfigEditor, statusColors, ChatMessage)
+- 3-panel session view (sidebar, chat, worker tabs)
+- Container start flow (Start button → assign containerIds → worker → getSandbox + startProcess)
+- Agent terminal endpoint (`/agent-terminal/{containerId}` with xterm.js + ttyd)
+- **ChatAgent DO** — `AIChatAgent` subclass with Anthropic/OpenAI providers, model mapping
+- **Svelte 5 chat client** — runes-based WS adapter for AIChatAgent protocol (432 lines)
+- **ChatPanel + WorkerTabs** wired to ChatAgent DOs via WebSocket
+- Production gates in CI
 
-🔄 **In Progress:**
-- Container spin-up for agent slots
-- Agent execution inside containers
-- Progress streaming from agents to UI
-- Per-minute credit deduction
+🔄 **In Progress (worker loop `aichat-refactor` is on this):**
+- Session start → ChatAgent DO creation per slot
+- Chat/terminal/split view modes in WorkerTabs
+- Full e2e: create session → start → chat streams → see output
 
 ❌ **Not Started:**
-- Real conductor implementation (types exist, no runtime yet)
-- Inter-agent communication (orchestrator ↔ workers)
+- Real credit deduction (mock returns hardcoded 9500)
+- Conductor runtime (types exist, no orchestrator↔worker communication)
 - Git repo cloning into containers
+- Agent execution (LLM drives container commands autonomously)
+- Status polling / real-time updates
 - Session pause/resume
-- E2E multi-agent test
 
 ## Architecture
 
 ```
-User → Wizard → Multi-Agent Session → Agent Slots → Containers
-                     ↓                     ↓            ↓
-               D1 metadata          Config/Status   Execution
-               Conductor API        Model/Router    (ttyd+bash)
+User → Wizard → Multi-Agent Session → Agent Slots → ChatAgent DOs → Containers
+                     ↓                     ↓              ↓              ↓
+               D1 metadata          Config/Status   LLM + Chat      Execution
+                                    Model/Router    (AIChatAgent)   (ttyd+bash)
 ```
+
+**One ChatAgent DO per agent slot.** Each has:
+- SDK-native chat persistence (DO SQLite)
+- Streaming via SSE-over-WebSocket (resumable)
+- LLM calls via AI SDK v6 (`streamText` + `@ai-sdk/anthropic`)
+- State: slotId, sessionId, agentType, model, systemPrompt, containerId
+
+**Client connects to DO directly via WebSocket** — no REST proxy for chat.
 
 ### Core Components
 
 | Component | File | Purpose |
-|-----------|------|---------|
-| TaskAgent | `src/agent/task-agent.ts` | Main DO (dual RPC+REST interface) |
-| ExecuteTaskWorkflow | `src/agent/workflows/execute-task.ts` | Run commands in containers |
-| CreateSessionWorkflow | `src/agent/workflows/create-session.ts` | Spawn container sessions |
+|-----------|------|---------|  
+| ChatAgent | `src/agent/chat-agent.ts` | AIChatAgent DO — real LLM conversations |
+| Chat Client | `src/lib/agents/chat-client.svelte.ts` | Svelte 5 WS adapter for AIChatAgent |
+| TaskAgent | `src/agent/index.ts` | Legacy DO (RPC+REST, workflows) |
 | Agent Catalog | `src/lib/agents/catalog.ts` | Registry of 7 agent types |
 | Session Types | `src/lib/types/session.ts` | AgentSlot, MultiAgentSession, ModelId |
-| Conductor | `src/lib/types/conductor.ts` | Orchestration API interface |
+| Conductor | `src/lib/types/conductor.ts` | Orchestration interface (types only) |
 | Wizard | `src/lib/components/wizard/` | 4-step session creation |
-| Session View | `src/lib/components/session/` | 3-panel layout |
-
-### Dual Interface Pattern
-
-```typescript
-// @callable = primary interface (RPC, typed, streaming)
-@callable()
-async executeTask(sessionId: string, task: string, apiKey: string) { ... }
-
-// fetch() = thin REST wrapper
-async fetch(request: Request) {
-  const apiKey = request.headers.get('x-api-key');
-  return await this.executeTask(sessionId, task, apiKey);
-}
-```
+| Session View | `src/lib/components/session/` | ChatPanel, SessionSidebar, WorkerTabs |
 
 ## Development
 
 ```bash
 bun install
 bun run dev          # localhost:5173
-bash gates/health.sh # Health check (skips tsc — too slow on this VM)
+bash gates/health.sh # Health check (fast — skips tsc)
 bun run deploy       # Deploy via Alchemy
-# bunx tsc --noEmit  # Takes ~10 min on this VM. CI catches type errors. Run only when needed.
 ```
+
+**⚠️ tsc takes ~10 min on this VM** (Stripe=156K + CF workers=104K lines of .d.ts on 2 CPUs).
+Do NOT run `bunx tsc --noEmit` in loops. CI catches type errors. Run manually only when needed.
 
 ## Code Rules
 
 ### Svelte 5 Syntax (CRITICAL)
 ```svelte
 <!-- ❌ WRONG --><button on:click={fn}>   <!-- ✅ RIGHT --><button onclick={fn}>
-<!-- ❌ WRONG --><form on:submit|preventDefault>  <!-- ✅ RIGHT --><form onsubmit={(e) => { e.preventDefault(); ... }}>
 ```
 
 ### TypeScript
 - No explicit `any` — use `unknown`, generics, or specific types
-- No implicit returns in non-void functions
 - `arr[0]` is `T | undefined` (noUncheckedIndexedAccess)
 
 ### Commit Discipline
-1. **DO NOT run `bunx tsc --noEmit`** — takes ~10min on this VM. CI catches type errors.
+1. **DO NOT run `bunx tsc --noEmit`** in loops
 2. Commit after EVERY file change
-3. Descriptive commit messages
-4. Run `bash gates/health.sh` between phases (quick — checks syntax, svelte5, any)
+3. Push with `--no-verify` (pre-push hook runs svelte-check, also slow)
+4. Run `bash gates/health.sh` between phases
 
 ## Key Files
 
 ```
 src/
 ├── agent/
-│   ├── task-agent.ts            # Main Durable Object
+│   ├── chat-agent.ts            # AIChatAgent DO (LLM conversations)
+│   ├── index.ts                 # TaskAgent DO (legacy, workflows)
 │   └── workflows/               # ExecuteTask, CreateSession
 ├── lib/
-│   ├── agents/catalog.ts        # 7 agent types
-│   ├── types/session.ts         # AgentSlot, MultiAgentSession, etc.
-│   ├── types/conductor.ts       # Conductor orchestration interface
+│   ├── agents/
+│   │   ├── catalog.ts           # 7 agent types
+│   │   └── chat-client.svelte.ts # Svelte 5 WS chat adapter
+│   ├── types/session.ts         # AgentSlot, MultiAgentSession, ModelId
+│   ├── types/conductor.ts       # Conductor interface (types only)
 │   ├── components/session/      # ChatPanel, SessionSidebar, WorkerTabs
 │   ├── components/wizard/       # StepBasics, StepOrchestrator, StepWorkers, StepReview
 │   ├── schema.ts                # Drizzle D1 schema
@@ -124,56 +124,30 @@ src/
 │   ├── session/new/             # Wizard page
 │   ├── session/[id]/            # 3-panel session view
 │   ├── dashboard/               # Session list
-│   ├── api/session/multi/       # CRUD endpoints
+│   ├── api/session/multi/       # CRUD + start/stop/chat endpoints
 │   └── settings/                # API keys, billing, account
+worker/
+├── agent.ts                     # Worker entry — exports ChatAgent, TaskAgent
+└── index.ts                     # Terminal handlers, /start-agent-slots, /agent-terminal/*
 gates/                           # Health + production gates
 alchemy.run.ts                   # Infrastructure config (NOT wrangler)
 ```
 
-## API Endpoints
+## ⚠️ CRITICAL Rules
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/api/session/multi` | POST | Cookie | Create multi-agent session |
-| `/api/session/multi?id=X` | GET | Cookie | Get session + slots |
-| `/api/session/multi/list` | GET | Cookie | List sessions |
-| `/api/session/multi/chat` | POST | Cookie | Message an agent |
-| `/api/session/multi/stop` | POST | Cookie | Stop session |
-| `/api/orchestrator` | POST | x-api-key | Execute task (legacy) |
-| `/api/billing/checkout` | POST | Cookie | Stripe checkout |
-| `/api/billing/balance` | GET | Cookie | Credit balance |
+1. **Alchemy, NOT Wrangler** — `bun run deploy`, config in `alchemy.run.ts`
+2. **`bun`/`bunx`** not npm/npx
+3. **Svelte 5** — `onclick` not `on:click`
+4. **`--no-verify`** on git push (pre-push hook is slow)
+5. **AIChatAgent is the core** — don't build REST chat endpoints, use WS protocol
+6. **One ChatAgent DO per agent slot** — not per session
 
-## Gates
+## Sprint Priorities
 
-| Gate | File | Status |
-|------|------|--------|
-| Health | `gates/health.sh` | ✅ |
-| Signup | `gates/signup.gate.sh` | ✅ |
-| Login | `gates/login.gate.sh` | ✅ |
-| API Keys | `gates/api-e2e.gate.sh` | ✅ |
-| Terminal | `gates/terminal.gate.sh` | ✅ |
-| Orchestrator | `gates/orchestrator.gate.sh` | ✅ |
-| Full E2E | `gates/full-user-lifecycle.gate.sh` | ✅ |
-| Production (CI) | `gates/production/run-all.sh` | ✅ |
-
-## ⚠️ CRITICAL: Use Alchemy, NOT Wrangler
-
-- ❌ `wrangler deploy`, `wrangler.toml`
-- ✅ `bun run deploy` (runs `alchemy deploy`)
-- Config lives in `alchemy.run.ts`
-
-## Footguns
-
-1. **ttyd needs size message** — send `{columns:80, rows:24}` on WS connect
-2. **Skip `waitForPort`** in prod — let WS retry handle ttyd startup
-3. **SvelteKit can't proxy WebSocket** — terminal WS goes direct to worker
-4. **Sandbox binding** — must point to correct container namespace (was stale, fixed)
-5. **Use `bun`/`bunx`** not npm/npx
-
-## Sprint Priorities (Next)
-
-1. Wire agent slots to real containers (slot.containerId → running container)
-2. Agent execution — start agent binary in container, stream output
-3. Chat → agent routing (ChatPanel → API → container stdin)
-4. Credit deduction per minute of container runtime
-5. Conductor runtime implementation (beyond types)
+1. ✅ ChatAgent DO + Svelte chat client + UI wiring
+2. 🔄 Session start creates ChatAgent DOs, full e2e chat flow works
+3. Container integration (ChatAgent manages its sandbox, LLM tool calls exec in container)
+4. Real credit deduction (atomic D1 update, per-minute billing loop)
+5. Conductor runtime (orchestrator drives workers, inter-agent communication)
+6. Git repo cloning into containers
+7. Status polling / real-time session updates
