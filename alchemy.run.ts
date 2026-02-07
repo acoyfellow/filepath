@@ -12,6 +12,7 @@ import {
 import { CloudflareStateStore } from "alchemy/state";
 
 import type { TaskAgent } from "./src/agent/index.ts";
+import type { ChatAgent } from "./src/agent/chat-agent.ts";
 
 const password = process.env.ALCHEMY_PASSWORD;
 if (!password) {
@@ -35,6 +36,13 @@ console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 // Task Agent Durable Object (Agents SDK)
 const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-agent`, {
   className: "TaskAgent",
+  scriptName: `${prefix}-worker`,
+  sqlite: true
+});
+
+// Chat Agent Durable Object (AIChatAgent - real LLM conversations)
+const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent`, {
+  className: "ChatAgent",
   scriptName: `${prefix}-worker`,
   sqlite: true
 });
@@ -93,6 +101,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
   bindings: {
     TaskAgent: TASK_AGENT_DO,
+    ChatAgent: CHAT_AGENT_DO,
     Sandbox,
     DB,
     EXECUTE_TASK,
@@ -107,6 +116,8 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     API_WS_HOST: isProd ? "api.myfilepath.com" : "",
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
     BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
   },
 });
 
