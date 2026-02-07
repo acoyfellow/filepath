@@ -168,7 +168,11 @@ alchemy.run.ts                   # Infrastructure config (NOT wrangler)
 3. ✅ Container integration (execute_command tool, sandbox.exec)
 4. ✅ Conductor runtime (delegate_task, list_workers, read_worker_messages)
 5. ✅ Status polling + container stop + session delete
-6. 🔄 Get valid LLM API key + e2e test with real LLM responses
+6. ✅ Valid LLM API keys (OPENROUTER + OPENAI) — deployed via alchemy.run.ts
 7. ✅ Per-minute credit deduction during container runtime
 8. ✅ Git repo cloning into containers
-9. ❌ Session pause/resume
+9. ✅ Model routing: all 6 models route correctly (OpenRouter for Anthropic/DeepSeek/Gemini, direct for OpenAI)
+10. ✅ Real-time tool invocation streaming in chat client
+11. ✅ Zero `as any` across codebase
+12. 🔄 E2E test: create session → start → chat → LLM response → tool use
+13. ❌ Session pause/resume
