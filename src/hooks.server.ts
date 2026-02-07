@@ -9,7 +9,13 @@ export const handle: Handle = async ({ event, resolve }) => {
   try {
     const db = event.platform?.env?.DB;
 
-    if (!db) return error(500, 'D1 database not available');
+    if (!db) {
+      // D1 not available — serve page without auth (better than hard 500)
+      console.warn('D1 database not available, serving without auth');
+      event.locals.user = null;
+      event.locals.session = null;
+      return await resolve(event);
+    }
 
     // Initialize auth for this origin (previews/prod/local)
     const auth = initAuth(db, event.platform?.env, event.url.origin);
