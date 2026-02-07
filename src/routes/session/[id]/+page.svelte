@@ -8,7 +8,7 @@
   import WorkerTabs from '$lib/components/session/WorkerTabs.svelte';
   import { PaneGroup, Pane, Handle } from '$lib/components/ui/resizable';
   import type { MultiAgentSession, AgentSlot } from '$lib/types/session';
-  import { createAgentChatClient, type AgentChatClient } from '$lib/agents/chat-client';
+  import { createAgentChatClient, type AgentChatClient } from '$lib/agents/chat-client.svelte';
 
   // Session data
   let sessionId = $derived(page.params.id ?? '');

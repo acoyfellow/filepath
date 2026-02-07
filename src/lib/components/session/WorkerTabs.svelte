@@ -3,7 +3,7 @@
   import { statusColors } from './status-colors';
   import ChatPanel from './ChatPanel.svelte';
   import type { AgentSlot } from '$lib/types/session';
-  import type { AgentChatClient } from '$lib/agents/chat-client';
+  import type { AgentChatClient } from '$lib/agents/chat-client.svelte';
 
   interface Props {
     workers: AgentSlot[];
