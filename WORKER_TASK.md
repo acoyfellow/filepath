@@ -14,7 +14,14 @@ and message persistence.
 - **Phase 1: ✅ DONE** — ChatAgent DO with AIChatAgent, model mapping, alchemy bindings
 - **Phase 2: ✅ DONE** — Svelte 5 runes chat client, ChatPanel wiring
 - **Phase 3: ✅ DONE** — Chat clients for ALL slots (orchestrator + workers), WorkerTabs with chat/terminal/split view, auto-send task context on start, server-side chat API for message injection
-- **Phase 4: 🔄 NEXT** — Container integration (LLM tool calls → container exec)
+- **Phase 4: ✅ DONE** — Container integration: `execute_command` tool via getSandbox + sandbox.exec, maxSteps=10 for multi-turn tool use
+
+## Remaining Work
+- Add ANTHROPIC_API_KEY / OPENAI_API_KEY to .env + Cloudflare secrets for live LLM calls
+- End-to-end test: create session → start → chat → verify LLM response + tool use
+- Terminal gate is failing (HTTP 500) — pre-existing container issue, not from this refactor
+- Credit deduction per LLM call or per minute of container runtime
+- Conductor runtime: orchestrator sends tasks to workers via the server-side chat API
 
 ## Research Summary (already done)
 
