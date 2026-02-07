@@ -1,5 +1,4 @@
 import { AIChatAgent } from '@cloudflare/ai-chat';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText, convertToModelMessages, tool, type StreamTextOnFinishCallback, type ToolSet } from 'ai';
 import { z } from 'zod';
@@ -18,34 +17,36 @@ export interface ChatAgentState {
 }
 
 /**
- * Maps our ModelId to AI SDK model identifiers.
- * Throws a clear error if the required API key is missing.
+ * OpenRouter model ID mapping.
+ * All models route through OpenRouter (OpenAI-compatible API)
+ * using the OPENROUTER_API_KEY env var.
+ */
+const MODEL_MAP: Record<ModelId, string> = {
+  'claude-sonnet-4': 'anthropic/claude-sonnet-4',
+  'claude-opus-4-6': 'anthropic/claude-opus-4.6',
+  'gpt-4o': 'openai/gpt-4o',
+  'o3': 'openai/o3',
+  'deepseek-r1': 'deepseek/deepseek-r1',
+  'gemini-2.5-pro': 'google/gemini-2.5-pro',
+};
+
+/**
+ * Maps our ModelId to AI SDK model via OpenRouter.
+ * Uses a single API key (OPENROUTER_API_KEY) for all providers.
  */
 function getModel(modelId: ModelId, env: Env) {
-  const requireKey = (key: string | undefined, provider: string): string => {
-    if (!key) throw new Error(`Missing ${provider} API key. Configure it in your environment.`);
-    return key;
-  };
-
-  switch (modelId) {
-    case 'claude-sonnet-4':
-      return createAnthropic({ apiKey: requireKey(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY') })('claude-sonnet-4-20250514');
-    case 'claude-opus-4-6':
-      return createAnthropic({ apiKey: requireKey(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY') })('claude-opus-4-20250610');
-    case 'gpt-4o':
-      return createOpenAI({ apiKey: requireKey(env.OPENAI_API_KEY, 'OPENAI_API_KEY') })('gpt-4o');
-    case 'o3':
-      return createOpenAI({ apiKey: requireKey(env.OPENAI_API_KEY, 'OPENAI_API_KEY') })('o3');
-    case 'deepseek-r1':
-      return createOpenAI({ baseURL: 'https://api.deepseek.com/v1' })('deepseek-reasoner');
-    case 'gemini-2.5-pro':
-      return createOpenAI({ baseURL: 'https://openrouter.ai/api/v1' })('google/gemini-2.5-pro');
-    default: {
-      const _exhaustive: never = modelId;
-      void _exhaustive;
-      return createAnthropic({ apiKey: requireKey(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY') })('claude-sonnet-4-20250514');
-    }
+  const apiKey = env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing OPENROUTER_API_KEY. Add it to your environment to enable LLM calls.');
   }
+
+  const openrouter = createOpenAI({
+    apiKey,
+    baseURL: 'https://openrouter.ai/api/v1',
+  });
+
+  const routerModelId = MODEL_MAP[modelId] ?? 'anthropic/claude-sonnet-4';
+  return openrouter(routerModelId);
 }
 
 const DEFAULT_SYSTEM_PROMPT = `You are an AI coding assistant running inside a container environment.
