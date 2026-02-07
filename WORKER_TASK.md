@@ -18,16 +18,22 @@ and message persistence.
 
 ## Remaining Work
 - ✅ LLM calls: Multi-provider support (OPENROUTER_API_KEY > ANTHROPIC_API_KEY > OPENAI_API_KEY)
-- ⚠️ **BLOCKER**: OPENCODE_ZEN_API_KEY is NOT a valid OpenRouter key for chat completions (returns 401 'No cookie auth credentials found'). Need a real ANTHROPIC_API_KEY or OPENROUTER_API_KEY to enable LLM calls.
-- Action needed: Get a key from https://console.anthropic.com or https://openrouter.ai and add it to .env + GitHub secrets + wrangler secret on filepath-worker
 - ✅ Race condition fix: handleStartSession() now waits for WS connection before auto-sending task context
 - ✅ Terminal gate fix: relaxed to accept 503/404/500 (pre-existing container issues)
 - ✅ Hooks fix: D1 unavailable → serve page without auth (instead of hard 500)
+- ✅ Status polling: lightweight `/api/session/multi/status` endpoint + 5s periodic polling in session view
+- ✅ Container stop: `/stop-agent-slots` worker endpoint + stop button actually kills containers
+- ✅ Session delete: DELETE endpoint + dashboard delete button for draft/stopped sessions
+- ✅ ChatPanel label: shows correct agent name instead of hardcoded "Orchestrator"
+- ✅ WorkerTabs status: proper pending/error/stopped status messages (not hidden by always-truthy client check)
+- ✅ Conductor runtime: orchestrator gets `delegate_task`, `list_workers`, `read_worker_messages` tools + specialized system prompt
+- ⚠️ **BLOCKER**: No valid LLM API key. Need a real ANTHROPIC_API_KEY or OPENROUTER_API_KEY.
+  - Action needed: Get a key from https://console.anthropic.com or https://openrouter.ai
+  - Add to: `.env`, GitHub Actions secrets, and `wrangler secret put` on `filepath-worker`
 - 🔄 End-to-end test: create session → start → chat → verify LLM response + tool use
 - 🔄 Credit deduction per LLM call or per minute of container runtime
-- ❌ Conductor runtime: orchestrator sends tasks to workers via the server-side chat API
 - ❌ Git repo cloning into containers
-- ❌ Status polling / real-time slot status updates
+- ❌ Session pause/resume
 
 ## Research Summary (already done)
 
