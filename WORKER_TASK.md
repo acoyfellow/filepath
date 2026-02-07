@@ -31,9 +31,14 @@ and message persistence.
   - Action needed: Get a key from https://console.anthropic.com or https://openrouter.ai
   - Add to: `.env`, GitHub Actions secrets, and `wrangler secret put` on `filepath-worker`
 - 🔄 End-to-end test: create session → start → chat → verify LLM response + tool use
-- 🔄 Credit deduction per LLM call or per minute of container runtime
-- ❌ Git repo cloning into containers
+- ✅ Per-minute credit deduction — status poll deducts per running slot per minute, auto-stops on depletion
+- ✅ Git repo cloning into containers — cloned to /workspace on session start
+- ✅ Stripe webhook credit bug fixed — metadata key mismatch (creditAmount vs credit_amount)
+- ✅ ContainerId sync — polling pushes containerId to chat clients via updateState
+- ✅ Chat reconnect UI — reconnect button when disconnected
+- ✅ Tool invocation rendering — execute_command, delegate_task shown inline in chat
 - ❌ Session pause/resume
+- ❌ Container idle timeout (containers run until manually stopped)
 
 ## Research Summary (already done)
 
