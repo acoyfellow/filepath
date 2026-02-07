@@ -28,8 +28,14 @@ export interface Env {
   EXECUTE_TASK: Workflow<ExecuteTaskParams>;
   CREATE_SESSION: Workflow<CreateSessionParams>;
   
+  // Chat Agent DO binding
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ChatAgent: DurableObjectNamespace<any>;
+
   // Environment variables
   BETTER_AUTH_SECRET: string;
+  ANTHROPIC_API_KEY?: string;
+  OPENAI_API_KEY?: string;
   BETTER_AUTH_URL: string;
   API_WS_HOST?: string;
   MAILGUN_API_KEY?: string;

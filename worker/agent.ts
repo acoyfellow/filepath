@@ -9,13 +9,15 @@
 
 import { routeAgentRequest } from 'agents';
 import { TaskAgent } from '../src/agent';
+import { ChatAgent } from '../src/agent/chat-agent';
 import { ExecuteTaskWorkflow } from '../src/agent/workflows/execute-task';
 import { CreateSessionWorkflow } from '../src/agent/workflows/create-session';
 import { handleRequest as handleTerminalRequest } from './index';
 import type { Env } from '../src/types';
 
-// Export the Agent as a Durable Object
+// Export Durable Object classes
 export { TaskAgent };
+export { ChatAgent };
 
 // Export workflow classes with binding names
 export const EXECUTE_TASK = ExecuteTaskWorkflow;
