@@ -276,12 +276,22 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
    * This gives us real-time streaming updates before the server sends
    * the full CHAT_MESSAGES sync.
    */
+  /** Track tool invocations during streaming */
+  interface StreamingToolCall {
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    state: 'call' | 'result';
+    result?: unknown;
+  }
+
   async function processStream(stream: ReadableStream<Uint8Array>, requestId: string) {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let assistantText = '';
-    let assistantMessageId = `assistant-${requestId}`;
+    const assistantMessageId = `assistant-${requestId}`;
+    const toolCalls = new Map<string, StreamingToolCall>();
 
     try {
       while (true) {
@@ -301,39 +311,75 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
           if (data === '[DONE]') continue;
 
           try {
-            // AI SDK UI message stream format - each line is a JSON chunk
-            // Format: type:value pairs like "2:text" or "0:text"
-            // Actually the AI SDK stream format is more complex.
-            // The toUIMessageStreamResponse sends UIMessageChunk SSE.
-            // For now, let's parse the simple text deltas.
-            //
-            // The SSE body from the CF agent protocol is the raw SSE line content
-            // (without the "data: " prefix). The content is already the SSE data field.
-            // Let's just accumulate text parts.
-
-            // AI SDK stream format: each chunk is like:
-            //   0:"hello"     (text delta)
-            //   2:[{...}]     (message parts)
-            //   e:{...}       (error)
-            //   d:{...}       (done)
+            // AI SDK UIMessageStream format:
+            //   0:"text"              — text delta
+            //   9:{toolCallId,toolName,args} — tool call start
+            //   a:{toolCallId,result}  — tool result
+            //   e:{...}               — error
+            //   d:{...}               — done/finish
             const colonIdx = data.indexOf(':');
             if (colonIdx === -1) continue;
 
             const typeChar = data.slice(0, colonIdx);
             const payload = data.slice(colonIdx + 1);
 
-            if (typeChar === '0') {
-              // Text delta
-              try {
-                const textDelta = JSON.parse(payload) as string;
-                assistantText += textDelta;
-                updateAssistantMessage(assistantMessageId, assistantText);
-              } catch {
-                // Not valid JSON text delta
+            switch (typeChar) {
+              case '0': {
+                // Text delta
+                try {
+                  const textDelta = JSON.parse(payload) as string;
+                  assistantText += textDelta;
+                  updateAssistantMessageParts(assistantMessageId, assistantText, toolCalls);
+                } catch {
+                  // Not valid JSON text delta
+                }
+                break;
               }
+              case '9': {
+                // Tool call invocation
+                try {
+                  const tc = JSON.parse(payload) as { toolCallId: string; toolName: string; args: Record<string, unknown> };
+                  toolCalls.set(tc.toolCallId, {
+                    toolCallId: tc.toolCallId,
+                    toolName: tc.toolName,
+                    args: tc.args,
+                    state: 'call',
+                  });
+                  updateAssistantMessageParts(assistantMessageId, assistantText, toolCalls);
+                } catch {
+                  // Ignore parse errors
+                }
+                break;
+              }
+              case 'a': {
+                // Tool result
+                try {
+                  const tr = JSON.parse(payload) as { toolCallId: string; result: unknown };
+                  const existing = toolCalls.get(tr.toolCallId);
+                  if (existing) {
+                    existing.state = 'result';
+                    existing.result = tr.result;
+                  }
+                  updateAssistantMessageParts(assistantMessageId, assistantText, toolCalls);
+                } catch {
+                  // Ignore parse errors
+                }
+                break;
+              }
+              case 'e': {
+                // Error
+                try {
+                  const errPayload = JSON.parse(payload) as { message?: string };
+                  error = new Error(errPayload.message ?? 'Stream error');
+                  status = 'error';
+                } catch {
+                  error = new Error('Stream error');
+                  status = 'error';
+                }
+                break;
+              }
+              // 'd' (done) and other types handled by CHAT_MESSAGES sync
             }
-            // Other chunk types (tool calls, etc.) will be handled
-            // when we get the full CHAT_MESSAGES sync from the server
           } catch {
             // Ignore parse errors
           }
@@ -348,15 +394,41 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
 
   /**
    * Update or create the assistant message in the local messages array
-   * for real-time streaming display.
+   * for real-time streaming display. Includes text and tool invocation parts.
    */
-  function updateAssistantMessage(id: string, text: string) {
+  function updateAssistantMessageParts(
+    id: string,
+    text: string,
+    toolCalls: Map<string, StreamingToolCall>,
+  ) {
+    const parts: UIMessage['parts'] = [];
+
+    // Add text part if there's any text
+    if (text) {
+      parts.push({ type: 'text', text });
+    }
+
+    // Add tool invocation parts
+    for (const tc of toolCalls.values()) {
+      parts.push({
+        type: 'tool-invocation',
+        toolInvocation: {
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          args: tc.args,
+          state: tc.state,
+          ...(tc.state === 'result' ? { result: tc.result } : {}),
+        },
+      } as UIMessage['parts'][number]);
+    }
+
+    // Ensure at least one part
+    if (parts.length === 0) {
+      parts.push({ type: 'text', text: '' });
+    }
+
+    const assistantMessage: UIMessage = { id, role: 'assistant', parts };
     const existingIdx = messages.findIndex(m => m.id === id);
-    const assistantMessage: UIMessage = {
-      id,
-      role: 'assistant',
-      parts: [{ type: 'text', text }],
-    };
 
     if (existingIdx >= 0) {
       messages = [
