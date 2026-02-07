@@ -81,8 +81,6 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
   function connect() {
     // Parse the worker URL to get host for WS
     const url = new URL(workerUrl);
-    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = `${protocol}//${url.host}`;
 
     client = new AgentClient({
       agent: 'chat-agent',
