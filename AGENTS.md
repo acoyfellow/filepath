@@ -36,21 +36,21 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - Production gates in CI
 
 🔄 **In Progress:**
-- E2E testing: create session → start → chat → LLM response → tool use
-- Per-minute credit deduction during container runtime
+- E2E testing: create session → start → chat → LLM response → tool use (needs valid API key)
 
 ✅ **Recently completed:**
+- **Per-minute credit deduction** — status poll deducts per running slot per minute, auto-stops on depletion, credit warning UI
+- **Git repo cloning** — cloned to /workspace on container start, agents told to check /workspace
+- **Stripe webhook fix** — metadata key mismatch (creditAmount vs credit_amount) caused 0 credits applied
+- **ContainerId sync** — polling pushes containerId to chat clients via updateState (fixes execute_command)
+- **Chat reconnect UI** — reconnect button on disconnected chat clients
+- **Tool invocation rendering** — execute_command, delegate_task shown inline in chat with args + results
 - **Conductor runtime** — orchestrator ChatAgent gets `delegate_task`, `list_workers`, `read_worker_messages` tools
 - **Container stop** — `/stop-agent-slots` worker endpoint, stop button actually kills containers
 - **Session delete** — DELETE endpoint + dashboard delete button for draft/stopped sessions
 - **Status polling** — lightweight `/api/session/multi/status` endpoint + 5s periodic polling
-- **ChatPanel label** — shows correct agent name (not hardcoded "Orchestrator")
-- **WorkerTabs status** — proper pending/error/stopped messages (fixed always-truthy client bug)
-- **noUncheckedIndexedAccess fixes** — proper nullish checks on array access
 - Multi-provider LLM support (OPENROUTER > ANTHROPIC > OPENAI priority)
 - Credit deduction per LLM call (atomic D1 update in ChatAgent DO)
-- Race condition fix: WS connection awaited before auto-sending task context
-- Dynamic worker URL via /api/config endpoint
 - WebSocket cleanup on page unmount
 
 ⚠️ **BLOCKER:**
@@ -169,6 +169,6 @@ alchemy.run.ts                   # Infrastructure config (NOT wrangler)
 4. ✅ Conductor runtime (delegate_task, list_workers, read_worker_messages)
 5. ✅ Status polling + container stop + session delete
 6. 🔄 Get valid LLM API key + e2e test with real LLM responses
-7. 🔄 Per-minute credit deduction during container runtime
-8. ❌ Git repo cloning into containers
+7. ✅ Per-minute credit deduction during container runtime
+8. ✅ Git repo cloning into containers
 9. ❌ Session pause/resume
