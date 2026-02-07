@@ -5,7 +5,7 @@
   import { Separator } from '$lib/components/ui/separator';
   import { tick } from 'svelte';
   import type { UIMessage } from 'ai';
-  import type { ChatStatus } from '$lib/agents/chat-client';
+  import type { ChatStatus } from '$lib/agents/chat-client.svelte';
 
   interface Props {
     agentName: string;
