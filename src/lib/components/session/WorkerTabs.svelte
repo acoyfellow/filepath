@@ -120,6 +120,7 @@
                       onSendMessage={(content) => handleWorkerSendMessage(worker.id, content)}
                       onToggleCollapse={() => {}}
                       onCancel={() => handleWorkerCancel(worker.id)}
+                      onReconnect={() => client.reconnect()}
                     />
                   {:else}
                     <div class="flex h-full items-center justify-center">
