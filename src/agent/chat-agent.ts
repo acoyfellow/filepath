@@ -49,6 +49,43 @@ function getModel(modelId: ModelId, env: Env) {
   return openrouter(routerModelId);
 }
 
+/** Credits to deduct per LLM call (1 credit = $0.01) */
+const CREDITS_PER_CALL = 1;
+
+/**
+ * Deduct credits from the user who owns this session.
+ * Uses D1 directly since ChatAgent DO has access to the DB binding.
+ */
+async function deductCreditsForSession(db: Env['DB'], sessionId: string): Promise<boolean> {
+  try {
+    // Look up the session's user
+    const session = await db.prepare(
+      'SELECT user_id FROM multi_agent_session WHERE id = ?'
+    ).bind(sessionId).first<{ user_id: string }>();
+
+    if (!session?.user_id) {
+      console.warn(`[ChatAgent] No session found for credit deduction: ${sessionId}`);
+      return false;
+    }
+
+    // Atomic deduction: only deduct if balance >= credits
+    const result = await db.prepare(
+      'UPDATE user SET credit_balance = credit_balance - ? WHERE id = ? AND credit_balance >= ?'
+    ).bind(CREDITS_PER_CALL, session.user_id, CREDITS_PER_CALL).run();
+
+    const success = (result.meta?.changes ?? 0) > 0;
+    if (!success) {
+      console.warn(`[ChatAgent] Insufficient credits for user ${session.user_id}`);
+    } else {
+      console.log(`[ChatAgent] Deducted ${CREDITS_PER_CALL} credit(s) from user ${session.user_id}`);
+    }
+    return success;
+  } catch (err) {
+    console.error('[ChatAgent] Credit deduction failed:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 const DEFAULT_SYSTEM_PROMPT = `You are an AI coding assistant running inside a container environment.
 You can help with programming tasks, answer questions, and assist with software development.
 
@@ -133,6 +170,29 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
       `[ChatAgent] onChatMessage slot=${agentState?.slotId ?? 'unknown'} model=${modelId} messages=${this.messages.length} container=${this.containerId ?? 'none'}`,
     );
 
+    const sessionId = agentState?.sessionId;
+    const db = this.env.DB;
+
+    // Pre-check: does the user have credits?
+    if (sessionId && db) {
+      try {
+        const session = await db.prepare(
+          'SELECT u.credit_balance FROM multi_agent_session s JOIN user u ON s.user_id = u.id WHERE s.id = ?'
+        ).bind(sessionId).first<{ credit_balance: number }>();
+
+        if (session && session.credit_balance < CREDITS_PER_CALL) {
+          console.warn(`[ChatAgent] Insufficient credits before LLM call, session=${sessionId}`);
+          return new Response(JSON.stringify({ error: 'Insufficient credits. Please add credits to continue.' }), {
+            status: 402,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      } catch (err) {
+        console.error('[ChatAgent] Credit check failed:', err instanceof Error ? err.message : err);
+        // Continue anyway — don't block on credit check failure
+      }
+    }
+
     let model;
     try {
       model = getModel(modelId, this.env);
@@ -152,7 +212,14 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
       tools: hasTools ? tools : undefined,
       maxSteps: hasTools ? 10 : 1,
       abortSignal: options?.abortSignal,
-      onFinish,
+      onFinish: async (event) => {
+        // Deduct credits after successful LLM response
+        if (sessionId && db) {
+          await deductCreditsForSession(db, sessionId);
+        }
+        // Call the SDK's onFinish callback
+        await onFinish(event);
+      },
     });
 
     return result.toUIMessageStreamResponse();
