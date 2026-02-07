@@ -24,8 +24,9 @@
   let selectedSlotId = $state<string | null>(null);
   let activeWorkerId = $state<string | null>(null);
 
-  // Chat client (connected to ChatAgent DO via WebSocket)
-  let chatClient = $state<AgentChatClient | null>(null);
+  // Chat clients — one per slot (orchestrator + workers)
+  let chatClients = $state<Record<string, AgentChatClient>>({});
+  let orchestratorChatClient = $derived(orchestratorSlot ? chatClients[orchestratorSlot.id] ?? null : null);
 
   // Legacy terminal state (for non-multi-agent sessions)
   let tabs = $state<Array<{id: string, name: string}>>([{ id: 'tab1', name: 'Terminal 1' }]);
@@ -60,8 +61,8 @@
           if (firstWorker) {
             activeWorkerId = firstWorker.id;
           }
-          // Initialize chat client for orchestrator slot
-          initChatClient();
+          // Initialize chat clients for all slots
+          initChatClients();
           isLoading = false;
           return;
         }
@@ -85,46 +86,52 @@
   }
 
   /**
-   * Initialize the chat client connecting to the orchestrator's ChatAgent DO.
+   * Get the worker URL for WebSocket connections to ChatAgent DOs.
    */
-  function initChatClient() {
-    // Disconnect existing client if any
-    if (chatClient) {
-      chatClient.disconnect();
+  function getWorkerUrl(): string {
+    if (typeof window !== 'undefined' && window.location.hostname === 'myfilepath.com') {
+      return 'https://api.myfilepath.com';
     }
+    return typeof window !== 'undefined' ? window.location.origin : '';
+  }
 
-    const orch = orchestratorSlot;
-    if (!orch) return;
+  /**
+   * Initialize chat clients for ALL slots (orchestrator + workers).
+   * Each slot gets its own ChatAgent DO instance.
+   */
+  function initChatClients() {
+    // Disconnect all existing clients
+    for (const client of Object.values(chatClients)) {
+      client.disconnect();
+    }
+    chatClients = {};
 
-    // Determine worker URL — in production, the worker is at api.myfilepath.com
-    // In dev, it's the same host (SvelteKit proxies to worker)
-    const workerUrl = typeof window !== 'undefined' && window.location.hostname === 'myfilepath.com'
-      ? 'https://api.myfilepath.com'
-      : typeof window !== 'undefined'
-        ? window.location.origin
-        : '';
+    const workerUrl = getWorkerUrl();
 
-    chatClient = createAgentChatClient({
-      workerUrl,
-      agentName: `chat-${orch.id}`,
-      initialState: {
-        slotId: orch.id,
-        sessionId,
-        agentType: orch.agentType,
-        model: orch.config.model,
-        systemPrompt: orch.config.systemPrompt || '',
-      },
-    });
+    for (const slot of slots) {
+      chatClients[slot.id] = createAgentChatClient({
+        workerUrl,
+        agentName: `chat-${slot.id}`,
+        initialState: {
+          slotId: slot.id,
+          sessionId,
+          agentType: slot.agentType,
+          model: slot.config.model,
+          systemPrompt: slot.config.systemPrompt || '',
+          containerId: slot.containerId || undefined,
+        },
+      });
+    }
   }
 
   function handleSendMessage(content: string) {
-    if (!chatClient) return;
-    chatClient.sendMessage(content);
+    if (!orchestratorChatClient) return;
+    orchestratorChatClient.sendMessage(content);
   }
 
   function handleCancel() {
-    if (!chatClient) return;
-    chatClient.cancel();
+    if (!orchestratorChatClient) return;
+    orchestratorChatClient.cancel();
   }
 
   function handleSelectSlot(slotId: string) {
@@ -174,10 +181,10 @@
       session = { ...session, status: 'stopped' };
     }
     slots = slots.map(s => ({ ...s, status: 'stopped' as const }));
-    if (chatClient) {
-      chatClient.disconnect();
-      chatClient = null;
+    for (const client of Object.values(chatClients)) {
+      client.disconnect();
     }
+    chatClients = {};
   }
 
   function dismissError() {
@@ -275,10 +282,10 @@
             <ChatPanel
               agentName={orchestratorSlot.name}
               agentIcon="🤖"
-              messages={chatClient?.messages ?? []}
+              messages={orchestratorChatClient?.messages ?? []}
               collapsed={chatCollapsed}
-              isConnected={chatClient?.isConnected ?? false}
-              status={chatClient?.status ?? 'ready'}
+              isConnected={orchestratorChatClient?.isConnected ?? false}
+              status={orchestratorChatClient?.status ?? 'ready'}
               onSendMessage={handleSendMessage}
               onToggleCollapse={() => chatCollapsed = !chatCollapsed}
               onCancel={handleCancel}
@@ -293,6 +300,7 @@
           <WorkerTabs
             workers={workerSlots}
             {activeWorkerId}
+            {chatClients}
             onSelectWorker={(id) => activeWorkerId = id}
             {getTerminalUrl}
           />
