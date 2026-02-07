@@ -62,7 +62,7 @@
             activeWorkerId = firstWorker.id;
           }
           // Initialize chat clients for all slots
-          initChatClients();
+          await initChatClients();
           isLoading = false;
           return;
         }
@@ -85,32 +85,50 @@
     isLoading = false;
   }
 
+  // Worker URL for WebSocket connections, loaded from server config
+  let workerUrl = $state('');
+
   /**
-   * Get the worker URL for WebSocket connections to ChatAgent DOs.
+   * Fetch the worker URL from the server config endpoint.
+   * Falls back to same-origin if the fetch fails.
    */
-  function getWorkerUrl(): string {
-    if (typeof window !== 'undefined' && window.location.hostname === 'myfilepath.com') {
-      return 'https://api.myfilepath.com';
+  async function loadWorkerUrl(): Promise<string> {
+    if (workerUrl) return workerUrl;
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const config = await res.json() as { workerUrl: string };
+        workerUrl = config.workerUrl;
+        return workerUrl;
+      }
+    } catch {
+      // Ignore — fall back to hardcoded
     }
-    return typeof window !== 'undefined' ? window.location.origin : '';
+    // Fallback
+    if (typeof window !== 'undefined' && window.location.hostname === 'myfilepath.com') {
+      workerUrl = 'https://api.myfilepath.com';
+    } else {
+      workerUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    }
+    return workerUrl;
   }
 
   /**
    * Initialize chat clients for ALL slots (orchestrator + workers).
    * Each slot gets its own ChatAgent DO instance.
    */
-  function initChatClients() {
+  async function initChatClients() {
     // Disconnect all existing clients
     for (const client of Object.values(chatClients)) {
       client.disconnect();
     }
     chatClients = {};
 
-    const workerUrl = getWorkerUrl();
+    const url = await loadWorkerUrl();
 
     for (const slot of slots) {
       chatClients[slot.id] = createAgentChatClient({
-        workerUrl,
+        workerUrl: url,
         agentName: `chat-${slot.id}`,
         initialState: {
           slotId: slot.id,
@@ -233,12 +251,11 @@
   }
 
   function getTerminalUrl(slot: AgentSlot): string {
-    if (slot.containerId) {
+    if (slot.containerId && workerUrl) {
       // Load terminal page directly from worker domain.
       // The worker serves /agent-terminal/{containerId} which renders xterm.js.
       // WebSocket connections also go directly to worker (SvelteKit can't proxy WS).
-      const workerHost = 'https://api.myfilepath.com';
-      return `${workerHost}/agent-terminal/${slot.containerId}`;
+      return `${workerUrl}/agent-terminal/${slot.containerId}`;
     }
     return '';
   }
