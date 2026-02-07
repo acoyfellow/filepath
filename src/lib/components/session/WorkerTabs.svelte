@@ -104,7 +104,7 @@
 
           <!-- Content based on view mode -->
           <div class="flex flex-1 overflow-hidden">
-            {#if worker.status === 'running' || client}
+            {#if worker.status === 'running' || (worker.status === 'starting' && client)}
               <!-- Chat view -->
               {#if viewMode === 'chat' || viewMode === 'split'}
                 <div class="{viewMode === 'split' ? 'w-1/2 border-r border-neutral-800' : 'w-full'}">
