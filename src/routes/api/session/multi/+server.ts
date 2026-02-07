@@ -42,11 +42,10 @@ export const GET: RequestHandler = async ({ locals, url }) => {
       .from(multiAgentSession)
       .where(eq(multiAgentSession.id, sessionId));
 
-    if (sessions.length === 0) {
+    const mas = sessions[0];
+    if (!mas) {
       throw error(404, 'Multi-agent session not found');
     }
-
-    const mas = sessions[0];
 
     // Ensure the session belongs to the requesting user
     if (mas.userId !== locals.user.id) {
@@ -201,11 +200,10 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
       .from(multiAgentSession)
       .where(eq(multiAgentSession.id, sessionId));
 
-    if (sessions.length === 0) {
+    const mas = sessions[0];
+    if (!mas) {
       throw error(404, 'Multi-agent session not found');
     }
-
-    const mas = sessions[0];
 
     // Ensure the session belongs to the requesting user
     if (mas.userId !== locals.user.id) {
