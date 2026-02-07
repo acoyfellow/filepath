@@ -112,6 +112,7 @@
                     <ChatPanel
                       agentName={worker.name}
                       agentIcon={catalog.icon}
+                      label={catalog.name}
                       messages={client.messages}
                       collapsed={false}
                       isConnected={client.isConnected}
