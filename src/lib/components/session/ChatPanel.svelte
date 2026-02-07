@@ -82,6 +82,24 @@
       .join('');
   }
 
+  interface ToolInvocation {
+    type: 'tool-invocation';
+    toolInvocation: {
+      toolName: string;
+      args: Record<string, unknown>;
+      state: 'call' | 'result' | 'partial-call';
+      result?: unknown;
+    };
+  }
+
+  /** Extract tool invocations from a message */
+  function getToolInvocations(msg: UIMessage): ToolInvocation[] {
+    if (!msg.parts) return [];
+    return msg.parts.filter(
+      (p): p is ToolInvocation => p.type === 'tool-invocation'
+    );
+  }
+
   interface ContentSegment {
     type: 'text' | 'code';
     content: string;
@@ -192,7 +210,8 @@
             {@const isUser = message.role === 'user'}
             {@const isAssistant = message.role === 'assistant'}
             {@const text = getMessageText(message)}
-            {#if text}
+            {@const toolInvocations = getToolInvocations(message)}
+            {#if text || toolInvocations.length > 0}
               <div class="group flex gap-3 {isUser ? 'flex-row-reverse' : ''}">
                 <!-- Avatar -->
                 <div
@@ -210,20 +229,47 @@
                     </span>
                   </div>
 
-                  <div
-                    class="rounded-lg px-3 py-2 text-sm leading-relaxed
-                      {isAssistant
-                        ? 'bg-neutral-900 text-neutral-200'
-                        : 'bg-blue-900/30 text-blue-100'}"
-                  >
-                    {#each parseContent(text) as segment}
-                      {#if segment.type === 'code'}
-                        <pre class="my-2 overflow-x-auto rounded bg-neutral-950 p-3 text-xs leading-relaxed"><code class="font-mono text-emerald-400">{segment.content}</code></pre>
-                      {:else}
-                        <p class="whitespace-pre-wrap">{segment.content}</p>
+                  {#if text}
+                    <div
+                      class="rounded-lg px-3 py-2 text-sm leading-relaxed
+                        {isAssistant
+                          ? 'bg-neutral-900 text-neutral-200'
+                          : 'bg-blue-900/30 text-blue-100'}"
+                    >
+                      {#each parseContent(text) as segment}
+                        {#if segment.type === 'code'}
+                          <pre class="my-2 overflow-x-auto rounded bg-neutral-950 p-3 text-xs leading-relaxed"><code class="font-mono text-emerald-400">{segment.content}</code></pre>
+                        {:else}
+                          <p class="whitespace-pre-wrap">{segment.content}</p>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/if}
+
+                  <!-- Tool invocations -->
+                  {#each toolInvocations as ti}
+                    {@const inv = ti.toolInvocation}
+                    <div class="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-2 text-xs">
+                      <div class="flex items-center gap-1.5 text-neutral-400">
+                        <span class="font-mono">⚙️ {inv.toolName}</span>
+                        {#if inv.state === 'call'}
+                          <span class="animate-pulse text-amber-500">● running</span>
+                        {:else if inv.state === 'result'}
+                          <span class="text-emerald-500">✓ done</span>
+                        {/if}
+                      </div>
+                      {#if inv.args && Object.keys(inv.args).length > 0}
+                        <div class="mt-1 font-mono text-neutral-500">
+                          {#each Object.entries(inv.args) as [key, val]}
+                            <span class="mr-2">{key}=<span class="text-neutral-300">{typeof val === 'string' ? val : JSON.stringify(val)}</span></span>
+                          {/each}
+                        </div>
                       {/if}
-                    {/each}
-                  </div>
+                      {#if inv.state === 'result' && inv.result}
+                        <pre class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-neutral-300">{typeof inv.result === 'string' ? inv.result : JSON.stringify(inv.result, null, 2)}</pre>
+                      {/if}
+                    </div>
+                  {/each}
                 </div>
               </div>
             {/if}
