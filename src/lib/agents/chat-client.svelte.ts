@@ -407,6 +407,30 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
   }
 
   /**
+   * Wait for the WebSocket connection to be established.
+   * Resolves `true` when connected, or `false` if the timeout expires.
+   */
+  function waitForConnection(timeoutMs: number = 10000): Promise<boolean> {
+    if (isConnected) return Promise.resolve(true);
+
+    return new Promise<boolean>((resolve) => {
+      const pollIntervalMs = 50;
+      let elapsed = 0;
+
+      const interval = setInterval(() => {
+        elapsed += pollIntervalMs;
+        if (isConnected) {
+          clearInterval(interval);
+          resolve(true);
+        } else if (elapsed >= timeoutMs) {
+          clearInterval(interval);
+          resolve(false);
+        }
+      }, pollIntervalMs);
+    });
+  }
+
+  /**
    * Disconnect the WebSocket.
    */
   function disconnect() {
@@ -436,6 +460,7 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
     updateState,
     disconnect,
     reconnect: connect,
+    waitForConnection,
   };
 }
 
