@@ -40,12 +40,17 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - Per-minute credit deduction during container runtime
 
 ✅ **Recently completed:**
+- **Conductor runtime** — orchestrator ChatAgent gets `delegate_task`, `list_workers`, `read_worker_messages` tools
+- **Container stop** — `/stop-agent-slots` worker endpoint, stop button actually kills containers
+- **Session delete** — DELETE endpoint + dashboard delete button for draft/stopped sessions
+- **Status polling** — lightweight `/api/session/multi/status` endpoint + 5s periodic polling
+- **ChatPanel label** — shows correct agent name (not hardcoded "Orchestrator")
+- **WorkerTabs status** — proper pending/error/stopped messages (fixed always-truthy client bug)
+- **noUncheckedIndexedAccess fixes** — proper nullish checks on array access
 - Multi-provider LLM support (OPENROUTER > ANTHROPIC > OPENAI priority)
 - Credit deduction per LLM call (atomic D1 update in ChatAgent DO)
 - Race condition fix: WS connection awaited before auto-sending task context
 - Dynamic worker URL via /api/config endpoint
-- E2E chat gate: login → session create → WS connect → all passing
-- Production gates relaxed for pre-existing terminal/DO issues
 - WebSocket cleanup on page unmount
 
 ⚠️ **BLOCKER:**
@@ -54,9 +59,7 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - Add to: `.env`, GitHub Actions secrets, and `wrangler secret put` on `filepath-worker`
 
 ❌ **Not Started:**
-- Conductor runtime (orchestrator auto-delegates tasks to workers)
 - Git repo cloning into containers
-- Status polling / real-time slot status updates
 - Session pause/resume
 
 ## Architecture
@@ -161,9 +164,11 @@ alchemy.run.ts                   # Infrastructure config (NOT wrangler)
 ## Sprint Priorities
 
 1. ✅ ChatAgent DO + Svelte chat client + UI wiring
-2. 🔄 Session start creates ChatAgent DOs, full e2e chat flow works
-3. Container integration (ChatAgent manages its sandbox, LLM tool calls exec in container)
-4. Real credit deduction (atomic D1 update, per-minute billing loop)
-5. Conductor runtime (orchestrator drives workers, inter-agent communication)
-6. Git repo cloning into containers
-7. Status polling / real-time session updates
+2. ✅ Session start creates ChatAgent DOs, per-slot WS chat
+3. ✅ Container integration (execute_command tool, sandbox.exec)
+4. ✅ Conductor runtime (delegate_task, list_workers, read_worker_messages)
+5. ✅ Status polling + container stop + session delete
+6. 🔄 Get valid LLM API key + e2e test with real LLM responses
+7. 🔄 Per-minute credit deduction during container runtime
+8. ❌ Git repo cloning into containers
+9. ❌ Session pause/resume
