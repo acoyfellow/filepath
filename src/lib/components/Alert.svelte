@@ -44,7 +44,7 @@
 
   // Expose to window for global access
   if (typeof window !== "undefined") {
-    (window as any).alert = alert;
+    window.alert = alert;
   }
 </script>
 
