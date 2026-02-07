@@ -43,6 +43,13 @@
       return;
     }
     loadSession();
+
+    // Cleanup on unmount: disconnect all chat clients
+    return () => {
+      for (const client of Object.values(chatClients)) {
+        client.disconnect();
+      }
+    };
   });
 
   async function loadSession() {
