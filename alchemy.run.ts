@@ -117,6 +117,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
   },
 });
 
