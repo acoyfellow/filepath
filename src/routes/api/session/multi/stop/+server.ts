@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 /**
  * POST /api/session/multi/stop - Stop a multi-agent session and all its agent slots
  */
-export const POST: RequestHandler = async ({ locals, request }) => {
+export const POST: RequestHandler = async ({ locals, request, platform }) => {
   if (!locals.user) {
     throw error(401, 'Unauthorized');
   }
@@ -42,6 +42,41 @@ export const POST: RequestHandler = async ({ locals, request }) => {
     // Idempotent: already stopped is a no-op
     if (sessions[0].status === 'stopped') {
       return json({ success: true, alreadyStopped: true });
+    }
+
+    // Load slots to get containerIds for killing containers
+    const slots = await db
+      .select()
+      .from(agentSlot)
+      .where(eq(agentSlot.sessionId, body.sessionId));
+
+    // Kill containers via the worker before updating DB
+    const containerIds = slots
+      .filter((s) => s.containerId && s.status !== 'stopped' && s.status !== 'pending')
+      .map((s) => s.containerId as string);
+
+    if (containerIds.length > 0) {
+      const worker = (platform?.env as Record<string, unknown> | undefined)?.WORKER as
+        | { fetch: (req: Request) => Promise<Response> }
+        | undefined;
+
+      if (worker) {
+        try {
+          const workerRes = await worker.fetch(
+            new Request('https://internal/stop-agent-slots', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ containerIds }),
+            }),
+          );
+
+          if (!workerRes.ok) {
+            console.error('Worker stop-agent-slots failed:', workerRes.status);
+          }
+        } catch (err) {
+          console.error('Worker stop call failed:', err);
+        }
+      }
     }
 
     // Update session status to stopped
