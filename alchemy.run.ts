@@ -96,8 +96,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   bundle: {
-    // Mark "ai" (vercel AI SDK) as external - optional dep from agents package
-    external: ["ai"],
+    // AI SDK is now used directly by ChatAgent — must be bundled
   },
   bindings: {
     TaskAgent: TASK_AGENT_DO,
