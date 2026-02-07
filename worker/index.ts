@@ -459,12 +459,21 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
 
       // Debug endpoint to test container
       if (pathname === '/debug/container') {
+        const startTime = Date.now();
         try {
           const sandbox = getSandbox(env.Sandbox, 'debug-test');
-          const result = await sandbox.exec('echo hello');
-          return withCors(Response.json({ success: true, output: result }));
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Container startup timed out after 25s`)), 25000)
+          );
+          const result = await Promise.race([
+            sandbox.exec('echo hello'),
+            timeoutPromise
+          ]);
+          const duration = Date.now() - startTime;
+          return withCors(Response.json({ success: true, output: result, durationMs: duration }));
         } catch (error) {
-          return withCors(Response.json({ error: String(error) }, { status: 500 }));
+          const duration = Date.now() - startTime;
+          return withCors(Response.json({ error: String(error), durationMs: duration }, { status: 500 }));
         }
       }
 
