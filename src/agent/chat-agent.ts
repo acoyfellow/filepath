@@ -17,17 +17,23 @@ export interface ChatAgentState {
 
 /**
  * Maps our ModelId to AI SDK model identifiers.
+ * Throws a clear error if the required API key is missing.
  */
 function getModel(modelId: ModelId, env: Env) {
+  const requireKey = (key: string | undefined, provider: string): string => {
+    if (!key) throw new Error(`Missing ${provider} API key. Configure it in your environment.`);
+    return key;
+  };
+
   switch (modelId) {
     case 'claude-sonnet-4':
-      return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })('claude-sonnet-4-20250514');
+      return createAnthropic({ apiKey: requireKey(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY') })('claude-sonnet-4-20250514');
     case 'claude-opus-4-6':
-      return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })('claude-opus-4-20250610');
+      return createAnthropic({ apiKey: requireKey(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY') })('claude-opus-4-20250610');
     case 'gpt-4o':
-      return createOpenAI({ apiKey: env.OPENAI_API_KEY })('gpt-4o');
+      return createOpenAI({ apiKey: requireKey(env.OPENAI_API_KEY, 'OPENAI_API_KEY') })('gpt-4o');
     case 'o3':
-      return createOpenAI({ apiKey: env.OPENAI_API_KEY })('o3');
+      return createOpenAI({ apiKey: requireKey(env.OPENAI_API_KEY, 'OPENAI_API_KEY') })('o3');
     case 'deepseek-r1':
       return createOpenAI({ baseURL: 'https://api.deepseek.com/v1' })('deepseek-reasoner');
     case 'gemini-2.5-pro':
@@ -35,7 +41,7 @@ function getModel(modelId: ModelId, env: Env) {
     default: {
       const _exhaustive: never = modelId;
       void _exhaustive;
-      return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })('claude-sonnet-4-20250514');
+      return createAnthropic({ apiKey: requireKey(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY') })('claude-sonnet-4-20250514');
     }
   }
 }
@@ -63,7 +69,17 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     const modelId: ModelId = agentState?.model ?? 'claude-sonnet-4';
     const systemPrompt = agentState?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-    const model = getModel(modelId, this.env);
+    let model;
+    try {
+      model = getModel(modelId, this.env);
+    } catch (err) {
+      // Return error as a text response so the client sees it
+      const msg = err instanceof Error ? err.message : 'Failed to initialize model';
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const result = streamText({
       model,
