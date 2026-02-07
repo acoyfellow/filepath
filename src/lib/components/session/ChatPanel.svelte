@@ -149,9 +149,9 @@
             <span class="text-xs text-neutral-400">Orchestrator</span>
             <Badge
               variant={isConnected ? 'default' : 'outline'}
-              class="text-[10px] {isConnected ? 'bg-emerald-600 text-white' : 'border-neutral-600 text-neutral-500'}"
+              class="text-[10px] {isStreaming ? 'bg-amber-600 text-white' : isConnected ? 'bg-emerald-600 text-white' : 'border-neutral-600 text-neutral-500'}"
             >
-              {isConnected ? 'Connected' : 'Disconnected'}
+              {isStreaming ? 'Streaming' : isConnected ? 'Connected' : 'Disconnected'}
             </Badge>
           </div>
         </div>
