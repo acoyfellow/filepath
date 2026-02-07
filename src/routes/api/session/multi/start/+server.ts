@@ -80,7 +80,7 @@ export const POST: RequestHandler = async ({ locals, request, platform }) => {
     // Assign containerIds and transition slots to 'starting'
     const slotContainers: Array<{ id: string; containerId: string }> = [];
     for (const slot of slots) {
-      if (slot.status === 'pending' || slot.status === 'stopped') {
+      if (slot.status === 'pending' || slot.status === 'stopped' || slot.status === 'starting' || slot.status === 'error') {
         const containerId = `agent-${body.sessionId.slice(0, 8)}-${slot.id.slice(0, 8)}`.toLowerCase();
         await db
           .update(agentSlot)

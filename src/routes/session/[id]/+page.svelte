@@ -172,10 +172,11 @@
 
   function getTerminalUrl(slot: AgentSlot): string {
     if (slot.containerId) {
-      // Route to worker's agent-terminal endpoint via the session proxy.
-      // SvelteKit /api/session/* → worker /session/* → redirected to /agent-terminal/*
-      // The containerId IS the sandbox name (no makeTerminalId transform).
-      return `/api/session/agent-terminal/${slot.containerId}`;
+      // Load terminal page directly from worker domain.
+      // The worker serves /agent-terminal/{containerId} which renders xterm.js.
+      // WebSocket connections also go directly to worker (SvelteKit can't proxy WS).
+      const workerHost = 'https://api.myfilepath.com';
+      return `${workerHost}/agent-terminal/${slot.containerId}`;
     }
     return '';
   }

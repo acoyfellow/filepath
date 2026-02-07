@@ -141,11 +141,26 @@ export const APP = await SvelteKit(`${projectName}-app`, {
       async fetch(request, env, ctx) {
         const url = new URL(request.url);
         
-        // Route terminal/*, session/* to worker
-        // Worker handles: HTML pages, WebSocket, start/close endpoints, task execution
+        // SvelteKit handles:
+        //   /session/new (wizard page)
+        //   /session/{id} (3-panel session view page)
+        //   /api/session/multi/* (multi-agent CRUD, start, stop, chat, list)
+        //   Everything else not explicitly routed to worker
+        if (url.pathname.startsWith('/api/session/multi')) {
+          return svelteKitHandler.fetch(request, env, ctx);
+        }
+        if (url.pathname.startsWith('/session/')) {
+          // Check if this is a SvelteKit page route (not a worker API)
+          // SvelteKit pages: /session/new, /session/{uuid}
+          // Worker routes: none under /session/ (legacy SessionDO was /session/{id}/state etc)
+          // Since we use multi-agent API now, let SvelteKit handle all /session/* page routes
+          return svelteKitHandler.fetch(request, env, ctx);
+        }
+        
+        // Route terminal/* and legacy /api/session/* to worker
+        // Worker handles: terminal HTML pages, WebSocket, start/close, task execution
         if (
           url.pathname.startsWith('/terminal/') ||
-          url.pathname.startsWith('/session/') ||
           url.pathname.startsWith('/api/session/')
         ) {
           // Rewrite /api/session/* to /session/* for worker
