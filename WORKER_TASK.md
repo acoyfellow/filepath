@@ -6,9 +6,15 @@ replacing the current hollow `TaskAgent` + stub chat flow with SDK-native chat, 
 and message persistence.
 
 ## Context
-- **Current state:** Infrastructure works (containers, terminals, DB, auth, billing). AI/agent layer is completely hollow — ChatPanel sends to a REST stub that returns success and discards messages. No LLM connected.
-- **Target state:** Each multi-agent session slot backed by an `AIChatAgent` DO instance with real LLM streaming, persistent conversation, and container integration.
-- **Framework:** SvelteKit (Svelte 5), NOT React. SDK client hooks are React-only, so we need a vanilla JS/Svelte adapter.
+- **Current state:** ChatAgent DO + Svelte chat client + session wiring all implemented. Each slot gets its own ChatAgent DO with LLM streaming. Workers have chat/terminal/split view.
+- **Target state:** Container integration — LLM tool calls execute in containers, terminal shows container output.
+- **Framework:** SvelteKit (Svelte 5), NOT React. SDK client hooks are React-only, so we use a vanilla JS/Svelte adapter.
+
+## Progress
+- **Phase 1: ✅ DONE** — ChatAgent DO with AIChatAgent, model mapping, alchemy bindings
+- **Phase 2: ✅ DONE** — Svelte 5 runes chat client, ChatPanel wiring
+- **Phase 3: ✅ DONE** — Chat clients for ALL slots (orchestrator + workers), WorkerTabs with chat/terminal/split view, auto-send task context on start, server-side chat API for message injection
+- **Phase 4: 🔄 NEXT** — Container integration (LLM tool calls → container exec)
 
 ## Research Summary (already done)
 
