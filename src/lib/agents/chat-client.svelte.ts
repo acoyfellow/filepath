@@ -6,7 +6,16 @@
  *
  * This replaces the React useAgentChat hook with a runes-based approach.
  */
-import { AgentClient } from 'agents/client';
+// Dynamic import to avoid SSR crash (AgentClient uses PartySocket/WebSocket)
+type AgentClientType = import('agents/client').AgentClient;
+let AgentClientClass: typeof import('agents/client').AgentClient | null = null;
+const getAgentClient = async () => {
+  if (!AgentClientClass) {
+    const mod = await import('agents/client');
+    AgentClientClass = mod.AgentClient;
+  }
+  return AgentClientClass;
+};
 import type { UIMessage } from 'ai';
 
 /** Message types matching @cloudflare/ai-chat protocol */
@@ -72,17 +81,18 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
   let isConnected = $state(false);
 
   // Internal tracking
-  let client: AgentClient | null = null;
+  let client: AgentClientType | null = null;
   let activeStreamController: ReadableStreamDefaultController<Uint8Array> | null = null;
   let activeRequestId: string | null = null;
   let activeAbortController: AbortController | null = null;
 
   // --- WebSocket connection ---
-  function connect() {
+  async function connect() {
     // Parse the worker URL to get host for WS
     const url = new URL(workerUrl);
 
-    client = new AgentClient({
+    const AC = await getAgentClient();
+    client = new AC({
       agent: 'chat-agent',
       name: agentName,
       host: url.host,
