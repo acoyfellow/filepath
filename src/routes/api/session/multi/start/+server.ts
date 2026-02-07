@@ -37,11 +37,11 @@ export const POST: RequestHandler = async ({ locals, request, platform }) => {
       .from(multiAgentSession)
       .where(eq(multiAgentSession.id, body.sessionId));
 
-    if (sessions.length === 0) {
+    const sess = sessions[0];
+    if (!sess) {
       throw error(404, 'Session not found');
     }
 
-    const sess = sessions[0];
     if (sess.userId !== locals.user.id) {
       throw error(403, 'Forbidden');
     }
