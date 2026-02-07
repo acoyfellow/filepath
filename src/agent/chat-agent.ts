@@ -1,7 +1,9 @@
 import { AIChatAgent } from '@cloudflare/ai-chat';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
-import { streamText, convertToModelMessages, type StreamTextOnFinishCallback, type ToolSet } from 'ai';
+import { streamText, convertToModelMessages, tool, type StreamTextOnFinishCallback, type ToolSet } from 'ai';
+import { z } from 'zod';
+import { getSandbox } from '@cloudflare/sandbox';
 import type { Env } from '../types';
 import type { ModelId } from '$lib/types/session';
 
@@ -46,7 +48,12 @@ function getModel(modelId: ModelId, env: Env) {
   }
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are an AI coding assistant running inside a container environment. You can help with programming tasks, answer questions, and assist with software development.`;
+const DEFAULT_SYSTEM_PROMPT = `You are an AI coding assistant running inside a container environment.
+You can help with programming tasks, answer questions, and assist with software development.
+
+When you have a container available, use the execute_command tool to run shell commands.
+Always check the output of commands and handle errors gracefully.
+Prefer small, focused commands over long scripts.`;
 
 /**
  * ChatAgent — AIChatAgent-based DO for real LLM conversations.
@@ -62,6 +69,51 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
   }
 
   /**
+   * Build tools available to the LLM.
+   * If a container is assigned, includes execute_command for shell access.
+   */
+  private getTools(): ToolSet {
+    const cid = this.containerId;
+    if (!cid) return {};
+
+    const env = this.env;
+
+    return {
+      execute_command: tool({
+        description: 'Execute a shell command in the agent\'s container. Returns stdout, stderr, and exit code.',
+        parameters: z.object({
+          command: z.string().describe('The shell command to execute'),
+          cwd: z.string().optional().describe('Working directory (default: /home/user)'),
+          timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
+        }),
+        execute: async ({ command, cwd, timeout }) => {
+          console.log(`[ChatAgent] exec in ${cid}: ${command}`);
+          try {
+            // getSandbox expects the Sandbox binding — cast to avoid complex type
+            const sandbox = getSandbox(
+              env.Sandbox as Parameters<typeof getSandbox>[0],
+              cid,
+            );
+            const result = await sandbox.exec(command, {
+              cwd: cwd ?? '/home/user',
+              timeout: timeout ?? 30000,
+            });
+            return {
+              stdout: result.stdout ?? '',
+              stderr: result.stderr ?? '',
+              exitCode: result.exitCode ?? -1,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[ChatAgent] exec error: ${msg}`);
+            return { stdout: '', stderr: msg, exitCode: 1 };
+          }
+        },
+      }),
+    };
+  }
+
+  /**
    * Called by the SDK when the client sends a chat message.
    * `this.messages` is already populated with the full conversation
    * including the latest user message.
@@ -73,16 +125,17 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     const agentState = this.state;
     const modelId: ModelId = agentState?.model ?? 'claude-sonnet-4';
     const systemPrompt = agentState?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+    const tools = this.getTools();
+    const hasTools = Object.keys(tools).length > 0;
 
     console.log(
-      `[ChatAgent] onChatMessage slot=${agentState?.slotId ?? 'unknown'} model=${modelId} messages=${this.messages.length}`,
+      `[ChatAgent] onChatMessage slot=${agentState?.slotId ?? 'unknown'} model=${modelId} messages=${this.messages.length} container=${this.containerId ?? 'none'}`,
     );
 
     let model;
     try {
       model = getModel(modelId, this.env);
     } catch (err) {
-      // Return error as a text response so the client sees it
       const msg = err instanceof Error ? err.message : 'Failed to initialize model';
       console.error(`[ChatAgent] model init error: ${msg}`);
       return new Response(JSON.stringify({ error: msg }), {
@@ -95,6 +148,8 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
       model,
       system: systemPrompt,
       messages: await convertToModelMessages(this.messages),
+      tools: hasTools ? tools : undefined,
+      maxSteps: hasTools ? 10 : 1,
       abortSignal: options?.abortSignal,
       onFinish,
     });
