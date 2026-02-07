@@ -40,10 +40,18 @@ Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alch
 - Per-minute credit deduction during container runtime
 
 ✅ **Recently completed:**
-- All LLM calls route through OpenRouter (single OPENROUTER_API_KEY for all models)
+- Multi-provider LLM support (OPENROUTER > ANTHROPIC > OPENAI priority)
 - Credit deduction per LLM call (atomic D1 update in ChatAgent DO)
 - Race condition fix: WS connection awaited before auto-sending task context
+- Dynamic worker URL via /api/config endpoint
+- E2E chat gate: login → session create → WS connect → all passing
 - Production gates relaxed for pre-existing terminal/DO issues
+- WebSocket cleanup on page unmount
+
+⚠️ **BLOCKER:**
+- No valid LLM API key. OPENCODE_ZEN_API_KEY is NOT an OpenRouter key (returns 401).
+- Need: `ANTHROPIC_API_KEY` from console.anthropic.com, or `OPENROUTER_API_KEY` from openrouter.ai
+- Add to: `.env`, GitHub Actions secrets, and `wrangler secret put` on `filepath-worker`
 
 ❌ **Not Started:**
 - Conductor runtime (orchestrator auto-delegates tasks to workers)
