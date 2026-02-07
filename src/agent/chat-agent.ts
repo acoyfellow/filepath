@@ -46,20 +46,12 @@ const MODEL_CONFIG: Record<ModelId, { provider: 'openai' | 'anthropic' | 'openro
 };
 
 /**
- * OpenRouter model IDs (for models not available via direct provider keys)
- */
-const OPENROUTER_MODELS: Partial<Record<ModelId, string>> = {
-  'deepseek-r1': 'deepseek/deepseek-r1',
-  'gemini-2.5-pro': 'google/gemini-2.5-pro',
-};
-
-/**
  * Get an AI SDK model instance.
  *
  * Routing:
- * 1. CF AI Gateway (proxies to provider with logging/caching) — needs provider API key
- * 2. OpenRouter fallback (for models without direct keys, e.g. DeepSeek, Gemini)
- * 3. Direct provider as last resort
+ * 1. OpenRouter-native models (DeepSeek, Gemini) — direct to OpenRouter
+ * 2. OpenAI models — CF AI Gateway → direct OpenAI
+ * 3. Anthropic models — routed through OpenRouter (no Anthropic key)
  */
 function getModel(modelId: ModelId, env: Env) {
   const config = MODEL_CONFIG[modelId];
@@ -101,15 +93,6 @@ function getModel(modelId: ModelId, env: Env) {
       apiKey: env.OPENROUTER_API_KEY,
       baseURL: 'https://openrouter.ai/api/v1',
     })(orId);
-  }
-
-  // OpenRouter fallback for anything else
-  const orModelId = OPENROUTER_MODELS[modelId];
-  if (orModelId && env.OPENROUTER_API_KEY) {
-    return createOpenAI({
-      apiKey: env.OPENROUTER_API_KEY,
-      baseURL: 'https://openrouter.ai/api/v1',
-    })(orModelId);
   }
 
   throw new Error(
