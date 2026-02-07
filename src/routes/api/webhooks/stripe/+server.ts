@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       
       try {
         // Get the credit amount from metadata
-        const creditAmount = parseInt(session.metadata?.credit_amount || '0');
+        const creditAmount = parseInt(session.metadata?.creditAmount || session.metadata?.credit_amount || '0');
         
         if (creditAmount > 0 && session.customer) {
           // Find user by Stripe customer ID
