@@ -231,3 +231,4 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
     throw error(500, 'Failed to delete multi-agent session');
   }
 };
+
