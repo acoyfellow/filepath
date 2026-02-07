@@ -71,10 +71,11 @@ export const POST: RequestHandler = async ({ locals, request, platform }) => {
       throw error(400, 'Session has no agent slots');
     }
 
-    // Transition session to 'starting'
+    // Transition session to 'starting' and record start time for billing
+    const now = new Date();
     await db
       .update(multiAgentSession)
-      .set({ status: 'starting' })
+      .set({ status: 'starting', startedAt: now, lastBilledAt: now })
       .where(eq(multiAgentSession.id, body.sessionId));
 
     // Assign containerIds and transition slots to 'starting'

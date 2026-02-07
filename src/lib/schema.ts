@@ -224,6 +224,10 @@ export const multiAgentSession = sqliteTable(
     gitRepoUrl: text("git_repo_url"),
     status: text("status").notNull().default("draft"),
     orchestratorSlotId: text("orchestrator_slot_id"),
+    /** When the session was started (containers spun up) */
+    startedAt: integer("started_at", { mode: "timestamp_ms" }),
+    /** Last time per-minute credits were deducted (for metered billing) */
+    lastBilledAt: integer("last_billed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
