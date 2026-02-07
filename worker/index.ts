@@ -512,6 +512,41 @@ async function _fetchHandler(request: Request, env: Env): Promise<Response> {
         }
       }
 
+      // Stop/destroy containers for multi-agent session slots
+      if (pathname === '/stop-agent-slots' && request.method === 'POST') {
+        try {
+          const body = await request.json() as {
+            containerIds: string[];
+          };
+
+          if (!body.containerIds || !Array.isArray(body.containerIds)) {
+            return withCors(Response.json({ error: 'containerIds array required' }, { status: 400 }));
+          }
+
+          const results: Array<{ containerId: string; status: string; error?: string }> = [];
+
+          for (const containerId of body.containerIds) {
+            try {
+              const sandbox = getSandbox(env.Sandbox, containerId);
+              // Kill the ttyd process to tear down the container
+              await sandbox.exec('kill -SIGTERM 1').catch(() => {});
+              results.push({ containerId, status: 'stopped' });
+            } catch (err) {
+              console.error(`Failed to stop container ${containerId}:`, err);
+              results.push({
+                containerId,
+                status: 'error',
+                error: String(err),
+              });
+            }
+          }
+
+          return withCors(Response.json({ success: true, results }));
+        } catch (err) {
+          return withCors(Response.json({ error: String(err) }, { status: 500 }));
+        }
+      }
+
       // Handle agent-terminal page: /agent-terminal/{containerId}
       // Serves xterm.js page that connects to a pre-started container directly
       const agentTerminalMatch = pathname.match(/^\/agent-terminal\/([a-z0-9-]+)$/);
