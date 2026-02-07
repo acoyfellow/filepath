@@ -1,4 +1,5 @@
 import { AIChatAgent } from '@cloudflare/ai-chat';
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText, convertToModelMessages, tool, type StreamTextOnFinishCallback, type ToolSet } from 'ai';
 import { z } from 'zod';
@@ -30,23 +31,55 @@ const MODEL_MAP: Record<ModelId, string> = {
   'gemini-2.5-pro': 'google/gemini-2.5-pro',
 };
 
+/** Direct Anthropic model ID mapping */
+const ANTHROPIC_MODELS: Partial<Record<ModelId, string>> = {
+  'claude-sonnet-4': 'claude-sonnet-4-20250514',
+  'claude-opus-4-6': 'claude-opus-4-20250610',
+};
+
 /**
- * Maps our ModelId to AI SDK model via OpenRouter.
- * Uses a single API key (OPENROUTER_API_KEY) for all providers.
+ * Maps our ModelId to AI SDK model.
+ *
+ * Priority:
+ * 1. OPENROUTER_API_KEY — routes all models through OpenRouter (single key)
+ * 2. ANTHROPIC_API_KEY — direct Anthropic access (Claude models)
+ * 3. OPENAI_API_KEY — direct OpenAI access (GPT/O3 models)
+ *
+ * Throws if no suitable API key is configured.
  */
 function getModel(modelId: ModelId, env: Env) {
-  const apiKey = env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('Missing OPENROUTER_API_KEY. Add it to your environment to enable LLM calls.');
+  // Try OpenRouter first (single key for all providers)
+  if (env.OPENROUTER_API_KEY) {
+    const openrouter = createOpenAI({
+      apiKey: env.OPENROUTER_API_KEY,
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
+    const routerModelId = MODEL_MAP[modelId] ?? 'anthropic/claude-sonnet-4';
+    return openrouter(routerModelId);
   }
 
-  const openrouter = createOpenAI({
-    apiKey,
-    baseURL: 'https://openrouter.ai/api/v1',
-  });
+  // Direct Anthropic access for Claude models
+  const anthropicModelId = ANTHROPIC_MODELS[modelId];
+  if (anthropicModelId && env.ANTHROPIC_API_KEY) {
+    const anthropic = createAnthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    return anthropic(anthropicModelId);
+  }
 
-  const routerModelId = MODEL_MAP[modelId] ?? 'anthropic/claude-sonnet-4';
-  return openrouter(routerModelId);
+  // Direct OpenAI access for GPT/O3 models
+  if ((modelId === 'gpt-4o' || modelId === 'o3') && env.OPENAI_API_KEY) {
+    const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+    return openai(modelId);
+  }
+
+  // If we have an Anthropic key, use Claude Sonnet as fallback for any model
+  if (env.ANTHROPIC_API_KEY) {
+    const anthropic = createAnthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    return anthropic('claude-sonnet-4-20250514');
+  }
+
+  throw new Error(
+    'No API key configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in your environment.'
+  );
 }
 
 /** Credits to deduct per LLM call (1 credit = $0.01) */
