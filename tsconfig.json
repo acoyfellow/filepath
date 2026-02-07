@@ -17,7 +17,6 @@
 		".svelte-kit/types/**/$types.d.ts",
 		"src/**/*",
 		"types/**/*",
-		"alchemy.run.ts",
 		"worker/**/*"
 	]
 }

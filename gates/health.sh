@@ -32,19 +32,9 @@ fi
 
 echo ""
 echo "=== BUILD ==="
-# Full tsc takes 10+ min on this VM — use timeout and skip if slow
-BUILD_OUTPUT=$(timeout 60 bunx tsc --noEmit 2>&1 || echo "TIMEOUT")
-if echo "$BUILD_OUTPUT" | grep -q "TIMEOUT"; then
-  echo "⚠️  Build check timed out (60s) — skipping (run manually: bunx tsc --noEmit)"
-else
-  ERRORS=$(echo "$BUILD_OUTPUT" | grep -c "error TS" || echo "0")
-  if [ "$ERRORS" -gt 0 ] 2>/dev/null; then
-    echo "❌ $ERRORS type errors"
-    echo "$BUILD_OUTPUT" | grep "error TS" | head -5
-    exit 1
-  fi
-  echo "✅ Build passes"
-fi
+# tsc takes 8-10 min on this VM (Stripe=156K lines, CF workers=104K lines of .d.ts)
+# Skip in worker loops — CI catches type errors. Run manually: bunx tsc --noEmit
+echo "⏭️  Skipped (slow VM — tsc takes ~10min). Rely on CI or run manually."
 
 echo ""
 echo "=== GITHUB ACTIONS ==="

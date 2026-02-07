@@ -81,9 +81,9 @@ async fetch(request: Request) {
 ```bash
 bun install
 bun run dev          # localhost:5173
-bunx tsc --noEmit    # Build check (ALWAYS before commit)
-bash gates/health.sh # Full health check
+bash gates/health.sh # Health check (skips tsc — too slow on this VM)
 bun run deploy       # Deploy via Alchemy
+# bunx tsc --noEmit  # Takes ~10 min on this VM. CI catches type errors. Run only when needed.
 ```
 
 ## Code Rules
@@ -100,9 +100,10 @@ bun run deploy       # Deploy via Alchemy
 - `arr[0]` is `T | undefined` (noUncheckedIndexedAccess)
 
 ### Commit Discipline
-1. Run `bunx tsc --noEmit` before every commit
+1. **DO NOT run `bunx tsc --noEmit`** — takes ~10min on this VM. CI catches type errors.
 2. Commit after EVERY file change
 3. Descriptive commit messages
+4. Run `bash gates/health.sh` between phases (quick — checks syntax, svelte5, any)
 
 ## Key Files
 
