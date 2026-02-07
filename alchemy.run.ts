@@ -115,9 +115,9 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     API_WS_HOST: isProd ? "api.myfilepath.com" : "",
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
     BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
+    CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || "",
   },
 });
 
