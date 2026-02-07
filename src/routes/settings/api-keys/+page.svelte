@@ -42,7 +42,7 @@
       if (result.data) {
         apiKeys = result.data.apiKeys.map(key => ({
           ...key,
-          budgetCap: (key as any).budgetCap || null,
+          budgetCap: (key as typeof key & { budgetCap?: number | null }).budgetCap || null,
           createdAt: new Date(key.createdAt),
           updatedAt: new Date(key.updatedAt),
           expiresAt: key.expiresAt ? new Date(key.expiresAt) : null
