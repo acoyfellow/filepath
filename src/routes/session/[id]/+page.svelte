@@ -347,6 +347,7 @@
             <ChatPanel
               agentName={orchestratorSlot.name}
               agentIcon="🤖"
+              label="Orchestrator"
               messages={orchestratorChatClient?.messages ?? []}
               collapsed={chatCollapsed}
               isConnected={orchestratorChatClient?.isConnected ?? false}

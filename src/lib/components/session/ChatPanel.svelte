@@ -10,6 +10,7 @@
   interface Props {
     agentName: string;
     agentIcon: string;
+    label?: string;
     messages: UIMessage[];
     collapsed: boolean;
     isConnected: boolean;
@@ -22,6 +23,7 @@
   let {
     agentName,
     agentIcon,
+    label = 'Orchestrator',
     messages,
     collapsed,
     isConnected,
@@ -146,7 +148,7 @@
         <div>
           <h2 class="text-sm font-semibold text-neutral-100">{agentName}</h2>
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-neutral-400">Orchestrator</span>
+            <span class="text-xs text-neutral-400">{label}</span>
             <Badge
               variant={isConnected ? 'default' : 'outline'}
               class="text-[10px] {isStreaming ? 'bg-amber-600 text-white' : isConnected ? 'bg-emerald-600 text-white' : 'border-neutral-600 text-neutral-500'}"
