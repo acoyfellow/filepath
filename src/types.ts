@@ -34,9 +34,9 @@ export interface Env {
 
   // Environment variables
   BETTER_AUTH_SECRET: string;
-  ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
   BETTER_AUTH_URL: string;
   API_WS_HOST?: string;
   MAILGUN_API_KEY?: string;

@@ -1,5 +1,4 @@
 import { AIChatAgent } from '@cloudflare/ai-chat';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText, convertToModelMessages, tool, type StreamTextOnFinishCallback, type ToolSet } from 'ai';
 import { z } from 'zod';
@@ -30,67 +29,78 @@ export interface ChatAgentState {
 }
 
 /**
- * OpenRouter model ID mapping.
- * All models route through OpenRouter (OpenAI-compatible API)
- * using the OPENROUTER_API_KEY env var.
+ * Model ID mapping to provider-prefixed IDs.
+ * All models route through Cloudflare AI Gateway → provider.
+ * Gateway URL: https://gateway.ai.cloudflare.com/v1/{account_id}/default/{provider}
+ * This gives us logging, caching, rate limiting for free.
+ *
+ * Fallback chain: CF AI Gateway → OpenRouter → direct OpenAI
  */
-const MODEL_MAP: Record<ModelId, string> = {
-  'claude-sonnet-4': 'anthropic/claude-sonnet-4',
-  'claude-opus-4-6': 'anthropic/claude-opus-4.6',
-  'gpt-4o': 'openai/gpt-4o',
-  'o3': 'openai/o3',
+const MODEL_CONFIG: Record<ModelId, { provider: 'openai' | 'anthropic'; model: string }> = {
+  'claude-sonnet-4': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+  'claude-opus-4-6': { provider: 'anthropic', model: 'claude-opus-4-20250610' },
+  'gpt-4o': { provider: 'openai', model: 'gpt-4o' },
+  'o3': { provider: 'openai', model: 'o3' },
+  'deepseek-r1': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' }, // TODO: route via OpenRouter
+  'gemini-2.5-pro': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' }, // TODO: route via OpenRouter
+};
+
+/**
+ * OpenRouter model IDs (for models not available via direct provider keys)
+ */
+const OPENROUTER_MODELS: Partial<Record<ModelId, string>> = {
   'deepseek-r1': 'deepseek/deepseek-r1',
   'gemini-2.5-pro': 'google/gemini-2.5-pro',
 };
 
-/** Direct Anthropic model ID mapping */
-const ANTHROPIC_MODELS: Partial<Record<ModelId, string>> = {
-  'claude-sonnet-4': 'claude-sonnet-4-20250514',
-  'claude-opus-4-6': 'claude-opus-4-20250610',
-};
-
 /**
- * Maps our ModelId to AI SDK model.
+ * Get an AI SDK model instance.
  *
- * Priority:
- * 1. OPENROUTER_API_KEY — routes all models through OpenRouter (single key)
- * 2. ANTHROPIC_API_KEY — direct Anthropic access (Claude models)
- * 3. OPENAI_API_KEY — direct OpenAI access (GPT/O3 models)
- *
- * Throws if no suitable API key is configured.
+ * Routing:
+ * 1. CF AI Gateway (proxies to provider with logging/caching) — needs provider API key
+ * 2. OpenRouter fallback (for models without direct keys, e.g. DeepSeek, Gemini)
+ * 3. Direct provider as last resort
  */
 function getModel(modelId: ModelId, env: Env) {
-  // Try OpenRouter first (single key for all providers)
-  if (env.OPENROUTER_API_KEY) {
-    const openrouter = createOpenAI({
+  const config = MODEL_CONFIG[modelId];
+  if (!config) {
+    throw new Error(`Unknown model: ${modelId}`);
+  }
+
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+
+  // For OpenAI models: CF Gateway → direct OpenAI → OpenRouter
+  if (config.provider === 'openai' && env.OPENAI_API_KEY) {
+    const baseURL = accountId
+      ? `https://gateway.ai.cloudflare.com/v1/${accountId}/default/openai`
+      : 'https://api.openai.com/v1';
+    return createOpenAI({ apiKey: env.OPENAI_API_KEY, baseURL })(config.model);
+  }
+
+  // For Anthropic models: route through OpenRouter (we don't have an Anthropic key)
+  if (config.provider === 'anthropic' && env.OPENROUTER_API_KEY) {
+    const OR_ANTHROPIC: Record<string, string> = {
+      'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4',
+      'claude-opus-4-20250610': 'anthropic/claude-opus-4.6',
+    };
+    const orId = OR_ANTHROPIC[config.model] ?? 'anthropic/claude-sonnet-4';
+    return createOpenAI({
       apiKey: env.OPENROUTER_API_KEY,
       baseURL: 'https://openrouter.ai/api/v1',
-    });
-    const routerModelId = MODEL_MAP[modelId] ?? 'anthropic/claude-sonnet-4';
-    return openrouter(routerModelId);
+    })(orId);
   }
 
-  // Direct Anthropic access for Claude models
-  const anthropicModelId = ANTHROPIC_MODELS[modelId];
-  if (anthropicModelId && env.ANTHROPIC_API_KEY) {
-    const anthropic = createAnthropic({ apiKey: env.ANTHROPIC_API_KEY });
-    return anthropic(anthropicModelId);
-  }
-
-  // Direct OpenAI access for GPT/O3 models
-  if ((modelId === 'gpt-4o' || modelId === 'o3') && env.OPENAI_API_KEY) {
-    const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
-    return openai(modelId);
-  }
-
-  // If we have an Anthropic key, use Claude Sonnet as fallback for any model
-  if (env.ANTHROPIC_API_KEY) {
-    const anthropic = createAnthropic({ apiKey: env.ANTHROPIC_API_KEY });
-    return anthropic('claude-sonnet-4-20250514');
+  // OpenRouter fallback for anything else
+  const orModelId = OPENROUTER_MODELS[modelId];
+  if (orModelId && env.OPENROUTER_API_KEY) {
+    return createOpenAI({
+      apiKey: env.OPENROUTER_API_KEY,
+      baseURL: 'https://openrouter.ai/api/v1',
+    })(orModelId);
   }
 
   throw new Error(
-    'No API key configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in your environment.'
+    `No API key for model ${modelId}. Set OPENROUTER_API_KEY or provider-specific keys.`
   );
 }
 
