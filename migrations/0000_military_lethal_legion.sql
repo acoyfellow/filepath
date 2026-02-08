@@ -1,4 +1,4 @@
-CREATE TABLE `account` (
+CREATE TABLE IF NOT EXISTS `account` (
 	`id` text PRIMARY KEY NOT NULL,
 	`account_id` text NOT NULL,
 	`provider_id` text NOT NULL,
@@ -15,8 +15,8 @@ CREATE TABLE `account` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `account_userId_idx` ON `account` (`user_id`);--> statement-breakpoint
-CREATE TABLE `agent_node` (
+CREATE INDEX IF NOT EXISTS `account_userId_idx` ON `account` (`user_id`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `agent_node` (
 	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
 	`parent_id` text,
@@ -33,10 +33,10 @@ CREATE TABLE `agent_node` (
 	FOREIGN KEY (`session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `agent_node_session_id_idx` ON `agent_node` (`session_id`);--> statement-breakpoint
-CREATE INDEX `agent_node_parent_id_idx` ON `agent_node` (`parent_id`);--> statement-breakpoint
-CREATE INDEX `agent_node_status_idx` ON `agent_node` (`status`);--> statement-breakpoint
-CREATE TABLE `agent_session` (
+CREATE INDEX IF NOT EXISTS `agent_node_session_id_idx` ON `agent_node` (`session_id`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `agent_node_parent_id_idx` ON `agent_node` (`parent_id`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `agent_node_status_idx` ON `agent_node` (`status`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `agent_session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`name` text NOT NULL,
@@ -50,9 +50,9 @@ CREATE TABLE `agent_session` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `agent_session_user_id_idx` ON `agent_session` (`user_id`);--> statement-breakpoint
-CREATE INDEX `agent_session_status_idx` ON `agent_session` (`status`);--> statement-breakpoint
-CREATE TABLE `apikey` (
+CREATE INDEX IF NOT EXISTS `agent_session_user_id_idx` ON `agent_session` (`user_id`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `agent_session_status_idx` ON `agent_session` (`status`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `apikey` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text,
 	`start` text,
@@ -81,9 +81,9 @@ CREATE TABLE `apikey` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `apikey_user_id_idx` ON `apikey` (`user_id`);--> statement-breakpoint
-CREATE INDEX `apikey_key_idx` ON `apikey` (`key`);--> statement-breakpoint
-CREATE TABLE `passkey` (
+CREATE INDEX IF NOT EXISTS `apikey_user_id_idx` ON `apikey` (`user_id`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `apikey_key_idx` ON `apikey` (`key`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `passkey` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text,
 	`public_key` text NOT NULL,
@@ -97,9 +97,9 @@ CREATE TABLE `passkey` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `passkey_credential_id_unique` ON `passkey` (`credential_id`);--> statement-breakpoint
-CREATE INDEX `passkey_user_id_idx` ON `passkey` (`user_id`);--> statement-breakpoint
-CREATE TABLE `session` (
+CREATE INDEX IF NOT EXISTS `passkey_credential_id_unique` ON `passkey` (`credential_id`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `passkey_user_id_idx` ON `passkey` (`user_id`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
 	`token` text NOT NULL,
@@ -111,9 +111,9 @@ CREATE TABLE `session` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint
-CREATE INDEX `session_userId_idx` ON `session` (`user_id`);--> statement-breakpoint
-CREATE TABLE `user` (
+CREATE UNIQUE INDEX IF NOT EXISTS `session_token_unique` ON `session` (`token`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `session_userId_idx` ON `session` (`user_id`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `user` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text,
 	`email` text NOT NULL,
@@ -127,8 +127,8 @@ CREATE TABLE `user` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `user_email_unique` ON `user` (`email`);--> statement-breakpoint
-CREATE TABLE `verification` (
+CREATE UNIQUE INDEX IF NOT EXISTS `user_email_unique` ON `user` (`email`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `verification` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
 	`value` text NOT NULL,
@@ -137,4 +137,4 @@ CREATE TABLE `verification` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `verification_identifier_idx` ON `verification` (`identifier`);
+CREATE INDEX IF NOT EXISTS `verification_identifier_idx` ON `verification` (`identifier`);
