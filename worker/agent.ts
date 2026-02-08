@@ -12,12 +12,13 @@ import { TaskAgent } from '../src/agent';
 import { ChatAgent } from '../src/agent/chat-agent';
 import { ExecuteTaskWorkflow } from '../src/agent/workflows/execute-task';
 import { CreateSessionWorkflow } from '../src/agent/workflows/create-session';
-import { handleRequest as handleTerminalRequest, type TerminalEnv } from './index';
+import { handleRequest as handleTerminalRequest, SessionDO, type TerminalEnv } from './index';
 import type { Env } from '../src/types';
 
 // Export Durable Object classes
 export { TaskAgent };
 export { ChatAgent };
+export { SessionDO };
 
 // Export workflow classes with binding names
 export const EXECUTE_TASK = ExecuteTaskWorkflow;
