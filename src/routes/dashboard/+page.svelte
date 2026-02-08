@@ -1,247 +1,250 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
-  import { signOut } from '$lib/auth-client';
-  import Nav from '$lib/components/Nav.svelte';
-  
-  interface DashboardSession {
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
+  import StatusDot from "$lib/components/shared/StatusDot.svelte";
+
+  interface SessionItem {
     id: string;
     name: string;
-    description?: string;
-    type: 'legacy' | 'multi-agent';
     status: string;
-    agentCount: number;
-    createdAt: Date;
-    lastActive: Date;
+    gitRepoUrl?: string;
+    nodeCount: number;
+    createdAt: number;
+    updatedAt: number;
   }
 
-  let sessions = $state<DashboardSession[]>([]);
+  let sessions = $state<SessionItem[]>([]);
   let isLoading = $state(true);
-  let error = $state<string | null>(null);
-  
+  let errorMsg = $state<string | null>(null);
+
+  // New session modal
+  let showNewModal = $state(false);
+  let newName = $state("");
+  let newGitUrl = $state("");
+  let isCreating = $state(false);
+
   onMount(async () => {
     try {
-      // Fetch both legacy and multi-agent sessions in parallel
-      const [legacyRes, multiRes] = await Promise.all([
-        fetch('/api/session'),
-        fetch('/api/session/multi/list'),
-      ]);
-
-      const allSessions: DashboardSession[] = [];
-
-      if (legacyRes.ok) {
-        const data = await legacyRes.json() as { sessions: Array<{ id: string; token: string; createdAt: string; updatedAt: string }> };
-        for (const s of data.sessions) {
-          allSessions.push({
-            id: s.token,
-            name: `Terminal ${s.token.substring(0, 8)}`,
-            type: 'legacy',
-            status: 'running',
-            agentCount: 0,
-            createdAt: new Date(s.createdAt),
-            lastActive: new Date(s.updatedAt),
-          });
-        }
-      }
-
-      if (multiRes.ok) {
-        const data = await multiRes.json() as { sessions: Array<{ id: string; name: string; description?: string; status: string; slotCount: number; createdAt: number; updatedAt: number }> };
-        for (const s of data.sessions) {
-          allSessions.push({
-            id: s.id,
-            name: s.name,
-            description: s.description,
-            type: 'multi-agent',
-            status: s.status,
-            agentCount: s.slotCount,
-            createdAt: new Date(s.createdAt),
-            lastActive: new Date(s.updatedAt),
-          });
-        }
-      }
-
-      // Sort by most recently active
-      allSessions.sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
-      sessions = allSessions;
-      isLoading = false;
+      const res = await fetch("/api/sessions");
+      if (!res.ok) throw new Error("Failed to load sessions");
+      const data = (await res.json()) as { sessions: SessionItem[] };
+      sessions = data.sessions;
     } catch (err) {
-      console.error('Error fetching sessions:', err);
-      error = 'Failed to load sessions';
+      errorMsg =
+        err instanceof Error ? err.message : "Failed to load sessions";
+    } finally {
       isLoading = false;
     }
   });
-  
-  async function deleteSession(session: DashboardSession, event: MouseEvent) {
-    event.stopPropagation();
-    if (!confirm(`Delete session "${session.name}"? This cannot be undone.`)) return;
 
+  async function createSession() {
+    isCreating = true;
+    errorMsg = null;
     try {
-      const endpoint = session.type === 'multi-agent'
-        ? `/api/session/multi?id=${encodeURIComponent(session.id)}`
-        : `/api/session?id=${encodeURIComponent(session.id)}`;
-      const res = await fetch(endpoint, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(data.message || 'Failed to delete session');
-      }
-      sessions = sessions.filter((s) => s.id !== session.id);
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName.trim() || undefined,
+          gitRepoUrl: newGitUrl.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create session");
+      const data = (await res.json()) as { id: string };
+      goto(`/session/${data.id}`);
     } catch (err) {
-      console.error('Error deleting session:', err);
-      error = err instanceof Error ? err.message : 'Failed to delete session';
+      errorMsg =
+        err instanceof Error ? err.message : "Failed to create session";
+      isCreating = false;
     }
   }
 
-  async function createNewSession() {
+  async function deleteSession(id: string, name: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     try {
-      const balanceResponse = await fetch('/api/billing/balance');
-      if (!balanceResponse.ok) {
-        throw new Error('Failed to check credit balance');
-      }
-      
-      const balanceData = await balanceResponse.json() as { balance: number };
-      
-      if (balanceData.balance < 1) {
-        error = 'Insufficient credits. Please add credits to your account to create a session.';
-        return;
-      }
-      
-      const sessionResponse = await fetch('/api/session', { method: 'POST' });
-      
-      if (!sessionResponse.ok) {
-        const errorData = await sessionResponse.json().catch(() => ({})) as { message?: string };
-        throw new Error(errorData.message || 'Failed to create session');
-      }
-      
-      const sessionData = await sessionResponse.json() as { sessionId: string };
-      goto(`/session/${sessionData.sessionId}`);
+      const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      sessions = sessions.filter((s) => s.id !== id);
     } catch (err) {
-      console.error('Error creating session:', err);
-      error = 'Failed to create session. Please try again.';
+      errorMsg =
+        err instanceof Error ? err.message : "Failed to delete session";
     }
+  }
+
+  function formatDate(ts: number): string {
+    return new Date(ts).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  function openNewModal() {
+    newName = "";
+    newGitUrl = "";
+    showNewModal = true;
   }
 </script>
 
 <svelte:head>
-  <title>Dashboard - myfilepath.com</title>
+  <title>Dashboard - filepath</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
 </svelte:head>
 
-<div class="min-h-screen bg-neutral-950 text-neutral-300">
-  <Nav variant="dashboard" email={page.data.user?.email} />
-  
-  <main class="max-w-4xl mx-auto px-6 py-12">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-10">
-      <div>
-        <h1 class="text-neutral-100 text-xl font-medium mb-1">Your sessions</h1>
-        <p class="text-sm text-neutral-500">Manage your agent execution environments</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <button
-          onclick={() => goto('/session/new')}
-          class="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded hover:bg-emerald-500 transition-colors cursor-pointer"
-        >
-          + new session
-        </button>
-        <button
-          onclick={createNewSession}
-          class="px-4 py-2 text-sm font-medium bg-neutral-800 text-neutral-300 border border-neutral-700 rounded hover:bg-neutral-700 transition-colors cursor-pointer"
-        >
-          quick terminal
-        </button>
-      </div>
+<div class="dashboard dark">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="logo">filepath</span>
     </div>
-    
-    {#if error}
-      <div class="bg-red-950/50 border border-red-800 rounded p-4 mb-6">
-        <p class="text-red-400 text-sm">{error}</p>
+    <div class="topbar-right">
+      <span class="user-email">{page.data.user?.email ?? ""}</span>
+      <a href="/settings" class="nav-link">Settings</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="header-row">
+      <div>
+        <h1 class="title">Sessions</h1>
+        <p class="subtitle">Your agent orchestration environments</p>
       </div>
+      <button class="btn-primary" onclick={openNewModal}>+ New session</button>
+    </div>
+
+    {#if errorMsg}
+      <div class="error-banner">{errorMsg}</div>
     {/if}
-    
+
     {#if isLoading}
-      <div class="text-center py-16">
-        <div class="w-6 h-6 border-2 border-neutral-700 border-t-neutral-400 rounded-full animate-spin mx-auto"></div>
-        <p class="mt-4 text-neutral-500 text-sm">Loading sessions...</p>
+      <div class="empty-state">
+        <div class="spinner"></div>
+        <p>Loading sessions...</p>
       </div>
     {:else if sessions.length === 0}
-      <div class="border border-neutral-800 rounded p-12 text-center">
-        <p class="text-neutral-400 mb-1">No sessions yet</p>
-        <p class="text-neutral-600 text-sm mb-6">Create your first execution environment to get started</p>
-        <button
-          onclick={createNewSession}
-          class="px-4 py-2 text-sm font-medium bg-neutral-100 text-neutral-950 rounded hover:bg-white transition-colors cursor-pointer"
-        >
-          create your first session
-        </button>
+      <div class="empty-state">
+        <p class="empty-title">No sessions yet</p>
+        <p class="empty-sub">Create your first session to start orchestrating agents</p>
+        <button class="btn-primary" onclick={openNewModal}>Create first session</button>
       </div>
     {:else}
-      <div class="space-y-3">
-        {#each sessions as session (session.id)}
-          <div 
-            class="bg-neutral-900 border border-neutral-800 rounded p-5 hover:border-neutral-700 transition-colors cursor-pointer group"
+      <div class="session-list">
+        {#each sessions as s (s.id)}
+          <div
+            class="session-card"
             role="button"
             tabindex="0"
-            onclick={() => goto(`/session/${session.id}`)}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') goto(`/session/${session.id}`); }}
+            onclick={() => goto(`/session/${s.id}`)}
+            onkeydown={(e) => { if (e.key === "Enter") goto(`/session/${s.id}`); }}
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <span class="w-2 h-2 rounded-full {session.status === 'running' ? 'bg-emerald-500' : session.status === 'stopped' ? 'bg-neutral-500' : session.status === 'error' ? 'bg-red-500' : 'bg-amber-500'}"></span>
-                <h3 class="text-neutral-100 font-medium">{session.name}</h3>
-                {#if session.type === 'multi-agent'}
-                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                    {session.agentCount} agent{session.agentCount !== 1 ? 's' : ''}
-                  </span>
-                {:else}
-                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700 font-mono">terminal</span>
-                {/if}
+            <div class="session-row">
+              <div class="session-info">
+                <StatusDot status={s.status} size={8} />
+                <span class="session-name">{s.name}</span>
+                <span class="session-badge">{s.nodeCount} agent{s.nodeCount !== 1 ? "s" : ""}</span>
               </div>
-              <div class="flex items-center gap-2">
-                {#if session.type === 'multi-agent' && (session.status === 'draft' || session.status === 'stopped')}
+              <div class="session-actions">
+                {#if s.status === "draft" || s.status === "stopped"}
                   <button
-                    onclick={(e: MouseEvent) => deleteSession(session, e)}
-                    class="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/50 rounded transition-all cursor-pointer"
-                    title="Delete session"
-                  >
-                    ✕ delete
-                  </button>
+                    class="btn-delete"
+                    onclick={(e) => deleteSession(s.id, s.name, e)}
+                  >delete</button>
                 {/if}
-                <span class="text-neutral-600 text-xs font-mono group-hover:text-neutral-400 transition-colors">open →</span>
+                <span class="session-arrow">open &rarr;</span>
               </div>
             </div>
-            {#if session.description}
-              <p class="mt-2 ml-5 text-sm text-neutral-500 line-clamp-1">{session.description}</p>
-            {/if}
-            <div class="mt-2 ml-5 flex gap-6 text-xs text-neutral-500 font-mono">
-              <span>{session.id.substring(0, 16)}…</span>
-              <span>created {session.createdAt.toLocaleDateString()}</span>
-              <span>active {session.lastActive.toLocaleDateString()}</span>
+            <div class="session-meta">
+              <span>{s.id.slice(0, 12)}</span>
+              <span>{s.status}</span>
+              <span>created {formatDate(s.createdAt)}</span>
+              <span>updated {formatDate(s.updatedAt)}</span>
             </div>
           </div>
         {/each}
       </div>
     {/if}
-    
-    <!-- Getting Started -->
-    <section class="mt-16 pt-8 border-t border-neutral-800">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-6">Getting started</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-5">
-          <p class="text-neutral-500 text-xs font-mono mb-2">01</p>
-          <h3 class="text-neutral-200 font-medium text-sm mb-2">Create session</h3>
-          <p class="text-neutral-500 text-sm">Start a new container for your AI agent.</p>
-        </div>
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-5">
-          <p class="text-neutral-500 text-xs font-mono mb-2">02</p>
-          <h3 class="text-neutral-200 font-medium text-sm mb-2">Configure agent</h3>
-          <p class="text-neutral-500 text-sm">Set up API keys with secrets and budget caps.</p>
-        </div>
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-5">
-          <p class="text-neutral-500 text-xs font-mono mb-2">03</p>
-          <h3 class="text-neutral-200 font-medium text-sm mb-2">Run agent</h3>
-          <p class="text-neutral-500 text-sm">Connect your agent and watch it execute.</p>
+  </main>
+
+  {#if showNewModal}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="modal-overlay" onclick={() => (showNewModal = false)} onkeydown={() => {}}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+        <h2 class="modal-title">New session</h2>
+
+        <label class="field-label">
+          Name
+          <input type="text" class="field-input" placeholder="my-project" bind:value={newName} />
+        </label>
+
+        <label class="field-label">
+          Git repo URL <span class="optional">(optional)</span>
+          <input type="text" class="field-input" placeholder="https://github.com/user/repo" bind:value={newGitUrl} />
+        </label>
+
+        <div class="modal-buttons">
+          <button class="btn-secondary" onclick={() => (showNewModal = false)}>Cancel</button>
+          <button class="btn-primary" disabled={isCreating} onclick={createSession}>
+            {isCreating ? "Creating..." : "Create & spawn agent"}
+          </button>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  {/if}
 </div>
+
+<style>
+  .dashboard {
+    --bg: #09090b; --bg3: #111114; --b1: #1a1a1e; --b2: #27272a;
+    --t1: #e4e4e7; --t2: #a1a1aa; --t3: #71717a; --t4: #52525b;
+    --accent: #818cf8; --red: #ef4444;
+    --mono: "JetBrains Mono", monospace; --sans: "Outfit", sans-serif;
+    min-height: 100vh; background: var(--bg); color: var(--t2); font-family: var(--mono);
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--b1); }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 12px; }
+  .logo { font-family: var(--sans); font-weight: 600; font-size: 16px; color: var(--t1); }
+  .user-email { color: var(--t3); }
+  .nav-link { color: var(--t3); text-decoration: none; }
+  .nav-link:hover { color: var(--t2); }
+  .main { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+  .title { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--t1); margin: 0; }
+  .subtitle { font-size: 12px; color: var(--t3); margin: 4px 0 0; }
+  .btn-primary { padding: 8px 16px; font-size: 12px; font-family: var(--mono); background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { padding: 8px 16px; font-size: 12px; font-family: var(--mono); background: var(--bg3); color: var(--t2); border: 1px solid var(--b1); border-radius: 6px; cursor: pointer; }
+  .btn-secondary:hover { border-color: var(--b2); }
+  .error-banner { padding: 10px 14px; font-size: 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; color: #f87171; margin-bottom: 16px; }
+  .empty-state { text-align: center; padding: 64px 0; }
+  .empty-title { font-size: 14px; color: var(--t2); margin: 0 0 4px; }
+  .empty-sub { font-size: 12px; color: var(--t4); margin: 0 0 24px; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--b2); border-top-color: var(--t3); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .session-list { display: flex; flex-direction: column; gap: 8px; }
+  .session-card { background: var(--bg3); border: 1px solid var(--b1); border-radius: 8px; padding: 14px 16px; cursor: pointer; transition: border-color 0.15s; }
+  .session-card:hover { border-color: var(--b2); }
+  .session-row { display: flex; align-items: center; justify-content: space-between; }
+  .session-info { display: flex; align-items: center; gap: 10px; }
+  .session-name { color: var(--t1); font-weight: 500; font-size: 13px; }
+  .session-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(129,140,248,0.1); color: var(--accent); border: 1px solid rgba(129,140,248,0.2); }
+  .session-actions { display: flex; align-items: center; gap: 8px; }
+  .btn-delete { font-size: 10px; font-family: var(--mono); color: var(--red); background: none; border: none; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+  .session-card:hover .btn-delete { opacity: 1; }
+  .session-arrow { font-size: 11px; color: var(--t4); }
+  .session-meta { display: flex; gap: 16px; margin-top: 6px; padding-left: 18px; font-size: 10px; color: var(--t4); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: var(--bg3); border: 1px solid var(--b1); border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw; }
+  .modal-title { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--t1); margin: 0 0 20px; }
+  .field-label { display: block; font-size: 11px; color: var(--t3); margin-bottom: 14px; }
+  .optional { color: var(--t4); }
+  .field-input { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--mono); background: var(--bg); color: var(--t1); border: 1px solid var(--b1); border-radius: 6px; outline: none; box-sizing: border-box; }
+  .field-input:focus { border-color: var(--accent); }
+  .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+</style>

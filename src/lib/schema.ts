@@ -177,7 +177,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   passkeys: many(passkey),
   apikeys: many(apikey),
-  multiAgentSessions: many(multiAgentSession),
+  agentSessions: many(agentSession),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -209,24 +209,22 @@ export const apikeyRelations = relations(apikey, ({ one }) => ({
 }));
 
 // ============================================
-// Multi-Agent Sessions
+// Agent Sessions (tree-native)
 // ============================================
 
-export const multiAgentSession = sqliteTable(
-  "multi_agent_session",
+export const agentSession = sqliteTable(
+  "agent_session",
   {
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    description: text("description"),
     gitRepoUrl: text("git_repo_url"),
     status: text("status").notNull().default("draft"),
-    orchestratorSlotId: text("orchestrator_slot_id"),
-    /** When the session was started (containers spun up) */
+    // 'draft' | 'running' | 'paused' | 'stopped' | 'error'
+    rootNodeId: text("root_node_id"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
-    /** Last time per-minute credits were deducted (for metered billing) */
     lastBilledAt: integer("last_billed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -237,24 +235,31 @@ export const multiAgentSession = sqliteTable(
       .notNull(),
   },
   (table) => [
-    index("multi_agent_session_user_id_idx").on(table.userId),
-    index("multi_agent_session_status_idx").on(table.status),
+    index("agent_session_user_id_idx").on(table.userId),
+    index("agent_session_status_idx").on(table.status),
   ],
 );
 
-export const agentSlot = sqliteTable(
-  "agent_slot",
+export const agentNode = sqliteTable(
+  "agent_node",
   {
     id: text("id").primaryKey(),
     sessionId: text("session_id")
       .notNull()
-      .references(() => multiAgentSession.id, { onDelete: "cascade" }),
-    role: text("role").notNull(),
-    agentType: text("agent_type").notNull(),
+      .references(() => agentSession.id, { onDelete: "cascade" }),
+    parentId: text("parent_id"),
+    // Self-referential. NULL = root node. FK enforced at app level.
     name: text("name").notNull(),
+    agentType: text("agent_type").notNull(),
+    // 'shelley' | 'pi' | 'claude-code' | 'codex' | 'cursor' | 'amp' | 'custom'
+    model: text("model").notNull(),
+    status: text("status").notNull().default("idle"),
+    // 'idle' | 'thinking' | 'running' | 'done' | 'error'
     config: text("config").notNull().default("{}"),
+    // JSON: { systemPrompt?, envVars?, maxTokens? }
     containerId: text("container_id"),
-    status: text("status").notNull().default("pending"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    tokens: integer("tokens").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -264,26 +269,33 @@ export const agentSlot = sqliteTable(
       .notNull(),
   },
   (table) => [
-    index("agent_slot_session_id_idx").on(table.sessionId),
-    index("agent_slot_status_idx").on(table.status),
+    index("agent_node_session_id_idx").on(table.sessionId),
+    index("agent_node_parent_id_idx").on(table.parentId),
+    index("agent_node_status_idx").on(table.status),
   ],
 );
 
 // ============================================
-// Multi-Agent Relations
+// Agent Session Relations
 // ============================================
 
-export const multiAgentSessionRelations = relations(multiAgentSession, ({ one, many }) => ({
+export const agentSessionRelations = relations(agentSession, ({ one, many }) => ({
   user: one(user, {
-    fields: [multiAgentSession.userId],
+    fields: [agentSession.userId],
     references: [user.id],
   }),
-  agentSlots: many(agentSlot),
+  nodes: many(agentNode),
 }));
 
-export const agentSlotRelations = relations(agentSlot, ({ one }) => ({
-  session: one(multiAgentSession, {
-    fields: [agentSlot.sessionId],
-    references: [multiAgentSession.id],
+export const agentNodeRelations = relations(agentNode, ({ one, many }) => ({
+  session: one(agentSession, {
+    fields: [agentNode.sessionId],
+    references: [agentSession.id],
   }),
+  parent: one(agentNode, {
+    fields: [agentNode.parentId],
+    references: [agentNode.id],
+    relationName: "parentChild",
+  }),
+  children: many(agentNode, { relationName: "parentChild" }),
 }));

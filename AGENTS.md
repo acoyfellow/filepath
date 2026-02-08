@@ -1,68 +1,74 @@
-# AGENTS.md - myfilepath.com
+# AGENTS.md - filepath
+
+> See [NORTHSTAR.md](./NORTHSTAR.md) for the full plan, protocol spec, schema design, and execution phases.
 
 ## North Star
 
-Users configure sessions with an orchestrator + workers from an agent catalog, give them a task and a git repo, and watch them work in parallel in isolated containers.
-
-This is NOT a chatbot. The product is autonomous agents collaborating on real code.
+filepath is a web UI for orchestrating trees of AI coding agents in containers on Cloudflare. Tree on the left, rich chat on the right. Every agent is the same primitive. If your agent has a CLI, it runs on filepath.
 
 ## Stack
 
-Cloudflare Workers + Agents SDK (AIChatAgent) + SvelteKit (Svelte 5) + D1 + Alchemy
+SvelteKit (Svelte 5) + Cloudflare Workers + Agents SDK (AIChatAgent DOs) + D1 + CF Sandbox + Alchemy + Stripe
 
 ## Architecture
 
 ```
-User → Wizard → Session → Agent Slots → ChatAgent DOs → Containers
-                   ↓            ↓              ↓              ↓
-              D1 metadata   Config/Status   LLM + Chat    Execution
-                                            (AIChatAgent) (ttyd+bash)
+Browser ←WebSocket→ ChatAgent DO ←stdin/stdout→ Container (CLI agent)
+                         ↓
+                    D1 (tree state + message history)
 ```
 
-- **One ChatAgent DO per agent slot** — SDK-native chat persistence (DO SQLite), streaming (SSE-over-WS), resumable
-- **Client connects via WebSocket directly to DO** — no REST proxy for chat
-- **Model routing:** OpenAI models → CF AI Gateway. Anthropic/DeepSeek/Gemini → OpenRouter. No Anthropic key needed.
-- **Tools:** `execute_command` (shell in container), `delegate_task`, `list_workers`, `read_worker_messages` (conductor)
+- **One ChatAgent DO per agent node** -- relay/conductor, NOT the agent brain
+- **Container runs the actual CLI agent** (claude-code, cursor, codex, shelley, etc.)
+- **Agent protocol (FAP):** NDJSON over stdout/stdin. Zod-validated event types.
+- **Model routing:** All LLM calls go through filepath API keys → CF AI Gateway → OpenRouter
+- **Tree structure:** `agentNode` table with `parentId` (self-referential). Workflowy-inspired.
 
-## Status (Feb 7, 2026)
+## Agent Catalog
 
-✅ Auth, billing, agent catalog, wizard, 3-panel session view, container start/stop,
-ChatAgent DOs, Svelte chat client, tool calling, conductor tools, git cloning,
-credit deduction (per-call + per-minute), status polling, session delete, model routing
-
-❌ E2E prod test, session pause/resume, typed API contracts
+| Agent | CLI | Default Model | Description |
+|-------|-----|---------------|-------------|
+| Shelley | filepath-native | claude-sonnet-4 | Full-stack engineering. Reference BYO implementation. |
+| Pi | filepath-native | claude-sonnet-4 | Research and analysis specialist. |
+| Claude Code | `claude` CLI | claude-sonnet-4 | Anthropic's agentic coding tool. |
+| Codex | `codex` CLI | o3 | OpenAI's coding agent. |
+| Cursor | `cursor` CLI | claude-sonnet-4 | Cursor agent mode via CLI. |
+| Amp | `amp` CLI | claude-sonnet-4 | Sourcegraph's large codebase agent. |
+| Custom (BYO) | Your Dockerfile | claude-sonnet-4 | Speak the protocol, run on filepath. |
 
 ## Development
 
 ```bash
 bun install
-bun run dev          # localhost:5173
-bash gates/health.sh # Quick check (skips tsc)
-bun run deploy       # Alchemy (never wrangler)
+bun run dev          # localhost:5173 (SvelteKit + CF worker via Alchemy)
+bash gates/health.sh # Quick health check
+bun run deploy       # Deploy via Alchemy (never wrangler)
+bun run prd          # Run gates
 ```
-
-> `bunx tsc --noEmit` takes ~10 min on this VM. CI catches type errors. Don't run in loops.
 
 ## Rules
 
 1. **`bun`/`bunx`** not npm/npx
-2. **Alchemy** not wrangler — config in `alchemy.run.ts`
-3. **Svelte 5** — `onclick` not `on:click`
+2. **Alchemy** not wrangler -- config in `alchemy.run.ts`
+3. **Svelte 5** -- `onclick` not `on:click`, runes not stores
 4. **Push with `--no-verify`** (pre-push hook is slow)
-5. **No explicit `any`** — use `unknown`, generics, or specific types
-6. Commit after every file change. Descriptive messages.
+5. **No explicit `any`** -- use `unknown`, generics, or specific types
+6. **Gates before implementation** -- write the test, then write the code
+7. **Simplicity always** -- fewer clicks, fewer concepts
 
 ## Key Files
 
 ```
-src/agent/chat-agent.ts              # AIChatAgent DO (core)
+NORTHSTAR.md                         # The plan. Read this first.
+src/lib/protocol/                    # Agent protocol Zod schemas (source of truth)
+src/lib/schema.ts                    # Drizzle D1 schema (agentSession + agentNode)
+src/agent/chat-agent.ts              # ChatAgent DO (relay, not brain)
 src/lib/agents/chat-client.svelte.ts # Svelte 5 WS chat adapter
-src/lib/agents/catalog.ts            # 7 agent types
-src/lib/types/session.ts             # AgentSlot, MultiAgentSession, ModelId
-src/lib/components/session/          # ChatPanel, SessionSidebar, WorkerTabs
-src/lib/components/wizard/           # 4-step session creation
-src/routes/api/session/multi/        # CRUD + start/stop/chat/status
-worker/agent.ts                      # Exports ChatAgent, TaskAgent, workflows
-worker/index.ts                      # Terminal handlers, container management
-alchemy.run.ts                       # Infrastructure config
+src/lib/agents/catalog.ts            # Agent definitions
+src/lib/components/session/          # Tree, panel, chat, spawn modal
+src/lib/components/chat/             # Rich message type components
+src/routes/session/[id]/             # Session view (tree + chat)
+src/routes/api/session/              # Session + node CRUD
+worker/                              # CF Worker entry, agent exports
+gates/                               # Health + production gates
 ```

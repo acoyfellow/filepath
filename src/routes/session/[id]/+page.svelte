@@ -1,601 +1,212 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
-  import Nav from '$lib/components/Nav.svelte';
-  import SessionSidebar from '$lib/components/session/SessionSidebar.svelte';
-  import ChatPanel from '$lib/components/session/ChatPanel.svelte';
-  import WorkerTabs from '$lib/components/session/WorkerTabs.svelte';
-  import { PaneGroup, Pane, Handle } from '$lib/components/ui/resizable';
-  import type { MultiAgentSession, AgentSlot } from '$lib/types/session';
-  import { createAgentChatClient, type AgentChatClient } from '$lib/agents/chat-client.svelte';
+  import "$lib/styles/theme.css";
+  import TopBar from "$lib/components/session/TopBar.svelte";
+  import AgentTree from "$lib/components/session/AgentTree.svelte";
+  import AgentPanel from "$lib/components/session/AgentPanel.svelte";
+  import SpawnModal from "$lib/components/session/SpawnModal.svelte";
+  import type { AgentNode, AgentType, AgentNodeConfig } from "$lib/types/session";
+  import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
+  import { page } from "$app/stores";
 
-  // Session data
-  let sessionId = $derived(page.params.id ?? '');
-  let session = $state<MultiAgentSession | null>(null);
-  let slots = $state<AgentSlot[]>([]);
-  let isMultiAgent = $state(false);
-  let isLoading = $state(true);
-  let errorMessage = $state<string | null>(null);
+  // ─── Server data ───
+  let { data } = $props();
+  const sessionId = $derived($page.params.id);
 
-  // Panel state
-  let sidebarCollapsed = $state(false);
-  let chatCollapsed = $state(false);
-  let selectedSlotId = $state<string | null>(null);
-  let activeWorkerId = $state<string | null>(null);
+  // ─── Theme ───
+  let dark = $state(false);
 
-  // Status polling
-  let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+  // ─── Spawn modal ───
+  let showSpawn = $state(false);
 
-  // Chat clients — one per slot (orchestrator + workers)
-  let chatClients = $state<Record<string, AgentChatClient>>({});
-  let creditWarning = $state('');
-  let orchestratorChatClient = $derived(orchestratorSlot ? chatClients[orchestratorSlot.id] ?? null : null);
+  // ─── Build tree from flat nodes ───
+  function buildTree(flatNodes: typeof data.nodes): AgentNode | null {
+    if (flatNodes.length === 0) return null;
 
-  // Legacy terminal state (for non-multi-agent sessions)
-  let tabs = $state<Array<{id: string, name: string}>>([{ id: 'tab1', name: 'Terminal 1' }]);
-  let activeTabId = $state('tab1');
-  let terminalStatus = $state<Record<string, string>>({ tab1: 'ready' });
+    const nodeMap = new Map<string, AgentNode>();
+    for (const n of flatNodes) {
+      let config: AgentNodeConfig = {};
+      try {
+        config = typeof n.config === "string" ? JSON.parse(n.config) : (n.config ?? {});
+      } catch { /* invalid JSON, default to {} */ }
 
-  // Derived
-  let orchestratorSlot = $derived(slots.find(s => s.role === 'orchestrator'));
-  let workerSlots = $derived(slots.filter(s => s.role === 'worker'));
+      nodeMap.set(n.id, {
+        id: n.id,
+        sessionId: n.sessionId,
+        parentId: n.parentId,
+        name: n.name,
+        agentType: n.agentType as AgentType,
+        model: n.model,
+        status: (n.status as AgentNode["status"]) ?? "idle",
+        config,
+        containerId: n.containerId ?? undefined,
+        sortOrder: n.sortOrder ?? 0,
+        tokens: n.tokens ?? 0,
+        children: [],
+        createdAt: typeof n.createdAt === "number" ? n.createdAt : Date.now(),
+        updatedAt: typeof n.updatedAt === "number" ? n.updatedAt : Date.now(),
+      });
+    }
 
-  onMount(() => {
-    if (!sessionId) {
-      goto('/dashboard');
+    const roots: AgentNode[] = [];
+    for (const node of nodeMap.values()) {
+      if (node.parentId && nodeMap.has(node.parentId)) {
+        nodeMap.get(node.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    return roots[0] ?? null;
+  }
+
+  let rootNode = $state<AgentNode | null>(buildTree(data.nodes));
+
+  // ─── Messages (live from WebSocket, empty until connected) ───
+  let messagesByNode = $state<Record<string, ChatMsg[]>>({});
+
+  // ─── State ───
+  let selectedId = $state<string | null>(rootNode?.id ?? null);
+
+  /** Find a node by ID in the tree */
+  function findNode(node: AgentNode, id: string): AgentNode | null {
+    if (node.id === id) return node;
+    for (const child of node.children) {
+      const found = findNode(child, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /** Find a node by name in the tree */
+  function findByName(node: AgentNode, name: string): AgentNode | null {
+    if (node.name === name) return node;
+    for (const child of node.children) {
+      const found = findByName(child, name);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  let selectedAgent = $derived(
+    selectedId && rootNode ? findNode(rootNode, selectedId) : null,
+  );
+
+  let currentMessages = $derived<ChatMsg[]>(
+    selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
+  );
+
+  function handleSelect(id: string) {
+    selectedId = id;
+  }
+
+  function handleNavigate(name: string) {
+    if (!rootNode) return;
+    const node = findByName(rootNode, name);
+    if (node) selectedId = node.id;
+  }
+
+  function handleSend(message: string) {
+    if (!selectedAgent) return;
+    // Add user message to local state
+    const nodeId = selectedAgent.id;
+    const msgs = messagesByNode[nodeId] ?? [];
+    messagesByNode[nodeId] = [...msgs, { from: "u", event: { type: "text", content: message } }];
+    // TODO: send to ChatAgent DO via WebSocket
+  }
+
+  async function handleSpawn(req: { name: string; agentType: AgentType; model: string }) {
+    const parentId = selectedAgent?.id ?? rootNode?.id;
+
+    const res = await fetch(`/api/sessions/${sessionId}/nodes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: req.name,
+        agentType: req.agentType,
+        model: req.model,
+        parentId,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to spawn node:", await res.text());
+      showSpawn = false;
       return;
     }
-    loadSession();
 
-    // Cleanup on unmount: stop polling + disconnect all chat clients
-    return () => {
-      stopPolling();
-      for (const client of Object.values(chatClients)) {
-        client.disconnect();
-      }
+    const { id: newId } = await res.json();
+
+    const newNode: AgentNode = {
+      id: newId,
+      name: req.name,
+      agentType: req.agentType,
+      model: req.model,
+      status: "idle",
+      children: [],
+      sessionId,
+      parentId: parentId ?? null,
+      config: {},
+      sortOrder: 0,
+      tokens: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
-  });
 
-  async function loadSession() {
-    errorMessage = null;
-    try {
-      // Try multi-agent endpoint first
-      const multiRes = await fetch(`/api/session/multi?id=${sessionId}`);
-      if (multiRes.ok) {
-        const data = await multiRes.json() as { session?: MultiAgentSession; slots?: AgentSlot[] };
-        if (data.session && data.slots && data.slots.length > 0) {
-          session = data.session;
-          slots = data.slots;
-          isMultiAgent = true;
-          // Select first worker if any
-          const firstWorker = workerSlots[0];
-          if (firstWorker) {
-            activeWorkerId = firstWorker.id;
-          }
-          // Initialize chat clients for all slots
-          await initChatClients();
-          isLoading = false;
-          return;
-        }
+    // Add to parent's children in the tree
+    if (rootNode && parentId) {
+      const parent = findNode(rootNode, parentId);
+      if (parent) {
+        parent.children = [...parent.children, newNode];
       }
-    } catch {
-      // Multi endpoint failed, try legacy
+    } else if (!rootNode) {
+      // First node becomes root
+      rootNode = newNode;
     }
 
-    try {
-      // Fall back to legacy single-session endpoint
-      const legacyRes = await fetch(`/api/session/${sessionId}`);
-      if (legacyRes.ok) {
-        // Legacy mode — no multi-agent data, just show terminal
-      } else {
-        errorMessage = `Failed to load session (${legacyRes.status})`;
-      }
-    } catch {
-      errorMessage = 'Failed to connect to the server. Please check your connection.';
-    }
-    isLoading = false;
-  }
-
-  /**
-   * Lightweight status poll — updates session + slot statuses without
-   * re-fetching configs or re-initialising chat clients.
-   */
-  async function pollStatus() {
-    try {
-      const res = await fetch(`/api/session/multi/status?id=${sessionId}`);
-      if (!res.ok) return;
-      const data = await res.json() as {
-        session: { id: string; status: string };
-        slots: Array<{ id: string; status: string; containerId: string | null }>;
-        billing?: { deducted: number; balance: number; insufficientCredits: boolean };
-      };
-
-      // Handle billing — auto-stop if credits depleted
-      if (data.billing?.insufficientCredits) {
-        console.warn('[session] Credits depleted — stopping session');
-        creditWarning = 'Credits depleted. Session will stop.';
-        void handleStopSession();
-        return;
-      } else if (data.billing && data.billing.balance < 10) {
-        creditWarning = `Low credits: ${data.billing.balance} remaining`;
-      } else {
-        creditWarning = '';
-      }
-
-      // Update session status
-      if (session) {
-        session = { ...session, status: data.session.status as MultiAgentSession['status'] };
-      }
-
-      // Update each slot's status & containerId
-      slots = slots.map((s) => {
-        const fresh = data.slots.find((r) => r.id === s.id);
-        if (!fresh) return s;
-        return {
-          ...s,
-          status: fresh.status as AgentSlot['status'],
-          containerId: fresh.containerId ?? s.containerId,
-        };
-      });
-    } catch {
-      // Silently ignore poll failures — next tick will retry
-    }
-  }
-
-  /** Start periodic status polling (idempotent). */
-  function startPolling() {
-    if (pollTimer) return;
-    pollTimer = setInterval(() => {
-      void pollStatus();
-    }, 5000);
-  }
-
-  /** Stop periodic status polling (idempotent). */
-  function stopPolling() {
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
-  }
-
-  // React to session status changes: start/stop polling automatically
-  $effect(() => {
-    const s = session?.status;
-    if (s === 'running' || s === 'starting') {
-      startPolling();
-    } else {
-      stopPolling();
-    }
-  });
-
-  // Sync containerId updates from polling to chat clients
-  // When polling updates a slot's containerId, push it to the DO so execute_command works
-  const syncedContainerIds = new Map<string, string>();
-  $effect(() => {
-    for (const slot of slots) {
-      const client = chatClients[slot.id];
-      if (client && slot.containerId && syncedContainerIds.get(slot.id) !== slot.containerId) {
-        syncedContainerIds.set(slot.id, slot.containerId);
-        client.updateState({ containerId: slot.containerId });
-      }
-    }
-  });
-
-  // Worker URL for WebSocket connections, loaded from server config
-  let workerUrl = $state('');
-
-  /**
-   * Fetch the worker URL from the server config endpoint.
-   * Falls back to same-origin if the fetch fails.
-   */
-  async function loadWorkerUrl(): Promise<string> {
-    if (workerUrl) return workerUrl;
-    try {
-      const res = await fetch('/api/config');
-      if (res.ok) {
-        const config = await res.json() as { workerUrl: string };
-        workerUrl = config.workerUrl;
-        return workerUrl;
-      }
-    } catch {
-      // Ignore — fall back to hardcoded
-    }
-    // Fallback
-    if (typeof window !== 'undefined' && window.location.hostname === 'myfilepath.com') {
-      workerUrl = 'https://api.myfilepath.com';
-    } else {
-      workerUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    }
-    return workerUrl;
-  }
-
-  /**
-   * Initialize chat clients for ALL slots (orchestrator + workers).
-   * Each slot gets its own ChatAgent DO instance.
-   */
-  async function initChatClients() {
-    // Skip if we already have clients for all current slots
-    const existingIds = Object.keys(chatClients);
-    const slotIds = slots.map(s => s.id);
-    if (existingIds.length > 0 && slotIds.every(id => existingIds.includes(id))) {
-      return; // Clients already initialized for these slots
-    }
-
-    // Disconnect all existing clients
-    for (const client of Object.values(chatClients)) {
-      client.disconnect();
-    }
-    chatClients = {};
-
-    const url = await loadWorkerUrl();
-
-    for (const slot of slots) {
-      const isOrchestrator = slot.role === 'orchestrator';
-      const initialState: Record<string, unknown> = {
-        slotId: slot.id,
-        sessionId,
-        agentType: slot.agentType,
-        model: slot.config.model,
-        systemPrompt: slot.config.systemPrompt || '',
-        containerId: slot.containerId || undefined,
-      };
-
-      // Orchestrators get conductor tools (worker info)
-      if (isOrchestrator) {
-        initialState.isOrchestrator = true;
-        initialState.workers = workerSlots.map(w => ({
-          slotId: w.id,
-          name: w.name,
-          agentType: w.agentType,
-          status: w.status,
-        }));
-      }
-
-      chatClients[slot.id] = createAgentChatClient({
-        workerUrl: url,
-        agentName: `chat-${slot.id}`,
-        initialState,
-      });
-    }
-  }
-
-  function handleSendMessage(content: string) {
-    if (!orchestratorChatClient) return;
-    orchestratorChatClient.sendMessage(content);
-  }
-
-  function handleCancel() {
-    if (!orchestratorChatClient) return;
-    orchestratorChatClient.cancel();
-  }
-
-  function handleSelectSlot(slotId: string) {
-    selectedSlotId = slotId;
-    const slot = slots.find(s => s.id === slotId);
-    if (slot && slot.role === 'worker') {
-      activeWorkerId = slotId;
-    }
-  }
-
-  let isStarting = $state(false);
-
-  async function handleStartSession() {
-    isStarting = true;
-    errorMessage = null;
-    try {
-      const res = await fetch('/api/session/multi/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ message: `Start failed: ${res.status}` }));
-        throw new Error((data as { message?: string }).message || `Start failed: ${res.status}`);
-      }
-
-      // Reload session data to get updated statuses
-      await loadSession();
-
-      // If the session is still starting, poll until it becomes running or error
-      if (session?.status === 'starting') {
-        const pollIntervalMs = 2000;
-        const maxWaitMs = 30000;
-        let elapsed = 0;
-
-        while (elapsed < maxWaitMs && session?.status === 'starting') {
-          await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));
-          elapsed += pollIntervalMs;
-          await loadSession();
-        }
-
-        if (session?.status === 'starting') {
-          throw new Error('Session took too long to start. Please try again.');
-        }
-        if (session?.status === 'error') {
-          throw new Error('Session failed to start.');
-        }
-      }
-
-      // Wait for the orchestrator WebSocket to be connected before sending
-      if (session && orchestratorChatClient) {
-        const connected = await orchestratorChatClient.waitForConnection(5000);
-        if (connected) {
-          const parts: string[] = [];
-          if (session.name) parts.push(`**Task:** ${session.name}`);
-          if (session.description) parts.push(session.description);
-          if (session.gitRepoUrl) parts.push(`**Git repo:** ${session.gitRepoUrl}`);
-          if (workerSlots.length > 0) {
-            const workerNames = workerSlots.map(w => w.name).join(', ');
-            parts.push(`**Workers available:** ${workerNames}`);
-          }
-          if (parts.length > 0) {
-            orchestratorChatClient.sendMessage(parts.join('\n\n'));
-          }
-        } else {
-          console.warn('[session] orchestrator WebSocket did not connect in time');
-        }
-      }
-    } catch (err) {
-      errorMessage = err instanceof Error ? err.message : 'Failed to start session';
-    }
-    isStarting = false;
-  }
-
-  async function handleStopSession() {
-    errorMessage = null;
-    try {
-      const res = await fetch('/api/session/multi/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-      if (!res.ok) throw new Error(`Stop request failed: ${res.status}`);
-    } catch (err) {
-      errorMessage = err instanceof Error ? err.message : 'Failed to stop session';
-    }
-    if (session) {
-      session = { ...session, status: 'stopped' };
-    }
-    slots = slots.map(s => ({ ...s, status: 'stopped' as const }));
-    for (const client of Object.values(chatClients)) {
-      client.disconnect();
-    }
-    chatClients = {};
-  }
-
-  function dismissError() {
-    errorMessage = null;
-  }
-
-  function getTerminalUrl(slot: AgentSlot): string {
-    if (slot.containerId && workerUrl) {
-      // Load terminal page directly from worker domain.
-      // The worker serves /agent-terminal/{containerId} which renders xterm.js.
-      // WebSocket connections also go directly to worker (SvelteKit can't proxy WS).
-      return `${workerUrl}/agent-terminal/${slot.containerId}`;
-    }
-    return '';
-  }
-
-  // Legacy terminal functions
-  function startTerminal(tabId: string) {
-    terminalStatus[tabId] = 'ready';
-  }
-
-  function getLegacyTerminalUrl(tabId: string): string {
-    return `/terminal/${sessionId}/tab?tab=${tabId}`;
-  }
-
-  function addTab() {
-    const newTabId = `tab${tabs.length + 1}`;
-    tabs = [...tabs, { id: newTabId, name: `Terminal ${tabs.length + 1}` }];
-    activeTabId = newTabId;
-    startTerminal(newTabId);
-  }
-
-  function closeTab(tabId: string) {
-    if (tabs.length <= 1) return;
-    tabs = tabs.filter(t => t.id !== tabId);
-    if (activeTabId === tabId) {
-      activeTabId = tabs[0]?.id || '';
-    }
+    showSpawn = false;
+    selectedId = newId;
   }
 </script>
 
-<svelte:head>
-  <title>Session {session?.name || sessionId} - myfilepath.com</title>
-</svelte:head>
+<div class:dark style="display:flex;flex-direction:column;height:100vh;width:100vw;background:var(--bg);color:var(--t1);overflow:hidden">
+  <TopBar {dark} ontoggletheme={() => { dark = !dark; }} />
 
-{#if isLoading}
-  <div class="h-screen flex items-center justify-center bg-neutral-950">
-    <div class="text-center">
-      <div class="w-8 h-8 border-2 border-neutral-700 border-t-neutral-400 rounded-full animate-spin mb-4 mx-auto"></div>
-      <p class="text-neutral-400 text-sm">Loading session…</p>
-    </div>
-  </div>
-{:else if isMultiAgent && session}
-  <!-- Multi-Agent 3-Panel Resizable Layout -->
-  <div class="h-screen flex flex-col bg-neutral-950">
-    <Nav variant="session" sessionId={sessionId} />
+  <div style="display:flex;flex:1;overflow:hidden">
+    {#if rootNode}
+      <AgentTree
+        root={rootNode}
+        {selectedId}
+        onselect={handleSelect}
+        onspawn={() => { showSpawn = true; }}
+      />
 
-    <!-- Error banner -->
-    {#if errorMessage}
-      <div class="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-sm text-red-300">
-        <span class="shrink-0">⚠️</span>
-        <span class="flex-1">{errorMessage}</span>
+      <div style="flex:1;display:flex;flex-direction:column;background:var(--bg);overflow:hidden">
+        <AgentPanel
+          agent={selectedAgent}
+          messages={currentMessages}
+          onsend={handleSend}
+          onnavigate={handleNavigate}
+        />
+      </div>
+    {:else}
+      <!-- Empty session -- prompt to spawn first agent -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+        <p style="color:var(--t2);font-size:14px">{data.session.name}</p>
+        <p style="color:var(--t3);font-size:13px">No agents yet. Spawn your first agent to get started.</p>
         <button
-          onclick={dismissError}
-          class="shrink-0 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-200"
+          onclick={() => { showSpawn = true; }}
+          style="padding:8px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-size:13px;cursor:pointer"
         >
-          Dismiss
+          + spawn agent
         </button>
       </div>
     {/if}
-    <!-- Credit warning banner -->
-    {#if creditWarning}
-      <div class="flex items-center gap-2 border-b border-amber-900/50 bg-amber-950/50 px-4 py-2 text-sm text-amber-300">
-        <span class="shrink-0">💰</span>
-        <span class="flex-1">{creditWarning}</span>
-        <a href="/settings/billing" class="shrink-0 rounded bg-amber-800/50 px-2 py-0.5 text-xs text-amber-200 hover:bg-amber-800">Add Credits</a>
-      </div>
-    {/if}
-
-    <div class="flex-1 overflow-hidden">
-      <PaneGroup direction="horizontal" autoSaveId="session-panels">
-        <!-- Left: Sidebar Pane -->
-        <Pane defaultSize={20} minSize={10}>
-          <SessionSidebar
-            {session}
-            {slots}
-            collapsed={sidebarCollapsed}
-            {selectedSlotId}
-            onToggleCollapse={() => sidebarCollapsed = !sidebarCollapsed}
-            onSelectSlot={handleSelectSlot}
-            onStartSession={handleStartSession}
-            onStopSession={handleStopSession}
-            {isStarting}
-          />
-        </Pane>
-
-        <Handle withHandle />
-
-        <!-- Center: Chat Pane -->
-        {#if orchestratorSlot}
-          <Pane defaultSize={35} minSize={15}>
-            <ChatPanel
-              agentName={orchestratorSlot.name}
-              agentIcon="🤖"
-              label="Orchestrator"
-              messages={orchestratorChatClient?.messages ?? []}
-              collapsed={chatCollapsed}
-              isConnected={orchestratorChatClient?.isConnected ?? false}
-              status={orchestratorChatClient?.status ?? 'ready'}
-              onSendMessage={handleSendMessage}
-              onToggleCollapse={() => chatCollapsed = !chatCollapsed}
-              onCancel={handleCancel}
-              onReconnect={() => orchestratorChatClient?.reconnect()}
-            />
-          </Pane>
-
-          <Handle withHandle />
-        {/if}
-
-        <!-- Right: Worker Tabs Pane -->
-        <Pane defaultSize={45} minSize={15}>
-          <WorkerTabs
-            workers={workerSlots}
-            {activeWorkerId}
-            {chatClients}
-            onSelectWorker={(id) => activeWorkerId = id}
-            {getTerminalUrl}
-          />
-        </Pane>
-      </PaneGroup>
-    </div>
   </div>
-{:else}
-  <!-- Legacy Single-Terminal Layout -->
-  <div class="h-screen flex flex-col bg-neutral-950 text-neutral-300">
-    <Nav variant="session" sessionId={sessionId} />
+</div>
 
-    <!-- Error banner -->
-    {#if errorMessage}
-      <div class="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-sm text-red-300">
-        <span class="shrink-0">⚠️</span>
-        <span class="flex-1">{errorMessage}</span>
-        <button
-          onclick={dismissError}
-          class="shrink-0 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-200"
-        >
-          Dismiss
-        </button>
-      </div>
-    {/if}
-
-    <!-- Tabs -->
-    <div class="flex items-center gap-0 px-4 border-b border-neutral-800 bg-neutral-900/50">
-      {#each tabs as tab (tab.id)}
-        <button
-          onclick={() => { activeTabId = tab.id; }}
-          class="flex items-center gap-2 px-4 py-2 text-sm transition-colors cursor-pointer
-            {activeTabId === tab.id ? 'text-neutral-100 border-b border-neutral-100 -mb-px' : 'text-neutral-500 hover:text-neutral-300'}"
-        >
-          <span>{tab.name}</span>
-          {#if terminalStatus[tab.id] === 'starting'}
-            <span class="w-2 h-2 border border-current border-t-transparent rounded-full animate-spin"></span>
-          {:else if terminalStatus[tab.id] === 'ready'}
-            <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-          {:else if terminalStatus[tab.id] === 'error'}
-            <span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-          {:else}
-            <span class="w-1.5 h-1.5 bg-neutral-600 rounded-full"></span>
-          {/if}
-          {#if tabs.length > 1}
-            <span
-              role="button"
-              tabindex="0"
-              onclick={(e: MouseEvent) => { e.stopPropagation(); closeTab(tab.id); }}
-              onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') { e.stopPropagation(); closeTab(tab.id); } }}
-              class="ml-1 text-neutral-600 hover:text-neutral-300 cursor-pointer"
-            >
-              ×
-            </span>
-          {/if}
-        </button>
-      {/each}
-      <button
-        onclick={addTab}
-        class="px-3 py-2 text-neutral-600 hover:text-neutral-300 transition-colors cursor-pointer text-sm"
-      >
-        +
-      </button>
-    </div>
-
-    <!-- Terminal Area -->
-    <div class="flex-1 relative bg-black">
-      {#each tabs as tab (tab.id)}
-        <div class="absolute inset-0 {activeTabId === tab.id ? 'block' : 'hidden'}">
-          {#if terminalStatus[tab.id] === 'ready'}
-            <iframe
-              src={getLegacyTerminalUrl(tab.id)}
-              class="w-full h-full border-0"
-              title="Terminal {tab.name}"
-            ></iframe>
-          {:else if terminalStatus[tab.id] === 'starting'}
-            <div class="flex items-center justify-center h-full">
-              <div class="text-center">
-                <div class="w-8 h-8 border-2 border-neutral-700 border-t-neutral-400 rounded-full animate-spin mb-4 mx-auto"></div>
-                <p class="text-neutral-300 text-sm">Starting terminal…</p>
-              </div>
-            </div>
-          {:else if terminalStatus[tab.id] === 'error'}
-            <div class="flex items-center justify-center h-full">
-              <div class="text-center">
-                <p class="text-red-400 text-sm mb-4">Terminal failed to start</p>
-                <button
-                  onclick={() => startTerminal(tab.id)}
-                  class="px-4 py-2 text-sm bg-neutral-900 border border-neutral-700 rounded text-neutral-300 hover:border-neutral-500 transition-colors cursor-pointer"
-                >
-                  retry
-                </button>
-              </div>
-            </div>
-          {:else}
-            <div class="flex items-center justify-center h-full">
-              <p class="text-neutral-600 font-mono text-sm">Initializing…</p>
-            </div>
-          {/if}
-        </div>
-      {/each}
-    </div>
-  </div>
+{#if showSpawn}
+  <SpawnModal
+    onclose={() => { showSpawn = false; }}
+    onspawn={handleSpawn}
+  />
 {/if}
-
-<style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-</style>

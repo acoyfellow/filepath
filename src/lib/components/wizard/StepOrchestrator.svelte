@@ -22,7 +22,7 @@
       onUpdateConfig({
         ...config,
         model: entry.defaultModel,
-        router: entry.defaultRouter,
+        router: 'direct',
       });
     }
   }
