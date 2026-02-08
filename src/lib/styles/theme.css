@@ -1,0 +1,69 @@
+/* filepath theme -- CSS custom properties */
+/* Light mode default, dark mode via .dark class */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap');
+
+:root {
+  --m: 'JetBrains Mono', monospace;
+  --f: Outfit, -apple-system, sans-serif;
+  --accent: #818cf8;
+
+  /* Light (default) */
+  --bg: #ffffff;
+  --bg2: #f9f9fb;
+  --bg3: #f4f4f6;
+  --bg4: #eeeef0;
+  --b1: #e8e8ec;
+  --b2: #dddde1;
+  --t1: #1a1a1e;
+  --t2: #3f3f46;
+  --t3: #52525b;
+  --t4: #71717a;
+  --t5: #a1a1aa;
+  --t6: #d4d4d8;
+  --bubble-u: color-mix(in srgb, var(--accent) 8%, white);
+  --bubble-ub: color-mix(in srgb, var(--accent) 15%, transparent);
+  --block-bg: #f6f6f8;
+  --block-bg2: #f0f0f3;
+  --block-b: #e8e8ec;
+  --code-bg: #f0f0f3;
+  --top-bg: #fafafa;
+  --tree-bg: #fafafa;
+  --modal-bg: #ffffff;
+  --overlay: rgba(0, 0, 0, 0.15);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.12);
+}
+
+/* Dark */
+.dark {
+  --bg: #09090b;
+  --bg2: #0a0a0d;
+  --bg3: #0c0c0f;
+  --bg4: #0f0f12;
+  --b1: #141417;
+  --b2: #1a1a1e;
+  --t1: #e4e4e7;
+  --t2: #a1a1aa;
+  --t3: #71717a;
+  --t4: #3f3f46;
+  --t5: #27272a;
+  --t6: #1e1e22;
+  --bubble-u: color-mix(in srgb, var(--accent) 5%, transparent);
+  --bubble-ub: color-mix(in srgb, var(--accent) 8%, transparent);
+  --block-bg: #0a0a0d;
+  --block-bg2: #08080b;
+  --block-b: #1a1a1e;
+  --code-bg: #18181b;
+  --top-bg: #0a0a0d;
+  --tree-bg: #09090b;
+  --modal-bg: #111114;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 2px; }
+
+input::placeholder { color: var(--t5); }

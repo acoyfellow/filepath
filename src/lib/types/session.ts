@@ -1,31 +1,94 @@
-/** Agent roles in a session */
-export type AgentRole = 'orchestrator' | 'worker';
+import type { AgentStatus as AgentStatusType } from "$lib/protocol";
 
-/** Supported agent types */
-export type AgentType = 'shelley' | 'pi' | 'opencode' | 'codex' | 'amp' | 'claude-code' | 'custom';
+/** Supported agent types (harnesses) */
+export type AgentType =
+  | "shelley"
+  | "pi"
+  | "claude-code"
+  | "codex"
+  | "cursor"
+  | "amp"
+  | "opencode"
+  | "custom";
 
-/** LLM model options */
-export type ModelId = 
-  | 'claude-opus-4-6'
-  | 'claude-sonnet-4'
-  | 'gpt-4o'
-  | 'o3'
-  | 'deepseek-r1'
-  | 'gemini-2.5-pro';
+/** Agent node status (mirrors protocol AgentStatus) */
+export type NodeStatus = AgentStatusType;
 
-/** Router/provider for API calls */
-export type RouterId = 'direct' | 'openrouter' | 'fireworks';
+/** Session-level status */
+export type SessionStatus = "draft" | "running" | "paused" | "stopped" | "error";
 
-/** Configuration for a single agent in a session */
-export interface AgentConfig {
-  model: ModelId;
-  router: RouterId;
+/** Configuration stored in agentNode.config JSON column */
+export interface AgentNodeConfig {
   systemPrompt?: string;
   envVars?: Record<string, string>;
   maxTokens?: number;
 }
 
-/** An agent slot within a session */
+/** An agent node in the session tree */
+export interface AgentNode {
+  id: string;
+  sessionId: string;
+  parentId: string | null;
+  name: string;
+  agentType: AgentType;
+  model: string;
+  status: NodeStatus;
+  config: AgentNodeConfig;
+  containerId?: string;
+  sortOrder: number;
+  tokens: number;
+  children: AgentNode[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** An agent session (flat, from DB) */
+export interface AgentSession {
+  id: string;
+  userId: string;
+  name: string;
+  gitRepoUrl?: string;
+  status: SessionStatus;
+  rootNodeId?: string;
+  startedAt?: number;
+  lastBilledAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Agent catalog entry */
+export interface AgentCatalogEntry {
+  id: AgentType;
+  name: string;
+  description: string;
+  defaultModel: string;
+  icon: string;
+}
+
+/** Spawn request (from spawn modal) */
+export interface SpawnRequest {
+  name: string;
+  agentType: AgentType;
+  model: string;
+  parentId?: string;
+}
+
+// ============================================================
+// Legacy compat types -- needed until wizard + sidebar are rewritten for tree architecture
+// ============================================================
+
+export type ModelId = string;
+export type RouterId = string;
+export type AgentRole = 'orchestrator' | 'worker';
+
+export interface AgentConfig {
+  model: string;
+  router: string;
+  systemPrompt?: string;
+  envVars?: Record<string, string>;
+}
+
+/** @deprecated Use AgentNode */
 export interface AgentSlot {
   id: string;
   sessionId: string;
@@ -33,13 +96,11 @@ export interface AgentSlot {
   agentType: AgentType;
   name: string;
   config: AgentConfig;
-  containerId?: string;
   status: 'pending' | 'starting' | 'running' | 'stopped' | 'error';
-  createdAt: number;
-  updatedAt: number;
+  containerId?: string;
 }
 
-/** A multi-agent session */
+/** @deprecated Use AgentSession */
 export interface MultiAgentSession {
   id: string;
   userId: string;
@@ -48,45 +109,8 @@ export interface MultiAgentSession {
   gitRepoUrl?: string;
   status: 'draft' | 'starting' | 'running' | 'paused' | 'stopped' | 'error';
   orchestratorSlotId?: string;
+  startedAt?: number;
+  lastBilledAt?: number;
   createdAt: number;
   updatedAt: number;
-}
-
-/** Catalog entry for an agent type */
-export interface AgentCatalogEntry {
-  id: AgentType;
-  name: string;
-  description: string;
-  roles: AgentRole[];
-  defaultModel: ModelId;
-  defaultRouter: RouterId;
-  configSchema?: Record<string, unknown>;
-  imageName: string;
-  icon: string;
-}
-
-/** Wizard state for session creation */
-export interface SessionWizardState {
-  step: 1 | 2 | 3 | 4;
-  name: string;
-  description: string;
-  gitRepoUrl: string;
-  orchestrator: {
-    agentType: AgentType;
-    config: AgentConfig;
-  } | null;
-  workers: Array<{
-    agentType: AgentType;
-    name: string;
-    config: AgentConfig;
-  }>;
-}
-
-/** A chat message in a session */
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'agent';
-  content: string;
-  timestamp: number;
-  status?: 'sending' | 'complete' | 'error';
 }

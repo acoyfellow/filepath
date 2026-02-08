@@ -40,11 +40,17 @@ const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-age
   sqlite: true
 });
 
-// Chat Agent Durable Object (AIChatAgent - real LLM conversations)
+// Chat Agent Durable Object (relay between frontend and container)
 const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent`, {
   className: "ChatAgent",
   scriptName: `${prefix}-worker`,
   sqlite: true
+});
+
+// Session DO (terminal tab state management)
+const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
+  className: "SessionDO",
+  scriptName: `${prefix}-worker`,
 });
 
 // D1 database for auth + metadata
@@ -101,6 +107,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   bindings: {
     TaskAgent: TASK_AGENT_DO,
     ChatAgent: CHAT_AGENT_DO,
+    SESSION_DO,
     Sandbox,
     DB,
     EXECUTE_TASK,

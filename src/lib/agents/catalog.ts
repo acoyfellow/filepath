@@ -1,75 +1,61 @@
-import type { AgentCatalogEntry, AgentType } from '$lib/types/session';
+import type { AgentCatalogEntry, AgentType } from "$lib/types/session";
 
 export const AGENT_CATALOG: Record<AgentType, AgentCatalogEntry> = {
   shelley: {
-    id: 'shelley',
-    name: 'Shelley',
-    description: 'Experienced software engineer. Builds full-stack apps, manages infrastructure, writes clean code. Best all-rounder.',
-    roles: ['orchestrator', 'worker'],
-    defaultModel: 'claude-sonnet-4',
-    defaultRouter: 'direct',
-    imageName: 'shelley-agent',
-    icon: '🐚',
+    id: "shelley",
+    name: "Shelley",
+    description: "Full-stack engineering agent. filepath-native reference implementation.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "shell",
   },
   pi: {
-    id: 'pi',
-    name: 'Pi',
-    description: 'Research and analysis specialist. Deep dives into docs, APIs, and codebases. Great for exploration and planning.',
-    roles: ['orchestrator', 'worker'],
-    defaultModel: 'claude-sonnet-4',
-    defaultRouter: 'direct',
-    imageName: 'pi-agent',
-    icon: '🥧',
+    id: "pi",
+    name: "Pi",
+    description: "Research and analysis. Deep dives into docs, APIs, codebases.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "search",
   },
-  opencode: {
-    id: 'opencode',
-    name: 'OpenCode',
-    description: 'Open-source coding agent. Lightweight, fast, focused on code generation and refactoring.',
-    roles: ['worker'],
-    defaultModel: 'claude-sonnet-4',
-    defaultRouter: 'direct',
-    imageName: 'opencode-agent',
-    icon: '📖',
+  "claude-code": {
+    id: "claude-code",
+    name: "Claude Code",
+    description: "Anthropic's agentic coding tool. Complex multi-file changes.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "bot",
   },
   codex: {
-    id: 'codex',
-    name: 'Codex',
-    description: 'OpenAI\'s coding agent. Strong at Python, data science, and scripting tasks.',
-    roles: ['worker'],
-    defaultModel: 'o3',
-    defaultRouter: 'direct',
-    imageName: 'codex-agent',
-    icon: '📜',
+    id: "codex",
+    name: "Codex",
+    description: "OpenAI's coding agent. Strong at Python, scripting, data.",
+    defaultModel: "openai/o3",
+    icon: "scroll",
+  },
+  cursor: {
+    id: "cursor",
+    name: "Cursor",
+    description: "Cursor's agent mode via CLI. IDE-grade code intelligence.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "mouse-pointer",
   },
   amp: {
-    id: 'amp',
-    name: 'Amp',
-    description: 'Sourcegraph\'s coding agent. Excellent at large codebase navigation and cross-repo changes.',
-    roles: ['worker'],
-    defaultModel: 'claude-sonnet-4',
-    defaultRouter: 'direct',
-    imageName: 'amp-agent',
-    icon: '⚡',
+    id: "amp",
+    name: "Amp",
+    description: "Sourcegraph's agent. Large codebase navigation, cross-repo changes.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "zap",
   },
-  'claude-code': {
-    id: 'claude-code',
-    name: 'Claude Code',
-    description: 'Anthropic\'s agentic coding tool. Terminal-native, great at complex multi-file changes.',
-    roles: ['orchestrator', 'worker'],
-    defaultModel: 'claude-sonnet-4',
-    defaultRouter: 'direct',
-    imageName: 'claude-code-agent',
-    icon: '🤖',
+  opencode: {
+    id: "opencode",
+    name: "OpenCode",
+    description: "Open-source coding agent. Terminal-based development.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "terminal",
   },
   custom: {
-    id: 'custom',
-    name: 'Custom Agent',
-    description: 'Bring your own agent. Configure any Docker image with custom entrypoint and environment.',
-    roles: ['orchestrator', 'worker'],
-    defaultModel: 'claude-sonnet-4',
-    defaultRouter: 'direct',
-    imageName: 'custom-agent',
-    icon: '🔧',
+    id: "custom",
+    name: "Custom",
+    description: "Bring your own agent. Dockerfile that speaks the filepath protocol.",
+    defaultModel: "anthropic/claude-sonnet-4",
+    icon: "box",
   },
 };
 
@@ -77,8 +63,4 @@ export const AGENT_LIST = Object.values(AGENT_CATALOG);
 
 export function getAgent(id: AgentType): AgentCatalogEntry {
   return AGENT_CATALOG[id] ?? AGENT_CATALOG.custom;
-}
-
-export function getAgentsByRole(role: 'orchestrator' | 'worker'): AgentCatalogEntry[] {
-  return AGENT_LIST.filter(a => a.roles.includes(role));
 }
