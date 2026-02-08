@@ -7,6 +7,8 @@ import {
   serializeInput,
 } from "$lib/protocol";
 import type { AgentEventType, UserMessageType } from "$lib/protocol";
+import { ADAPTER_COMMANDS, buildAgentEnv } from "$lib/agents/adapters";
+import type { AdapterConfig } from "$lib/agents/adapters";
 
 /**
  * State stored in the DO for this chat agent instance.
@@ -137,6 +139,8 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     task?: string;
     nodeId: string;
     sessionId: string;
+    apiKey?: string;
+    envVars?: Record<string, string>;
   }): Promise<{ containerId: string }> {
     const containerId = crypto.randomUUID();
     const sandbox = getSandbox(
@@ -156,6 +160,38 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       }
     }
 
+    // Build env vars for the adapter process
+    const adapterConfig: AdapterConfig = {
+      agentType: config.agentType as AdapterConfig["agentType"],
+      model: config.model,
+      apiKey: config.apiKey || this.env.OPENROUTER_API_KEY || "",
+      task: config.task,
+      workspacePath: "/workspace",
+      envVars: config.envVars,
+    };
+    const processEnv = buildAgentEnv(adapterConfig);
+
+    // Resolve the adapter entrypoint command
+    const adapterCmd = ADAPTER_COMMANDS[config.agentType];
+    if (!adapterCmd) {
+      throw new Error(`No adapter command for agent type: ${config.agentType}`);
+    }
+
+    // Start the adapter as a long-running background process
+    const process = await sandbox.startProcess(adapterCmd, {
+      cwd: "/workspace",
+      env: processEnv,
+    });
+
+    console.log(
+      `[ChatAgent] Process started: pid=${process.id} for node ${config.nodeId}`,
+    );
+
+    // Read stdout in the background and broadcast events
+    this.readStdout(sandbox, process.id).catch((err) => {
+      console.error(`[ChatAgent] stdout reader failed: ${err}`);
+    });
+
     // Store state
     this.setState({
       nodeId: config.nodeId,
@@ -165,7 +201,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       containerId,
     });
 
-    // Update D1 with container ID
+    // Update D1 with container ID and status
     try {
       await this.env.DB.prepare(
         "UPDATE agent_node SET container_id = ?, status = 'running' WHERE id = ?",
@@ -176,11 +212,53 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       console.error("[ChatAgent] Failed to update node:", err);
     }
 
-    console.log(
-      `[ChatAgent] Container started: ${containerId} for node ${config.nodeId}`,
-    );
-
     return { containerId };
+  }
+
+  /**
+   * Continuously read stdout from the container process and broadcast events.
+   */
+  private async readStdout(
+    sandbox: ReturnType<typeof getSandbox>,
+    processId: string,
+  ): Promise<void> {
+    // Poll process logs for new output
+    let lastOffset = 0;
+    const POLL_MS = 500;
+    const MAX_IDLE = 300_000; // 5 min without output = stop polling
+    let idleMs = 0;
+
+    while (idleMs < MAX_IDLE) {
+      try {
+        const proc = await sandbox.getProcess(processId);
+        if (!proc) break;
+
+        const logs = await proc.getLogs({ start: lastOffset });
+        if (logs.stdout && logs.stdout.length > 0) {
+          idleMs = 0;
+          for (const line of logs.stdout) {
+            const trimmed = line.trim();
+            if (trimmed) {
+              await this.processStdoutLine(trimmed);
+            }
+          }
+          lastOffset += logs.stdout.length;
+        } else {
+          idleMs += POLL_MS;
+        }
+
+        // Check if process exited
+        if (proc.status === "exited" || proc.status === "killed") {
+          console.log(`[ChatAgent] Process ${processId} ended: ${proc.status}`);
+          break;
+        }
+      } catch (err) {
+        console.error(`[ChatAgent] Log poll error: ${err}`);
+        break;
+      }
+
+      await new Promise((r) => setTimeout(r, POLL_MS));
+    }
   }
 
   /**

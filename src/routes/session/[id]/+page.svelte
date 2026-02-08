@@ -4,9 +4,13 @@
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
   import SpawnModal from "$lib/components/session/SpawnModal.svelte";
-  import type { AgentNode, AgentType } from "$lib/types/session";
+  import type { AgentNode, AgentType, AgentNodeConfig } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
-  import type { AgentEvent } from "$lib/protocol";
+  import { page } from "$app/stores";
+
+  // ─── Server data ───
+  let { data } = $props();
+  const sessionId = $derived($page.params.id);
 
   // ─── Theme ───
   let dark = $state(false);
@@ -14,109 +18,54 @@
   // ─── Spawn modal ───
   let showSpawn = $state(false);
 
-  // ─── Demo data (mirrors React prototype) ───
-  const uid = () => Math.random().toString(36).slice(2, 9);
+  // ─── Build tree from flat nodes ───
+  function buildTree(flatNodes: typeof data.nodes): AgentNode | null {
+    if (flatNodes.length === 0) return null;
 
-  function mkNode(
-    name: string,
-    agentType: AgentType,
-    model: string,
-    status: "idle" | "thinking" | "running" | "done" | "error",
-    children: AgentNode[] = [],
-    opts: { tokens?: number } = {},
-  ): AgentNode {
-    return {
-      id: uid(), name, agentType, model, status, children,
-      sessionId: "demo", parentId: null, config: {},
-      containerId: undefined, sortOrder: 0,
-      tokens: opts.tokens ?? 0,
-      createdAt: Date.now(), updatedAt: Date.now(),
-    };
+    const nodeMap = new Map<string, AgentNode>();
+    for (const n of flatNodes) {
+      let config: AgentNodeConfig = {};
+      try {
+        config = typeof n.config === "string" ? JSON.parse(n.config) : (n.config ?? {});
+      } catch { /* invalid JSON, default to {} */ }
+
+      nodeMap.set(n.id, {
+        id: n.id,
+        sessionId: n.sessionId,
+        parentId: n.parentId,
+        name: n.name,
+        agentType: n.agentType as AgentType,
+        model: n.model,
+        status: (n.status as AgentNode["status"]) ?? "idle",
+        config,
+        containerId: n.containerId ?? undefined,
+        sortOrder: n.sortOrder ?? 0,
+        tokens: n.tokens ?? 0,
+        children: [],
+        createdAt: typeof n.createdAt === "number" ? n.createdAt : Date.now(),
+        updatedAt: typeof n.updatedAt === "number" ? n.updatedAt : Date.now(),
+      });
+    }
+
+    const roots: AgentNode[] = [];
+    for (const node of nodeMap.values()) {
+      if (node.parentId && nodeMap.has(node.parentId)) {
+        nodeMap.get(node.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    return roots[0] ?? null;
   }
 
-  let rootNode = $state<AgentNode>(
-    mkNode("conductor", "claude-code", "sonnet-4.5", "running", [
-      mkNode("planner", "claude-code", "sonnet-4.5", "done", [
-        mkNode("schema", "claude-code", "sonnet-4.5", "done", [], { tokens: 4218 }),
-        mkNode("spec", "shelley", "sonnet-4.5", "done", [], { tokens: 3102 }),
-      ], { tokens: 1200 }),
-      mkNode("backend", "claude-code", "sonnet-4.5", "running", [
-        mkNode("jwt", "claude-code", "sonnet-4.5", "done", [], { tokens: 5830 }),
-        mkNode("passwords", "claude-code", "sonnet-4.5", "running", [], { tokens: 3400 }),
-        mkNode("session-do", "claude-code", "sonnet-4.5", "thinking", [], { tokens: 1200 }),
-        mkNode("routes", "shelley", "sonnet-4.5", "idle"),
-      ], { tokens: 890 }),
-      mkNode("frontend", "cursor", "sonnet-4.5", "idle", [
-        mkNode("login-ui", "cursor", "sonnet-4.5", "idle"),
-        mkNode("register-ui", "cursor", "sonnet-4.5", "idle"),
-      ]),
-      mkNode("e2e", "codex", "o3", "idle"),
-    ], { tokens: 2400 }),
-  );
+  let rootNode = $state<AgentNode | null>(buildTree(data.nodes));
 
-  // ─── Demo chat messages per agent (by name) ───
-  const demoChats: Record<string, ChatMsg[]> = {
-    conductor: [
-      { from: "u", event: { type: "text", content: "Build auth system for myfilepath.com" } },
-      { from: "a", event: { type: "text", content: "Breaking this into workstreams. Starting with schema and API spec, then backend implementation." } },
-      { from: "a", event: { type: "workers", workers: [
-        { name: "planner", status: "done" },
-        { name: "backend", status: "running" },
-        { name: "frontend", status: "idle" },
-        { name: "e2e", status: "idle" },
-      ]}},
-    ],
-    planner: [
-      { from: "u", event: { type: "text", content: "Break down the auth system into tasks" } },
-      { from: "a", event: { type: "text", content: "Creating two agents: schema and API spec. Everything else depends on these." } },
-      { from: "a", event: { type: "workers", workers: [
-        { name: "schema", status: "done" },
-        { name: "spec", status: "done" },
-      ]}},
-      { from: "a", event: { type: "text", content: "Both done. Schema: 2 tables, 3 indexes. Spec: 4 endpoints. Handing off to backend." } },
-    ],
-    schema: [
-      { from: "a", event: { type: "text", content: "Starting on the DB schema. Need users table for auth and sessions for token refresh." } },
-      { from: "a", event: { type: "tool", name: "write_file", path: "migrations/001_users.sql", status: "done", output: "CREATE TABLE users (\n  id TEXT PRIMARY KEY,\n  email TEXT UNIQUE NOT NULL,\n  password_hash TEXT NOT NULL,\n  created_at INTEGER DEFAULT (unixepoch()),\n  mfa_secret TEXT\n);" } },
-      { from: "a", event: { type: "tool", name: "write_file", path: "migrations/002_sessions.sql", status: "done", output: "CREATE TABLE sessions (\n  id TEXT PRIMARY KEY,\n  user_id TEXT REFERENCES users(id),\n  token TEXT UNIQUE NOT NULL,\n  expires_at INTEGER NOT NULL,\n  ip TEXT\n);\n\nCREATE INDEX idx_sessions_token ON sessions(token);" } },
-      { from: "a", event: { type: "text", content: "Schema's done. 2 tables, 3 indexes. Anything you want changed?" } },
-      { from: "u", event: { type: "text", content: "add an `ip_address` column to sessions" } },
-      { from: "a", event: { type: "text", content: "Done. Added `ip TEXT` to sessions. Migrations updated." } },
-    ],
-    spec: [
-      { from: "a", event: { type: "tool", name: "write_file", path: "specs/auth.yaml", status: "done" } },
-      { from: "a", event: { type: "text", content: "Spec complete. 4 endpoints: register, login, refresh, logout." } },
-    ],
-    backend: [
-      { from: "a", event: { type: "workers", workers: [
-        { name: "jwt", status: "done" },
-        { name: "passwords", status: "running" },
-        { name: "session-do", status: "thinking" },
-        { name: "routes", status: "idle" },
-      ]}},
-      { from: "a", event: { type: "commit", hash: "a3f21b7", message: "feat: JWT sign/verify with Web Crypto" } },
-      { from: "a", event: { type: "commit", hash: "b8c44e1", message: "test: 6 JWT tests" } },
-      { from: "a", event: { type: "commit", hash: "c2d19f3", message: "wip: PBKDF2 password hashing" } },
-      { from: "a", event: { type: "text", content: "JWT done and tested. Passwords in progress -- PBKDF2 at 100k iterations. Session DO being designed. Routes blocked until deps ready.\n\nWant me to keep going or steer something?" } },
-    ],
-    jwt: [
-      { from: "a", event: { type: "text", content: "Implementing JWT with SubtleCrypto. No deps needed in Workers." } },
-      { from: "a", event: { type: "tool", name: "write_file", path: "src/auth/jwt.ts", status: "done" } },
-      { from: "a", event: { type: "command", cmd: "npx vitest run jwt.test.ts", status: "done", exit: 0, stdout: " PASS  (6 tests)\n \u2713 signs valid token\n \u2713 verifies valid token\n \u2713 rejects expired\n \u2713 rejects tampered\n \u2713 rejects malformed\n \u2713 empty payload" } },
-      { from: "a", event: { type: "text", content: "All 6 passing. 0 deps, 142 lines." } },
-    ],
-    passwords: [
-      { from: "a", event: { type: "text", content: "No argon2 in Workers. Using PBKDF2 via SubtleCrypto." } },
-      { from: "a", event: { type: "command", cmd: "benchmarking", status: "done", exit: 0, stdout: "100k iterations: 42ms (fits 50ms CPU budget)" } },
-      { from: "a", event: { type: "text", content: "100k iterations works. Writing verify function with constant-time compare now." } },
-    ],
-    "session-do": [
-      { from: "a", event: { type: "text", content: "Each session = one DO instance. Alarm at `expires_at` for cleanup. Designing create > validate > refresh > revoke lifecycle." } },
-    ],
-  };
+  // ─── Messages (live from WebSocket, empty until connected) ───
+  let messagesByNode = $state<Record<string, ChatMsg[]>>({});
 
   // ─── State ───
-  let selectedId = $state<string | null>(rootNode.id);
+  let selectedId = $state<string | null>(rootNode?.id ?? null);
 
   /** Find a node by ID in the tree */
   function findNode(node: AgentNode, id: string): AgentNode | null {
@@ -139,11 +88,11 @@
   }
 
   let selectedAgent = $derived(
-    selectedId ? findNode(rootNode, selectedId) : null,
+    selectedId && rootNode ? findNode(rootNode, selectedId) : null,
   );
 
-  let currentMessages = $derived(
-    selectedAgent ? (demoChats[selectedAgent.name] ?? []) : [],
+  let currentMessages = $derived<ChatMsg[]>(
+    selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
   );
 
   function handleSelect(id: string) {
@@ -151,35 +100,71 @@
   }
 
   function handleNavigate(name: string) {
+    if (!rootNode) return;
     const node = findByName(rootNode, name);
     if (node) selectedId = node.id;
   }
 
   function handleSend(message: string) {
-    // TODO: Wire to WebSocket/DO
-    console.log("Send:", message, "to:", selectedAgent?.name);
+    if (!selectedAgent) return;
+    // Add user message to local state
+    const nodeId = selectedAgent.id;
+    const msgs = messagesByNode[nodeId] ?? [];
+    messagesByNode[nodeId] = [...msgs, { from: "u", event: { type: "text", content: message } }];
+    // TODO: send to ChatAgent DO via WebSocket
   }
 
-  function handleSpawn(req: { name: string; agentType: AgentType; model: string }) {
-    const parent = selectedAgent ?? rootNode;
+  async function handleSpawn(req: { name: string; agentType: AgentType; model: string }) {
+    const parentId = selectedAgent?.id ?? rootNode?.id;
+
+    const res = await fetch(`/api/sessions/${sessionId}/nodes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: req.name,
+        agentType: req.agentType,
+        model: req.model,
+        parentId,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to spawn node:", await res.text());
+      showSpawn = false;
+      return;
+    }
+
+    const { id: newId } = await res.json();
+
     const newNode: AgentNode = {
-      id: uid(),
+      id: newId,
       name: req.name,
       agentType: req.agentType,
       model: req.model,
       status: "idle",
       children: [],
-      sessionId: "demo",
-      parentId: parent.id,
+      sessionId,
+      parentId: parentId ?? null,
       config: {},
-      sortOrder: parent.children.length,
+      sortOrder: 0,
       tokens: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    parent.children = [...parent.children, newNode];
+
+    // Add to parent's children in the tree
+    if (rootNode && parentId) {
+      const parent = findNode(rootNode, parentId);
+      if (parent) {
+        parent.children = [...parent.children, newNode];
+      }
+    } else if (!rootNode) {
+      // First node becomes root
+      rootNode = newNode;
+    }
+
     showSpawn = false;
-    selectedId = newNode.id;
+    selectedId = newId;
   }
 </script>
 
@@ -187,21 +172,35 @@
   <TopBar {dark} ontoggletheme={() => { dark = !dark; }} />
 
   <div style="display:flex;flex:1;overflow:hidden">
-    <AgentTree
-      root={rootNode}
-      {selectedId}
-      onselect={handleSelect}
-      onspawn={() => { showSpawn = true; }}
-    />
-
-    <div style="flex:1;display:flex;flex-direction:column;background:var(--bg);overflow:hidden">
-      <AgentPanel
-        agent={selectedAgent}
-        messages={currentMessages}
-        onsend={handleSend}
-        onnavigate={handleNavigate}
+    {#if rootNode}
+      <AgentTree
+        root={rootNode}
+        {selectedId}
+        onselect={handleSelect}
+        onspawn={() => { showSpawn = true; }}
       />
-    </div>
+
+      <div style="flex:1;display:flex;flex-direction:column;background:var(--bg);overflow:hidden">
+        <AgentPanel
+          agent={selectedAgent}
+          messages={currentMessages}
+          onsend={handleSend}
+          onnavigate={handleNavigate}
+        />
+      </div>
+    {:else}
+      <!-- Empty session -- prompt to spawn first agent -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+        <p style="color:var(--t2);font-size:14px">{data.session.name}</p>
+        <p style="color:var(--t3);font-size:13px">No agents yet. Spawn your first agent to get started.</p>
+        <button
+          onclick={() => { showSpawn = true; }}
+          style="padding:8px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-size:13px;cursor:pointer"
+        >
+          + spawn agent
+        </button>
+      </div>
+    {/if}
   </div>
 </div>
 
