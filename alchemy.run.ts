@@ -47,6 +47,12 @@ const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-age
   sqlite: true
 });
 
+// Session DO (terminal tab state management)
+const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
+  className: "SessionDO",
+  scriptName: `${prefix}-worker`,
+});
+
 // D1 database for auth + metadata
 // Manually created to bypass Alchemy state cache bug
 // Database UUID: 11c62299-1d8c-418f-b250-ff2598c699c6
@@ -101,6 +107,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   bindings: {
     TaskAgent: TASK_AGENT_DO,
     ChatAgent: CHAT_AGENT_DO,
+    SESSION_DO,
     Sandbox,
     DB,
     EXECUTE_TASK,
