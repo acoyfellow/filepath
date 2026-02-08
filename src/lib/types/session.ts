@@ -8,6 +8,7 @@ export type AgentType =
   | "codex"
   | "cursor"
   | "amp"
+  | "opencode"
   | "custom";
 
 /** Agent node status (mirrors protocol AgentStatus) */
@@ -70,4 +71,46 @@ export interface SpawnRequest {
   agentType: AgentType;
   model: string;
   parentId?: string;
+}
+
+// ============================================================
+// Legacy compat types -- needed until wizard + sidebar are rewritten for tree architecture
+// ============================================================
+
+export type ModelId = string;
+export type RouterId = string;
+export type AgentRole = 'orchestrator' | 'worker';
+
+export interface AgentConfig {
+  model: string;
+  router: string;
+  systemPrompt?: string;
+  envVars?: Record<string, string>;
+}
+
+/** @deprecated Use AgentNode */
+export interface AgentSlot {
+  id: string;
+  sessionId: string;
+  role: AgentRole;
+  agentType: AgentType;
+  name: string;
+  config: AgentConfig;
+  status: 'pending' | 'starting' | 'running' | 'stopped' | 'error';
+  containerId?: string;
+}
+
+/** @deprecated Use AgentSession */
+export interface MultiAgentSession {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  gitRepoUrl?: string;
+  status: 'draft' | 'starting' | 'running' | 'paused' | 'stopped' | 'error';
+  orchestratorSlotId?: string;
+  startedAt?: number;
+  lastBilledAt?: number;
+  createdAt: number;
+  updatedAt: number;
 }

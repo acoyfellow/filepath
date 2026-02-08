@@ -63,7 +63,7 @@
     const entry = AGENT_CATALOG[type];
     orchestratorConfig = {
       model: entry.defaultModel,
-      router: entry.defaultRouter,
+      router: 'direct',
     };
   }
 
@@ -79,7 +79,7 @@
       name: `Worker ${workers.length + 1}`,
       config: {
         model: entry.defaultModel,
-        router: entry.defaultRouter,
+        router: 'direct',
       },
     }];
   }
