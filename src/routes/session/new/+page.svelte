@@ -1,250 +1,85 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import Nav from '$lib/components/Nav.svelte';
-  import { Button } from '$lib/components/ui/button';
-  import StepBasics from '$lib/components/wizard/StepBasics.svelte';
-  import StepOrchestrator from '$lib/components/wizard/StepOrchestrator.svelte';
-  import StepWorkers from '$lib/components/wizard/StepWorkers.svelte';
-  import StepReview from '$lib/components/wizard/StepReview.svelte';
-  import { AGENT_CATALOG } from '$lib/agents/catalog';
-  import type { AgentType, AgentConfig, ModelId, RouterId } from '$lib/types/session';
+  import { goto } from "$app/navigation";
 
-  // Wizard state
-  let step = $state<1 | 2 | 3 | 4>(1);
-  let name = $state('');
-  let description = $state('');
-  let gitRepoUrl = $state('');
-  let isLaunching = $state(false);
-  let launchError = $state<string | null>(null);
+  let name = $state("");
+  let gitRepoUrl = $state("");
+  let isCreating = $state(false);
+  let errorMsg = $state<string | null>(null);
 
-  // Orchestrator
-  let orchestratorType = $state<AgentType | null>(null);
-  let orchestratorConfig = $state<AgentConfig>({
-    model: 'claude-sonnet-4',
-    router: 'direct',
-  });
-
-  // Workers
-  let workers = $state<Array<{ id: string; agentType: AgentType; name: string; config: AgentConfig }>>([]);
-
-  // Step validation
-  let canProceed = $derived.by(() => {
-    switch (step) {
-      case 1: return name.trim().length > 0;
-      case 2: return orchestratorType !== null;
-      case 3: return true; // Workers are optional
-      case 4: return !isLaunching;
-      default: return false;
-    }
-  });
-
-  const stepLabels = ['Basics', 'Orchestrator', 'Workers', 'Review'];
-
-  function nextStep() {
-    if (step < 4 && canProceed) {
-      step = (step + 1) as 1 | 2 | 3 | 4;
-    }
-  }
-
-  function prevStep() {
-    if (step > 1) {
-      step = (step - 1) as 1 | 2 | 3 | 4;
-    }
-  }
-
-  function handleBasicsUpdate(field: 'name' | 'description' | 'gitRepoUrl', value: string) {
-    if (field === 'name') name = value;
-    else if (field === 'description') description = value;
-    else gitRepoUrl = value;
-  }
-
-  function handleSelectOrchestrator(type: AgentType) {
-    orchestratorType = type;
-    const entry = AGENT_CATALOG[type];
-    orchestratorConfig = {
-      model: entry.defaultModel,
-      router: 'direct',
-    };
-  }
-
-  function handleUpdateOrchestratorConfig(config: AgentConfig) {
-    orchestratorConfig = config;
-  }
-
-  function handleAddWorker(agentType: AgentType) {
-    const entry = AGENT_CATALOG[agentType];
-    workers = [...workers, {
-      id: crypto.randomUUID(),
-      agentType,
-      name: `Worker ${workers.length + 1}`,
-      config: {
-        model: entry.defaultModel,
-        router: 'direct',
-      },
-    }];
-  }
-
-  function handleRemoveWorker(id: string) {
-    workers = workers.filter((w) => w.id !== id);
-  }
-
-  function handleUpdateWorkerName(id: string, newName: string) {
-    workers = workers.map((w) => w.id === id ? { ...w, name: newName } : w);
-  }
-
-  function handleUpdateWorkerConfig(id: string, config: AgentConfig) {
-    workers = workers.map((w) => w.id === id ? { ...w, config } : w);
-  }
-
-  async function handleLaunch() {
-    if (!orchestratorType) return;
-    isLaunching = true;
-
+  async function create() {
+    isCreating = true;
+    errorMsg = null;
     try {
-      const response = await fetch('/api/session/multi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          description,
-          gitRepoUrl: gitRepoUrl || undefined,
-          orchestrator: {
-            agentType: orchestratorType,
-            config: orchestratorConfig,
-          },
-          workers,
+          name: name.trim() || undefined,
+          gitRepoUrl: gitRepoUrl.trim() || undefined,
         }),
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({})) as { message?: string };
-        throw new Error(err.message || 'Failed to create session');
-      }
-
-      const data = await response.json() as { sessionId: string };
-      goto(`/session/${data.sessionId}`);
+      if (!res.ok) throw new Error("Failed to create session");
+      const data = (await res.json()) as { id: string };
+      goto(`/session/${data.id}?spawn=1`);
     } catch (err) {
-      console.error('Launch failed:', err);
-      launchError = err instanceof Error ? err.message : 'Failed to create session';
-      isLaunching = false;
+      errorMsg = err instanceof Error ? err.message : "Failed to create session";
+      isCreating = false;
     }
   }
 </script>
 
-<Nav variant="dashboard" current="new-session" />
+<svelte:head>
+  <title>New Session - filepath</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+</svelte:head>
 
-<div class="min-h-screen bg-neutral-950 pt-20">
-  <div class="max-w-3xl mx-auto px-4 py-8">
-    <!-- Progress Steps -->
-    <div class="flex items-center justify-center mb-10">
-      {#each stepLabels as label, i}
-        {@const stepNum = (i + 1) as 1 | 2 | 3 | 4}
-        <button
-          onclick={() => { if (stepNum < step) step = stepNum; }}
-          class="flex items-center {stepNum <= step ? 'cursor-pointer' : 'cursor-default'}"
-          disabled={stepNum > step}
-          aria-disabled={stepNum > step}
-        >
-          <div class="flex items-center gap-2">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors
-                {stepNum === step ? 'bg-emerald-500 text-white' : stepNum < step ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/40' : 'bg-neutral-800 text-neutral-500 border border-neutral-700'}"
-            >
-              {#if stepNum < step}
-                ✓
-              {:else}
-                {stepNum}
-              {/if}
-            </div>
-            <span class="text-sm hidden sm:inline {stepNum === step ? 'text-white font-medium' : stepNum < step ? 'text-emerald-400' : 'text-neutral-500'}">
-              {label}
-            </span>
-          </div>
-        </button>
-        {#if i < stepLabels.length - 1}
-          <div class="w-8 sm:w-16 h-px mx-2 {stepNum < step ? 'bg-emerald-500/50' : 'bg-neutral-700'}"></div>
-        {/if}
-      {/each}
-    </div>
+<div class="page">
+  <div class="container">
+    <button class="back-btn" onclick={() => goto("/dashboard")}>&larr; Dashboard</button>
+    <h1 class="title">New session</h1>
+    <p class="subtitle">Create an orchestration environment for your agents</p>
 
-    <!-- Step Content -->
-    <div class="bg-neutral-900/50 border border-neutral-800 rounded-lg p-6 sm:p-8">
-      {#if step === 1}
-        <StepBasics {name} {description} {gitRepoUrl} onUpdate={handleBasicsUpdate} />
-      {:else if step === 2}
-        <StepOrchestrator
-          selectedType={orchestratorType}
-          config={orchestratorConfig}
-          onSelectAgent={handleSelectOrchestrator}
-          onUpdateConfig={handleUpdateOrchestratorConfig}
-        />
-      {:else if step === 3}
-        <StepWorkers
-          {workers}
-          onAdd={handleAddWorker}
-          onRemove={handleRemoveWorker}
-          onUpdateName={handleUpdateWorkerName}
-          onUpdateConfig={handleUpdateWorkerConfig}
-        />
-      {:else if step === 4}
-        <StepReview
-          {name}
-          {description}
-          {gitRepoUrl}
-          orchestrator={orchestratorType ? { agentType: orchestratorType, config: orchestratorConfig } : null}
-          {workers}
-          {isLaunching}
-          onLaunch={handleLaunch}
-        />
-      {/if}
-    </div>
+    <label class="field">
+      Session name
+      <input type="text" class="input" placeholder="my-project" bind:value={name} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
+    </label>
 
-    <!-- Error Display -->
-    {#if launchError}
-      <div class="mt-6 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-        <div class="flex items-center gap-2">
-          <span class="shrink-0">⚠</span>
-          <span>{launchError}</span>
-          <button
-            onclick={() => (launchError = null)}
-            class="ml-auto shrink-0 text-red-400 hover:text-red-300"
-          >✕</button>
-        </div>
-      </div>
+    <label class="field">
+      Git repo URL <span class="optional">(optional)</span>
+      <input type="text" class="input" placeholder="https://github.com/user/repo" bind:value={gitRepoUrl} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
+    </label>
+
+    {#if errorMsg}
+      <div class="error">{errorMsg}</div>
     {/if}
 
-    <!-- Navigation Buttons -->
-    <div class="flex justify-between mt-6">
-      <div>
-        {#if step > 1}
-          <Button
-            variant="outline"
-            onclick={prevStep}
-            class="border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-          >
-            ← Back
-          </Button>
-        {:else}
-          <Button
-            variant="outline"
-            onclick={() => goto('/dashboard')}
-            class="border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-          >
-            Cancel
-          </Button>
-        {/if}
-      </div>
-      <div>
-        {#if step < 4}
-          <Button
-            onclick={nextStep}
-            disabled={!canProceed}
-            class="bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
-          >
-            Next →
-          </Button>
-        {/if}
-      </div>
-    </div>
+    <button class="btn-primary" disabled={isCreating} onclick={create}>
+      {isCreating ? "Creating..." : "Create session"}
+    </button>
   </div>
 </div>
+
+<style>
+  .page {
+    --bg: #09090b; --bg3: #111114; --b1: #1a1a1e;
+    --t1: #e4e4e7; --t2: #a1a1aa; --t3: #71717a; --t4: #52525b;
+    --accent: #818cf8;
+    --mono: "JetBrains Mono", monospace; --sans: "Outfit", sans-serif;
+    min-height: 100vh; background: var(--bg); color: var(--t2); font-family: var(--mono);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .container { width: 400px; max-width: 90vw; }
+  .back-btn { font-size: 12px; font-family: var(--mono); color: var(--t3); background: none; border: none; cursor: pointer; margin-bottom: 24px; padding: 0; }
+  .back-btn:hover { color: var(--t2); }
+  .title { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--t1); margin: 0 0 4px; }
+  .subtitle { font-size: 12px; color: var(--t3); margin: 0 0 32px; }
+  .field { display: block; font-size: 11px; color: var(--t3); margin-bottom: 16px; }
+  .optional { color: var(--t4); }
+  .input { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font-size: 13px; font-family: var(--mono); background: var(--bg3); color: var(--t1); border: 1px solid var(--b1); border-radius: 6px; outline: none; box-sizing: border-box; }
+  .input:focus { border-color: var(--accent); }
+  .error { padding: 10px; font-size: 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; color: #f87171; margin-bottom: 16px; }
+  .btn-primary { width: 100%; padding: 10px; font-size: 13px; font-family: var(--mono); background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
