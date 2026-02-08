@@ -40,7 +40,7 @@ const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-age
   sqlite: true
 });
 
-// Chat Agent Durable Object (AIChatAgent - real LLM conversations)
+// Chat Agent Durable Object (relay between frontend and container)
 const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent`, {
   className: "ChatAgent",
   scriptName: `${prefix}-worker`,

@@ -1,4 +1,5 @@
-import { AIChatAgent } from "@cloudflare/ai-chat";
+import { Agent } from "agents";
+import type { Connection, ConnectionContext, WSMessage } from "agents";
 import { getSandbox } from "@cloudflare/sandbox";
 import type { Env } from "../types";
 import {
@@ -29,10 +30,7 @@ export interface ChatAgentState {
  * 4. Persists events as message history
  * 5. Streams events to frontend via WebSocket
  */
-export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
-  /** Active WebSocket connections from frontends */
-  private wsClients: Set<WebSocket> = new Set();
-
+export class ChatAgent extends Agent<Env, ChatAgentState> {
   /** Get the container ID (if running) */
   get containerId(): string | undefined {
     return this.state?.containerId;
@@ -42,88 +40,71 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
    * Handle incoming WebSocket connections.
    * Frontend connects here to send/receive messages.
    */
-  async onConnect(connection: WebSocket): Promise<void> {
-    this.wsClients.add(connection);
-
-    // Send existing message history
-    for (const msg of this.messages) {
-      connection.send(JSON.stringify(msg));
-    }
+  onConnect(
+    connection: Connection,
+    ctx: ConnectionContext,
+  ): void | Promise<void> {
+    // History is loaded from D1 on the frontend side.
+    // The DO just relays live events.
   }
 
-  async onClose(connection: WebSocket): Promise<void> {
-    this.wsClients.delete(connection);
-  }
-
-  /**
-   * Broadcast a message to all connected frontends.
-   */
-  private broadcast(data: unknown): void {
-    const payload = JSON.stringify(data);
-    for (const ws of this.wsClients) {
-      try {
-        ws.send(payload);
-      } catch {
-        this.wsClients.delete(ws);
-      }
-    }
+  onClose(
+    connection: Connection,
+    code: number,
+    reason: string,
+    wasClean: boolean,
+  ): void | Promise<void> {
+    // Connection cleanup handled by base class
   }
 
   /**
-   * Called by the SDK when the client sends a chat message.
-   * Instead of calling an LLM, we forward the message to the container.
+   * Handle incoming WebSocket messages from the frontend.
+   * Parses the message and forwards it to the container.
    */
-  async onChatMessage(
-    onFinish: (event: unknown) => Promise<void>,
-    options?: { abortSignal?: AbortSignal },
-  ): Promise<Response> {
-    const agentState = this.state;
-    const lastMessage = this.messages[this.messages.length - 1];
-
-    if (!lastMessage) {
-      return new Response("No message to process", { status: 400 });
+  onMessage(connection: Connection, message: WSMessage): void | Promise<void> {
+    let text: string;
+    if (typeof message === "string") {
+      text = message;
+    } else if (message instanceof ArrayBuffer) {
+      text = new TextDecoder().decode(message);
+    } else {
+      text = new TextDecoder().decode(message);
     }
 
-    // Extract text from the last message
-    const text =
-      lastMessage.parts
-        ?.filter((p: { type: string }) => p.type === "text")
-        .map((p: { text?: string }) => p.text ?? "")
-        .join("") ?? "";
-
-    if (!text) {
-      return new Response("Empty message", { status: 400 });
+    let parsed: { type?: string; content?: string };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = { type: "message", content: text };
     }
 
-    // If container is running, forward the message via stdin
-    const cid = agentState?.containerId;
+    const content = parsed.content ?? text;
+    if (!content) return;
+
+    const cid = this.state?.containerId;
     if (cid) {
-      try {
-        await this.sendToContainer(cid, {
-          type: "message",
-          from: "user",
-          content: text,
-        });
-      } catch (err) {
+      this.sendToContainer(cid, {
+        type: "message",
+        from: "user",
+        content,
+      }).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[ChatAgent] Failed to send to container: ${msg}`);
-        return new Response(
-          `Container communication error: ${msg}`,
-          { headers: { "Content-Type": "text/plain" } },
+        connection.send(
+          JSON.stringify({
+            type: "error",
+            message: `Container communication error: ${msg}`,
+          }),
         );
-      }
+      });
     } else {
-      // No container -- return a message indicating agent needs to be started
-      return new Response(
-        "Agent container is not running. Start the agent first.",
-        { headers: { "Content-Type": "text/plain" } },
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          message: "Agent container is not running. Start the agent first.",
+        }),
       );
     }
-
-    // Acknowledge -- actual responses will come via stdout event stream
-    return new Response("Message forwarded to agent", {
-      headers: { "Content-Type": "text/plain" },
-    });
   }
 
   /**
@@ -134,7 +115,7 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     input: UserMessageType,
   ): Promise<void> {
     const sandbox = getSandbox(
-      this.env.Sandbox as Parameters<typeof getSandbox>[0],
+      this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0],
       containerId,
     );
 
@@ -157,8 +138,10 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     nodeId: string;
     sessionId: string;
   }): Promise<{ containerId: string }> {
+    const containerId = crypto.randomUUID();
     const sandbox = getSandbox(
-      this.env.Sandbox as Parameters<typeof getSandbox>[0],
+      this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0],
+      containerId,
     );
 
     // Clone repo if specified
@@ -174,7 +157,6 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     }
 
     // Store state
-    const containerId = crypto.randomUUID();
     this.setState({
       nodeId: config.nodeId,
       sessionId: config.sessionId,
@@ -213,12 +195,14 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
     }
 
     // Broadcast to all connected frontends
-    this.broadcast({
-      type: "event",
-      event,
-      messageId: crypto.randomUUID(),
-      timestamp: Date.now(),
-    });
+    this.broadcast(
+      JSON.stringify({
+        type: "event",
+        event,
+        messageId: crypto.randomUUID(),
+        timestamp: Date.now(),
+      }),
+    );
 
     // Handle special events
     await this.handleSpecialEvent(event);
@@ -275,19 +259,21 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
             )
             .run();
 
-          this.broadcast({
-            type: "tree_update",
-            action: "spawn",
-            node: {
-              id: childId,
-              sessionId: agentState.sessionId,
-              parentId: agentState.nodeId,
-              name: event.name,
-              agentType: event.agent,
-              model: event.model,
-              status: "idle",
-            },
-          });
+          this.broadcast(
+            JSON.stringify({
+              type: "tree_update",
+              action: "spawn",
+              node: {
+                id: childId,
+                sessionId: agentState.sessionId,
+                parentId: agentState.nodeId,
+                name: event.name,
+                agentType: event.agent,
+                model: event.model,
+                status: "idle",
+              },
+            }),
+          );
         } catch (err) {
           console.error("[ChatAgent] Failed to spawn child:", err);
         }
