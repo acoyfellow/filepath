@@ -56,7 +56,8 @@ const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
 // D1 database for auth + metadata
 // Manually created to bypass Alchemy state cache bug
 // Database UUID: 11c62299-1d8c-418f-b250-ff2598c699c6
-// Migrations applied via: wrangler d1 execute filepath-db --file=migrations/0000_initial_schema.sql --remote
+// Migrations applied via:
+//   wrangler d1 execute filepath-db --file=migrations/0001_agent_tables.sql --remote
 const DB = {
   type: "d1" as const,
   id: "11c62299-1d8c-418f-b250-ff2598c699c6", // Must be the UUID, not the name
