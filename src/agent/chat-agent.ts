@@ -63,7 +63,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
    * Handle incoming WebSocket messages from the frontend.
    * Parses the message and forwards it to the container.
    */
-  onMessage(connection: Connection, message: WSMessage): void | Promise<void> {
+  async onMessage(connection: Connection, message: WSMessage): Promise<void> {
     let text: string;
     if (typeof message === "string") {
       text = message;
@@ -73,7 +73,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       text = new TextDecoder().decode(message);
     }
 
-    let parsed: { type?: string; content?: string };
+    let parsed: { type?: string; content?: string; nodeId?: string; sessionId?: string };
     try {
       parsed = JSON.parse(text);
     } catch {
@@ -83,29 +83,104 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     const content = parsed.content ?? text;
     if (!content) return;
 
-    const cid = this.state?.containerId;
-    if (cid) {
-      this.sendToContainer(cid, {
-        type: "message",
-        from: "user",
-        content,
-      }).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[ChatAgent] Failed to send to container: ${msg}`);
-        connection.send(
-          JSON.stringify({
-            type: "error",
-            message: `Container communication error: ${msg}`,
-          }),
-        );
-      });
-    } else {
+    // If no container is running, auto-start one
+    if (!this.state?.containerId) {
+      await this.autoStartContainer(parsed.nodeId, parsed.sessionId, content, connection);
+      return;
+    }
+
+    this.sendToContainer(this.state.containerId, {
+      type: "message",
+      from: "user",
+      content,
+    }).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ChatAgent] Failed to send to container: ${msg}`);
       connection.send(
         JSON.stringify({
           type: "error",
-          message: "Agent container is not running. Start the agent first.",
+          message: `Container communication error: ${msg}`,
         }),
       );
+    });
+  }
+
+  /**
+   * Auto-start container on first message. Looks up node config from D1.
+   */
+  private async autoStartContainer(
+    nodeId: string | undefined,
+    sessionId: string | undefined,
+    firstMessage: string,
+    connection: Connection,
+  ): Promise<void> {
+    // Try to get node info from D1
+    const nid = nodeId || this.state?.nodeId;
+    const sid = sessionId || this.state?.sessionId;
+
+    if (!nid) {
+      connection.send(JSON.stringify({
+        type: "error",
+        message: "No nodeId provided. Include nodeId in your first message.",
+      }));
+      return;
+    }
+
+    try {
+      // Broadcast that we're starting
+      this.broadcast(JSON.stringify({
+        type: "event",
+        event: { type: "status", state: "thinking" },
+        messageId: crypto.randomUUID(),
+        timestamp: Date.now(),
+      }));
+
+      // Look up node + session from D1
+      const nodeResult = await this.env.DB.prepare(
+        `SELECT n.agent_type, n.model, n.config, s.git_repo_url, s.id as session_id
+         FROM agent_node n JOIN agent_session s ON n.session_id = s.id
+         WHERE n.id = ?`
+      ).bind(nid).first<{
+        agent_type: string;
+        model: string;
+        config: string;
+        git_repo_url: string | null;
+        session_id: string;
+      }>();
+
+      if (!nodeResult) {
+        connection.send(JSON.stringify({
+          type: "error",
+          message: `Node ${nid} not found in database.`,
+        }));
+        return;
+      }
+
+      // Start the container
+      await this.startContainer({
+        agentType: nodeResult.agent_type,
+        model: nodeResult.model,
+        gitRepoUrl: nodeResult.git_repo_url ?? undefined,
+        task: firstMessage,
+        nodeId: nid,
+        sessionId: nodeResult.session_id,
+      });
+
+      // Now send the first message to the container
+      if (this.state?.containerId) {
+        await this.sendToContainer(this.state.containerId, {
+          type: "message",
+          from: "user",
+          content: firstMessage,
+        });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ChatAgent] Auto-start failed: ${msg}`);
+      connection.send(JSON.stringify({
+        type: "error",
+        message: `Failed to start agent container: ${msg}`,
+      }));
     }
   }
 
