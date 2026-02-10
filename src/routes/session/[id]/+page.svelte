@@ -1,11 +1,13 @@
 <script lang="ts">
   import "$lib/styles/theme.css";
+  import { onMount, onDestroy } from "svelte";
   import TopBar from "$lib/components/session/TopBar.svelte";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
   import SpawnModal from "$lib/components/session/SpawnModal.svelte";
   import type { AgentNode, AgentType, AgentNodeConfig } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
+  import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
   import { page } from "$app/stores";
 
   // ─── Server data ───
@@ -17,6 +19,111 @@
 
   // ─── Spawn modal ───
   let showSpawn = $state(false);
+
+  // ─── WebSocket state ───
+  let workerUrl = $state<string | null>(null);
+  let activeClients = $state<Record<string, ReturnType<typeof createNodeClient>>>({});
+  let connectionStates = $state<Record<string, ConnectionState>>({});
+
+  // Fetch worker URL on mount
+  onMount(async () => {
+    try {
+      const res = await fetch('/api/config');
+      const cfg = await res.json() as { workerUrl: string };
+      workerUrl = cfg.workerUrl;
+    } catch (err) {
+      console.error('[Session] Failed to fetch config:', err);
+    }
+  });
+
+  // Clean up all WS connections on destroy
+  onDestroy(() => {
+    for (const client of Object.values(activeClients)) {
+      client.close();
+    }
+  });
+
+  /** Connect to a node's ChatAgent DO if not already connected */
+  function ensureConnection(nodeId: string) {
+    if (!workerUrl || activeClients[nodeId]) return;
+
+    const client = createNodeClient(workerUrl, nodeId, {
+      onMessage: (msg: DOMessage) => handleDOMessage(nodeId, msg),
+      onStateChange: (state: ConnectionState) => {
+        connectionStates = { ...connectionStates, [nodeId]: state };
+      },
+    });
+
+    activeClients = { ...activeClients, [nodeId]: client };
+  }
+
+  /** Handle messages from the ChatAgent DO */
+  function handleDOMessage(nodeId: string, msg: DOMessage) {
+    if (msg.type === 'event' && msg.event) {
+      const existing = messagesByNode[nodeId] ?? [];
+      messagesByNode = {
+        ...messagesByNode,
+        [nodeId]: [...existing, { from: 'a', event: msg.event }],
+      };
+
+      // Update node status from status events
+      if (msg.event.type === 'status' && rootNode) {
+        const node = findNode(rootNode, nodeId);
+        if (node) {
+          node.status = msg.event.state as AgentNode['status'];
+          rootNode = rootNode; // trigger reactivity
+        }
+      }
+
+      // Handle done events
+      if (msg.event.type === 'done' && rootNode) {
+        const node = findNode(rootNode, nodeId);
+        if (node) {
+          node.status = 'done';
+          rootNode = rootNode;
+        }
+      }
+
+      // Handle tree updates from spawn events
+      if (msg.event.type === 'spawn' && rootNode) {
+        // The DO handles spawn in D1 and sends a tree_update
+        // We'll handle tree_update below
+      }
+    } else if (msg.type === 'tree_update' && msg.action === 'spawn' && msg.node) {
+      // New child node spawned by the agent
+      const n = msg.node as Record<string, string>;
+      const newChild: AgentNode = {
+        id: n.id ?? '',
+        sessionId: n.sessionId ?? sessionId,
+        parentId: n.parentId ?? nodeId,
+        name: n.name ?? 'agent',
+        agentType: (n.agentType ?? 'shelley') as AgentType,
+        model: n.model ?? 'claude-sonnet-4',
+        status: 'idle',
+        config: {},
+        sortOrder: 0,
+        tokens: 0,
+        children: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      if (rootNode) {
+        const parent = findNode(rootNode, nodeId);
+        if (parent) {
+          parent.children = [...parent.children, newChild];
+          rootNode = rootNode; // trigger reactivity
+        }
+      }
+    } else if (msg.type === 'error') {
+      console.error(`[ChatAgent ${nodeId}] Error:`, msg.message);
+      // Show error as a system message in chat
+      const existing = messagesByNode[nodeId] ?? [];
+      messagesByNode = {
+        ...messagesByNode,
+        [nodeId]: [...existing, { from: 'a', event: { type: 'text', content: `⚠️ ${msg.message}` } }],
+      };
+    }
+  }
 
   // ─── Build tree from flat nodes ───
   function buildTree(flatNodes: typeof data.nodes): AgentNode | null {
@@ -61,11 +168,18 @@
 
   let rootNode = $state<AgentNode | null>(buildTree(data.nodes));
 
-  // ─── Messages (live from WebSocket, empty until connected) ───
+  // ─── Messages (live from WebSocket) ───
   let messagesByNode = $state<Record<string, ChatMsg[]>>({});
 
   // ─── State ───
   let selectedId = $state<string | null>(rootNode?.id ?? null);
+
+  // Auto-connect when selecting a node
+  $effect(() => {
+    if (selectedId && workerUrl) {
+      ensureConnection(selectedId);
+    }
+  });
 
   /** Find a node by ID in the tree */
   function findNode(node: AgentNode, id: string): AgentNode | null {
@@ -95,6 +209,10 @@
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
   );
 
+  let currentConnectionState = $derived<ConnectionState | undefined>(
+    selectedAgent ? connectionStates[selectedAgent.id] : undefined,
+  );
+
   function handleSelect(id: string) {
     selectedId = id;
   }
@@ -107,11 +225,22 @@
 
   function handleSend(message: string) {
     if (!selectedAgent) return;
-    // Add user message to local state
     const nodeId = selectedAgent.id;
+
+    // Add user message to local state immediately
     const msgs = messagesByNode[nodeId] ?? [];
-    messagesByNode[nodeId] = [...msgs, { from: "u", event: { type: "text", content: message } }];
-    // TODO: send to ChatAgent DO via WebSocket
+    messagesByNode = {
+      ...messagesByNode,
+      [nodeId]: [...msgs, { from: 'u', event: { type: 'text', content: message } }],
+    };
+
+    // Ensure connected then send via WebSocket
+    ensureConnection(nodeId);
+    const client = activeClients[nodeId];
+    if (client) {
+      // Include nodeId and sessionId so the DO can auto-start the container
+      client.send(message, { nodeId, sessionId });
+    }
   }
 
   async function handleSpawn(req: { name: string; agentType: AgentType; model: string }) {
