@@ -39,8 +39,9 @@ fi
 
 # Step 2: Create a new session
 echo -n "2. Create session... "
-SESSION_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/session" \
+SESSION_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions" \
   -H "Content-Type: application/json" \
+  -d '{"name":"gate-test"}' \
   -b "$COOKIE_JAR" --max-time 15 2>&1)
 SESSION_HTTP=$(echo "$SESSION_RESP" | tail -1)
 SESSION_BODY=$(echo "$SESSION_RESP" | sed '$d')
