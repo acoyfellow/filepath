@@ -48,7 +48,7 @@ SESSION_HTTP=$(echo "$SESSION_RESP" | tail -1)
 SESSION_BODY=$(echo "$SESSION_RESP" | sed '$d')
 SESSION_ID=$(echo "$SESSION_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 
-if [ "$SESSION_HTTP" = "200" ] && [ -n "$SESSION_ID" ]; then
+if ([ "$SESSION_HTTP" = "200" ] || [ "$SESSION_HTTP" = "201" ]) && [ -n "$SESSION_ID" ]; then
   echo "PASS (session: $SESSION_ID)"
 else
   echo "FAIL (HTTP $SESSION_HTTP, body: $(echo $SESSION_BODY | head -c 200))"
@@ -57,6 +57,7 @@ else
 fi
 
 # Step 3: Spawn agent node
+NODE_ID=""
 if [ -n "$SESSION_ID" ]; then
   echo -n "3. Spawn agent... "
   NODE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
@@ -67,7 +68,7 @@ if [ -n "$SESSION_ID" ]; then
   NODE_BODY=$(echo "$NODE_RESP" | sed '$d')
   NODE_ID=$(echo "$NODE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 
-  if [ "$NODE_HTTP" = "200" ] && [ -n "$NODE_ID" ]; then
+  if ([ "$NODE_HTTP" = "200" ] || [ "$NODE_HTTP" = "201" ]) && [ -n "$NODE_ID" ]; then
     echo "PASS (node: $NODE_ID)"
   else
     echo "FAIL (HTTP $NODE_HTTP, body: $(echo $NODE_BODY | head -c 200))"
