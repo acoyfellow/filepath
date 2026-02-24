@@ -154,26 +154,33 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     // Add to history
     this.chatHistory.push({ role: "user", content: userMessage });
 
-    const apiKey = this.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
+    // Try OpenRouter first, fall back to OpenAI
+    const openrouterKey = this.env.OPENROUTER_API_KEY;
+    const openaiKey = this.env.OPENAI_API_KEY;
+    
+    if (!openrouterKey && !openaiKey) {
       connection.send(JSON.stringify({
         type: "error",
-        message: "No OPENROUTER_API_KEY configured. Cannot call LLM.",
+        message: "No API keys configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.",
       }));
       return;
     }
 
-    // Resolve model - map agent type defaults
-    const model = this.resolveModel();
+    // Resolve model for the chosen provider
+    const useOpenAI = !openrouterKey;
+    const model = useOpenAI ? this.resolveOpenAIModel() : this.resolveModel();
+    const apiUrl = useOpenAI 
+      ? "https://api.openai.com/v1/chat/completions"
+      : "https://openrouter.ai/api/v1/chat/completions";
+    const apiKey = useOpenAI ? openaiKey! : openrouterKey!;
 
     try {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      let response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://myfilepath.com",
-          "X-Title": "filepath",
+          ...(useOpenAI ? {} : { "HTTP-Referer": "https://myfilepath.com", "X-Title": "filepath" }),
         },
         body: JSON.stringify({
           model,
@@ -187,6 +194,29 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
           stream: false,
         }),
       });
+
+      // If OpenRouter fails, try OpenAI as fallback
+      if (!response.ok && !useOpenAI && openaiKey) {
+        const fallbackModel = this.resolveOpenAIModel();
+        response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${openaiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: fallbackModel,
+            messages: [
+              {
+                role: "system",
+                content: `You are a helpful AI assistant running on filepath, an agent orchestration platform. You are agent type "${this.state?.agentType || 'shelley'}" using model "${fallbackModel}". Be concise and helpful.`,
+              },
+              ...this.chatHistory,
+            ],
+            stream: false,
+          }),
+        });
+      }
 
       if (!response.ok) {
         const errText = await response.text();
@@ -239,7 +269,6 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
    */
   private resolveModel(): string {
     const model = this.state?.model || "claude-sonnet-4";
-    // Map friendly names to OpenRouter model IDs
     const modelMap: Record<string, string> = {
       "claude-sonnet-4": "anthropic/claude-sonnet-4",
       "claude-opus-4-6": "anthropic/claude-opus-4",
@@ -249,6 +278,22 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       "gemini-2.5-pro": "google/gemini-2.5-pro-preview",
     };
     return modelMap[model] || model;
+  }
+
+  /**
+   * Resolve OpenAI model string (fallback provider).
+   */
+  private resolveOpenAIModel(): string {
+    const model = this.state?.model || "claude-sonnet-4";
+    const modelMap: Record<string, string> = {
+      "claude-sonnet-4": "gpt-4o",
+      "claude-opus-4-6": "gpt-4o",
+      "gpt-4o": "gpt-4o",
+      "o3": "o3",
+      "deepseek-r1": "gpt-4o",
+      "gemini-2.5-pro": "gpt-4o",
+    };
+    return modelMap[model] || "gpt-4o";
   }
 
   /**
