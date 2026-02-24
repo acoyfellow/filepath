@@ -2,7 +2,7 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { agentSession, agentNode } from "$lib/schema";
 import { eq, and } from "drizzle-orm";
-import type { RequestHandler } from "./$types";
+import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 /** Verify user owns session */
 async function verifyOwnership(
@@ -22,17 +22,19 @@ async function verifyOwnership(
 /**
  * GET /api/sessions/[id]/nodes/[nodeId] - Get a single node
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
+  const nodeId = params.nodeId!;
 
   const db = getDrizzle();
-  await verifyOwnership(db, params.id, locals.user.id);
+  await verifyOwnership(db, id, locals.user.id);
 
   const nodes = await db
     .select()
     .from(agentNode)
     .where(
-      and(eq(agentNode.id, params.nodeId), eq(agentNode.sessionId, params.id)),
+      and(eq(agentNode.id, nodeId), eq(agentNode.sessionId, id)),
     );
 
   if (nodes.length === 0) throw error(404, "Node not found");
@@ -43,8 +45,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 /**
  * PATCH /api/sessions/[id]/nodes/[nodeId] - Update node (status, config, name, etc.)
  */
-export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
+  const nodeId = params.nodeId!;
 
   const body = (await request.json()) as {
     name?: string;
@@ -55,7 +59,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   };
 
   const db = getDrizzle();
-  await verifyOwnership(db, params.id, locals.user.id);
+  await verifyOwnership(db, id, locals.user.id);
 
   const updates: Record<string, unknown> = {};
   if (body.name !== undefined) updates.name = body.name;
@@ -72,7 +76,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
     .update(agentNode)
     .set(updates)
     .where(
-      and(eq(agentNode.id, params.nodeId), eq(agentNode.sessionId, params.id)),
+      and(eq(agentNode.id, nodeId), eq(agentNode.sessionId, id)),
     );
 
   return json({ ok: true });
@@ -81,15 +85,17 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 /**
  * DELETE /api/sessions/[id]/nodes/[nodeId] - Delete a node and all descendants
  */
-export const DELETE: RequestHandler = async ({ params, locals }) => {
+export const DELETE: RequestHandler = async ({ params, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
+  const nId = params.nodeId!;
 
   const db = getDrizzle();
-  await verifyOwnership(db, params.id, locals.user.id);
+  await verifyOwnership(db, id, locals.user.id);
 
   // Collect all descendant node IDs (recursive via repeated queries)
-  const toDelete = new Set<string>([params.nodeId]);
-  const queue = [params.nodeId];
+  const toDelete = new Set<string>([nId]);
+  const queue = [nId];
 
   while (queue.length > 0) {
     const parentId = queue.shift()!;
@@ -99,7 +105,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
       .where(
         and(
           eq(agentNode.parentId, parentId),
-          eq(agentNode.sessionId, params.id),
+          eq(agentNode.sessionId, id),
         ),
       );
 
@@ -116,7 +122,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     await db
       .delete(agentNode)
       .where(
-        and(eq(agentNode.id, nodeId), eq(agentNode.sessionId, params.id)),
+        and(eq(agentNode.id, nodeId), eq(agentNode.sessionId, id)),
       );
   }
 
