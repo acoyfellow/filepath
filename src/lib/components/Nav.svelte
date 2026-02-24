@@ -81,6 +81,7 @@
         <a href="/docs" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'docs'}>docs</a>
         <a href="/pricing" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'pricing'}>pricing</a>
         <a href="/login" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'login'}>login</a>
+        <a href="/signup" class="bg-neutral-100 text-neutral-900 px-3 py-1 rounded text-sm font-medium hover:bg-white transition-colors">sign up</a>
       </div>
 
       {@render hamburger()}
@@ -92,6 +93,7 @@
         {@render mobileLink('/docs', 'docs', current === 'docs')}
         {@render mobileLink('/pricing', 'pricing', current === 'pricing')}
         {@render mobileLink('/login', 'login', current === 'login')}
+        {@render mobileLink('/signup', 'sign up', current === 'signup')}
       </div>
     {/if}
   </nav>
