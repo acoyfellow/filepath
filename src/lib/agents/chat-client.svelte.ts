@@ -429,7 +429,7 @@ export function createAgentChatClient(options: AgentChatClientOptions) {
           state: tc.state,
           ...(tc.state === 'result' ? { result: tc.result } : {}),
         },
-      } as UIMessage['parts'][number]);
+      } as unknown as UIMessage['parts'][number]);
     }
 
     // Ensure at least one part
