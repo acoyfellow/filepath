@@ -36,43 +36,36 @@ Browser ←WebSocket→ ChatAgent DO ←stdin/stdout→ Container (CLI agent)
 | Amp | `amp` CLI | claude-sonnet-4 | Sourcegraph's large codebase agent. |
 | Custom (BYO) | Your Dockerfile | claude-sonnet-4 | Speak the protocol, run on filepath. |
 
-## CURRENT MISSION (Feb 24, 2026): E2E Demo
+## CURRENT STATUS (Feb 24, 2026)
 
-**Deploy has been broken since Feb 8.** 22 type errors + mailgun.js CF Workers issue.
-The live site at myfilepath.com is running stale Feb 8 code. Fix and ship.
+**Deploy works. Site live. Core e2e flow working.**
 
-### Phase 1: DEPLOY UNBLOCK (do first)
-- Fix all type errors (`bunx tsc --noEmit` must pass)
-- Fix mailgun.js CF Workers incompatibility (replace with native fetch or stub)
-- Successful deploy — verify with `gh run list`
+### TRUE NORTH STAR
+Screenshot proof of: Login → Create session → Spawn agent → Type message → **Get LLM response in chat**.
+The production gate `gates/production/agent-chat.gate.sh` tests this end-to-end.
 
-### Phase 2: NAVIGATION & AUTH
-- Sign out button visible on dashboard + session views
-- Settings pages load (`/settings/account`, `/settings/billing`, `/settings/api-keys`)
-- Login → dashboard → settings → sign out flow works
+### What's Working ✅
+- Build passes (0 type errors), deploy succeeds
+- Auth: login, sign out (visible on all pages), settings pages
+- Session: create via dashboard, spawn agent, tree sidebar + chat panel
+- Chat: send message → ChatAgent DO → OpenAI → response in chat
+- Billing: credit balance displays (10,000 credits), purchase tiers
 
-### Phase 3: SESSION CREATION & VIEW
-- Session wizard creates a session
-- Dashboard lists sessions with working links
-- Session view loads (tree + chat panel)
+### Known Bugs 🐛 (fix before calling it done)
+1. **OpenRouter API key expired** — using OpenAI fallback. Get new key.
+2. **Dashboard shows 0 agents** for all sessions. Node count query wrong.
+3. **Chat history lost between DO restarts** — `chatHistory` is in-memory only.
+4. **Production gates fail** — old gates test terminal/billing, new agent-chat gate untested in CI.
 
-### Phase 4: AGENT EXECUTION
-- Start session spins up ChatAgent DOs
-- Orchestrator chat: WebSocket connects, LLM responds, messages stream
-- Tool execution works, output displays
-- Stop session cleanly shuts down
+### Architecture: Direct LLM Mode
+ChatAgent DO calls OpenRouter/OpenAI directly (not via container).
+Container execution (Phase 4 original) deferred — direct mode is the demo.
 
-### Phase 5: BILLING BASICS
-- Credit balance displays on billing page
-- Admin can add test credits for demo
-- Session start blocked when credits = 0
-
-### Phase 6: POLISH & DEMO
-- Full walkthrough: landing → login → dashboard → create → session → agent → stop → sign out
-- No 404s, no console errors on critical paths
-
-**Do phases in order. Commit after every file change. Deploy after Phase 1.**
-**Use subagents liberally for parallel work (research in one, implement in another).**
+```
+Browser ←WebSocket→ ChatAgent DO ←fetch→ OpenRouter/OpenAI
+                         ↓
+                    D1 (node lookup for model/type)
+```
 
 ## Development
 
