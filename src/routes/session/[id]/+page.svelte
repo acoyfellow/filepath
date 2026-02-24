@@ -298,7 +298,7 @@
 </script>
 
 <div class:dark style="display:flex;flex-direction:column;height:100vh;width:100vw;background:var(--bg);color:var(--t1);overflow:hidden">
-  <TopBar {dark} ontoggletheme={() => { dark = !dark; }} />
+  <TopBar {dark} ontoggletheme={() => { dark = !dark; }} email={data.user?.email} />
 
   <div style="display:flex;flex:1;overflow:hidden">
     {#if rootNode}
