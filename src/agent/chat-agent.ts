@@ -59,9 +59,12 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     // Connection cleanup handled by base class
   }
 
+  /** Message history for direct LLM mode */
+  private chatHistory: Array<{ role: string; content: string }> = [];
+
   /**
    * Handle incoming WebSocket messages from the frontend.
-   * Parses the message and forwards it to the container.
+   * Parses the message and either forwards to container or calls LLM directly.
    */
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {
     let text: string;
@@ -83,26 +86,169 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     const content = parsed.content ?? text;
     if (!content) return;
 
-    // If no container is running, auto-start one
-    if (!this.state?.containerId) {
-      await this.autoStartContainer(parsed.nodeId, parsed.sessionId, content, connection);
+    // Store nodeId/sessionId from first message
+    if (!this.state?.nodeId && parsed.nodeId) {
+      await this.initFromNode(parsed.nodeId, parsed.sessionId);
+    }
+
+    // If container is running, forward to it
+    if (this.state?.containerId) {
+      this.sendToContainer(this.state.containerId, {
+        type: "message",
+        from: "user",
+        content,
+      }).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[ChatAgent] Failed to send to container: ${msg}`);
+        // Fall back to direct LLM
+        this.callLLMDirect(content, connection).catch(console.error);
+      });
       return;
     }
 
-    this.sendToContainer(this.state.containerId, {
-      type: "message",
-      from: "user",
-      content,
-    }).catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[ChatAgent] Failed to send to container: ${msg}`);
-      connection.send(
-        JSON.stringify({
-          type: "error",
-          message: `Container communication error: ${msg}`,
+    // No container — call LLM directly (demo mode)
+    await this.callLLMDirect(content, connection);
+  }
+
+  /**
+   * Initialize state from D1 node lookup.
+   */
+  private async initFromNode(nodeId: string, sessionId?: string): Promise<void> {
+    try {
+      const row = await this.env.DB.prepare(
+        `SELECT n.agent_type, n.model, n.config, s.id as session_id
+         FROM agent_node n JOIN agent_session s ON n.session_id = s.id
+         WHERE n.id = ?`
+      ).bind(nodeId).first<{
+        agent_type: string;
+        model: string;
+        config: string;
+        session_id: string;
+      }>();
+
+      if (row) {
+        this.setState({
+          nodeId,
+          sessionId: sessionId || row.session_id,
+          agentType: row.agent_type,
+          model: row.model,
+        });
+      }
+    } catch (err) {
+      console.error(`[ChatAgent] initFromNode failed:`, err);
+    }
+  }
+
+  /**
+   * Call LLM directly via OpenRouter (fallback when no container).
+   */
+  private async callLLMDirect(userMessage: string, connection: Connection): Promise<void> {
+    // Broadcast thinking status
+    this.broadcast(JSON.stringify({
+      type: "event",
+      event: { type: "status", state: "thinking" },
+      messageId: crypto.randomUUID(),
+      timestamp: Date.now(),
+    }));
+
+    // Add to history
+    this.chatHistory.push({ role: "user", content: userMessage });
+
+    const apiKey = this.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      connection.send(JSON.stringify({
+        type: "error",
+        message: "No OPENROUTER_API_KEY configured. Cannot call LLM.",
+      }));
+      return;
+    }
+
+    // Resolve model - map agent type defaults
+    const model = this.resolveModel();
+
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://myfilepath.com",
+          "X-Title": "filepath",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: `You are a helpful AI assistant running on filepath, an agent orchestration platform. You are agent type "${this.state?.agentType || 'shelley'}" using model "${model}". Be concise and helpful.`,
+            },
+            ...this.chatHistory,
+          ],
+          stream: false,
         }),
-      );
-    });
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenRouter ${response.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const data = await response.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const reply = data.choices?.[0]?.message?.content || "(no response)";
+
+      // Add to history
+      this.chatHistory.push({ role: "assistant", content: reply });
+
+      // Broadcast the text response
+      this.broadcast(JSON.stringify({
+        type: "event",
+        event: { type: "text", content: reply },
+        messageId: crypto.randomUUID(),
+        timestamp: Date.now(),
+      }));
+
+      // Broadcast idle status
+      this.broadcast(JSON.stringify({
+        type: "event",
+        event: { type: "status", state: "idle" },
+        messageId: crypto.randomUUID(),
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ChatAgent] LLM call failed: ${msg}`);
+      connection.send(JSON.stringify({
+        type: "error",
+        message: `LLM error: ${msg}`,
+      }));
+
+      // Set status back to idle on error
+      this.broadcast(JSON.stringify({
+        type: "event",
+        event: { type: "status", state: "idle" },
+        messageId: crypto.randomUUID(),
+        timestamp: Date.now(),
+      }));
+    }
+  }
+
+  /**
+   * Resolve the OpenRouter model string from state.
+   */
+  private resolveModel(): string {
+    const model = this.state?.model || "claude-sonnet-4";
+    // Map friendly names to OpenRouter model IDs
+    const modelMap: Record<string, string> = {
+      "claude-sonnet-4": "anthropic/claude-sonnet-4",
+      "claude-opus-4-6": "anthropic/claude-opus-4",
+      "gpt-4o": "openai/gpt-4o",
+      "o3": "openai/o3",
+      "deepseek-r1": "deepseek/deepseek-r1",
+      "gemini-2.5-pro": "google/gemini-2.5-pro-preview",
+    };
+    return modelMap[model] || model;
   }
 
   /**
