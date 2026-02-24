@@ -1,6 +1,5 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { page } from '$app/stores';
   import Nav from '$lib/components/Nav.svelte';
   
   type ApiKeyInfo = { id: string; name: string | null; prefix: string; budgetCap: number | null; creditBalance: number | null };
