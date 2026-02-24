@@ -1,7 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import { getSandbox, Sandbox } from '@cloudflare/sandbox'
 import type { Process } from '@cloudflare/sandbox'
-import type { Env } from '../src/types';
 import { drizzle } from 'drizzle-orm/d1';
 import { session as sessionTable, user as userTable, apikey as apikeyTable } from '../src/lib/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -438,17 +437,17 @@ export class SessionDO extends DurableObject {
   }
 }
 
-export async function handleRequest(request: Request, env: Env): Promise<Response> {
+export async function handleRequest(request: Request, env: TerminalEnv): Promise<Response> {
   return _fetchHandler(request, env);
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: TerminalEnv) {
     return _fetchHandler(request, env);
   }
 };
 
-async function _fetchHandler(request: Request, env: Env): Promise<Response> {
+async function _fetchHandler(request: Request, env: TerminalEnv): Promise<Response> {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;

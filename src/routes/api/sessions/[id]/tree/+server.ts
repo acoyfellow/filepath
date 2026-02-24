@@ -2,7 +2,7 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { agentSession, agentNode } from "$lib/schema";
 import { eq, and } from "drizzle-orm";
-import type { RequestHandler } from "./$types";
+import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 interface TreeNode {
   id: string;
@@ -24,8 +24,9 @@ interface TreeNode {
 /**
  * GET /api/sessions/[id]/tree - Full tree with statuses
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
 
   const db = getDrizzle();
 
@@ -35,7 +36,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     .from(agentSession)
     .where(
       and(
-        eq(agentSession.id, params.id),
+        eq(agentSession.id, id),
         eq(agentSession.userId, locals.user.id),
       ),
     );
@@ -45,7 +46,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   const nodes = await db
     .select()
     .from(agentNode)
-    .where(eq(agentNode.sessionId, params.id))
+    .where(eq(agentNode.sessionId, id))
     .orderBy(agentNode.sortOrder);
 
   // Build tree
