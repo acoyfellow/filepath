@@ -1,14 +1,25 @@
 <script lang="ts">
+  import { signOut } from '$lib/auth-client';
+  import { goto } from '$app/navigation';
+
   interface Props {
     dark: boolean;
     ontoggletheme: () => void;
+    email?: string;
   }
 
-  let { dark, ontoggletheme }: Props = $props();
+  let { dark, ontoggletheme, email }: Props = $props();
+
+  async function handleSignOut() {
+    await signOut();
+    goto('/login');
+  }
 </script>
 
 <div class="top">
   <div class="top-left">
+    <a href="/dashboard" class="back-link">← dashboard</a>
+    <span class="sep">·</span>
     <div class="top-logo">
       <svg width="14" height="14" viewBox="0 0 339 339" fill="none">
         <path fill-rule="evenodd" clip-rule="evenodd" d="M119.261 35C128.462 35.0001 137.256 38.8378 143.569 45.6083L160.108 63.3453C166.421 70.1159 175.215 73.9536 184.416 73.9536H298.583C317.039 73.9536 332 89.0902 332 107.762V270.191C332 288.863 317.039 304 298.583 304H41.417C22.9613 304 8 288.863 8 270.191V68.8087C8.0001 50.1368 22.9614 35 41.417 35H119.261ZM169.23 219.37V259.415H291.318V219.37H169.23ZM50.7361 111.182L110.398 171.838L51.027 226.311L79.9846 258.994L169.77 173.606L82.022 81.2961L50.7361 111.182Z" fill="currentColor" />
@@ -17,6 +28,9 @@
     <span class="top-name">filepath</span>
   </div>
   <div class="top-right">
+    {#if email}
+      <span class="email">{email}</span>
+    {/if}
     <button class="top-theme" onclick={ontoggletheme} title={dark ? "Light mode" : "Dark mode"}>
       {#if dark}
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
@@ -29,6 +43,7 @@
         </svg>
       {/if}
     </button>
+    <button class="sign-out" onclick={handleSignOut}>sign out</button>
   </div>
 </div>
 
@@ -48,6 +63,19 @@
     align-items: center;
     gap: 8px;
   }
+  .back-link {
+    font-family: var(--m);
+    font-size: 11px;
+    color: var(--t4);
+    text-decoration: none;
+  }
+  .back-link:hover {
+    color: var(--t1);
+  }
+  .sep {
+    color: var(--t5);
+    font-size: 11px;
+  }
   .top-logo {
     width: 18px;
     height: 18px;
@@ -61,6 +89,11 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--t1);
+  }
+  .email {
+    font-family: var(--m);
+    font-size: 11px;
+    color: var(--t4);
   }
   .top-theme {
     background: none;
@@ -77,5 +110,20 @@
   }
   .top-theme:hover {
     border-color: var(--t5);
+  }
+  .sign-out {
+    background: none;
+    border: 1px solid var(--b1);
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-family: var(--m);
+    font-size: 11px;
+    color: var(--t4);
+    cursor: pointer;
+    transition: border 0.1s, color 0.1s;
+  }
+  .sign-out:hover {
+    border-color: var(--t5);
+    color: var(--t1);
   }
 </style>
