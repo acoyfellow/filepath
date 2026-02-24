@@ -75,7 +75,7 @@ export default {
       url.pathname === '/start-agent-slots' ||
       url.pathname === '/stop-agent-slots'
     ) {
-      return handleTerminalRequest(request, env as TerminalEnv);
+      return handleTerminalRequest(request, env as unknown as TerminalEnv);
     }
     
     // Route /api/orchestrator to TaskAgent DO with proper name headers
