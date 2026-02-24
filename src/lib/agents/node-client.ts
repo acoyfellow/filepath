@@ -10,15 +10,25 @@
 
 import type { AgentEventType } from '$lib/protocol';
 
+/** A persisted message from DO SQLite */
+export interface HistoryMessage {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: number;
+}
+
 /** Message from the DO broadcast */
 export interface DOMessage {
-  type: 'event' | 'error' | 'tree_update';
+  type: 'event' | 'error' | 'tree_update' | 'history';
   event?: AgentEventType;
+  role?: string;
   message?: string;
   messageId?: string;
   timestamp?: number;
   action?: string;
   node?: Record<string, unknown>;
+  messages?: HistoryMessage[];
 }
 
 export type ConnectionState = 'connecting' | 'open' | 'closed' | 'error';
