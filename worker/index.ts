@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { getSandbox, Sandbox } from '@cloudflare/sandbox'
 import type { Process } from '@cloudflare/sandbox'
+import type { Env } from '../src/types';
 import { drizzle } from 'drizzle-orm/d1';
 import { session as sessionTable, user as userTable, apikey as apikeyTable } from '../src/lib/schema';
 import { eq, sql } from 'drizzle-orm';
