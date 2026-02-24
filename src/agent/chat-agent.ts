@@ -308,22 +308,23 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
         const proc = await sandbox.getProcess(processId);
         if (!proc) break;
 
-        const logs = await proc.getLogs({ start: lastOffset });
-        if (logs.stdout && logs.stdout.length > 0) {
+        const logs = await proc.getLogs();
+        const newOutput = logs.stdout.slice(lastOffset);
+        if (newOutput.length > 0) {
           idleMs = 0;
-          for (const line of logs.stdout) {
+          for (const line of newOutput.split('\n')) {
             const trimmed = line.trim();
             if (trimmed) {
               await this.processStdoutLine(trimmed);
             }
           }
-          lastOffset += logs.stdout.length;
+          lastOffset = logs.stdout.length;
         } else {
           idleMs += POLL_MS;
         }
 
         // Check if process exited
-        if (proc.status === "exited" || proc.status === "killed") {
+        if (proc.status === "completed" || proc.status === "killed") {
           console.log(`[ChatAgent] Process ${processId} ended: ${proc.status}`);
           break;
         }
