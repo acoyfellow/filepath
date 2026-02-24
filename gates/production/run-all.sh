@@ -25,6 +25,9 @@ echo ""
 
 GATES=(
   "visual-regression"
+  "terminal-start"
+  "credit-deduction"
+  "billing-webhook"
   "agent-chat"
 )
 
