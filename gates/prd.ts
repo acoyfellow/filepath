@@ -1,110 +1,115 @@
 import { definePrd, runPrd } from "gateproof/prd";
 
 /**
- * myfilepath.com - The platform for agents
- * 
+ * myfilepath.com — Agent Orchestration Platform
+ *
+ * TRUE NORTH STAR:
+ *   Login → Create session → Spawn agent → Type message → Get LLM response
+ *   Screenshot proof of each step or it didn't happen.
+ *
  * Checkpoints:
- * 1. Terminal Parity ✅ - SvelteKit + better-auth + Containers working
- * 2. Agent Auth 🚧 - API keys for agents, environment secrets
- * 3. Persistence - Sessions forever, real-time sync
- * 4. Billing - Per-minute compute billing
+ * 1. Auth & Navigation — Login, sign out, settings pages load
+ * 2. Session & Agent — Create session, spawn agent, see tree + chat
+ * 3. Chat E2E — Send message, get LLM response displayed in chat
+ * 4. Billing — Credits display, purchase flow, block when 0
+ * 5. Polish — No 404s, no console errors, agent count correct
  */
 
 export const prd = definePrd({
   progressLog: [
-    "2026-01-31: Checkpoint 1 complete - terminal parity achieved",
-    "2026-01-31: shadcn-svelte installed, API keys UI created",
-    "2026-01-31: Clean slate DB schema with better-auth apiKey plugin",
+    "2026-02-24: Phase 1 — Build passes (0 errors), deploy works",
+    "2026-02-24: Phase 2 — Nav fixed: sign out on dashboard+session, /settings redirect",
+    "2026-02-24: Phase 3 — Session creation, agent spawn, tree+chat view working",
+    "2026-02-24: Phase 4 — ChatAgent calls LLM directly via OpenAI (OpenRouter expired)",
+    "2026-02-24: Phase 5 — Billing page shows credits, purchase tiers",
   ],
   stories: [
     // ============================================================
-    // CHECKPOINT 1: Terminal Parity ✅
+    // CHECKPOINT 1: Auth & Navigation
     // ============================================================
     {
-      id: "terminal-start",
-      title: "Terminal containers start via /terminal/{sessionId}/{tabId}/start",
-      gateFile: "./gates/terminal-start.gate.ts",
+      id: "login-flow",
+      title: "Login with email/password → lands on /dashboard",
+      gateFile: "./gates/production/auth-flow.gate.sh",
       progress: ["DONE"],
     },
     {
-      id: "terminal-websocket",
-      title: "Terminal WebSocket connects and receives shell output",
-      gateFile: "./gates/terminal-websocket.gate.ts",
-      dependsOn: ["terminal-start"],
+      id: "sign-out",
+      title: "Sign out button visible on dashboard + session, returns to landing",
+      gateFile: "./gates/production/auth-flow.gate.sh",
+      dependsOn: ["login-flow"],
       progress: ["DONE"],
     },
     {
-      id: "session-state",
-      title: "Session state persists via Durable Objects",
-      gateFile: "./gates/session-state.gate.ts",
+      id: "settings-pages",
+      title: "/settings/account, /settings/billing, /settings/api-keys all load (no 404)",
+      gateFile: "./gates/production/auth-flow.gate.sh",
+      dependsOn: ["login-flow"],
       progress: ["DONE"],
     },
 
     // ============================================================
-    // CHECKPOINT 2: Agent Auth 🚧
+    // CHECKPOINT 2: Session & Agent
     // ============================================================
     {
-      id: "human-auth",
-      title: "Human can sign up/sign in via better-auth",
-      gateFile: "./gates/human-auth.gate.ts",
-      progress: ["DONE - email/password working"],
+      id: "create-session",
+      title: "Create session from dashboard → navigates to session view",
+      gateFile: "./gates/production/agent-chat.gate.sh",
+      dependsOn: ["login-flow"],
+      progress: ["DONE"],
     },
     {
-      id: "api-key-create",
-      title: "Human can create API key for agent via /settings/api-keys",
-      gateFile: "./gates/api-key-create.gate.ts",
-      dependsOn: ["human-auth"],
-      progress: ["UI done, pending DB migration"],
+      id: "spawn-agent",
+      title: "Spawn agent → appears in tree sidebar + panel shows type/model",
+      gateFile: "./gates/production/agent-chat.gate.sh",
+      dependsOn: ["create-session"],
+      progress: ["DONE"],
     },
     {
-      id: "api-key-auth",
-      title: "Agent authenticates with x-api-key header",
-      gateFile: "./gates/api-key-auth.gate.ts",
-      dependsOn: ["api-key-create"],
-      progress: [],
-    },
-    {
-      id: "env-secrets-inject",
-      title: "Secrets from API key metadata injected into terminal env",
-      gateFile: "./gates/env-secrets-inject.gate.ts",
-      dependsOn: ["api-key-auth", "terminal-start"],
-      progress: [],
+      id: "dashboard-lists",
+      title: "Dashboard lists sessions with correct agent count + working links",
+      gateFile: "./gates/production/agent-chat.gate.sh",
+      dependsOn: ["spawn-agent"],
+      progress: ["BUG: agent count always shows 0"],
     },
 
     // ============================================================
-    // CHECKPOINT 3: Persistence
+    // CHECKPOINT 3: Chat E2E ← THE NORTH STAR
     // ============================================================
     {
-      id: "session-forever",
-      title: "Sessions persist forever until explicitly closed",
-      gateFile: "./gates/session-forever.gate.ts",
-      dependsOn: ["session-state"],
-      progress: [],
+      id: "agent-chat-e2e",
+      title: "Send message to agent → LLM responds → response displayed in chat",
+      gateFile: "./gates/production/agent-chat.gate.sh",
+      dependsOn: ["spawn-agent"],
+      progress: ["DONE — OpenAI fallback when OpenRouter key expired"],
     },
     {
-      id: "terminal-reconnect",
-      title: "Terminal reconnects to existing container on reload",
-      gateFile: "./gates/terminal-reconnect.gate.ts",
-      dependsOn: ["terminal-websocket", "session-forever"],
-      progress: [],
+      id: "agent-chat-multi",
+      title: "Multi-turn conversation works (agent remembers context)",
+      gateFile: "./gates/production/agent-chat.gate.sh",
+      dependsOn: ["agent-chat-e2e"],
+      progress: ["BUG: chat history lost between messages (in-memory only)"],
     },
 
     // ============================================================
     // CHECKPOINT 4: Billing
     // ============================================================
     {
-      id: "usage-tracking",
-      title: "Track active/idle minutes per API key",
-      gateFile: "./gates/usage-tracking.gate.ts",
-      dependsOn: ["api-key-auth"],
-      progress: ["DONE - Implemented usage tracking in worker"],
+      id: "billing-display",
+      title: "Credit balance displayed on /settings/billing",
+      gateFile: "./gates/production/billing.gate.sh",
+      dependsOn: ["login-flow"],
+      progress: ["DONE — shows 10,000 credits"],
     },
+
+    // ============================================================
+    // CHECKPOINT 5: Polish
+    // ============================================================
     {
-      id: "billing-integration",
-      title: "Stripe integration for usage billing",
-      gateFile: "./gates/billing-integration.gate.ts",
-      dependsOn: ["usage-tracking"],
-      progress: ["DONE - Implemented Stripe integration with prepaid credits"],
+      id: "no-404s",
+      title: "No 404s on critical paths (landing, login, dashboard, session, settings)",
+      gateFile: "./gates/production/visual-regression.gate.sh",
+      progress: ["DONE"],
     },
   ],
 });
