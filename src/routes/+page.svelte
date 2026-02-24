@@ -104,7 +104,7 @@ GET /session/abc-123/files/coverage/</pre>
     <section class="border-t border-neutral-800 pt-8">
       <a href="/docs" class="text-neutral-400 hover:underline ml-2">read the docs</a>
       <span class="text-neutral-600 mx-4">or</span>
-      <a href="/login" class="text-neutral-100 hover:underline">Start executing → </a>
+      <a href="/signup" class="text-neutral-100 hover:underline">Start executing → </a>
     </section>
   </main>
 
