@@ -30,7 +30,7 @@ export const GET: RequestHandler = async ({ locals }: RequestEvent) => {
       startedAt: agentSession.startedAt,
       createdAt: agentSession.createdAt,
       updatedAt: agentSession.updatedAt,
-      nodeCount: sql<number>`(SELECT COUNT(*) FROM agent_node WHERE session_id = ${agentSession.id})`,
+      nodeCount: sql<number>`(SELECT COUNT(*) FROM agent_node WHERE agent_node.session_id = agent_session.id)`,
     })
     .from(agentSession)
     .where(eq(agentSession.userId, locals.user.id))
