@@ -1,17 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import Nav from '$lib/components/Nav.svelte';
   
-  let balance = 0;
-  let apiKeys: { id: string; name: string | null; prefix: string; budgetCap: number | null; creditBalance: number | null }[] = [];
+  type ApiKeyInfo = { id: string; name: string | null; prefix: string; budgetCap: number | null; creditBalance: number | null };
   
-  onMount(async () => {
-    const data = $page.data;
-    balance = data.balance;
-    apiKeys = data.apiKeys;
-  });
+  let { data } = $props<{ data: { balance: number; apiKeys: ApiKeyInfo[]; user?: { email?: string } } }>();
+  
+  let balance = $derived(data.balance ?? 0);
+  let apiKeys = $derived(data.apiKeys ?? []);
   
   async function purchaseCredits(amount: number) {
     try {
@@ -62,7 +59,7 @@
 </script>
 
 <div class="min-h-screen bg-neutral-950 text-neutral-300">
-  <Nav variant="dashboard" current="billing" email={($page).data?.user?.email} />
+  <Nav variant="dashboard" current="billing" email={data.user?.email} />
 
   <main class="max-w-3xl mx-auto px-6 py-12">
     <div class="flex items-center justify-between mb-10">
