@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
+  import Nav from "$lib/components/Nav.svelte";
 
   interface SessionItem {
     id: string;
@@ -97,15 +98,7 @@
 </svelte:head>
 
 <div class="dashboard dark">
-  <header class="topbar">
-    <div class="topbar-left">
-      <span class="logo">filepath</span>
-    </div>
-    <div class="topbar-right">
-      <span class="user-email">{page.data.user?.email ?? ""}</span>
-      <a href="/settings" class="nav-link">Settings</a>
-    </div>
-  </header>
+  <Nav variant="dashboard" email={page.data.user?.email ?? null} />
 
   <main class="main">
     <div class="header-row">
@@ -205,13 +198,7 @@
     --mono: "JetBrains Mono", monospace; --sans: "Outfit", sans-serif;
     min-height: 100vh; background: var(--bg); color: var(--t2); font-family: var(--mono);
   }
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--b1); }
-  .topbar-left { display: flex; align-items: center; gap: 12px; }
-  .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 12px; }
-  .logo { font-family: var(--sans); font-weight: 600; font-size: 16px; color: var(--t1); }
-  .user-email { color: var(--t3); }
-  .nav-link { color: var(--t3); text-decoration: none; }
-  .nav-link:hover { color: var(--t2); }
+
   .main { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
   .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
   .title { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--t1); margin: 0; }
