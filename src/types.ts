@@ -1,44 +1,29 @@
 import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
 
-// Workflow params types
-export interface ExecuteTaskParams {
-  userId: string;
-  sessionId: string;
-  task: string;
-}
-
-export interface CreateSessionParams {
-  userId: string;
-  sessionId: string;
-}
-
 /**
- * Cloudflare Worker environment bindings
+ * Cloudflare Worker environment bindings.
  */
 export interface Env {
-  // D1 Database for user data
+  // D1 Database (auth + session/node metadata)
   DB: D1Database;
-  
-  // Container binding for sandboxes
-  // Using any to avoid complex Sandbox type recursion
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Sandbox: DurableObjectNamespace<any>;
-  
-  // Workflow bindings for long-running tasks
-  EXECUTE_TASK: Workflow<ExecuteTaskParams>;
-  CREATE_SESSION: Workflow<CreateSessionParams>;
-  
-  // Chat Agent DO binding
+
+  // Durable Object bindings
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ChatAgent: DurableObjectNamespace<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TaskAgent: DurableObjectNamespace<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  SESSION_DO: DurableObjectNamespace<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Sandbox: DurableObjectNamespace<any>;
 
   // Environment variables
   BETTER_AUTH_SECRET: string;
+  BETTER_AUTH_URL: string;
+  API_WS_HOST?: string;
   OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
-  BETTER_AUTH_URL: string;
-  API_WS_HOST?: string;
   MAILGUN_API_KEY?: string;
   MAILGUN_DOMAIN?: string;
 }

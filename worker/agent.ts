@@ -1,97 +1,65 @@
 /**
- * Worker entry point using Cloudflare Agents SDK.
- * 
- * This worker handles:
- * - Agent API requests (via Agent Durable Object)
- * - Long-running workflows (via Workflow classes)
- * - Container management (via existing Sandbox binding)
+ * Worker entry point.
+ *
+ * Exports:
+ * - ChatAgent DO (chat + LLM, SQLite persistence)
+ * - TaskAgent DO (legacy, kept for binding)
+ * - SessionDO (stub, kept for binding)
+ * - Sandbox (re-export for Container binding)
+ *
+ * Routes:
+ * - /agents/* → Agent SDK (WebSocket connections to ChatAgent)
+ * - Everything else → 404
  */
 
 import { routeAgentRequest } from 'agents';
-import { TaskAgent } from '../src/agent';
 import { ChatAgent } from '../src/agent/chat-agent';
-import { ExecuteTaskWorkflow } from '../src/agent/workflows/execute-task';
-import { CreateSessionWorkflow } from '../src/agent/workflows/create-session';
-import { handleRequest as handleTerminalRequest, SessionDO, type TerminalEnv } from './index';
+import { TaskAgent } from '../src/agent/index';
+import { SessionDO, Sandbox } from './index';
 import type { Env } from '../src/types';
 
-// Export Durable Object classes
-export { TaskAgent };
+// Export DO classes (Alchemy needs these)
 export { ChatAgent };
+export { TaskAgent };
 export { SessionDO };
+export { Sandbox };
 
-// Export workflow classes with binding names
-export const EXECUTE_TASK = ExecuteTaskWorkflow;
-export const CREATE_SESSION = CreateSessionWorkflow;
-
-// Re-export Sandbox for Container binding
-export { Sandbox } from '@cloudflare/sandbox';
-
-// Helper to route to TaskAgent with proper name headers set
-function routeToTaskAgent(request: Request, env: Env & { TaskAgent: DurableObjectNamespace }, name = 'default'): Promise<Response> {
-  const id = env.TaskAgent.idFromName(name);
-  const agent = env.TaskAgent.get(id);
-  
-  // Create new headers with partykit room header (sets Agent.name)
-  const headers = new Headers(request.headers);
-  headers.set('x-partykit-room', name);
-  headers.set('x-partykit-namespace', 'task-agent');
-  
-  // Create new request with updated headers
-  const req = new Request(request.url, {
-    method: request.method,
-    headers,
-    body: request.body,
-    redirect: request.redirect,
-  });
-  
-  return agent.fetch(req);
-}
-
-// Worker fetch handler routes to Agent Durable Object
 export default {
-  async fetch(request: Request, env: Env & { TaskAgent: DurableObjectNamespace }, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    
-    // Handle CORS preflight
+
+    // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, {
-        status: 204,
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
       });
     }
-    
-    // Route terminal/*, agent-terminal/*, session/*, debug/*, start/stop-agent-slots to terminal handler
-    // These are container/sandbox requests that don't need API key auth
-    if (
-      url.pathname.startsWith('/terminal/') ||
-      url.pathname.startsWith('/agent-terminal/') ||
-      url.pathname.startsWith('/session/') ||
-      url.pathname === '/debug/container' ||
-      url.pathname === '/start-agent-slots' ||
-      url.pathname === '/stop-agent-slots'
-    ) {
-      return handleTerminalRequest(request, env as unknown as TerminalEnv);
-    }
-    
-    // Route /api/orchestrator to TaskAgent DO with proper name headers
-    if (url.pathname.startsWith('/api/orchestrator')) {
-      return routeToTaskAgent(request, env, 'default');
-    }
-    
-    // Route /agents/* via routeAgentRequest for proper SDK handling
+
+    // /agents/* → Agent SDK handles WebSocket upgrade + routing
     if (url.pathname.startsWith('/agents/')) {
       const response = await routeAgentRequest(request, env, {
         cors: true,
       });
       if (response) return response;
     }
-    
-    // Default: route to TaskAgent with proper headers
-    return routeToTaskAgent(request, env, 'default');
+
+    // /api/config → return worker URL for frontend WebSocket connections
+    if (url.pathname === '/api/config') {
+      const workerUrl = env.API_WS_HOST
+        ? `https://${env.API_WS_HOST}`
+        : url.origin;
+      return new Response(JSON.stringify({ workerUrl }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
+    return new Response('Not found', { status: 404 });
   },
 };
