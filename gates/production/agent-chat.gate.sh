@@ -83,6 +83,10 @@ fi
 if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ]; then
   echo -n "4. Chat: send message + get LLM response... "
   
+  # Check if ws module is available
+  if ! node -e "require('ws')" 2>/dev/null; then
+    echo "SKIP (ws module not installed — run 'npm i ws' to enable)"
+  else
   CHAT_RESULT=$(timeout 30 node -e "
     const WebSocket = require('ws');
     const ws = new WebSocket('wss://$(echo $API_URL | sed 's|https://||')/agents/chat-agent/$NODE_ID');
@@ -133,6 +137,7 @@ if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ]; then
   else
     echo "FAIL ($CHAT_RESULT)"
     FAILED=$((FAILED + 1))
+  fi
   fi
 else
   echo "4. Chat... SKIP (no node)"
