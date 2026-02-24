@@ -2,7 +2,7 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { agentSession, agentNode } from "$lib/schema";
 import { eq, and, sql } from "drizzle-orm";
-import type { RequestHandler } from "./$types";
+import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 function generateId(length = 16): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -32,16 +32,17 @@ async function verifySession(
 /**
  * GET /api/sessions/[id]/nodes - List all nodes in a session (flat)
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
 
   const db = getDrizzle();
-  await verifySession(db, params.id, locals.user.id);
+  await verifySession(db, id, locals.user.id);
 
   const nodes = await db
     .select()
     .from(agentNode)
-    .where(eq(agentNode.sessionId, params.id))
+    .where(eq(agentNode.sessionId, id))
     .orderBy(agentNode.sortOrder);
 
   return json({ nodes });
@@ -51,8 +52,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
  * POST /api/sessions/[id]/nodes - Spawn a new agent node
  * Body: { name, agentType, model, parentId?, config? }
  */
-export const POST: RequestHandler = async ({ params, request, locals }) => {
+export const POST: RequestHandler = async ({ params, request, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
 
   const body = (await request.json()) as {
     name: string;
@@ -67,7 +69,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   }
 
   const db = getDrizzle();
-  await verifySession(db, params.id, locals.user.id);
+  await verifySession(db, id, locals.user.id);
 
   // If parentId specified, verify it exists in this session
   if (body.parentId) {
@@ -77,7 +79,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       .where(
         and(
           eq(agentNode.id, body.parentId),
-          eq(agentNode.sessionId, params.id),
+          eq(agentNode.sessionId, id),
         ),
       );
     if (parents.length === 0) throw error(400, "Parent node not found");
@@ -90,7 +92,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
         .from(agentNode)
         .where(
           and(
-            eq(agentNode.sessionId, params.id),
+            eq(agentNode.sessionId, id),
             eq(agentNode.parentId, body.parentId),
           ),
         )
@@ -99,7 +101,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
         .from(agentNode)
         .where(
           and(
-            eq(agentNode.sessionId, params.id),
+            eq(agentNode.sessionId, id),
             sql`${agentNode.parentId} IS NULL`,
           ),
         );
@@ -112,7 +114,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   const nodeId = generateId();
   await db.insert(agentNode).values({
     id: nodeId,
-    sessionId: params.id,
+    sessionId: id,
     parentId: body.parentId || null,
     name: body.name,
     agentType: body.agentType,
@@ -126,13 +128,13 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     const existingRoot = await db
       .select({ rootNodeId: agentSession.rootNodeId })
       .from(agentSession)
-      .where(eq(agentSession.id, params.id));
+      .where(eq(agentSession.id, id));
 
     if (!existingRoot[0]?.rootNodeId) {
       await db
         .update(agentSession)
         .set({ rootNodeId: nodeId })
-        .where(eq(agentSession.id, params.id));
+        .where(eq(agentSession.id, id));
     }
   }
 
