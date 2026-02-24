@@ -7,8 +7,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey } from './schema';
 import { getRequestEvent } from '$app/server';
-import formData from 'form-data';
-import Mailgun from 'mailgun.js';
+// Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
 import type { D1Database, DurableObjectNamespace, Fetcher } from '@cloudflare/workers-types';
 
@@ -111,38 +110,42 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
       }),
       emailOTP({
         sendVerificationOTP: async ({ email, otp, type }) => {
-          const mailgun = new Mailgun(formData);
-          const apiKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
-          const mg: ReturnType<Mailgun['client']> = mailgun.client({
-            username: 'api',
-            key: apiKey as string,
-          });
-
+          const mgKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
           const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
-          
-          // Type assertion for Mailgun client methods
-          const mgClient = mg;
-          
+
+          const sendMail = async (subject: string, text: string, html: string) => {
+            const form = new FormData();
+            form.append('from', `MyFilePath <support@${domain}>`);
+            form.append('to', email);
+            form.append('subject', subject);
+            form.append('text', text);
+            form.append('html', html);
+
+            const resp = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+              method: 'POST',
+              headers: { Authorization: `Basic ${btoa(`api:${mgKey}`)}` },
+              body: form,
+            });
+            if (!resp.ok) {
+              const body = await resp.text();
+              throw new Error(`Mailgun ${resp.status}: ${body}`);
+            }
+          };
+
           try {
             if (type === 'forget-password') {
-              await mgClient.messages.create(domain, {
-                from: `MyFilePath <support@${domain}>`,
-                to: [email],
-                subject: 'Password Reset Request',
-                text: `You requested to reset your password. Use this code: ${otp}`,
-                html: `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
-              });
+              await sendMail(
+                'Password Reset Request',
+                `You requested to reset your password. Use this code: ${otp}`,
+                `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
+              );
             } else if (type === 'email-verification') {
-              // Welcome email for new users
-              await mgClient.messages.create(domain, {
-                from: `MyFilePath <support@${domain}>`,
-                to: [email],
-                subject: 'Welcome to MyFilePath!',
-                text: `Welcome to MyFilePath! Your verification code is: ${otp}\n\nMyFilePath is the platform for agents.`,
-                html: `<h1>Welcome to MyFilePath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>MyFilePath is the platform for agents.</p>`,
-              });
+              await sendMail(
+                'Welcome to MyFilePath!',
+                `Welcome to MyFilePath! Your verification code is: ${otp}\n\nMyFilePath is the platform for agents.`,
+                `<h1>Welcome to MyFilePath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>MyFilePath is the platform for agents.</p>`,
+              );
             }
-            // For sign-in type, we don't send emails in this implementation
           } catch (error) {
             console.error('Error sending email:', error);
             throw error;
