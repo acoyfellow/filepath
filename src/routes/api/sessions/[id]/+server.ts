@@ -2,13 +2,14 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { agentSession, agentNode } from "$lib/schema";
 import { eq, and } from "drizzle-orm";
-import type { RequestHandler } from "./$types";
+import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 /**
  * GET /api/sessions/[id] - Get a single session with its full node tree
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
 
   const db = getDrizzle();
 
@@ -17,7 +18,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     .from(agentSession)
     .where(
       and(
-        eq(agentSession.id, params.id),
+        eq(agentSession.id, id),
         eq(agentSession.userId, locals.user.id),
       ),
     );
@@ -30,7 +31,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   const nodes = await db
     .select()
     .from(agentNode)
-    .where(eq(agentNode.sessionId, params.id))
+    .where(eq(agentNode.sessionId, id))
     .orderBy(agentNode.sortOrder);
 
   // Build tree structure
@@ -54,8 +55,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 /**
  * PATCH /api/sessions/[id] - Update session (name, status, etc.)
  */
-export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
 
   const body = (await request.json()) as {
     name?: string;
@@ -71,7 +73,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
     .from(agentSession)
     .where(
       and(
-        eq(agentSession.id, params.id),
+        eq(agentSession.id, id),
         eq(agentSession.userId, locals.user.id),
       ),
     );
@@ -90,7 +92,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   await db
     .update(agentSession)
     .set(updates)
-    .where(eq(agentSession.id, params.id));
+    .where(eq(agentSession.id, id));
 
   return json({ ok: true });
 };
@@ -98,8 +100,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 /**
  * DELETE /api/sessions/[id] - Delete session (cascades to nodes)
  */
-export const DELETE: RequestHandler = async ({ params, locals }) => {
+export const DELETE: RequestHandler = async ({ params, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
+  const id = params.id!;
 
   const db = getDrizzle();
 
@@ -109,7 +112,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     .from(agentSession)
     .where(
       and(
-        eq(agentSession.id, params.id),
+        eq(agentSession.id, id),
         eq(agentSession.userId, locals.user.id),
       ),
     );
@@ -117,7 +120,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
   if (sessions.length === 0) throw error(404, "Session not found");
 
   // Cascading delete handles nodes
-  await db.delete(agentSession).where(eq(agentSession.id, params.id));
+  await db.delete(agentSession).where(eq(agentSession.id, id));
 
   return json({ ok: true });
 };
