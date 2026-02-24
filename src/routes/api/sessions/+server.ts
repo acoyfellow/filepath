@@ -2,7 +2,7 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { agentSession, agentNode } from "$lib/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import type { RequestHandler } from "./$types";
+import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 function generateId(length = 16): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -16,7 +16,7 @@ function generateId(length = 16): string {
 /**
  * GET /api/sessions - List all agent sessions for the authenticated user
  */
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
 
   const db = getDrizzle();
@@ -43,7 +43,7 @@ export const GET: RequestHandler = async ({ locals }) => {
  * POST /api/sessions - Create a new agent session
  * Body: { name?: string, gitRepoUrl?: string }
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
 
   const body = (await request.json().catch(() => ({}))) as {
