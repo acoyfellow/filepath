@@ -1,5 +1,5 @@
 import { json } from "@sveltejs/kit";
-import type { RequestHandler } from "./$types";
+import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 /**
  * GET /api/models
@@ -62,7 +62,7 @@ function extractProvider(modelId: string): string {
   return providers[prefix] ?? prefix;
 }
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url }: RequestEvent) => {
   const now = Date.now();
 
   // Return cache if fresh
