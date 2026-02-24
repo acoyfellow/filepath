@@ -59,21 +59,41 @@
 
   /** Handle messages from the ChatAgent DO */
   function handleDOMessage(nodeId: string, msg: DOMessage) {
+    // History: full message log from DO SQLite (sent on connect)
+    if (msg.type === 'history' && msg.messages) {
+      const chatMsgs: ChatMsg[] = msg.messages.map(m => ({
+        from: m.role === 'user' ? 'u' as const : 'a' as const,
+        event: { type: 'text' as const, content: m.content },
+      }));
+      messagesByNode = { ...messagesByNode, [nodeId]: chatMsgs };
+      return;
+    }
+
     if (msg.type === 'event' && msg.event) {
+      // Skip status events from being added as chat messages
+      if (msg.event.type === 'status') {
+        // Update node status
+        if (rootNode) {
+          const node = findNode(rootNode, nodeId);
+          if (node) {
+            node.status = msg.event.state as AgentNode['status'];
+            rootNode = rootNode;
+          }
+        }
+        return;
+      }
+
+      // For text events broadcast to other clients, avoid duplicates
+      // (sender already added the user message locally)
+      if (msg.role === 'user') {
+        // This is a user message from another tab — add it
+      }
+
       const existing = messagesByNode[nodeId] ?? [];
       messagesByNode = {
         ...messagesByNode,
-        [nodeId]: [...existing, { from: 'a', event: msg.event }],
+        [nodeId]: [...existing, { from: msg.role === 'user' ? 'u' : 'a', event: msg.event }],
       };
-
-      // Update node status from status events
-      if (msg.event.type === 'status' && rootNode) {
-        const node = findNode(rootNode, nodeId);
-        if (node) {
-          node.status = msg.event.state as AgentNode['status'];
-          rootNode = rootNode; // trigger reactivity
-        }
-      }
 
       // Handle done events
       if (msg.event.type === 'done' && rootNode) {
@@ -82,12 +102,6 @@
           node.status = 'done';
           rootNode = rootNode;
         }
-      }
-
-      // Handle tree updates from spawn events
-      if (msg.event.type === 'spawn' && rootNode) {
-        // The DO handles spawn in D1 and sends a tree_update
-        // We'll handle tree_update below
       }
     } else if (msg.type === 'tree_update' && msg.action === 'spawn' && msg.node) {
       // New child node spawned by the agent
