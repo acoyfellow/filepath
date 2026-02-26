@@ -1,0 +1,21 @@
+# Task 5: Test Container Evidence
+
+## Files Created
+- test-container/Dockerfile
+- test-container/test-agent.js
+
+## Build Test
+✓ Docker image builds successfully: docker build -t test-agent .
+
+## Functionality Test
+✓ Container speaks FAP NDJSON protocol
+✓ Startup message: {"type":"text","content":"Test agent started"}
+✓ Echo test: Input {"type":"message","content":"hello"} → Output {"type":"text","content":"Received: hello"}
+
+## Test Output
+$ echo '{"type":"message","content":"hello"}' | docker run -i test-agent
+{"type":"text","content":"Test agent started"}
+{"type":"text","content":"Received: hello"}
+
+## Status
+✓ COMPLETE - Container ready for ChatAgent DO integration
