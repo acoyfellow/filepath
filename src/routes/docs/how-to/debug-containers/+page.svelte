@@ -48,16 +48,16 @@
 
     <h3 class="text-lg font-medium text-neutral-300 mt-6 mb-3">3. Test Your Container Locally</h3>
     <p class="text-neutral-400 mb-4">For custom agents, test locally first:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"># Pull and test your image locally
-docker run --rm -it \
-  -e FILEPATH_API_KEY="$YOUR_KEY" \
-  -e FILEPATH_TASK="test" \
+    {@html `<pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"># Pull and test your image locally
+docker run --rm -it \\
+  -e FILEPATH_API_KEY="$YOUR_KEY" \\
+  -e FILEPATH_TASK="test" \\
   your-image:tag
 
 # Send test input
-echo '{"type":"message","content":"test"}' | docker run -i \
-  -e FILEPATH_API_KEY="$YOUR_KEY" \
-  your-image:tag</pre>
+echo '{""}"type":"message","content":"test"' | docker run -i \\
+  -e FILEPATH_API_KEY="$YOUR_KEY" \\
+  your-image:tag</pre>`}
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Common Issues & Fixes</h2>
 
@@ -77,11 +77,11 @@ echo '{"type":"message","content":"test"}' | docker run -i \
         <h3 class="font-medium text-neutral-200 mb-2">Issue: Container spawns but no output</h3>
         <p class="text-neutral-400 mb-2"><strong>Causes:</strong> Buffering, wrong format, or silent crash</p>
         <p class="text-neutral-400 mb-2"><strong>Fix — Force stdout flush:</strong></p>
-        <pre class="bg-neutral-950 border border-neutral-800 rounded p-3 text-sm text-neutral-300 overflow-x-auto">// BAD: Buffered output
-console.log(JSON.stringify({...}));
+        {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-3 text-sm text-neutral-300 overflow-x-auto">// BAD: Buffered output
+console.log(JSON.stringify({""}...));
 
 // GOOD: Force flush
-process.stdout.write(JSON.stringify({...}) + '\n');</pre>
+process.stdout.write(JSON.stringify({""}...) + '\\n');</pre>`}
       </div>
 
       <div class="bg-neutral-900/50 border border-neutral-800 rounded p-4">

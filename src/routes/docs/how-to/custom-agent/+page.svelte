@@ -55,7 +55,7 @@ CMD ["node", "index.js"]</pre>
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 2: Write the Agent Code</h2>
     <p class="text-neutral-400 mb-4">Create <code class="bg-neutral-800 px-2 py-1 rounded text-sm">index.js</code>:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">const readline = require('readline');
+    {@html `<pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">const readline = require('readline');
 
 // Read environment variables from filepath
 const task = process.env.FILEPATH_TASK || '';
@@ -71,7 +71,7 @@ console.log(JSON.stringify({
 
 console.log(JSON.stringify({
   type: 'text',
-  content: `Starting task: ${task}`
+  content: \`Starting task: \${task}\`
 }));
 
 // Read user messages from stdin
@@ -89,7 +89,7 @@ rl.on('line', async (line) => {
       // Echo back for demo purposes
       console.log(JSON.stringify({
         type: 'text',
-        content: `Received: ${msg.content}`
+        content: \`Received: \${msg.content}\`
       }));
       
       // Simulate some work
@@ -118,21 +118,20 @@ process.on('SIGTERM', () => {
     state: 'idle'
   }));
   process.exit(0);
-});</pre>
-
+});</pre>`}
     <p class="text-neutral-400 mb-4">Create <code class="bg-neutral-800 px-2 py-1 rounded text-sm">package.json</code>:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">{'{'}"name": "my-custom-agent","version": "1.0.0","main": "index.js"{'}'}</pre>
+    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">{'{'}{""}"name": "my-custom-agent", "version": "1.0.0", "main": "index.js"{'}'}</pre>
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 3: Test Locally</h2>
     <p class="text-neutral-400 mb-4">Build and test your container:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"># Build
+    {@html `<pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"># Build
 docker build -t my-custom-agent .
 
 # Test locally
-echo '{"type":"message","content":"hello"}' | docker run -i \
-  -e FILEPATH_TASK="Test task" \
-  -e FILEPATH_API_KEY="sk-test" \
-  my-custom-agent</pre>
+echo '{""}"type":"message","content":"hello"' | docker run -i \\
+  -e FILEPATH_TASK="Test task" \\
+  -e FILEPATH_API_KEY="sk-test" \\
+  my-custom-agent</pre>`}
 
     <p class="text-neutral-400 mb-4">You should see NDJSON output.</p>
 
