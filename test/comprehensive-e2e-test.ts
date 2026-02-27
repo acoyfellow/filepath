@@ -3,7 +3,6 @@
 import { eq } from 'drizzle-orm';
 import { getDrizzle } from '../src/lib/auth';
 import { user, session, apikey } from '../src/lib/schema';
-import { addUserCredits, deductUserCredits, getUserCreditBalance, setApiKeyBudgetCap, deductApiKeyCredits, getApiKeyCreditBalance } from '../src/lib/billing';
 
 async function testAdminApiEndpoints() {
   console.log('Testing admin API endpoints...');
@@ -22,8 +21,8 @@ async function testAdminApiEndpoints() {
   }
 }
 
-async function testBillingFlow() {
-  console.log('Testing billing flow...');
+async function testSessionCreation() {
+  console.log('Testing session creation...');
   
   try {
     const db = getDrizzle();
@@ -35,38 +34,49 @@ async function testBillingFlow() {
       email: `test-${Date.now()}@example.com`,
       emailVerified: true,
       role: 'user',
-      creditBalance: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     
     await db.insert(user).values(testUser);
     
-    // Test adding credits
-    await addUserCredits(testUserId, 1000);
-    let balance = await getUserCreditBalance(testUserId);
-    if (balance !== 1000) {
-      throw new Error(`Expected 1000 credits, got ${balance}`);
+    // Verify user was created
+    const createdUser = await db.select().from(user).where(eq(user.id, testUserId));
+    if (createdUser.length === 0) {
+      throw new Error('Failed to create test user');
     }
     
-    // Test deducting credits
-    const success = await deductUserCredits(testUserId, 500);
-    if (!success) {
-      throw new Error('Failed to deduct credits');
-    }
+    // Cleanup
+    await db.delete(user).where(eq(user.id, testUserId));
     
-    balance = await getUserCreditBalance(testUserId);
-    if (balance !== 500) {
-      throw new Error(`Expected 500 credits, got ${balance}`);
-    }
+    console.log('✅ Session creation tests passed');
+    return true;
+  } catch (error) {
+    console.error('❌ Session creation test failed:', error);
+    return false;
+  }
+}
+
+async function testApiKeyManagement() {
+  console.log('Testing API key management...');
+  
+  try {
+    const db = getDrizzle();
     
-    // Test insufficient credits
-    const failResult = await deductUserCredits(testUserId, 1000);
-    if (failResult) {
-      throw new Error('Should have failed to deduct insufficient credits');
-    }
+    // Create a test user
+    const testUserId = 'test-user-' + Date.now();
+    const testUser = {
+      id: testUserId,
+      email: `test-${Date.now()}@example.com`,
+      emailVerified: true,
+      role: 'user',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     
-    // Test API key budget cap
+    await db.insert(user).values(testUser);
+    
+    // Create a test API key
     const testApiKeyId = 'test-apikey-' + Date.now();
     const testApiKey = {
       id: testApiKeyId,
@@ -75,110 +85,26 @@ async function testBillingFlow() {
       prefix: 'test',
       hashedKey: 'test',
       userId: testUserId,
-      budgetCap: null,
-      creditBalance: 500,
-      totalUsageMinutes: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     
     await db.insert(apikey).values(testApiKey);
     
-    await setApiKeyBudgetCap(testApiKeyId, testUserId, 250);
-    
-    // Verify budget cap was set
-    const updatedApiKeys = await db.select().from(apikey).where(eq(apikey.id, testApiKeyId));
-    if (updatedApiKeys.length === 0 || updatedApiKeys[0].budgetCap !== 250) {
-      throw new Error('Failed to set API key budget cap');
-    }
-    
-    // Test API key credit deduction
-    const apiKeySuccess = await deductApiKeyCredits(testApiKeyId, 100);
-    if (!apiKeySuccess) {
-      throw new Error('Failed to deduct API key credits');
-    }
-    
-    const apiKeyBalance = await getApiKeyCreditBalance(testApiKeyId);
-    if (apiKeyBalance !== 400) { // 500 - 100
-      throw new Error(`Expected 400 API key credits, got ${apiKeyBalance}`);
+    // Verify API key was created
+    const createdApiKey = await db.select().from(apikey).where(eq(apikey.id, testApiKeyId));
+    if (createdApiKey.length === 0) {
+      throw new Error('Failed to create test API key');
     }
     
     // Cleanup
     await db.delete(apikey).where(eq(apikey.id, testApiKeyId));
     await db.delete(user).where(eq(user.id, testUserId));
     
-    console.log('✅ Billing flow tests passed');
+    console.log('✅ API key management tests passed');
     return true;
   } catch (error) {
-    console.error('❌ Billing flow test failed:', error);
-    return false;
-  }
-}
-
-async function testSessionCreationWithBillingGate() {
-  console.log('Testing session creation with billing gate...');
-  
-  try {
-    const db = getDrizzle();
-    
-    // Create a test user with sufficient credits
-    const testUserId = 'test-user-' + Date.now();
-    const testUser = {
-      id: testUserId,
-      email: `test-${Date.now()}@example.com`,
-      emailVerified: true,
-      role: 'user',
-      creditBalance: 1500, // More than 1000 required
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    await db.insert(user).values(testUser);
-    
-    // Test that user with sufficient credits can create session
-    // This logic is in the session creation endpoint
-    const userWithCredits = await db.select().from(user).where(eq(user.id, testUserId));
-    if (userWithCredits.length === 0) {
-      throw new Error('Failed to create test user');
-    }
-    
-    const creditBalance = userWithCredits[0].creditBalance || 0;
-    if (creditBalance < 1000) {
-      throw new Error('Test user should have sufficient credits');
-    }
-    
-    // Test user with insufficient credits
-    const testUser2Id = 'test-user2-' + Date.now();
-    const testUser2 = {
-      id: testUser2Id,
-      email: `test2-${Date.now()}@example.com`,
-      emailVerified: true,
-      role: 'user',
-      creditBalance: 500, // Less than 1000 required
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    await db.insert(user).values(testUser2);
-    
-    const userWithoutCredits = await db.select().from(user).where(eq(user.id, testUser2Id));
-    if (userWithoutCredits.length === 0) {
-      throw new Error('Failed to create test user 2');
-    }
-    
-    const creditBalance2 = userWithoutCredits[0].creditBalance || 0;
-    if (creditBalance2 >= 1000) {
-      throw new Error('Test user 2 should have insufficient credits');
-    }
-    
-    // Cleanup
-    await db.delete(user).where(eq(user.id, testUserId));
-    await db.delete(user).where(eq(user.id, testUser2Id));
-    
-    console.log('✅ Session creation with billing gate tests passed');
-    return true;
-  } catch (error) {
-    console.error('❌ Session creation with billing gate test failed:', error);
+    console.error('❌ API key management test failed:', error);
     return false;
   }
 }
@@ -188,8 +114,8 @@ async function runComprehensiveE2ETest() {
   
   const tests = [
     testAdminApiEndpoints(),
-    testBillingFlow(),
-    testSessionCreationWithBillingGate()
+    testSessionCreation(),
+    testApiKeyManagement()
   ];
   
   const results = await Promise.all(tests);

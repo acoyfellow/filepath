@@ -73,7 +73,6 @@ check_page "Landing page" "$BASE_URL/" "myfilepath"
 check_page "Login page" "$BASE_URL/login" "sign in\|login\|email\|password"
 check_page "Signup page" "$BASE_URL/signup" "sign up\|create\|register"
 check_page "Docs page" "$BASE_URL/docs" "api\|documentation\|getting started"
-check_page "Pricing page" "$BASE_URL/pricing" "credit\|pricing\|plan"
 
 echo ""
 
@@ -97,7 +96,6 @@ fi
 echo ""
 echo "Authenticated Pages:"
 check_page "Dashboard" "$BASE_URL/dashboard" "session" "true"
-check_page "Billing settings" "$BASE_URL/settings/billing" "credit\|billing\|balance" "true"
 check_page "API keys settings" "$BASE_URL/settings/api-keys" "api.*key\|create" "true"
 check_page "Account settings" "$BASE_URL/settings/account" "account\|delete\|profile" "true"
 

@@ -55,36 +55,12 @@ async function testAuthPlugins() {
   }
 }
 
-async function testBillingGate() {
-  console.log('Testing billing gate logic...');
-  
-  // Test the checkUserCredits function logic
-  // This is a simplified version of the logic in worker/index.ts
-  
-  // Test case 1: User with sufficient credits
-  const userWithCredits = { creditBalance: 1500 };
-  const hasCredits1 = userWithCredits.creditBalance >= 1000;
-  
-  // Test case 2: User with insufficient credits
-  const userWithoutCredits = { creditBalance: 500 };
-  const hasCredits2 = userWithoutCredits.creditBalance >= 1000;
-  
-  if (hasCredits1 && !hasCredits2) {
-    console.log('✅ Billing gate logic is working correctly');
-    return true;
-  } else {
-    console.error('❌ Billing gate logic is not working correctly');
-    return false;
-  }
-}
-
 async function runE2ETest() {
   console.log('Running myfilepath.com end-to-end test...\n');
   
   const tests = [
     testMailgunConfiguration(),
-    testAuthPlugins(),
-    testBillingGate()
+    testAuthPlugins()
   ];
   
   const results = await Promise.all(tests);

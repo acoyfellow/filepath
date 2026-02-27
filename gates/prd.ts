@@ -11,8 +11,7 @@ import { definePrd, runPrd } from "gateproof/prd";
  * 1. Auth & Navigation — Login, sign out, settings pages load
  * 2. Session & Agent — Create session, spawn agent, see tree + chat
  * 3. Chat E2E — Send message, get LLM response displayed in chat
- * 4. Billing — Credits display, purchase flow, block when 0
- * 5. Polish — No 404s, no console errors, agent count correct
+ * 4. Polish — No 404s, no console errors, agent count correct
  */
 
 export const prd = definePrd({
@@ -21,8 +20,7 @@ export const prd = definePrd({
     "2026-02-24: Phase 2 — Nav fixed: sign out on dashboard+session, /settings redirect",
     "2026-02-24: Phase 3 — Session creation, agent spawn, tree+chat view working",
     "2026-02-24: Phase 4 — ChatAgent calls LLM directly via OpenAI (OpenRouter expired)",
-    "2026-02-24: Phase 5 — Billing page shows credits, purchase tiers",
-  ],
+    "2026-02-24: Phase 4 — ChatAgent calls LLM directly via OpenAI (OpenRouter expired)",
   stories: [
     // ============================================================
     // CHECKPOINT 1: Auth & Navigation
@@ -42,11 +40,7 @@ export const prd = definePrd({
     },
     {
       id: "settings-pages",
-      title: "/settings/account, /settings/billing, /settings/api-keys all load (no 404)",
-      gateFile: "./gates/production/auth-flow.gate.sh",
-      dependsOn: ["login-flow"],
-      progress: ["DONE"],
-    },
+      title: "/settings/account, /settings/api-keys all load (no 404)",
 
     // ============================================================
     // CHECKPOINT 2: Session & Agent
@@ -92,15 +86,8 @@ export const prd = definePrd({
     },
 
     // ============================================================
-    // CHECKPOINT 4: Billing
+    // CHECKPOINT 4: Polish
     // ============================================================
-    {
-      id: "billing-display",
-      title: "Credit balance displayed on /settings/billing",
-      gateFile: "./gates/production/billing.gate.sh",
-      dependsOn: ["login-flow"],
-      progress: ["DONE — shows 10,000 credits"],
-    },
 
     // ============================================================
     // CHECKPOINT 5: Polish

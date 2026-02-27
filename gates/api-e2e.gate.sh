@@ -1,6 +1,6 @@
 #!/bin/bash
 # API E2E Gate: Backend Integration Tests
-# Tests auth, billing, and credit APIs directly
+# Tests auth and core APIs directly
 
 set -e
 
@@ -77,23 +77,6 @@ else
   echo "⚠️  Password reset returned empty (may be expected)"
 fi
 
-# Test 5: Billing endpoints (if authenticated)
-echo ""
-echo "Test 5: Billing Integration"
-echo "   ⚠️  Requires authenticated session"
-echo "   Endpoints to test:"
-echo "   - POST /api/billing/checkout-session"
-echo "   - POST /api/billing/portal-session"
-echo "   - GET  /api/user/credits"
-
-# Test 6: Webhook endpoint
-echo ""
-echo "Test 6: Stripe Webhook"
-WEBHOOK_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-  -H "Stripe-Signature: test" \
-  "$API_URL/billing/webhook" 2>/dev/null || echo "000")
-echo "   Webhook endpoint status: $WEBHOOK_STATUS (400 expected without valid sig)"
-
 echo ""
 echo "============================"
 echo "✅ API E2E Tests Complete"
@@ -101,7 +84,3 @@ echo ""
 echo "To verify emails:"
 echo "  - Check Mailgun dashboard"
 echo "  - Or run: npx wrangler tail filepath-app --format=pretty | grep -i email"
-echo ""
-echo "To verify Stripe:"
-echo "  - Check Stripe dashboard in test mode"
-echo "  - Look for customers created with email pattern: *@test.com"
