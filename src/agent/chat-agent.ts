@@ -153,8 +153,10 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   }
 
   onClose(_connection: Connection, _code: number, _reason: string, _wasClean: boolean): void {
-    // Stop all containers when connection closes
-    void this.stopAllContainers();
+    // Only stop containers when the last connection closes
+    if ([...this.getConnections()].length === 0) {
+      void this.stopAllContainers();
+    }
   }
 
   // ─── Node initialization ──────────────────────────────
@@ -218,7 +220,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       FILEPATH_SESSION_ID: row.session_id,
     };
 
-    const command = ADAPTER_COMMANDS[row.agent_type] || ADAPTER_COMMANDS['shelley'];
+    const command = ADAPTER_COMMANDS[row.agent_type] ?? ADAPTER_COMMANDS['shelley'];
     const proc = await sandbox.startProcess(command, {
       env: envVars,
       cwd: '/workspace',
@@ -322,18 +324,18 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     const history = this.loadMessages();
     const llmMessages = history.map(m => ({ role: m.role, content: m.content }));
 
-    // Resolve provider + model
-    const { apiUrl, apiKey, model, headers } = this.resolveProvider();
-
-    if (!apiKey) {
-      const errMsg = "No OPENROUTER_API_KEY configured.";
-      this.saveMessage("assistant", `⚠️ ${errMsg}`);
-      connection.send(JSON.stringify({ type: "error", message: errMsg }));
-      this.broadcastStatus("idle");
-      return;
-    }
-
     try {
+      // Resolve provider + model
+      const { apiUrl, apiKey, model, headers } = this.resolveProvider();
+
+      if (!apiKey) {
+        const errMsg = "No OPENROUTER_API_KEY configured.";
+        this.saveMessage("assistant", `⚠️ ${errMsg}`);
+        connection.send(JSON.stringify({ type: "error", message: errMsg }));
+        this.broadcastStatus("idle");
+        return;
+      }
+
       let response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json", ...headers },
