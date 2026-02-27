@@ -15,6 +15,7 @@ export const user = sqliteTable("user", {
   image: text("image"),
   banned: integer("banned", { mode: "boolean" }).default(false),
   role: text("role"),
+  openrouterApiKey: text("openrouter_api_key"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -220,6 +221,8 @@ export const agentSession = sqliteTable(
     status: text("status").notNull().default("draft"),
     // 'draft' | 'running' | 'paused' | 'stopped' | 'error'
     rootNodeId: text("root_node_id"),
+    apiKey: text("api_key"),
+    // Per-session OpenRouter key override (encrypted). Null = use account key.
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
     lastBilledAt: integer("last_billed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })

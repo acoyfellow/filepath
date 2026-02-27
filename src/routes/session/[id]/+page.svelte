@@ -5,7 +5,7 @@
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
   import SpawnModal from "$lib/components/session/SpawnModal.svelte";
-  import type { AgentNode, AgentType, AgentNodeConfig } from "$lib/types/session";
+  import type { AgentNode, AgentType, AgentNodeConfig, SpawnRequest } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
   import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
   import { page } from "$app/stores";
@@ -257,7 +257,7 @@
     }
   }
 
-  async function handleSpawn(req: { name: string; agentType: AgentType; model: string }) {
+  async function handleSpawn(req: SpawnRequest) {
     const parentId = selectedAgent?.id ?? rootNode?.id;
 
     const res = await fetch(`/api/sessions/${sessionId}/nodes`, {
@@ -268,6 +268,7 @@
         agentType: req.agentType,
         model: req.model,
         parentId,
+        apiKey: req.apiKey,
       }),
     });
 

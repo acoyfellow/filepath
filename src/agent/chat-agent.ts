@@ -6,6 +6,7 @@ import type { AgentEventType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { ADAPTER_COMMANDS, buildAgentEnv } from '$lib/agents/adapters';
 import type { AgentType } from '$lib/types/session';
+import { decryptApiKey } from '$lib/crypto';
 
 /**
  * ChatAgent — Durable Object for a single agent node.
@@ -26,6 +27,8 @@ export interface ChatAgentState {
   agentType: string;
   model: string;
   initialized: boolean;
+  /** Resolved API key source for logging (not the key itself) */
+  keySource?: 'session' | 'user' | 'env';
 }
 
 interface MessageRow {
@@ -164,13 +167,18 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   private async initFromNode(nodeId: string, sessionId?: string): Promise<void> {
     try {
       const row = await this.env.DB.prepare(
-        `SELECT n.agent_type, n.model, s.id as session_id
+        `SELECT n.agent_type, n.model, s.id as session_id, s.api_key as session_api_key,
+                s.user_id, u.openrouter_api_key as user_api_key
          FROM agent_node n JOIN agent_session s ON n.session_id = s.id
+         JOIN user u ON s.user_id = u.id
          WHERE n.id = ?`
       ).bind(nodeId).first<{
         agent_type: string;
         model: string;
         session_id: string;
+        session_api_key: string | null;
+        user_id: string;
+        user_api_key: string | null;
       }>();
 
       if (row) {
@@ -192,19 +200,36 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   private async spawnContainer(nodeId: string): Promise<void> {
     // Get node config from D1
     const row = await this.env.DB.prepare(
-      `SELECT n.agent_type, n.model, n.name, s.id as session_id
+      `SELECT n.agent_type, n.model, n.name, s.id as session_id,
+              s.api_key as session_key, u.openrouter_api_key as user_key
        FROM agent_node n JOIN agent_session s ON n.session_id = s.id
+       JOIN user u ON s.user_id = u.id
        WHERE n.id = ?`
     ).bind(nodeId).first<{
       agent_type: string;
       model: string;
       name: string;
       session_id: string;
+      session_key: string | null;
+      user_key: string | null;
     }>();
 
     if (!row) throw new Error(`Node ${nodeId} not found in D1`);
 
     console.log(`[ChatAgent] Spawning container for node ${nodeId} (${row.agent_type})`);
+
+    // Resolve API key for the container (same priority as callLLM)
+    let containerApiKey = '';
+    const secret = this.env.BETTER_AUTH_SECRET;
+    if (row.session_key && secret) {
+      try { containerApiKey = await decryptApiKey(row.session_key, secret); } catch { /* skip */ }
+    }
+    if (!containerApiKey && row.user_key && secret) {
+      try { containerApiKey = await decryptApiKey(row.user_key, secret); } catch { /* skip */ }
+    }
+    if (!containerApiKey) {
+      containerApiKey = this.env.OPENROUTER_API_KEY || '';
+    }
 
     const sandbox = getSandbox(this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0], nodeId);
 
@@ -212,7 +237,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       ...buildAgentEnv({
         agentType: row.agent_type as AgentType,
         model: row.model,
-        apiKey: this.env.OPENROUTER_API_KEY || '',
+        apiKey: containerApiKey,
         task: row.name || '',
         workspacePath: '/workspace',
       }),
@@ -326,7 +351,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
     try {
       // Resolve provider + model
-      const { apiUrl, apiKey, model, headers } = this.resolveProvider();
+      const { apiUrl, apiKey, model, headers } = await this.resolveProvider();
 
       if (!apiKey) {
         const errMsg = "No API key configured. Add your provider key in Settings → API Keys to continue.";
@@ -522,12 +547,67 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     return `You are a helpful AI assistant running on filepath, an agent orchestration platform. You are agent type "${agentType}" using model "${model}". Be concise and helpful.`;
   }
 
-  private resolveProvider(): { apiUrl: string; apiKey: string; model: string; headers: Record<string, string> } {
+  /**
+   * Resolve API key with priority:
+   *   1. Session-specific key (per-session BYOK override)
+   *   2. User's account key (set in Settings → API Keys)
+   *   3. Global env key (OPENROUTER_API_KEY — e2e tests only)
+   *   4. Empty string → callLLM will show clear error
+   */
+  private async resolveProvider(): Promise<{ apiUrl: string; apiKey: string; model: string; headers: Record<string, string> }> {
     const rawModel = this.state?.model || "claude-sonnet-4";
+    const sessionId = this.state?.sessionId;
 
-    // OpenRouter is required — no fallback
-    if (!this.env.OPENROUTER_API_KEY) {
-      throw new Error("OPENROUTER_API_KEY is required");
+    let resolvedKey = "";
+    let keySource: 'session' | 'user' | 'env' | undefined;
+
+    // Try to resolve key from D1 (session → user)
+    if (sessionId) {
+      try {
+        const row = await this.env.DB.prepare(
+          `SELECT s.api_key as session_key, u.openrouter_api_key as user_key
+           FROM agent_session s
+           JOIN user u ON s.user_id = u.id
+           WHERE s.id = ?`
+        ).bind(sessionId).first<{
+          session_key: string | null;
+          user_key: string | null;
+        }>();
+
+        const secret = this.env.BETTER_AUTH_SECRET;
+
+        if (row?.session_key && secret) {
+          // Priority 1: Session-specific key
+          try {
+            resolvedKey = await decryptApiKey(row.session_key, secret);
+            keySource = 'session';
+          } catch {
+            console.warn(`[ChatAgent] Failed to decrypt session key for ${sessionId}`);
+          }
+        }
+
+        if (!resolvedKey && row?.user_key && secret) {
+          // Priority 2: User's account key
+          try {
+            resolvedKey = await decryptApiKey(row.user_key, secret);
+            keySource = 'user';
+          } catch {
+            console.warn(`[ChatAgent] Failed to decrypt user key for session ${sessionId}`);
+          }
+        }
+      } catch (err) {
+        console.error(`[ChatAgent] Key resolution DB error:`, err);
+      }
+    }
+
+    if (!resolvedKey && this.env.OPENROUTER_API_KEY) {
+      // Priority 3: Global env key (e2e tests / dev)
+      resolvedKey = this.env.OPENROUTER_API_KEY;
+      keySource = 'env';
+    }
+
+    if (keySource) {
+      console.log(`[ChatAgent] Using ${keySource} API key for session ${sessionId}`);
     }
 
     const modelMap: Record<string, string> = {
@@ -541,7 +621,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-      apiKey: this.env.OPENROUTER_API_KEY,
+      apiKey: resolvedKey,
       model: modelMap[rawModel] || rawModel,
       headers: { "HTTP-Referer": "https://myfilepath.com", "X-Title": "filepath" },
     };

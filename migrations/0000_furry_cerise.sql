@@ -43,6 +43,7 @@ CREATE TABLE `agent_session` (
 	`git_repo_url` text,
 	`status` text DEFAULT 'draft' NOT NULL,
 	`root_node_id` text,
+	`api_key` text,
 	`started_at` integer,
 	`last_billed_at` integer,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
@@ -119,6 +120,7 @@ CREATE TABLE `user` (
 	`image` text,
 	`banned` integer DEFAULT false,
 	`role` text,
+	`openrouter_api_key` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );

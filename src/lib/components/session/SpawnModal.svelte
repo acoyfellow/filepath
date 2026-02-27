@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { AgentType, SpawnRequest } from "$lib/types/session";
 
   interface Props {
@@ -34,6 +35,28 @@
   let model = $state(lastModel);
   let modelFilter = $state("");
 
+  // BYOK state
+  let hasAccountKey = $state(false);
+  let accountKeyMasked = $state<string | null>(null);
+  let keyMode = $state<'account' | 'session'>('account');
+  let sessionKey = $state('');
+  let keyLoading = $state(true);
+
+  onMount(async () => {
+    try {
+      const res = await fetch('/api/user/keys');
+      if (res.ok) {
+        const data = await res.json() as { openrouter: string | null };
+        if (data.openrouter) {
+          hasAccountKey = true;
+          accountKeyMasked = data.openrouter;
+        }
+      }
+    } catch { /* ignore */ } finally {
+      keyLoading = false;
+    }
+  });
+
   let filteredModels = $derived(
     modelFilter
       ? MODELS.filter(m => m.toLowerCase().includes(modelFilter.toLowerCase()))
@@ -42,7 +65,11 @@
 
   function handleSpawn() {
     if (!name.trim()) return;
-    onspawn({ name: name.trim(), agentType: agent, model });
+    const req: SpawnRequest = { name: name.trim(), agentType: agent, model };
+    if (keyMode === 'session' && sessionKey.trim()) {
+      req.apiKey = sessionKey.trim();
+    }
+    onspawn(req);
   }
 
   function handleBackdrop(e: MouseEvent) {
@@ -90,6 +117,38 @@
           </button>
         {/each}
       </div>
+
+      <label class="modal-label">api key</label>
+      {#if keyLoading}
+        <div class="modal-key-info">loading...</div>
+      {:else if hasAccountKey}
+        <div class="modal-options">
+          <button class="modal-option" class:on={keyMode === 'account'} onclick={() => { keyMode = 'account'; }}>
+            account key ({accountKeyMasked})
+          </button>
+          <button class="modal-option" class:on={keyMode === 'session'} onclick={() => { keyMode = 'session'; }}>
+            different key
+          </button>
+        </div>
+        {#if keyMode === 'session'}
+          <input
+            class="modal-input modal-key-input"
+            type="password"
+            placeholder="sk-or-v1-..."
+            bind:value={sessionKey}
+          />
+        {/if}
+      {:else}
+        <input
+          class="modal-input modal-key-input"
+          type="password"
+          placeholder="sk-or-v1-... (or set in Settings)"
+          bind:value={sessionKey}
+        />
+        <div class="modal-key-info">
+          No account key set. <a href="/settings/account" class="modal-key-link">Add in Settings</a> or enter one for this session.
+        </div>
+      {/if}
     </div>
     <div class="modal-footer">
       <button class="modal-cancel" onclick={onclose}>cancel</button>
@@ -228,5 +287,24 @@
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
+  }
+  .modal-key-input {
+    margin-top: 6px;
+    font-family: monospace;
+    font-size: 11px;
+  }
+  .modal-key-info {
+    font-family: var(--m);
+    font-size: 10px;
+    color: var(--t5);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .modal-key-link {
+    color: var(--t3);
+    text-decoration: underline;
+  }
+  .modal-key-link:hover {
+    color: var(--t1);
   }
 </style>

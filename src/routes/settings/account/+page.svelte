@@ -1,8 +1,10 @@
 <script lang="ts">
   import { authClient } from '$lib/auth-client';
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import Nav from '$lib/components/Nav.svelte';
 
+  // ─── Delete account state ───
   let showDeleteDialog = $state(false);
   let password = $state('');
   let confirmText = $state('');
@@ -10,6 +12,85 @@
   let error = $state('');
 
   const CONFIRM_PHRASE = 'delete my account';
+
+  // ─── Provider API Keys state ───
+  let openrouterKey = $state('');
+  let maskedKey = $state<string | null>(null);
+  let keyLoading = $state(true);
+  let keySaving = $state(false);
+  let keyError = $state('');
+  let keySuccess = $state('');
+  let showKeyInput = $state(false);
+
+  onMount(async () => {
+    try {
+      const res = await fetch('/api/user/keys');
+      if (res.ok) {
+        const data = await res.json() as { openrouter: string | null };
+        maskedKey = data.openrouter;
+      }
+    } catch {
+      // silently fail on load
+    } finally {
+      keyLoading = false;
+    }
+  });
+
+  async function saveKey() {
+    keySaving = true;
+    keyError = '';
+    keySuccess = '';
+
+    try {
+      const res = await fetch('/api/user/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'openrouter', key: openrouterKey.trim() || null }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ message: 'Failed to save' })) as { message?: string };
+        keyError = errData.message || 'Failed to save key';
+        return;
+      }
+
+      const data = await res.json() as { masked: string | null };
+      maskedKey = data.masked;
+      openrouterKey = '';
+      showKeyInput = false;
+      keySuccess = maskedKey ? 'Key saved' : 'Key removed';
+      setTimeout(() => { keySuccess = ''; }, 3000);
+    } catch (err) {
+      keyError = err instanceof Error ? err.message : 'Failed to save key';
+    } finally {
+      keySaving = false;
+    }
+  }
+
+  async function removeKey() {
+    openrouterKey = '';
+    keySaving = true;
+    keyError = '';
+
+    try {
+      const res = await fetch('/api/user/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'openrouter', key: null }),
+      });
+
+      if (res.ok) {
+        maskedKey = null;
+        showKeyInput = false;
+        keySuccess = 'Key removed';
+        setTimeout(() => { keySuccess = ''; }, 3000);
+      }
+    } catch {
+      keyError = 'Failed to remove key';
+    } finally {
+      keySaving = false;
+    }
+  }
 
   async function handleDelete() {
     if (confirmText.toLowerCase() !== CONFIRM_PHRASE) {
@@ -55,6 +136,75 @@
       <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Account information</h2>
       <div class="bg-neutral-900 border border-neutral-800 rounded p-5">
         <p class="text-neutral-400 text-sm">Your account details are managed through your profile settings.</p>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Provider API Keys</h2>
+      <div class="bg-neutral-900 border border-neutral-800 rounded p-5">
+        <p class="text-neutral-400 text-sm mb-4">
+          Bring your own API key. Your key is encrypted at rest and never shared.
+        </p>
+
+        <div class="mb-2">
+          <label for="openrouter-key" class="text-xs text-neutral-500 uppercase tracking-wide">OpenRouter API Key</label>
+        </div>
+
+        {#if keyLoading}
+          <p class="text-neutral-600 text-sm">Loading...</p>
+        {:else if maskedKey && !showKeyInput}
+          <div class="flex items-center gap-3">
+            <code class="text-sm text-neutral-400 bg-neutral-950 px-3 py-2 rounded border border-neutral-800 font-mono">{maskedKey}</code>
+            <button
+              onclick={() => { showKeyInput = true; openrouterKey = ''; }}
+              class="px-3 py-1.5 text-xs text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors cursor-pointer"
+            >
+              change
+            </button>
+            <button
+              onclick={removeKey}
+              disabled={keySaving}
+              class="px-3 py-1.5 text-xs text-red-400/70 border border-neutral-800 rounded hover:border-red-900 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              remove
+            </button>
+          </div>
+        {:else}
+          <div class="flex gap-2">
+            <input
+              id="openrouter-key"
+              type="password"
+              placeholder="sk-or-v1-..."
+              bind:value={openrouterKey}
+              class="flex-1 px-3 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm text-neutral-200 placeholder:text-neutral-700 focus:outline-none focus:border-neutral-600 font-mono"
+            />
+            <button
+              onclick={saveKey}
+              disabled={keySaving || !openrouterKey.trim()}
+              class="px-4 py-2 text-sm text-neutral-200 bg-neutral-800 border border-neutral-700 rounded hover:bg-neutral-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {keySaving ? 'saving...' : 'save'}
+            </button>
+            {#if showKeyInput}
+              <button
+                onclick={() => { showKeyInput = false; openrouterKey = ''; keyError = ''; }}
+                class="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-300 cursor-pointer"
+              >
+                cancel
+              </button>
+            {/if}
+          </div>
+          <p class="text-neutral-600 text-xs mt-2">
+            Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-neutral-400 underline hover:text-neutral-300">openrouter.ai/keys</a>
+          </p>
+        {/if}
+
+        {#if keyError}
+          <p class="text-red-400 text-sm mt-2">{keyError}</p>
+        {/if}
+        {#if keySuccess}
+          <p class="text-green-400/70 text-sm mt-2">{keySuccess}</p>
+        {/if}
       </div>
     </section>
 

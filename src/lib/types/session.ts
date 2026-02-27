@@ -70,6 +70,8 @@ export interface SpawnRequest {
   agentType: AgentType;
   model: string;
   parentId?: string;
+  /** Per-session API key override (plaintext, will be encrypted server-side) */
+  apiKey?: string;
 }
 
 // ============================================================

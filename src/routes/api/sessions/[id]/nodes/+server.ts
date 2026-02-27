@@ -2,6 +2,7 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { agentSession, agentNode } from "$lib/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { encryptApiKey } from "$lib/crypto";
 import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
 
 function generateId(length = 16): string {
@@ -52,7 +53,7 @@ export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
  * POST /api/sessions/[id]/nodes - Spawn a new agent node
  * Body: { name, agentType, model, parentId?, config? }
  */
-export const POST: RequestHandler = async ({ params, request, locals }: RequestEvent) => {
+export const POST: RequestHandler = async ({ params, request, locals, platform }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
   const id = params.id!;
 
@@ -62,6 +63,7 @@ export const POST: RequestHandler = async ({ params, request, locals }: RequestE
     model: string;
     parentId?: string;
     config?: Record<string, unknown>;
+    apiKey?: string;
   };
 
   if (!body.name || !body.agentType || !body.model) {
@@ -122,6 +124,18 @@ export const POST: RequestHandler = async ({ params, request, locals }: RequestE
     config: JSON.stringify(body.config || {}),
     sortOrder: nextSort,
   });
+
+  // If a per-session API key was provided, encrypt and store on session
+  if (body.apiKey) {
+    const secret = (platform?.env as Record<string, string>)?.BETTER_AUTH_SECRET;
+    if (secret) {
+      const encrypted = await encryptApiKey(body.apiKey.trim(), secret);
+      await db
+        .update(agentSession)
+        .set({ apiKey: encrypted })
+        .where(eq(agentSession.id, id));
+    }
+  }
 
   // If this is the first node (root), set it as rootNodeId
   if (!body.parentId) {
