@@ -29,3 +29,4 @@ dist/
 # Screenshots and previews
 e2e-screenshots/
 preview/
+.sisyphus
