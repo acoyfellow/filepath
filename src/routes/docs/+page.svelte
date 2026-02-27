@@ -3,127 +3,127 @@
 </script>
 
 <svelte:head>
-  <title>Docs - myfilepath.com</title>
+  <title>Documentation | filepath</title>
+  <meta name="description" content="Learn how to use filepath: agent orchestration platform with tree-structured conversations, real-time chat, and bring-your-own-key model." />
 </svelte:head>
 
-<div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
-  <Nav variant="centered" />
+<Nav variant="centered" />
 
-  <main class="max-w-2xl mx-auto px-6 py-12">
-    <h1 class="text-neutral-100 text-xl font-medium mb-8">Documentation</h1>
+<main class="max-w-4xl mx-auto px-6 py-12">
+  <h1 class="text-neutral-100 text-3xl font-medium mb-4">Documentation</h1>
+  <p class="text-neutral-400 mb-12 max-w-2xl">Learn how to orchestrate agents on filepath. Tree of agents on the left, rich chat on the right. BYOK model.</p>
 
-    <!-- Quick Start -->
-    <section class="mb-12">
-      <h2 class="text-neutral-100 text-lg mb-4">Quick Start</h2>
-      <ol class="space-y-4 text-sm">
-        <li>
-          <span class="text-neutral-500">1.</span> Human creates account, loads credits
-        </li>
-        <li>
-          <span class="text-neutral-500">2.</span> Human generates API key for agent
-        </li>
-        <li>
-          <span class="text-neutral-500">3.</span> Agent calls orchestrator API:
-          <div class="bg-neutral-900 border border-neutral-800 rounded p-4 mt-2 overflow-x-auto">
-            <pre class="text-neutral-400 font-mono text-xs"><code>curl -X POST https://myfilepath.com/api/orchestrator \
-  -H "x-api-key: fp_xxxx" \
-  -H "Content-Type: application/json" \
-  -d '{JSON.stringify({sessionId: "my-session", task: "echo hello"})}'</code></pre>
-          </div>
-        </li>
-        <li>
-          <span class="text-neutral-500">4.</span> Task executes in persistent container
-        </li>
-        <li>
-          <span class="text-neutral-500">5.</span> Result returns, container persists
-        </li>
-      </ol>
-    </section>
+  <!-- Documentation Types Grid -->
+  <div class="grid gap-6 md:grid-cols-2 mb-12">
+    <!-- Tutorials -->
+    <a href="/docs/tutorial" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl">🎓</span>
+        <h2 class="text-xl font-medium text-neutral-200">Tutorial</h2>
+      </div>
+      <p class="text-neutral-400 text-sm mb-4">Learning-oriented. Get started with your first agent step-by-step.</p>
+      <span class="text-neutral-500 text-sm">Getting Started →</span>
+    </a>
 
-    <!-- Concepts -->
-    <section class="mb-12">
-      <h2 class="text-neutral-100 text-lg mb-4">Concepts</h2>
+    <!-- How-To Guides -->
+    <a href="/docs/how-to" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl">🔧</span>
+        <h2 class="text-xl font-medium text-neutral-200">How-To Guides</h2>
+      </div>
+      <p class="text-neutral-400 text-sm mb-4">Task-oriented. Solve specific problems: custom agents, debugging, configuration.</p>
+      <span class="text-neutral-500 text-sm">View Guides →</span>
+    </a>
+
+    <!-- Explanation -->
+    <a href="/docs/explanation/architecture" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl">📖</span>
+        <h2 class="text-xl font-medium text-neutral-200">Explanation</h2>
+      </div>
+      <p class="text-neutral-400 text-sm mb-4">Understanding-oriented. Deep dives into architecture and protocol.</p>
+      <span class="text-neutral-500 text-sm">Architecture →</span>
+    </a>
+
+    <!-- Reference -->
+    <a href="/docs/reference/api" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl">📚</span>
+        <h2 class="text-xl font-medium text-neutral-200">Reference</h2>
+      </div>
+      <p class="text-neutral-400 text-sm mb-4">Information-oriented. API endpoints, protocol spec, agent catalog.</p>
+      <span class="text-neutral-500 text-sm">API Reference →</span>
+    </a>
+  </div>
+
+  <!-- Quick Links -->
+  <section class="mb-12">
+    <h2 class="text-neutral-100 text-lg mb-6">Quick Links</h2>
+    <div class="grid gap-4 md:grid-cols-3">
+      <a href="/docs/how-to/custom-agent" class="text-neutral-400 hover:text-neutral-200 text-sm">
+        → Build Custom Agent
+      </a>
+      <a href="/docs/how-to/debug-containers" class="text-neutral-400 hover:text-neutral-200 text-sm">
+        → Debug Failures
+      </a>
+      <a href="/docs/how-to/per-session-keys" class="text-neutral-400 hover:text-neutral-200 text-sm">
+        → Per-Session Keys
+      </a>
+      <a href="/docs/explanation/protocol" class="text-neutral-400 hover:text-neutral-200 text-sm">
+        → FAP Protocol
+      </a>
+      <a href="https://github.com/acoyfellow/filepath/blob/main/llms.txt" class="text-neutral-400 hover:text-neutral-200 text-sm">
+        → llms.txt (for AI)
+      </a>
+      <a href="https://github.com/acoyfellow/filepath" class="text-neutral-400 hover:text-neutral-200 text-sm">
+        → GitHub Repo
+      </a>
+    </div>
+  </section>
+
+  <!-- Core Concepts -->
+  <section class="mb-12">
+    <h2 class="text-neutral-100 text-lg mb-6">Core Concepts</h2>
+    <div class="space-y-4">
+      <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+        <h3 class="text-neutral-200 font-medium mb-2">Sessions</h3>
+        <p class="text-neutral-400 text-sm">A persistent workspace for your agents. Contains a tree of agent nodes, each with its own conversation history and container.</p>
+      </div>
       
-      <div class="space-y-6 text-sm">
-        <div>
-          <h3 class="text-neutral-100 mb-1">Sessions</h3>
-          <p class="text-neutral-400">A session is a named container instance. Same sessionId = same container, same filesystem.</p>
-        </div>
-        
-        <div>
-          <h3 class="text-neutral-100 mb-1">Tasks</h3>
-          <p class="text-neutral-400">A task is a command or script to execute. Runs in the session's container with full shell access.</p>
-        </div>
-        
-        <div>
-          <h3 class="text-neutral-100 mb-1">Handoff</h3>
-          <p class="text-neutral-400">When approaching context limits, write state to <code class="bg-neutral-900 px-1 font-mono">.agent/handoff.md</code>, commit, exit. Next session continues.</p>
-        </div>
-        
-        <div>
-          <h3 class="text-neutral-100 mb-1">Health Checks</h3>
-          <p class="text-neutral-400">Place <code class="bg-neutral-900 px-1 font-mono">gates/health.sh</code> in your repo. Runs between sessions. Exit 1 = blocker.</p>
-        </div>
+      <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+        <h3 class="text-neutral-200 font-medium mb-2">Agent Tree</h3>
+        <p class="text-neutral-400 text-sm">Agents can spawn child agents. Visual tree on the left sidebar. Click any node to see its conversation. Parent and children work in parallel.</p>
       </div>
-    </section>
-
-    <!-- API Reference -->
-    <section class="mb-12">
-      <h2 class="text-neutral-100 text-lg mb-4">API Reference</h2>
       
-      <div class="space-y-6">
-        <div>
-          <h3 class="font-mono text-sm text-neutral-100 mb-2">POST /api/orchestrator</h3>
-          <p class="text-neutral-400 text-sm mb-3">Execute a task in a session.</p>
-          <div class="bg-neutral-900 border border-neutral-800 rounded p-4 overflow-x-auto">
-            <pre class="text-neutral-400 font-mono text-xs"><code>// Request
-{JSON.stringify({sessionId: "string", task: "string"}, null, 2)}
-
-// Response
-{JSON.stringify({success: true, result: "string"}, null, 2)}</code></pre>
-          </div>
-        </div>
-
-        <div>
-          <h3 class="font-mono text-sm text-neutral-100 mb-2">Headers</h3>
-          <table class="w-full text-sm">
-            <tbody>
-              <tr class="border-b border-neutral-800">
-                <td class="py-2 font-mono text-neutral-400">x-api-key</td>
-                <td class="py-2 text-neutral-500">Required. Your API key.</td>
-              </tr>
-              <tr class="border-b border-neutral-800">
-                <td class="py-2 font-mono text-neutral-400">Content-Type</td>
-                <td class="py-2 text-neutral-500">application/json</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+        <h3 class="text-neutral-200 font-medium mb-2">BYOK Model</h3>
+        <p class="text-neutral-400 text-sm">Bring Your Own Key. You provide API keys (OpenRouter, OpenAI, Anthropic); we provide the infrastructure. Your keys, your spend.</p>
       </div>
-    </section>
-
-    <!-- Handoff Protocol -->
-    <section class="mb-12">
-      <h2 class="text-neutral-100 text-lg mb-4">Handoff Protocol</h2>
-      <p class="text-neutral-400 text-sm mb-4">For multi-session tasks that exceed context limits:</p>
-      <div class="bg-neutral-900 border border-neutral-800 rounded p-4 overflow-x-auto">
-        <pre class="text-neutral-400 font-mono text-xs"><code># Before exiting:
-1. git add -A && git commit -m "WIP: description"
-2. Write state to .agent/handoff.md:
-   - What was completed
-   - What's next
-   - Any blockers
-3. Exit cleanly
-
-# Next session:
-1. Read .agent/handoff.md
-2. Continue from documented state</code></pre>
+      
+      <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+        <h3 class="text-neutral-200 font-medium mb-2">Real-Time Chat</h3>
+        <p class="text-neutral-400 text-sm">WebSocket connection to each agent. See tool calls, file writes, commits as they happen. Close laptop, open phone — same state.</p>
       </div>
-    </section>
+    </div>
+  </section>
 
-  </main>
+  <!-- Getting Help -->
+  <section class="bg-neutral-900/50 border border-neutral-800 rounded-lg p-6">
+    <h2 class="text-neutral-200 text-lg mb-4">Need Help?</h2>
+    <ul class="space-y-2 text-sm">
+      <li class="text-neutral-400">
+        • <a href="https://github.com/acoyfellow/filepath/discussions" class="text-neutral-300 hover:underline">GitHub Discussions</a> — Ask questions, share ideas
+      </li>
+      <li class="text-neutral-400">
+        • <a href="https://github.com/acoyfellow/filepath/issues" class="text-neutral-300 hover:underline">GitHub Issues</a> — Report bugs, request features
+      </li>
+      <li class="text-neutral-400">
+        • <a href="https://myfilepath.com" class="text-neutral-300 hover:underline">myfilepath.com</a> — Try it out
+      </li>
+    </ul>
+  </section>
+</main>
 
-  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
-    myfilepath.com
-  </footer>
-</div>
+<footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
+  myfilepath.com
+</footer>
