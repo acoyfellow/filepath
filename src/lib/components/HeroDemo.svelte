@@ -37,8 +37,6 @@
   let selectedNode = $derived(demoTree.find((n) => n.id === selectedId));
   let currentMessages = $derived(messagesByNode[selectedId] ?? []);
   let isSending = $state(false);
-  let autoPlayTimers: ReturnType<typeof setTimeout>[] = [];
-  let mode = $state<"try" | "watch">("try");
   let mobileTab = $state<"tree" | "chat">("tree");
   let inputValue = $state("");
 
@@ -74,49 +72,14 @@
     messagesByNode = { ...messagesByNode, [nextId]: [] };
   }
 
-  function startAutoPlay() {
-    stopAutoPlay();
-    mode = "watch";
-    selectNode("1");
-    autoPlayTimers.push(setTimeout(() => selectNode("2"), 2500));
-    autoPlayTimers.push(setTimeout(() => {
-      demoTree = demoTree.map((n) => (n.id === "2" ? { ...n, status: "done" as AgentStatus } : n));
-    }, 3500));
-    autoPlayTimers.push(setTimeout(() => selectNode("3"), 5000));
-    autoPlayTimers.push(setTimeout(() => {
-      demoTree = demoTree.map((n) => (n.id === "3" ? { ...n, status: "done" as AgentStatus } : n));
-    }, 6000));
-    autoPlayTimers.push(setTimeout(() => selectNode("4"), 7500));
-    autoPlayTimers.push(setTimeout(() => selectNode("1"), 10000));
-    autoPlayTimers.push(setTimeout(() => { mode = "try"; }, 12500));
-  }
-
-  function stopAutoPlay() {
-    for (const t of autoPlayTimers) clearTimeout(t);
-    autoPlayTimers = [];
-    mode = "try";
-  }
 
   onDestroy(() => {
-    for (const t of autoPlayTimers) clearTimeout(t);
+    // Cleanup if needed
   });
+
 </script>
 
 <div class="w-full min-w-0 rounded-lg overflow-hidden border bg-gray-100 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800">
-  <!-- Mode toggle -->
-  <div class="flex gap-2 p-3 border-b border-gray-200 dark:border-neutral-800">
-    <button
-      type="button"
-      class="text-xs px-2 py-1 rounded {mode === 'try' ? 'bg-gray-200 text-gray-900 dark:bg-neutral-800 dark:text-neutral-200' : 'text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300'}"
-      onclick={() => stopAutoPlay()}
-    >Try it</button>
-    <button
-      type="button"
-      class="text-xs px-2 py-1 rounded {mode === 'watch' ? 'bg-gray-200 text-gray-900 dark:bg-neutral-800 dark:text-neutral-200' : 'text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300'}"
-      onclick={() => startAutoPlay()}
-    >Watch demo</button>
-  </div>
-
   <!-- Side-by-side when container is wide enough; tabs when narrow -->
   <div class="hidden @md:grid @md:grid-cols-[200px_1fr] @lg:grid-cols-[240px_1fr] min-h-[360px]">
     <!-- Left: Tree Panel -->
