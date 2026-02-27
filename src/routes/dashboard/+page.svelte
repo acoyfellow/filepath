@@ -143,29 +143,29 @@
       <div class="session-list">
         {#each sessions as s (s.id)}
           <div
-            class="session-card"
+            class="group rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/50 p-4 cursor-pointer transition-colors hover:border-gray-300 dark:hover:border-neutral-700"
             role="button"
             tabindex="0"
             onclick={() => goto(`/session/${s.id}`)}
             onkeydown={(e) => { if (e.key === "Enter") goto(`/session/${s.id}`); }}
           >
-            <div class="session-row">
-              <div class="session-info">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
                 <StatusDot status={toAgentStatus(s.status)} size={8} />
-                <span class="session-name">{s.name}</span>
-                <span class="session-badge">{s.nodeCount} agent{s.nodeCount !== 1 ? "s" : ""}</span>
+                <span class="text-sm font-medium text-gray-900 dark:text-neutral-200">{s.name}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded border text-gray-600 dark:text-neutral-400 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/50">{s.nodeCount} agent{s.nodeCount !== 1 ? "s" : ""}</span>
               </div>
-              <div class="session-actions">
+              <div class="flex items-center gap-3">
                 {#if s.status === "draft" || s.status === "stopped"}
                   <button
-                    class="btn-delete"
+                    class="text-xs text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     onclick={(e) => deleteSession(s.id, s.name, e)}
                   >delete</button>
                 {/if}
-                <span class="session-arrow">open &rarr;</span>
+                <span class="text-xs text-gray-400 dark:text-neutral-500">open &rarr;</span>
               </div>
             </div>
-            <div class="session-meta">
+            <div class="flex gap-4 mt-2 pl-4 text-xs text-gray-400 dark:text-neutral-500">
               <span>{s.id.slice(0, 12)}</span>
               <span>{s.status}</span>
               <span>created {formatDate(s.createdAt)}</span>
@@ -181,20 +181,20 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-overlay" onclick={() => (showNewModal = false)} onkeydown={() => {}}>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-        <h2 class="modal-title">New session</h2>
+      <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-6 w-[400px] max-w-[90vw]" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+        <h2 class="text-base font-semibold text-gray-900 dark:text-neutral-100 mb-5">New session</h2>
 
-        <label class="field-label">
+        <label class="block text-xs text-gray-500 dark:text-neutral-500 mb-3.5">
           Name
-          <input type="text" class="field-input" placeholder="my-project" bind:value={newName} />
+          <input type="text" class="block w-full mt-1.5 px-2.5 py-2 text-xs font-mono bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-800 rounded-md outline-none focus:border-blue-500 dark:focus:border-indigo-500" placeholder="my-project" bind:value={newName} />
         </label>
 
-        <label class="field-label">
-          Git repo URL <span class="optional">(optional)</span>
-          <input type="text" class="field-input" placeholder="https://github.com/user/repo" bind:value={newGitUrl} />
+        <label class="block text-xs text-gray-500 dark:text-neutral-500 mb-3.5">
+          Git repo URL <span class="text-gray-400 dark:text-neutral-600">(optional)</span>
+          <input type="text" class="block w-full mt-1.5 px-2.5 py-2 text-xs font-mono bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 border border-gray-200 dark:border-neutral-800 rounded-md outline-none focus:border-blue-500 dark:focus:border-indigo-500" placeholder="https://github.com/user/repo" bind:value={newGitUrl} />
         </label>
 
-        <div class="modal-buttons">
+        <div class="flex justify-end gap-2 mt-5">
           <button class="px-4 py-2 text-xs font-medium rounded-md border transition-colors bg-white border-gray-300 hover:border-gray-400 text-gray-700 dark:bg-neutral-800 dark:border-neutral-700 dark:hover:border-neutral-600 dark:text-neutral-300" onclick={() => (showNewModal = false)}>Cancel</button>
           <button class="px-4 py-2 text-xs font-medium rounded-md transition-colors disabled:opacity-50 bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400" disabled={isCreating} onclick={createSession}>
             {isCreating ? "Creating..." : "Create & spawn agent"}
@@ -206,46 +206,14 @@
 </div>
 
 <style>
-  :global(.dashboard) {
-    --bg: #09090b; --bg3: #111114; --b1: #1a1a1e; --b2: #27272a;
-    --t1: #e4e4e7; --t2: #a1a1aa; --t3: #71717a; --t4: #52525b;
-    --accent: #818cf8; --red: #ef4444;
-    --mono: "JetBrains Mono", monospace; --sans: "Outfit", sans-serif;
-  }
-
   .main { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
   .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
-  .title { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--t1); margin: 0; }
-  .subtitle { font-size: 12px; color: var(--t3); margin: 4px 0 0; }
-  .btn-primary { padding: 8px 16px; font-size: 12px; font-family: var(--mono); background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-  .btn-primary:hover { filter: brightness(1.1); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-secondary { padding: 8px 16px; font-size: 12px; font-family: var(--mono); background: var(--bg3); color: var(--t2); border: 1px solid var(--b1); border-radius: 6px; cursor: pointer; }
-  .btn-secondary:hover { border-color: var(--b2); }
+  .title { font-size: 18px; font-weight: 600; margin: 0; }
+  .subtitle { font-size: 12px; margin: 4px 0 0; }
   .error-banner { padding: 10px 14px; font-size: 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; color: #f87171; margin-bottom: 16px; }
   .empty-state { text-align: center; padding: 64px 0; }
-  .empty-title { font-size: 14px; color: var(--t2); margin: 0 0 4px; }
-  .empty-sub { font-size: 12px; color: var(--t4); margin: 0 0 24px; }
-  .spinner { width: 20px; height: 20px; border: 2px solid var(--b2); border-top-color: var(--t3); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  .spinner { width: 20px; height: 20px; border: 2px solid rgb(229 231 235); border-top-color: rgb(156 163 175); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .session-list { display: flex; flex-direction: column; gap: 8px; }
-  .session-card { background: var(--bg3); border: 1px solid var(--b1); border-radius: 8px; padding: 14px 16px; cursor: pointer; transition: border-color 0.15s; }
-  .session-card:hover { border-color: var(--b2); }
-  .session-row { display: flex; align-items: center; justify-content: space-between; }
-  .session-info { display: flex; align-items: center; gap: 10px; }
-  .session-name { color: var(--t1); font-weight: 500; font-size: 13px; }
-  .session-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(129,140,248,0.1); color: var(--accent); border: 1px solid rgba(129,140,248,0.2); }
-  .session-actions { display: flex; align-items: center; gap: 8px; }
-  .btn-delete { font-size: 10px; font-family: var(--mono); color: var(--red); background: none; border: none; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
-  .session-card:hover .btn-delete { opacity: 1; }
-  .session-arrow { font-size: 11px; color: var(--t4); }
-  .session-meta { display: flex; gap: 16px; margin-top: 6px; padding-left: 18px; font-size: 10px; color: var(--t4); }
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-  .modal { background: var(--bg3); border: 1px solid var(--b1); border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw; }
-  .modal-title { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--t1); margin: 0 0 20px; }
-  .field-label { display: block; font-size: 11px; color: var(--t3); margin-bottom: 14px; }
-  .optional { color: var(--t4); }
-  .field-input { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--mono); background: var(--bg); color: var(--t1); border: 1px solid var(--b1); border-radius: 6px; outline: none; box-sizing: border-box; }
-  .field-input:focus { border-color: var(--accent); }
-  .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 </style>

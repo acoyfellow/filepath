@@ -30,7 +30,7 @@
 {/if}
 
 <div class="min-h-screen flex flex-col bg-white dark:bg-neutral-950 transition-colors duration-200">
-  <Nav {variant} {current} email={data.user?.email ?? null} {sessionId} />
+  <Nav {variant} {current} {sessionId} />
   <div class="flex-1 min-h-0">
     {@render children?.()}
   </div>

@@ -6,11 +6,10 @@
   interface Props {
     current?: string | null;
     variant?: 'centered' | 'dashboard' | 'session';
-    email?: string | null;
     sessionId?: string | null;
   }
 
-  let { current = null, variant = 'centered', email = null, sessionId = null }: Props = $props();
+  let { current = null, variant = 'centered', sessionId = null }: Props = $props();
   const { toggleTheme } = getContext<{ toggleTheme: () => void }>('theme');
   let mobileOpen = $state(false);
 
@@ -154,9 +153,7 @@
           href="/settings/account"
           class="transition-colors {current === 'account' ? 'text-gray-900 dark:text-neutral-100' : 'text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100'}"
         >account</a>
-        {#if email}
-          <span class="text-xs truncate max-w-[180px] text-gray-500 dark:text-neutral-600">{email}</span>
-        {/if}
+
         {@render themeButton()}
         <button
           onclick={signOutUser}
@@ -174,9 +171,7 @@
         {@render mobileLink('/settings/api-keys', 'api keys', current === 'api-keys')}
 
         {@render mobileLink('/settings/account', 'account', current === 'account')}
-        {#if email}
-          <div class="px-4 py-2 text-xs truncate border-t text-gray-500 dark:text-neutral-600 border-gray-200 dark:border-neutral-800/50">{email}</div>
-        {/if}
+
         <div class="px-4 py-3 border-t border-gray-200 dark:border-neutral-800/50">
           {@render themeButton()}
         </div>
@@ -208,9 +203,7 @@
       <a href="/settings/api-keys" class="transition-colors text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100">keys</a>
 
       <a href="/settings/account" class="transition-colors text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100">account</a>
-      {#if email}
-        <span class="text-xs truncate max-w-[180px] text-gray-500 dark:text-neutral-600">{email}</span>
-      {/if}
+
       {@render themeButton()}
       <button
         onclick={signOutUser}
@@ -230,9 +223,7 @@
         {@render mobileLink('/settings/api-keys', 'api keys', false)}
 
         {@render mobileLink('/settings/account', 'account', false)}
-        {#if email}
-          <div class="px-4 py-2 text-xs truncate border-t text-gray-500 dark:text-neutral-600 border-gray-200 dark:border-neutral-800/50">{email}</div>
-        {/if}
+
         <div class="px-4 py-3 border-t border-gray-200 dark:border-neutral-800/50">
           {@render themeButton()}
         </div>
