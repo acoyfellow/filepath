@@ -1,5 +1,6 @@
 <script lang="ts">
   import Nav from '$lib/components/Nav.svelte';
+  import HeroDemo from '$lib/components/HeroDemo.svelte';
 </script>
 
 <svelte:head>
@@ -15,165 +16,167 @@
 
   <Nav variant="centered" />
 
-  <!-- Hero -->
-  <main class="max-w-2xl mx-auto px-6 py-20">
-    <h1 class="text-neutral-100 text-2xl font-medium mb-4">
-      Orchestrate AI coding agents in persistent containers.
-    </h1>
-    
-    <p class="mb-12 leading-relaxed text-lg text-neutral-400">
-      Spawn agents. Watch them work in parallel. The tree visualizes everything.<br/>
-      <span class="text-neutral-500">Bring your own API keys. Your compute, your agents, your control.</span>
-    </p>
-
-    <!-- Visual Preview -->
-    <section class="mb-12 bg-neutral-900 border border-neutral-800 rounded-lg p-6">
-      <div class="flex gap-6">
-        <!-- Tree visualization mock -->
-        <div class="w-48 space-y-2 text-sm">
-          <div class="flex items-center gap-2 text-neutral-300">
-            <span class="w-2 h-2 rounded-full bg-green-500"></span>
-            <span>Project Setup</span>
-          </div>
-          <div class="pl-4 flex items-center gap-2 text-neutral-400">
-            <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-            <span>Research API</span>
-          </div>
-          <div class="pl-4 flex items-center gap-2 text-neutral-400">
-            <span class="w-2 h-2 rounded-full bg-green-500"></span>
-            <span>Write Tests</span>
-          </div>
-          <div class="pl-8 flex items-center gap-2 text-neutral-500">
-            <span class="w-2 h-2 rounded-full bg-neutral-600"></span>
-            <span>Fix Edge Case</span>
-          </div>
+  <main class="max-w-6xl mx-auto px-6 py-12 md:py-20">
+    <!-- Hero Section: Text + Demo -->
+    <div class="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start mb-16">
+      <!-- Left: Value Prop -->
+      <div class="lg:sticky lg:top-8">
+        <h1 class="text-neutral-100 text-3xl md:text-4xl font-medium mb-4 leading-tight">
+          Orchestrate AI coding agents in persistent containers.
+        </h1>
+        
+        <p class="mb-8 leading-relaxed text-lg text-neutral-400">
+          Spawn agents. Watch them work in parallel. The tree visualizes everything.
+        </p>
+        
+        <div class="flex flex-col sm:flex-row gap-3 mb-8">
+          <a href="/signup" class="inline-flex items-center justify-center px-6 py-3 bg-neutral-100 hover:bg-white text-neutral-950 rounded font-medium transition-colors">
+            Start executing
+          </a>
+          <a href="/docs" class="inline-flex items-center justify-center px-6 py-3 border border-neutral-700 hover:border-neutral-500 rounded transition-colors">
+            Read the docs
+          </a>
         </div>
         
-        <div class="flex-1 border-l border-neutral-800 pl-6">
-          <p class="text-xs text-neutral-500 mb-2">Click any agent to see its conversation</p>
-          <div class="space-y-3 text-sm">
-            <div class="flex gap-3">
-              <span class="text-neutral-500">user</span>
-              <span class="text-neutral-300">Research the API and write tests</span>
-            </div>
-            <div class="flex gap-3">
-              <span class="text-neutral-500">agent</span>
-              <span class="text-neutral-400">I'll spawn a researcher and a test writer to work in parallel...</span>
-            </div>
-            <div class="bg-neutral-950 rounded p-2 text-xs text-neutral-500 font-mono">
-              Spawning child agent: Researcher (pi)
-            </div>
-            <div class="bg-neutral-950 rounded p-2 text-xs text-neutral-500 font-mono">
-              Spawning child agent: Test Writer (shelley)
-            </div>
+        <!-- Quick value props -->
+        <div class="space-y-2 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-green-500/60">-</span>
+            <span class="text-neutral-400">Tree shows every agent's status</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-green-500/60">-</span>
+            <span class="text-neutral-400">Click any agent to chat</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-green-500/60">-</span>
+            <span class="text-neutral-400">Agents spawn child agents automatically</span>
           </div>
         </div>
       </div>
-    </section>
+      
+      <!-- Right: Live Demo -->
+      <div class="lg:mt-0">
+        <HeroDemo />
+        <p class="text-center text-xs text-neutral-500 mt-3">
+          This is the actual interface. Click agents in the tree to switch conversations.
+        </p>
+      </div>
+    </div>
 
-    <!-- What You Get -->
-    <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">What You Get</h2>
-      <ul class="space-y-3 text-sm">
-        <li class="flex gap-3">
-          <span class="text-neutral-600">-</span>
-          <span>Tree visualization shows every agent's status at a glance</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">-</span>
-          <span>Click any agent to see its full conversation history</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">-</span>
-          <span>Agents spawn child agents — workflows that branch automatically</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">-</span>
-          <span>Real-time chat with tool calls, file writes, commits inline</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">-</span>
-          <span>Close your laptop, reopen anywhere — same state</span>
-        </li>
-      </ul>
+    <!-- Features Grid -->
+    <section class="mb-16">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-6">What You Get</h2>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-neutral-900/50 border border-neutral-800 rounded-lg p-5">
+          <h3 class="text-neutral-200 font-medium mb-2">Visual Tree</h3>
+          <p class="text-sm text-neutral-400">See all your agents at a glance. Running, idle, done — status is obvious. Hierarchy shows who's working on what.</p>
+        </div>
+        <div class="bg-neutral-900/50 border border-neutral-800 rounded-lg p-5">
+          <h3 class="text-neutral-200 font-medium mb-2">Rich Chat</h3>
+          <p class="text-sm text-neutral-400">Not just text. Watch tool calls, file writes, commits, and spawned agents appear inline. Real-time via WebSocket.</p>
+        </div>
+        <div class="bg-neutral-900/50 border border-neutral-800 rounded-lg p-5">
+          <h3 class="text-neutral-200 font-medium mb-2">Persistent State</h3>
+          <p class="text-sm text-neutral-400">Close your laptop, reopen on your phone — same tree, same conversations. Agents continue working while you're away.</p>
+        </div>
+      </div>
     </section>
 
     <!-- Built-in Agents -->
-    <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Built-in Agents</h2>
-      <div class="grid grid-cols-2 gap-3 text-sm">
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-3">
-          <span class="text-neutral-300">Shelley</span>
-          <span class="text-neutral-600 block text-xs">Full-stack engineering</span>
+    <section class="mb-16">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-6">Built-in Agents</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div class="bg-neutral-900 border border-neutral-800 rounded p-4 hover:border-neutral-700 transition-colors">
+          <span class="text-neutral-200 font-medium block">Shelley</span>
+          <span class="text-neutral-500 text-xs">Full-stack engineering</span>
         </div>
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-3">
-          <span class="text-neutral-300">Pi</span>
-          <span class="text-neutral-600 block text-xs">Research and analysis</span>
+        <div class="bg-neutral-900 border border-neutral-800 rounded p-4 hover:border-neutral-700 transition-colors">
+          <span class="text-neutral-200 font-medium block">Pi</span>
+          <span class="text-neutral-500 text-xs">Research and analysis</span>
         </div>
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-3">
-          <span class="text-neutral-300">Claude Code</span>
-          <span class="text-neutral-600 block text-xs">Complex multi-file changes</span>
+        <div class="bg-neutral-900 border border-neutral-800 rounded p-4 hover:border-neutral-700 transition-colors">
+          <span class="text-neutral-200 font-medium block">Claude Code</span>
+          <span class="text-neutral-500 text-xs">Multi-file changes</span>
         </div>
-        <div class="bg-neutral-900 border border-neutral-800 rounded p-3">
-          <span class="text-neutral-300">Codex</span>
-          <span class="text-neutral-600 block text-xs">Python and data tasks</span>
+        <div class="bg-neutral-900 border border-neutral-800 rounded p-4 hover:border-neutral-700 transition-colors">
+          <span class="text-neutral-200 font-medium block">Codex</span>
+          <span class="text-neutral-500 text-xs">Python and data</span>
         </div>
       </div>
-      <p class="text-neutral-500 text-xs mt-3">
-        Plus: Cursor, Amp, OpenCode. Or bring your own container.
+      <p class="text-neutral-500 text-sm mt-4">
+        Plus: Cursor, Amp, OpenCode. Or bring your own Docker container.
+        <a href="/docs/agents" class="text-neutral-400 hover:underline ml-1">View all agents</a>
       </p>
     </section>
 
     <!-- BYOK Model -->
-    <section class="mb-12">
+    <section class="mb-16 bg-neutral-900/30 border border-neutral-800 rounded-lg p-6">
       <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Bring Your Own Key</h2>
-      <div class="text-sm space-y-2">
-        <p>Your OpenRouter API key = your compute spend. No markup.</p>
-        <p class="text-neutral-400">Access 100+ models (Claude, GPT-4, Gemini) through one key.</p>
-        <p class="text-neutral-500 text-xs mt-3">
-          Get an OpenRouter key at <a href="https://openrouter.ai/keys" class="text-neutral-400 hover:underline">openrouter.ai/keys</a>, then add it in Settings / Account.
-        </p>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <p class="text-neutral-300 mb-2">Your OpenRouter API key = your compute spend. No markup.</p>
+          <p class="text-sm text-neutral-400">Access 100+ models (Claude, GPT-4, Gemini) through one key.</p>
+        </div>
+        <div class="flex flex-col justify-center">
+          <a href="https://openrouter.ai/keys" class="text-sm text-neutral-400 hover:text-neutral-300 transition-colors mb-1" target="_blank">
+            Get a key at openrouter.ai/keys
+          </a>
+          <span class="text-xs text-neutral-600">Then add it in Settings / Account</span>
+        </div>
       </div>
     </section>
 
     <!-- How It Works -->
-    <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">How It Works</h2>
-      <ol class="space-y-3 text-sm">
-        <li class="flex gap-3">
-          <span class="text-neutral-600">1.</span>
-          <span>Create a session (like a project folder)</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">2.</span>
-          <span>Spawn an agent — pick type, model, name</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">3.</span>
-          <span>Chat with it — watch it write code, spawn helpers, commit</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-neutral-600">4.</span>
-          <span>Tree grows automatically as agents spawn children</span>
-        </li>
-      </ol>
+    <section class="mb-16">
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-6">How It Works</h2>
+      <div class="grid md:grid-cols-4 gap-4">
+        <div class="relative">
+          <div class="text-2xl font-medium text-neutral-700 mb-2">01</div>
+          <h3 class="text-neutral-200 font-medium mb-1">Create Session</h3>
+          <p class="text-sm text-neutral-400">Like a project folder. Optional git repo to clone.</p>
+        </div>
+        <div class="relative">
+          <div class="text-2xl font-medium text-neutral-700 mb-2">02</div>
+          <h3 class="text-neutral-200 font-medium mb-1">Spawn Agent</h3>
+          <p class="text-sm text-neutral-400">Pick type, model, give it a name. Appears in tree.</p>
+        </div>
+        <div class="relative">
+          <div class="text-2xl font-medium text-neutral-700 mb-2">03</div>
+          <h3 class="text-neutral-200 font-medium mb-1">Chat & Watch</h3>
+          <p class="text-sm text-neutral-400">Send tasks. Watch code, commits, spawned helpers in real-time.</p>
+        </div>
+        <div class="relative">
+          <div class="text-2xl font-medium text-neutral-700 mb-2">04</div>
+          <h3 class="text-neutral-200 font-medium mb-1">Tree Grows</h3>
+          <p class="text-sm text-neutral-400">Agents spawn child agents. Workflow branches automatically.</p>
+        </div>
+      </div>
     </section>
 
-    <!-- CTA -->
-    <section class="border-t border-neutral-800 pt-8">
-      <a href="/signup" class="text-neutral-100 hover:underline">Start executing</a>
-      <span class="text-neutral-600 mx-4">or</span>
-      <a href="/docs" class="text-neutral-400 hover:underline">read the docs</a>
+    <!-- Final CTA -->
+    <section class="text-center py-12 border-t border-neutral-800">
+      <h2 class="text-xl text-neutral-200 mb-4">Ready to orchestrate?</h2>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/signup" class="inline-flex items-center justify-center px-6 py-3 bg-neutral-100 hover:bg-white text-neutral-950 rounded font-medium transition-colors">
+          Create free account
+        </a>
+        <a href="/agent-api" class="inline-flex items-center justify-center px-6 py-3 border border-neutral-700 hover:border-neutral-500 rounded transition-colors">
+          API for agents
+        </a>
+      </div>
     </section>
   </main>
 
   <!-- Footer -->
-  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono space-y-2">
-    <div>myfilepath.com</div>
-    <div class="text-neutral-500">
-      <a href="https://github.com/acoyfellow/filepath" class="hover:text-neutral-300 transition-colors">Open source on GitHub</a>
-      <span class="mx-2">-</span>
-      <span>Hosted on Cloudflare</span>
+  <footer class="border-t border-neutral-800 px-6 py-8 text-center text-neutral-600 text-xs">
+    <div class="mb-2">myfilepath.com</div>
+    <div class="space-x-3">
+      <a href="https://github.com/acoyfellow/filepath" class="hover:text-neutral-300 transition-colors">GitHub</a>
+      <span class="text-neutral-700">-</span>
+      <a href="/docs" class="hover:text-neutral-300 transition-colors">Docs</a>
+      <span class="text-neutral-700">-</span>
+      <a href="/api/openapi.json" class="hover:text-neutral-300 transition-colors">API</a>
     </div>
   </footer>
 </div>
