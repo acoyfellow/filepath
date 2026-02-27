@@ -51,7 +51,6 @@ export interface AgentSession {
   status: SessionStatus;
   rootNodeId?: string;
   startedAt?: number;
-  lastBilledAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -110,7 +109,6 @@ export interface MultiAgentSession {
   status: 'draft' | 'starting' | 'running' | 'paused' | 'stopped' | 'error';
   orchestratorSlotId?: string;
   startedAt?: number;
-  lastBilledAt?: number;
   createdAt: number;
   updatedAt: number;
 }

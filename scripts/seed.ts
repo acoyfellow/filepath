@@ -15,8 +15,8 @@ async function generateSeed() {
   
   // User record
   const userInsert = `
-INSERT INTO "user" (id, name, email, email_verified, credit_balance, created_at, updated_at)
-VALUES ('${userId}', '${name}', '${email}', 1, 1000, ${now}, ${now});
+INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+VALUES ('${userId}', '${name}', '${email}', 1, ${now}, ${now});
 `;
 
   // Account record (for password auth)
@@ -28,7 +28,6 @@ VALUES ('${accountId}', '${email}', 'credential', '${userId}', '${hashedPassword
 
   console.log('-- Seed data for fresh database');
   console.log('-- User: jordan@sendgrowth.com / test123');
-  console.log('-- Credits: 1000');
   console.log('');
   console.log(userInsert);
   console.log(accountInsert);

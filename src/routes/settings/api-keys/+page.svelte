@@ -13,7 +13,6 @@
     createdAt: Date;
     updatedAt: Date;
     expiresAt: Date | null;
-    budgetCap: number | null;
     metadata: Record<string, unknown> | null;
     permissions: Record<string, string[]> | null;
   };
@@ -23,7 +22,6 @@
   let showCreateDialog = $state(false);
   let newKeyName = $state('');
   let newKeySecrets = $state('');
-  let newKeyBudgetCap = $state('');
   let createdKey = $state<string | null>(null);
   let error = $state<string | null>(null);
 
@@ -42,7 +40,6 @@
       if (result.data) {
         apiKeys = result.data.apiKeys.map(key => ({
           ...key,
-          budgetCap: (key as typeof key & { budgetCap?: number | null }).budgetCap || null,
           createdAt: new Date(key.createdAt),
           updatedAt: new Date(key.updatedAt),
           expiresAt: key.expiresAt ? new Date(key.expiresAt) : null
@@ -72,14 +69,6 @@
         }
       }
 
-      let budgetCap: number | undefined;
-      if (newKeyBudgetCap.trim()) {
-        const cap = parseInt(newKeyBudgetCap.trim(), 10);
-        if (!isNaN(cap) && cap > 0) {
-          budgetCap = cap;
-        }
-      }
-
       const result = await authClient.apiKey.create({
         name: newKeyName.trim(),
         prefix: 'mfp_',
@@ -88,8 +77,7 @@
           secrets: secretsObj,
           shell: 'bash',
           createdVia: 'web-ui'
-        },
-        ...(budgetCap !== undefined ? { budgetCap } : {})
+        }
       });
 
       if (result.data?.key) {
@@ -97,7 +85,6 @@
         await loadApiKeys();
         newKeyName = '';
         newKeySecrets = '';
-        newKeyBudgetCap = '';
       } else if (result.error) {
         error = result.error.message || 'Failed to create API key';
       }
@@ -263,17 +250,6 @@
               class="w-full mt-1 px-3 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm text-neutral-200 font-mono placeholder:text-neutral-700 focus:outline-none focus:border-neutral-600 resize-none"
             ></textarea>
             <p class="text-xs text-neutral-600 mt-1">One per line: KEY=value</p>
-          </div>
-          <div>
-            <label for="budgetCap" class="text-xs text-neutral-500 uppercase tracking-wide">Budget cap <span class="text-neutral-700">(optional, credits)</span></label>
-            <input
-              id="budgetCap"
-              type="number"
-              bind:value={newKeyBudgetCap}
-              placeholder="e.g., 10000"
-              class="w-full mt-1 px-3 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm text-neutral-200 placeholder:text-neutral-700 focus:outline-none focus:border-neutral-600"
-            />
-            <p class="text-xs text-neutral-600 mt-1">Maximum credits this key can use</p>
           </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">

@@ -15,8 +15,6 @@ export const user = sqliteTable("user", {
   image: text("image"),
   banned: integer("banned", { mode: "boolean" }).default(false),
   role: text("role"),
-  creditBalance: integer("credit_balance").default(0),
-  stripeCustomerId: text("stripe_customer_id"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -149,8 +147,6 @@ export const apikey = sqliteTable(
     lastRequest: integer("last_request", { mode: "timestamp_ms" }),
     permissions: text("permissions"),
     // Custom myfilepath fields
-    creditBalance: integer("credit_balance"),  // NULL = unlimited (inherits from user)
-    budgetCap: integer("budget_cap"),
     totalUsageMinutes: integer("total_usage_minutes").default(0),
     encryptedSecrets: text("encrypted_secrets"),
     metadata: text("metadata"),
