@@ -126,13 +126,7 @@
   <div>
     <h2 class="text-2xl font-black mb-4">SYSTEM ACTIONS</h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="border-4 border-black p-6">
-        <h3 class="text-xl font-black mb-2">BILLING</h3>
-        <p class="text-gray-700 mb-4">Manage user credits and billing issues</p>
-        <button class="px-4 py-2 font-black border-4 border-black hover:bg-black hover:text-white">
-          VIEW BILLING
-        </button>
-      </div>
+
       <div class="border-4 border-black p-6">
         <h3 class="text-xl font-black mb-2">SESSIONS</h3>
         <p class="text-gray-700 mb-4">Monitor active sessions and terminals</p>

@@ -110,7 +110,7 @@
       <!-- Desktop links -->
       <div class="hidden md:flex items-center gap-5 text-sm">
         <a href="/settings/api-keys" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'api-keys'}>keys</a>
-        <a href="/settings/billing" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'billing'}>billing</a>
+
         <a href="/settings/account" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'account'}>account</a>
         {#if email}
           <span class="text-neutral-600 font-mono text-xs truncate max-w-[180px]">{email}</span>
@@ -129,7 +129,7 @@
       <div class="md:hidden absolute left-0 right-0 top-full bg-neutral-950 border-b border-neutral-800 z-50">
         {@render mobileLink('/dashboard', 'sessions', current === 'sessions')}
         {@render mobileLink('/settings/api-keys', 'api keys', current === 'api-keys')}
-        {@render mobileLink('/settings/billing', 'billing', current === 'billing')}
+
         {@render mobileLink('/settings/account', 'account', current === 'account')}
         {#if email}
           <div class="px-4 py-2 text-xs font-mono text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
@@ -160,7 +160,7 @@
     <!-- Desktop links -->
     <div class="hidden md:flex items-center gap-5 text-sm">
       <a href="/settings/api-keys" class="text-neutral-400 hover:text-neutral-100 transition-colors">keys</a>
-      <a href="/settings/billing" class="text-neutral-400 hover:text-neutral-100 transition-colors">billing</a>
+
       <a href="/settings/account" class="text-neutral-400 hover:text-neutral-100 transition-colors">account</a>
       {#if email}
         <span class="text-neutral-600 font-mono text-xs truncate max-w-[180px]">{email}</span>
@@ -181,7 +181,7 @@
         {/if}
         {@render mobileLink('/dashboard', 'sessions', false)}
         {@render mobileLink('/settings/api-keys', 'api keys', false)}
-        {@render mobileLink('/settings/billing', 'billing', false)}
+
         {@render mobileLink('/settings/account', 'account', false)}
         {#if email}
           <div class="px-4 py-2 text-xs font-mono text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
