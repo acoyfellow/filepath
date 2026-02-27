@@ -1,28 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap');
 
 @import 'tailwindcss';
+@custom-variant dark (&:where(.dark, .dark *));
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
-
-:root {
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-}
 
 body {
   font-family: 'Google Sans Flex', -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #d4d4d4;
-  background-color: #0a0a0a;
   font-size: 14px;
-}
-
-/* Destructive button color class */
-.bg-destructive {
-  background-color: hsl(0 84% 60%);
-}
-
-.bg-destructive:hover {
-  background-color: hsl(0 84% 55%);
 }

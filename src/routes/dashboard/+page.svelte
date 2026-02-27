@@ -3,10 +3,9 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
-  import Nav from "$lib/components/Nav.svelte";
   import type { SessionStatus } from "$lib/types/session";
   import type { AgentStatus } from "$lib/protocol";
-
+  
   interface SessionItem {
     id: string;
     name: string;
@@ -115,16 +114,14 @@
   />
 </svelte:head>
 
-<div class="dashboard dark">
-	<Nav email={page.data.user?.email ?? null} />
-
+<div class="dashboard min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="main">
     <div class="header-row">
       <div>
         <h1 class="title">Sessions</h1>
         <p class="subtitle">Your agent orchestration environments</p>
       </div>
-      <button class="btn-primary" onclick={openNewModal}>+ New session</button>
+      <button class="px-4 py-2 text-xs font-medium rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400" onclick={openNewModal}>+ New session</button>
     </div>
 
     {#if errorMsg}
@@ -140,7 +137,7 @@
       <div class="empty-state">
         <p class="empty-title">No sessions yet</p>
         <p class="empty-sub">Create your first session to start orchestrating agents</p>
-        <button class="btn-primary" onclick={openNewModal}>Create first session</button>
+        <button class="px-4 py-2 text-xs font-medium rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400" onclick={openNewModal}>Create first session</button>
       </div>
     {:else}
       <div class="session-list">
@@ -198,8 +195,8 @@
         </label>
 
         <div class="modal-buttons">
-          <button class="btn-secondary" onclick={() => (showNewModal = false)}>Cancel</button>
-          <button class="btn-primary" disabled={isCreating} onclick={createSession}>
+          <button class="px-4 py-2 text-xs font-medium rounded-md border transition-colors bg-white border-gray-300 hover:border-gray-400 text-gray-700 dark:bg-neutral-800 dark:border-neutral-700 dark:hover:border-neutral-600 dark:text-neutral-300" onclick={() => (showNewModal = false)}>Cancel</button>
+          <button class="px-4 py-2 text-xs font-medium rounded-md transition-colors disabled:opacity-50 bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400" disabled={isCreating} onclick={createSession}>
             {isCreating ? "Creating..." : "Create & spawn agent"}
           </button>
         </div>
@@ -209,12 +206,11 @@
 </div>
 
 <style>
-  .dashboard {
+  :global(.dashboard) {
     --bg: #09090b; --bg3: #111114; --b1: #1a1a1e; --b2: #27272a;
     --t1: #e4e4e7; --t2: #a1a1aa; --t3: #71717a; --t4: #52525b;
     --accent: #818cf8; --red: #ef4444;
     --mono: "JetBrains Mono", monospace; --sans: "Outfit", sans-serif;
-    min-height: 100vh; background: var(--bg); color: var(--t2); font-family: var(--mono);
   }
 
   .main { max-width: 720px; margin: 0 auto; padding: 48px 24px; }

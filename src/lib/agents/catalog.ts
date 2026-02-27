@@ -1,25 +1,26 @@
 import type { AgentCatalogEntry, AgentType } from "$lib/types/session";
+import { DEFAULT_MODEL_FULL } from "$lib/config";
 
 export const AGENT_CATALOG: Record<AgentType, AgentCatalogEntry> = {
   shelley: {
     id: "shelley",
     name: "Shelley",
     description: "Full-stack engineering agent. filepath-native reference implementation.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "shell",
   },
   pi: {
     id: "pi",
     name: "Pi",
     description: "Research and analysis. Deep dives into docs, APIs, codebases.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "search",
   },
   "claude-code": {
     id: "claude-code",
     name: "Claude Code",
     description: "Anthropic's agentic coding tool. Complex multi-file changes.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "bot",
   },
   codex: {
@@ -33,28 +34,28 @@ export const AGENT_CATALOG: Record<AgentType, AgentCatalogEntry> = {
     id: "cursor",
     name: "Cursor",
     description: "Cursor's agent mode via CLI. IDE-grade code intelligence.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "mouse-pointer",
   },
   amp: {
     id: "amp",
     name: "Amp",
     description: "Sourcegraph's agent. Large codebase navigation, cross-repo changes.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "zap",
   },
   opencode: {
     id: "opencode",
     name: "OpenCode",
     description: "Open-source coding agent. Terminal-based development.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "terminal",
   },
   custom: {
     id: "custom",
     name: "Custom",
     description: "Bring your own agent. Dockerfile that speaks the filepath protocol.",
-    defaultModel: "anthropic/claude-sonnet-4",
+    defaultModel: DEFAULT_MODEL_FULL,
     icon: "box",
   },
 };

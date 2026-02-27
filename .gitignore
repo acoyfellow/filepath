@@ -30,4 +30,5 @@ dist/
 e2e-screenshots/
 preview/
 .sisyphus
+.cursor
 .dev.vars

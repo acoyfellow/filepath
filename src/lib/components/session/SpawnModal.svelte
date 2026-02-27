@@ -1,15 +1,17 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { DEFAULT_MODEL } from "$lib/config";
   import type { AgentType, SpawnRequest } from "$lib/types/session";
-
+  
   interface Props {
     onclose: () => void;
     onspawn: (req: SpawnRequest) => void;
     lastAgent?: AgentType;
     lastModel?: string;
+    accountKeyMasked?: string | null;
   }
+  
+  let { onclose, onspawn, lastAgent = "shelley", lastModel = DEFAULT_MODEL, accountKeyMasked = null }: Props = $props();
 
-  let { onclose, onspawn, lastAgent = "shelley", lastModel = "claude-sonnet-4" }: Props = $props();
 
   const NAMES = ["atlas","bolt","cipher","drift","echo","flux","ghost","helix","iris","kite","nova","orbit","pulse","relay","spark","trace","vortex","wave","zero"];
   const AGENTS: { id: AgentType; label: string }[] = [
@@ -22,7 +24,7 @@
     { id: "custom", label: "Custom" },
   ];
   // Default model list -- will be replaced by dynamic OpenRouter fetch
-  const MODELS = ["claude-sonnet-4", "claude-opus-4-6", "gpt-4o", "o3", "deepseek-r1", "gemini-2.5-pro"];
+  const MODELS = [DEFAULT_MODEL, "claude-opus-4-6", "gpt-4o", "o3", "deepseek-r1", "gemini-2.5-pro"];
 
   function pickName(): string {
     const word = NAMES[Math.floor(Math.random() * NAMES.length)];
@@ -35,27 +37,11 @@
   let model = $state(lastModel);
   let modelFilter = $state("");
 
-  // BYOK state
-  let hasAccountKey = $state(false);
-  let accountKeyMasked = $state<string | null>(null);
-  let keyMode = $state<'account' | 'session'>('account');
+  // BYOK state - accountKeyMasked comes from server-side props (no flicker!)
+  let hasAccountKey = $state(!!accountKeyMasked);
+  let keyMode = $state<'account' | 'session'>(accountKeyMasked ? 'account' : 'session');
   let sessionKey = $state('');
-  let keyLoading = $state(true);
-
-  onMount(async () => {
-    try {
-      const res = await fetch('/api/user/keys');
-      if (res.ok) {
-        const data = await res.json() as { openrouter: string | null };
-        if (data.openrouter) {
-          hasAccountKey = true;
-          accountKeyMasked = data.openrouter;
-        }
-      }
-    } catch { /* ignore */ } finally {
-      keyLoading = false;
-    }
-  });
+  let keyLoading = $state(false); // Already have the data from server
 
   let filteredModels = $derived(
     modelFilter

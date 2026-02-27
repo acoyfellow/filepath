@@ -1,19 +1,8 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { authClient } from '$lib/auth-client';
-  import Nav from '$lib/components/Nav.svelte';
-
-  let dark = $state(browser && document.documentElement.classList.contains('dark'));
-  if (browser) {
-    const observer = new MutationObserver(() => {
-      dark = document.documentElement.classList.contains('dark');
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  }
-
   type ApiKeyData = {
     id: string;
     name: string | null;
@@ -122,17 +111,15 @@
   <title>API Keys - myfilepath.com</title>
 </svelte:head>
 
-<div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-	<Nav current="api-keys" email={page.data.user?.email} />
-
+<div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-3xl mx-auto px-6 py-12">
     <div class="flex items-center justify-between mb-10">
       <div>
-        <h1 class="text-xl font-medium mb-1 {dark ? 'text-neutral-100' : 'text-gray-900'}">API keys</h1>
-        <p class="text-sm {dark ? 'text-neutral-500' : 'text-gray-500'}">Manage access keys for your agents</p>
+        <h1 class="text-xl font-medium mb-1 text-gray-900 dark:text-neutral-100">API keys</h1>
+        <p class="text-sm text-gray-500 dark:text-neutral-500">Manage access keys for your agents</p>
       </div>
       <div class="flex gap-3">
-			<a href="/dashboard" class="px-4 py-2 text-sm border rounded transition-colors {dark ? 'text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'text-gray-600 border-gray-200 hover:border-gray-400'}">Back</a>
+			<a href="/dashboard" class="px-4 py-2 text-sm border rounded transition-colors text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600">Back</a>
         <button
           onclick={() => { showCreateDialog = true; createdKey = null; error = null; }}
           class="px-4 py-2 text-sm font-medium bg-neutral-100 text-neutral-950 rounded hover:bg-white transition-colors cursor-pointer"
@@ -151,13 +138,13 @@
 
     {#if isLoading}
       <div class="text-center py-16">
-        <div class="w-6 h-6 border-2 rounded-full animate-spin mx-auto {dark ? 'border-neutral-700 border-t-neutral-400' : 'border-gray-300 border-t-gray-500'}"></div>
-        <p class="mt-4 text-sm {dark ? 'text-neutral-500' : 'text-gray-500'}">Loading…</p>
+        <div class="w-6 h-6 border-2 rounded-full animate-spin mx-auto border-gray-300 border-t-gray-500 dark:border-neutral-700 dark:border-t-neutral-400"></div>
+        <p class="mt-4 text-sm text-gray-500 dark:text-neutral-500">Loading…</p>
       </div>
     {:else if apiKeys.length === 0}
-      <div class="border rounded p-12 text-center transition-colors duration-200 {dark ? 'border-neutral-800' : 'border-gray-200'}">
-        <p class="mb-1 {dark ? 'text-neutral-400' : 'text-gray-600'}">No API keys yet</p>
-        <p class="text-sm mb-6 {dark ? 'text-neutral-600' : 'text-gray-400'}">Create an API key to give your agents access</p>
+      <div class="border rounded p-12 text-center transition-colors duration-200 border-gray-200 dark:border-neutral-800">
+        <p class="mb-1 text-gray-600 dark:text-neutral-400">No API keys yet</p>
+        <p class="text-sm mb-6 text-gray-400 dark:text-neutral-600">Create an API key to give your agents access</p>
         <button
           onclick={() => { showCreateDialog = true; createdKey = null; }}
           class="px-4 py-2 text-sm font-medium bg-neutral-100 text-neutral-950 rounded hover:bg-white transition-colors cursor-pointer"
@@ -168,14 +155,14 @@
     {:else}
       <div class="space-y-3">
         {#each apiKeys as key (key.id)}
-          <div class="border rounded p-5 transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800' : 'bg-gray-100 border-gray-200'}">
+          <div class="border rounded p-5 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
             <div class="flex items-center justify-between">
               <div>
-                <p class="font-medium {dark ? 'text-neutral-100' : 'text-gray-900'}">{key.name || 'Unnamed'}</p>
-                <p class="font-mono text-xs mt-1 {dark ? 'text-neutral-500' : 'text-gray-500'}">
+                <p class="font-medium text-gray-900 dark:text-neutral-100">{key.name || 'Unnamed'}</p>
+                <p class="font-mono text-xs mt-1 text-gray-500 dark:text-neutral-500">
                   {key.start || ''}{'•'.repeat(10)}
                 </p>
-                <p class="text-xs mt-1 {dark ? 'text-neutral-600' : 'text-gray-400'}">
+                <p class="text-xs mt-1 text-gray-400 dark:text-neutral-600">
                   Created {new Date(key.createdAt).toLocaleDateString()}
                   {#if key.expiresAt}
                     · Expires {new Date(key.expiresAt).toLocaleDateString()}
@@ -188,7 +175,7 @@
                     {key.expiresAt > new Date() ? 'active' : 'expired'}
                   </span>
                 {:else}
-                  <span class="px-2 py-1 text-xs font-mono border rounded {dark ? 'text-neutral-500 border-neutral-800' : 'text-gray-500 border-gray-200'}">
+                  <span class="px-2 py-1 text-xs font-mono border rounded text-gray-500 border-gray-200 dark:text-neutral-500 dark:border-neutral-800">
                     no expiry
                   </span>
                 {/if}
@@ -212,17 +199,17 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center" onclick={() => { if (!createdKey) showCreateDialog = false; }}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="border rounded-lg p-6 max-w-lg w-full mx-4 transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-gray-200'}" onclick={(e) => e.stopPropagation()}>
-      <h2 class="text-lg font-medium mb-4 {dark ? 'text-neutral-100' : 'text-gray-900'}">
+    <div class="border rounded-lg p-6 max-w-lg w-full mx-4 transition-colors duration-200 bg-white border-gray-200 dark:bg-neutral-900 dark:border-neutral-800" onclick={(e) => e.stopPropagation()}>
+      <h2 class="text-lg font-medium mb-4 text-gray-900 dark:text-neutral-100">
         {createdKey ? 'Key created' : 'Create API key'}
       </h2>
 
       {#if createdKey}
         <div>
-          <p class="text-sm mb-4 {dark ? 'text-neutral-500' : 'text-gray-500'}">
+          <p class="text-sm mb-4 text-gray-500 dark:text-neutral-500">
             Copy this key now. You won’t be able to see it again.
           </p>
-          <div class="border rounded p-4 font-mono text-sm break-all transition-colors duration-200 {dark ? 'bg-neutral-950 border-neutral-800 text-neutral-200' : 'bg-gray-50 border-gray-200 text-gray-800'}">
+          <div class="border rounded p-4 font-mono text-sm break-all transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200">
             {createdKey}
           </div>
           <button
@@ -233,7 +220,7 @@
           </button>
           <button
             onclick={() => { showCreateDialog = false; createdKey = null; }}
-            class="w-full mt-2 px-4 py-2 text-sm border rounded transition-colors cursor-pointer {dark ? 'text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'text-gray-600 border-gray-200 hover:border-gray-400'}"
+            class="w-full mt-2 px-4 py-2 text-sm border rounded transition-colors cursor-pointer text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
           >
             done
           </button>
@@ -241,30 +228,30 @@
       {:else}
         <div class="space-y-4">
           <div>
-            <label for="keyName" class="text-xs uppercase tracking-wide {dark ? 'text-neutral-500' : 'text-gray-500'}">Agent name</label>
+            <label for="keyName" class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Agent name</label>
             <input
               id="keyName"
               bind:value={newKeyName}
               placeholder="my-coding-agent"
-              class="w-full mt-1 px-3 py-2 border rounded text-sm focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-950 border-neutral-800 text-neutral-200 placeholder:text-neutral-700 focus:border-neutral-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400'}"
+              class="w-full mt-1 px-3 py-2 border rounded text-sm focus:outline-none transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
             />
           </div>
           <div>
-            <label for="secrets" class="text-xs uppercase tracking-wide {dark ? 'text-neutral-500' : 'text-gray-500'}">Environment secrets <span class="{dark ? 'text-neutral-700' : 'text-gray-400'}">(optional)</span></label>
+            <label for="secrets" class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Environment secrets <span class="text-gray-400 dark:text-neutral-700">(optional)</span></label>
             <textarea
               id="secrets"
               bind:value={newKeySecrets}
               placeholder={"ANTHROPIC_API_KEY=sk-...\nGITHUB_TOKEN=ghp_..."}
               rows="4"
-              class="w-full mt-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none resize-none transition-colors duration-200 {dark ? 'bg-neutral-950 border-neutral-800 text-neutral-200 placeholder:text-neutral-700 focus:border-neutral-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400'}"
+              class="w-full mt-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none resize-none transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
             ></textarea>
-            <p class="text-xs mt-1 {dark ? 'text-neutral-600' : 'text-gray-400'}">One per line: KEY=value</p>
+            <p class="text-xs mt-1 text-gray-400 dark:text-neutral-600">One per line: KEY=value</p>
           </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
           <button
             onclick={() => showCreateDialog = false}
-            class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer {dark ? 'text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'text-gray-600 border-gray-200 hover:border-gray-400'}"
+            class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
           >
             cancel
           </button>

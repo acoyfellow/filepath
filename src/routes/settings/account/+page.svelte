@@ -1,18 +1,7 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { authClient } from '$lib/auth-client';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import Nav from '$lib/components/Nav.svelte';
-
-  let dark = $state(browser && document.documentElement.classList.contains('dark'));
-  if (browser) {
-    const observer = new MutationObserver(() => {
-      dark = document.documentElement.classList.contains('dark');
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  }
-
   // ─── Delete account state ───
   let showDeleteDialog = $state(false);
   let password = $state('');
@@ -129,44 +118,42 @@
   }
 </script>
 
-<div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-	<Nav current="account" />
-
+<div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-2xl mx-auto px-6 py-12">
     <div class="flex items-center justify-between mb-10">
       <div>
-        <h1 class="text-xl font-medium mb-1 {dark ? 'text-neutral-100' : 'text-gray-900'}">Account</h1>
-        <p class="text-sm {dark ? 'text-neutral-500' : 'text-gray-500'}">Manage your account settings</p>
+        <h1 class="text-xl font-medium mb-1 text-gray-900 dark:text-neutral-100">Account</h1>
+        <p class="text-sm text-gray-500 dark:text-neutral-500">Manage your account settings</p>
       </div>
-			<a href="/dashboard" class="px-4 py-2 text-sm border rounded transition-colors {dark ? 'text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'text-gray-600 border-gray-200 hover:border-gray-400'}">Back</a>
+			<a href="/dashboard" class="px-4 py-2 text-sm border rounded transition-colors text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600">Back</a>
     </div>
 
     <section class="mb-10">
-      <h2 class="text-xs uppercase tracking-wide mb-4 {dark ? 'text-neutral-500' : 'text-gray-500'}">Account information</h2>
-      <div class="border rounded p-5 transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800' : 'bg-gray-100 border-gray-200'}">
-        <p class="text-sm {dark ? 'text-neutral-400' : 'text-gray-600'}">Your account details are managed through your profile settings.</p>
+      <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Account information</h2>
+      <div class="border rounded p-5 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
+        <p class="text-sm text-gray-600 dark:text-neutral-400">Your account details are managed through your profile settings.</p>
       </div>
     </section>
 
     <section class="mb-10">
-      <h2 class="text-xs uppercase tracking-wide mb-4 {dark ? 'text-neutral-500' : 'text-gray-500'}">Provider API Keys</h2>
-      <div class="border rounded p-5 transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800' : 'bg-gray-100 border-gray-200'}">
-        <p class="text-sm mb-4 {dark ? 'text-neutral-400' : 'text-gray-600'}">
+      <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Provider API Keys</h2>
+      <div class="border rounded p-5 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
+        <p class="text-sm mb-4 text-gray-600 dark:text-neutral-400">
           Bring your own API key. Your key is encrypted at rest and never shared.
         </p>
 
         <div class="mb-2">
-          <label for="openrouter-key" class="text-xs uppercase tracking-wide {dark ? 'text-neutral-500' : 'text-gray-500'}">OpenRouter API Key</label>
+          <label for="openrouter-key" class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">OpenRouter API Key</label>
         </div>
 
         {#if keyLoading}
-          <p class="text-sm {dark ? 'text-neutral-600' : 'text-gray-400'}">Loading...</p>
+          <p class="text-sm text-gray-400 dark:text-neutral-600">Loading...</p>
         {:else if maskedKey && !showKeyInput}
           <div class="flex items-center gap-3">
-            <code class="text-sm px-3 py-2 rounded border font-mono transition-colors duration-200 {dark ? 'text-neutral-400 bg-neutral-950 border-neutral-800' : 'text-gray-600 bg-gray-50 border-gray-200'}">{maskedKey}</code>
+            <code class="text-sm px-3 py-2 rounded border font-mono transition-colors duration-200 text-gray-600 bg-gray-50 border-gray-200 dark:text-neutral-400 dark:bg-neutral-950 dark:border-neutral-800">{maskedKey}</code>
             <button
               onclick={() => { showKeyInput = true; openrouterKey = ''; }}
-              class="px-3 py-1.5 text-xs border rounded transition-colors cursor-pointer {dark ? 'text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'text-gray-600 border-gray-200 hover:border-gray-400'}"
+              class="px-3 py-1.5 text-xs border rounded transition-colors cursor-pointer text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
             >
               change
             </button>
@@ -185,26 +172,26 @@
               type="password"
               placeholder="sk-or-v1-..."
               bind:value={openrouterKey}
-              class="flex-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-950 border-neutral-800 text-neutral-200 placeholder:text-neutral-700 focus:border-neutral-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400'}"
+              class="flex-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
             />
             <button
               onclick={saveKey}
               disabled={keySaving || !openrouterKey.trim()}
-              class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed {dark ? 'text-neutral-200 bg-neutral-800 border-neutral-700 hover:bg-neutral-700' : 'text-gray-800 bg-gray-200 border-gray-300 hover:bg-gray-300'}"
+              class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-gray-800 bg-gray-200 border-gray-300 hover:bg-gray-300 dark:text-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:hover:bg-neutral-700"
             >
               {keySaving ? 'saving...' : 'save'}
             </button>
             {#if showKeyInput}
               <button
                 onclick={() => { showKeyInput = false; openrouterKey = ''; keyError = ''; }}
-                class="px-3 py-2 text-sm cursor-pointer {dark ? 'text-neutral-500 hover:text-neutral-300' : 'text-gray-500 hover:text-gray-700'}"
+                class="px-3 py-2 text-sm cursor-pointer text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300"
               >
                 cancel
               </button>
             {/if}
           </div>
-          <p class="text-xs mt-2 {dark ? 'text-neutral-600' : 'text-gray-400'}">
-            Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="underline {dark ? 'text-neutral-400 hover:text-neutral-300' : 'text-gray-600 hover:text-gray-800'}">openrouter.ai/keys</a>
+          <p class="text-xs mt-2 text-gray-400 dark:text-neutral-600">
+            Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="underline text-gray-600 hover:text-gray-800 dark:text-neutral-400 dark:hover:text-neutral-300">openrouter.ai/keys</a>
           </p>
         {/if}
 
@@ -220,7 +207,7 @@
     <section>
       <h2 class="text-red-400/80 text-xs uppercase tracking-wide mb-4">Danger zone</h2>
       <div class="bg-neutral-900 border border-red-900/50 rounded p-5">
-        <p class="text-sm mb-4 {dark ? 'text-neutral-400' : 'text-gray-600'}">
+        <p class="text-sm mb-4 text-gray-600 dark:text-neutral-400">
           Permanently delete your account and all associated data. This action cannot be undone.
         </p>
         <button 
@@ -238,36 +225,36 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center" onclick={() => showDeleteDialog = false}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="border rounded-lg p-6 max-w-md w-full mx-4 transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-gray-200'}" onclick={(e) => e.stopPropagation()}>
+    <div class="border rounded-lg p-6 max-w-md w-full mx-4 transition-colors duration-200 bg-white border-gray-200 dark:bg-neutral-900 dark:border-neutral-800" onclick={(e) => e.stopPropagation()}>
       <h2 class="text-red-400 text-lg font-medium mb-2">Delete account</h2>
-      <p class="text-sm mb-2 {dark ? 'text-neutral-400' : 'text-gray-600'}">This will permanently delete:</p>
-      <ul class="text-sm space-y-1 mb-6 ml-4 {dark ? 'text-neutral-500' : 'text-gray-500'}">
-        <li class="flex gap-2"><span class="{dark ? 'text-neutral-600' : 'text-gray-400'}">•</span> All sessions and terminals</li>
-        <li class="flex gap-2"><span class="{dark ? 'text-neutral-600' : 'text-gray-400'}">•</span> All API keys</li>
-        <li class="flex gap-2"><span class="{dark ? 'text-neutral-600' : 'text-gray-400'}">•</span> Credit balance (non-refundable)</li>
-        <li class="flex gap-2"><span class="{dark ? 'text-neutral-600' : 'text-gray-400'}">•</span> Usage history</li>
+      <p class="text-sm mb-2 text-gray-600 dark:text-neutral-400">This will permanently delete:</p>
+      <ul class="text-sm space-y-1 mb-6 ml-4 text-gray-500 dark:text-neutral-500">
+        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All sessions and terminals</li>
+        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All API keys</li>
+        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> Credit balance (non-refundable)</li>
+        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> Usage history</li>
       </ul>
 
       <div class="space-y-4">
         <div>
-          <label for="password" class="text-xs uppercase tracking-wide {dark ? 'text-neutral-500' : 'text-gray-500'}">Password</label>
+          <label for="password" class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Password</label>
           <input
             id="password"
             type="password"
             placeholder="Enter your password"
             bind:value={password}
-            class="w-full mt-1 px-3 py-2 border rounded text-sm focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-950 border-neutral-800 text-neutral-200 placeholder:text-neutral-700 focus:border-neutral-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400'}"
+            class="w-full mt-1 px-3 py-2 border rounded text-sm focus:outline-none transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
           />
         </div>
 
         <div>
-          <label for="confirm" class="text-xs uppercase tracking-wide {dark ? 'text-neutral-500' : 'text-gray-500'}">Type "{CONFIRM_PHRASE}" to confirm</label>
+          <label for="confirm" class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Type "{CONFIRM_PHRASE}" to confirm</label>
           <input
             id="confirm"
             type="text"
             placeholder={CONFIRM_PHRASE}
             bind:value={confirmText}
-            class="w-full mt-1 px-3 py-2 border rounded text-sm focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-950 border-neutral-800 text-neutral-200 placeholder:text-neutral-700 focus:border-neutral-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400'}"
+            class="w-full mt-1 px-3 py-2 border rounded text-sm focus:outline-none transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
           />
         </div>
 
@@ -279,7 +266,7 @@
       <div class="flex justify-end gap-3 mt-6">
         <button
           onclick={() => showDeleteDialog = false}
-          class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer {dark ? 'text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'text-gray-600 border-gray-200 hover:border-gray-400'}"
+          class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
         >
           cancel
         </button>

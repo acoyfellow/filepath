@@ -1,5 +1,6 @@
 import { json } from "@sveltejs/kit";
 import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
+import { DEFAULT_MODEL_FULL } from "$lib/config";
 
 /**
  * GET /api/models
@@ -34,7 +35,7 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // Curated fallback list if OpenRouter API is unreachable
 const FALLBACK_MODELS: ModelEntry[] = [
-  { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4", provider: "Anthropic" },
+  { id: DEFAULT_MODEL_FULL, name: "Default Model", provider: "Default" },
   { id: "anthropic/claude-opus-4", name: "Claude Opus 4", provider: "Anthropic" },
   { id: "anthropic/claude-haiku-4", name: "Claude Haiku 4", provider: "Anthropic" },
   { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI" },

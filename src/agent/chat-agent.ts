@@ -5,6 +5,7 @@ import { parseAgentEvent } from "../lib/protocol";
 import type { AgentEventType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { ADAPTER_COMMANDS, buildAgentEnv } from '$lib/agents/adapters';
+import { DEFAULT_MODEL, DEFAULT_MODEL_FULL } from '$lib/config';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
 
@@ -337,7 +338,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
   // ─── LLM ──────────────────────────────────────────────
 
-  private async callLLM(userMessage: string, connection: Connection): Promise<void> {
+  private async callLLM(_userMessage: string, connection: Connection): Promise<void> {
     // Broadcast thinking status
     this.broadcast(JSON.stringify({
       type: "event",
@@ -555,7 +556,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
    *   4. Empty string → callLLM will show clear error
    */
   private async resolveProvider(): Promise<{ apiUrl: string; apiKey: string; model: string; headers: Record<string, string> }> {
-    const rawModel = this.state?.model || "claude-sonnet-4";
+    const rawModel = this.state?.model || DEFAULT_MODEL;
     const sessionId = this.state?.sessionId;
 
     let resolvedKey = "";
@@ -611,7 +612,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     }
 
     const modelMap: Record<string, string> = {
-      "claude-sonnet-4": "anthropic/claude-sonnet-4",
+      [DEFAULT_MODEL]: DEFAULT_MODEL_FULL,
       "claude-opus-4-6": "anthropic/claude-opus-4",
       "gpt-4o": "openai/gpt-4o",
       "o3": "openai/o3",
@@ -622,7 +623,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
       apiKey: resolvedKey,
-      model: modelMap[rawModel] || rawModel,
+      model: modelMap[rawModel] || modelMap[DEFAULT_MODEL] || rawModel,
       headers: { "HTTP-Referer": "https://myfilepath.com", "X-Title": "filepath" },
     };
   }

@@ -1,21 +1,28 @@
 <script lang="ts">
   import "$lib/styles/theme.css";
   import { onMount, onDestroy } from "svelte";
-  import TopBar from "$lib/components/session/TopBar.svelte";
+  import { browser } from "$app/environment";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
   import SpawnModal from "$lib/components/session/SpawnModal.svelte";
   import type { AgentNode, AgentType, AgentNodeConfig, SpawnRequest } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
   import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
+  import { DEFAULT_MODEL } from "$lib/config";
+  
+  let dark = $state(browser && document.documentElement.classList.contains('dark'));
+  
+  if (browser) {
+    const observer = new MutationObserver(() => {
+      dark = document.documentElement.classList.contains('dark');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  }
 
   // ─── Server data ───
   let { data } = $props();
-  const sessionId = $derived($page.params.id ?? "");
-
-  // ─── Theme ───
-  let dark = $state(false);
+  const sessionId = $derived(page.params.id ?? "");
 
   // ─── Spawn modal ───
   let showSpawn = $state(false);
@@ -112,7 +119,7 @@
         parentId: n.parentId ?? nodeId,
         name: n.name ?? 'agent',
         agentType: (n.agentType ?? 'shelley') as AgentType,
-        model: n.model ?? 'claude-sonnet-4',
+        model: n.model ?? DEFAULT_MODEL,
         status: 'idle',
         config: {},
         sortOrder: 0,
@@ -313,10 +320,8 @@
   }
 </script>
 
-<div class:dark style="display:flex;flex-direction:column;height:100vh;width:100vw;background:var(--bg);color:var(--t1);overflow:hidden">
-  <TopBar {dark} ontoggletheme={() => { dark = !dark; }} email={data.user?.email} />
-
-  <div style="display:flex;flex:1;overflow:hidden">
+<div class="min-h-screen flex flex-col overflow-hidden transition-colors duration-200 {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-white text-gray-900'}">
+  <div class="flex flex-col flex-1 min-h-0 overflow-hidden {dark ? 'bg-neutral-900' : 'bg-gray-50'}">
     {#if rootNode}
       <AgentTree
         root={rootNode}
@@ -325,7 +330,7 @@
         onspawn={() => { showSpawn = true; }}
       />
 
-      <div style="flex:1;display:flex;flex-direction:column;background:var(--bg);overflow:hidden">
+      <div class="flex-1 flex flex-col overflow-hidden {dark ? 'bg-neutral-900' : 'bg-gray-50'}">
         <AgentPanel
           agent={selectedAgent}
           messages={currentMessages}
@@ -335,12 +340,12 @@
       </div>
     {:else}
       <!-- Empty session -- prompt to spawn first agent -->
-      <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
-        <p style="color:var(--t2);font-size:14px">{data.session.name}</p>
-        <p style="color:var(--t3);font-size:13px">No agents yet. Spawn your first agent to get started.</p>
+      <div class="flex-1 flex flex-col items-center justify-center gap-4 pt-8 {dark ? 'bg-neutral-900' : 'bg-gray-50'}">
+        <p class="text-sm {dark ? 'text-neutral-400' : 'text-gray-600'}">{data.session.name}</p>
+        <p class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">No agents yet. Spawn your first agent to get started.</p>
         <button
           onclick={() => { showSpawn = true; }}
-          style="padding:8px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-size:13px;cursor:pointer"
+          class="px-5 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer {dark ? 'bg-indigo-500 hover:bg-indigo-400 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}"
         >
           + spawn agent
         </button>
@@ -353,5 +358,6 @@
   <SpawnModal
     onclose={() => { showSpawn = false; }}
     onspawn={handleSpawn}
+    accountKeyMasked={data.accountKeyMasked}
   />
 {/if}

@@ -1,64 +1,50 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
-  import Nav from '$lib/components/Nav.svelte';
-  import CodeBlock from '$lib/components/CodeBlock.svelte';
-
-  let dark = $state(browser && document.documentElement.classList.contains('dark'));
-
-  if (browser) {
-    const observer = new MutationObserver(() => {
-      dark = document.documentElement.classList.contains('dark');
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  }
-</script>
+  import CodeBlock from '$lib/components/CodeBlock.svelte';</script>
 
 <svelte:head>
   <title>How to Add a Custom Agent | filepath</title>
   <meta name="description" content="Build and integrate your own agent into filepath. Step-by-step guide for BYO (bring your own) Docker containers." />
 </svelte:head>
 
-<div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-  <Nav />
-
+<div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-3xl mx-auto px-6 py-12">
     <div class="mb-8">
-      <a href="/docs" class="{dark ? 'text-neutral-500' : 'text-gray-500'} hover:text-neutral-300 text-sm">Back to Docs</a>
+      <a href="/docs" class="text-gray-500 dark:text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
     </div>
 
-    <h1 class="text-3xl font-medium {dark ? 'text-neutral-100' : 'text-gray-900'} mb-4">How to Add a Custom Agent</h1>
-    <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-8">Build a Docker container that speaks the filepath Agent Protocol (FAP) and integrate it into the platform.</p>
+    <h1 class="text-3xl font-medium text-gray-900 dark:text-neutral-100 mb-4">How to Add a Custom Agent</h1>
+    <p class="text-gray-600 dark:text-neutral-400 mb-8">Build a Docker container that speaks the filepath Agent Protocol (FAP) and integrate it into the platform.</p>
 
     <div class="prose prose-invert prose-neutral max-w-none">
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">What you'll build</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">A Docker container that:</p>
-      <ul class="space-y-2 {dark ? 'text-neutral-400' : 'text-gray-600'} mb-6">
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">What you'll build</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">A Docker container that:</p>
+      <ul class="space-y-2 text-gray-600 dark:text-neutral-400 mb-6">
         <li>• Receives tasks via environment variables</li>
         <li>• Reads user messages from stdin (NDJSON)</li>
         <li>• Emits events to stdout (NDJSON)</li>
         <li>• Runs in an isolated Linux environment</li>
       </ul>
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Prerequisites</h2>
-      <ul class="space-y-2 {dark ? 'text-neutral-400' : 'text-gray-600'} mb-6">
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Prerequisites</h2>
+      <ul class="space-y-2 text-gray-600 dark:text-neutral-400 mb-6">
         <li>• Docker installed locally</li>
         <li>• filepath account with API key configured</li>
         <li>• Basic understanding of NDJSON (one JSON object per line)</li>
       </ul>
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Step 1: Create the Dockerfile</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Create a new directory for your agent:</p>
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Step 1: Create the Dockerfile</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Create a new directory for your agent:</p>
       <CodeBlock
         language="bash"
-        className="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-4 text-sm {dark ? 'text-neutral-300' : 'text-gray-700'} overflow-x-auto mb-6"
+        className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-6"
         code={`mkdir my-custom-agent
 cd my-custom-agent`}
       />
 
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Create <code class="{dark ? 'bg-neutral-800' : 'bg-gray-100'} px-2 py-1 rounded text-sm">Dockerfile</code>:</p>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Create <code class="bg-gray-100 dark:bg-neutral-800 px-2 py-1 rounded text-sm">Dockerfile</code>:</p>
       <CodeBlock
         language="bash"
-        className="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-4 text-sm {dark ? 'text-neutral-300' : 'text-gray-700'} overflow-x-auto mb-6"
+        className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-6"
         code={`FROM node:20-alpine
 
 WORKDIR /workspace
@@ -73,11 +59,11 @@ RUN npm install
 CMD ["node", "index.js"]`}
       />
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Step 2: Write the Agent Code</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Create <code class="{dark ? 'bg-neutral-800' : 'bg-gray-100'} px-2 py-1 rounded text-sm">index.js</code>:</p>
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Step 2: Write the Agent Code</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Create <code class="bg-gray-100 dark:bg-neutral-800 px-2 py-1 rounded text-sm">index.js</code>:</p>
       <CodeBlock
         language="javascript"
-        className="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-4 text-sm {dark ? 'text-neutral-300' : 'text-gray-700'} overflow-x-auto mb-6"
+        className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-6"
         code={`const readline = require('readline');
 
 // Read environment variables from filepath
@@ -143,18 +129,18 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });`}
       />
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Create <code class="{dark ? 'bg-neutral-800' : 'bg-gray-100'} px-2 py-1 rounded text-sm">package.json</code>:</p>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Create <code class="bg-gray-100 dark:bg-neutral-800 px-2 py-1 rounded text-sm">package.json</code>:</p>
       <CodeBlock
         language="json"
-        className="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-4 text-sm {dark ? 'text-neutral-300' : 'text-gray-700'} overflow-x-auto mb-6"
+        className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-6"
         code={`{"name": "my-custom-agent", "version": "1.0.0", "main": "index.js"}`}
       />
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Step 3: Test Locally</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Build and test your container:</p>
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Step 3: Test Locally</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Build and test your container:</p>
       <CodeBlock
         language="bash"
-        className="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-4 text-sm {dark ? 'text-neutral-300' : 'text-gray-700'} overflow-x-auto mb-6"
+        className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-6"
         code={`# Build
 docker build -t my-custom-agent .
 
@@ -165,13 +151,13 @@ echo '{"type":"message","content":"hello"}' | docker run -i \\
   my-custom-agent`}
       />
 
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">You should see NDJSON output.</p>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">You should see NDJSON output.</p>
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Step 4: Push to Registry</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Push your image to a container registry:</p>
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Step 4: Push to Registry</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Push your image to a container registry:</p>
       <CodeBlock
         language="bash"
-        className="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-4 text-sm {dark ? 'text-neutral-300' : 'text-gray-700'} overflow-x-auto mb-6"
+        className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-6"
         code={`# Tag for registry
 docker tag my-custom-agent:latest ghcr.io/YOURNAME/my-custom-agent:latest
 
@@ -179,28 +165,28 @@ docker tag my-custom-agent:latest ghcr.io/YOURNAME/my-custom-agent:latest
 docker push ghcr.io/YOURNAME/my-custom-agent:latest`}
       />
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Step 5: Register in filepath</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-6">Currently, custom agents are added via PR to the filepath repo. Submit a PR adding your agent to the catalog.</p>
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Step 5: Register in filepath</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-6">Currently, custom agents are added via PR to the filepath repo. Submit a PR adding your agent to the catalog.</p>
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Event Reference</h2>
-      <p class="{dark ? 'text-neutral-400' : 'text-gray-600'} mb-4">Your agent should emit these event types:</p>
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Event Reference</h2>
+      <p class="text-gray-600 dark:text-neutral-400 mb-4">Your agent should emit these event types:</p>
       <div class="space-y-3 mb-6">
-        <div class="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-3">
-          <code class="{dark ? 'text-neutral-300' : 'text-gray-700'} text-sm">{'{"type":"text","content":"Hello from agent"}'}</code>
-          <span class="{dark ? 'text-neutral-500' : 'text-gray-500'} text-sm ml-2">— Assistant message</span>
+        <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-3">
+          <code class="text-gray-700 dark:text-neutral-300 text-sm">{'{"type":"text","content":"Hello from agent"}'}</code>
+          <span class="text-gray-500 dark:text-neutral-500 text-sm ml-2">— Assistant message</span>
         </div>
-        <div class="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-3">
-          <code class="{dark ? 'text-neutral-300' : 'text-gray-700'} text-sm">{'{"type":"tool","name":"git","status":"success"}'}</code>
-          <span class="{dark ? 'text-neutral-500' : 'text-gray-500'} text-sm ml-2">— Tool execution</span>
+        <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-3">
+          <code class="text-gray-700 dark:text-neutral-300 text-sm">{'{"type":"tool","name":"git","status":"success"}'}</code>
+          <span class="text-gray-500 dark:text-neutral-500 text-sm ml-2">— Tool execution</span>
         </div>
-        <div class="{dark ? 'bg-neutral-900' : 'bg-white'} border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded p-3">
-          <code class="{dark ? 'text-neutral-300' : 'text-gray-700'} text-sm">{'{"type":"done"}'}</code>
-          <span class="{dark ? 'text-neutral-500' : 'text-gray-500'} text-sm ml-2">— Task complete</span>
+        <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded p-3">
+          <code class="text-gray-700 dark:text-neutral-300 text-sm">{'{"type":"done"}'}</code>
+          <span class="text-gray-500 dark:text-neutral-500 text-sm ml-2">— Task complete</span>
         </div>
       </div>
 
-      <h2 class="text-xl font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mt-8 mb-4">Best Practices</h2>
-      <ul class="space-y-2 {dark ? 'text-neutral-400' : 'text-gray-600'} mb-6">
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mt-8 mb-4">Best Practices</h2>
+      <ul class="space-y-2 text-gray-600 dark:text-neutral-400 mb-6">
         <li>• <strong>Flush stdout</strong> after each JSON line</li>
         <li>• <strong>Handle SIGTERM</strong> gracefully — save state and exit</li>
         <li>• <strong>Validate input</strong> — don't crash on malformed JSON</li>
@@ -208,11 +194,11 @@ docker push ghcr.io/YOURNAME/my-custom-agent:latest`}
         <li>• <strong>Use /workspace</strong> — that's where files live</li>
       </ul>
 
-      <div class="mt-8 p-4 bg-neutral-900/50 border {dark ? 'border-neutral-800' : 'border-gray-200'} rounded">
-        <h3 class="text-lg font-medium {dark ? 'text-neutral-200' : 'text-gray-800'} mb-2">Next Steps</h3>
-        <ul class="space-y-2 {dark ? 'text-neutral-400' : 'text-gray-600'}">
-          <li>• Read the <a href="/docs/explanation/protocol" class="{dark ? 'text-neutral-300' : 'text-gray-700'} hover:underline">Protocol Deep Dive</a> for full details</li>
-          <li>• Check <a href="/docs/agents" class="{dark ? 'text-neutral-300' : 'text-gray-700'} hover:underline">Agent Catalog</a> for reference implementations</li>
+      <div class="mt-8 p-4 bg-neutral-900/50 border border-gray-200 dark:border-neutral-800 rounded">
+        <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-2">Next Steps</h3>
+        <ul class="space-y-2 text-gray-600 dark:text-neutral-400">
+          <li>• Read the <a href="/docs/explanation/protocol" class="text-gray-700 dark:text-neutral-300 hover:underline">Protocol Deep Dive</a> for full details</li>
+          <li>• Check <a href="/docs/agents" class="text-gray-700 dark:text-neutral-300 hover:underline">Agent Catalog</a> for reference implementations</li>
           <li>• Join discussions on GitHub</li>
         </ul>
       </div>

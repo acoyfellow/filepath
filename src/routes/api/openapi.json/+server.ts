@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { initAuth } from '$lib/auth';
+import { DEFAULT_MODEL_FULL } from '$lib/config';
 
 /**
  * GET /api/openapi.json - Returns the complete OpenAPI specification
@@ -146,7 +147,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
                       enum: ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'],
                       description: 'Type of agent to spawn'
                     },
-                    model: { type: 'string', description: 'LLM model (e.g., anthropic/claude-sonnet-4)' },
+                    model: { type: 'string', description: `LLM model (e.g., ${DEFAULT_MODEL_FULL})` },
                     parentId: { type: 'string', description: 'Parent node ID for nested agents' },
                     config: { type: 'object', description: 'Agent configuration' },
                     apiKey: { type: 'string', description: 'Optional per-session API key' }
