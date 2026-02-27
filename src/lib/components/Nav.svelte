@@ -92,7 +92,7 @@
         <a href="/docs" class="transition-colors {current === 'docs' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}">docs</a>
         <a href="/pricing" class="transition-colors {current === 'pricing' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}">pricing</a>
         <a href="/login" class="transition-colors {current === 'login' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}">login</a>
-        <a href="/signup" class="px-3 py-1 rounded text-sm font-medium transition-colors {dark ? 'bg-neutral-100 text-neutral-900 hover:bg-white' : 'bg-neutral-900 text-white hover:bg-black'}">sign up</a>
+        <a href="/signup" class="px-3 py-1 rounded text-sm font-medium transition-colors {dark ? 'bg-neutral-100 text-neutral-900 hover:bg-white' : 'bg-white text-gray-900 hover:bg-gray-100 border border-gray-300'}">sign up</a>
       {/if}
       {@render themeButton()}
     </div>

@@ -190,7 +190,7 @@
 
   <footer class="border-t {dark ? 'border-neutral-800' : 'border-gray-200'} pt-6 mt-12 text-center">
     <p class="{dark ? 'text-neutral-500' : 'text-gray-500'} text-sm">
-      Want to add your agent? <a href="https://github.com/acoyfellow/filepath/discussions" class="{dark ? 'text-neutral-300' : 'text-gray-700'} hover:underline">Start a discussion</a>
+      Want to add your agent? <a href="https://github.com/acoyfellow/filepath/issues" class="{dark ? 'text-neutral-300' : 'text-gray-700'} hover:underline">Open an issue</a>
     </p>
   </footer>
 </main>
