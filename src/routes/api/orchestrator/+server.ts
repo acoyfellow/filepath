@@ -67,9 +67,6 @@ async function verifyApiKey(
       return { valid: false, error: { message: 'API key has expired' } };
     }
 
-    if (keyRecord.creditBalance !== null && keyRecord.creditBalance <= 0) {
-      return { valid: false, error: { message: 'Insufficient credits' } };
-    }
 
     await db
       .update(apikey)
