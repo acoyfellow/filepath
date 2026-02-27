@@ -1,9 +1,18 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { resetPasswordEmailOTP } from '$lib/auth-client';
   import { X, ArrowLeft, Lock } from '@lucide/svelte';
   import Nav from '$lib/components/Nav.svelte';
   
+  let dark = $state(browser && document.documentElement.classList.contains('dark'));
+  if (browser) {
+    const observer = new MutationObserver(() => {
+      dark = document.documentElement.classList.contains('dark');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  }
+
   let email = $state('');
   let otp = $state('');
   let password = $state('');
@@ -67,23 +76,23 @@
   <meta name="description" content="Create a new password for your myfilepath.com account" />
 </svelte:head>
 
-<div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans flex flex-col">
+<div class="min-h-screen font-sans flex flex-col {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
   <Nav variant="centered" />
 
   <main class="flex-grow max-w-md mx-auto px-6 py-20">
     <div class="mb-8">
-      <a href="/forgot-password" class="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-300 transition-colors">
+      <a href="/forgot-password" class="inline-flex items-center gap-2 text-sm transition-colors {dark ? 'text-neutral-500 hover:text-neutral-300' : 'text-gray-500 hover:text-gray-700'}">
         <ArrowLeft class="w-4 h-4" />
         Back
       </a>
     </div>
 
     <div class="text-center mb-8">
-      <div class="w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-lg flex items-center justify-center mx-auto mb-4">
-        <Lock class="w-6 h-6 text-neutral-100" />
+      <div class="w-12 h-12 border rounded-lg flex items-center justify-center mx-auto mb-4 transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800' : 'bg-gray-100 border-gray-200'}">
+        <Lock class="w-6 h-6 {dark ? 'text-neutral-100' : 'text-gray-900'}" />
       </div>
-      <h1 class="text-neutral-100 text-xl font-medium">Create new password</h1>
-      <p class="text-neutral-500 text-sm mt-2">
+      <h1 class="text-xl font-medium {dark ? 'text-neutral-100' : 'text-gray-900'}">Create new password</h1>
+      <p class="text-sm mt-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">
         Enter the code from your email and your new password
       </p>
     </div>
@@ -112,12 +121,12 @@
         
         <form class="space-y-4" onsubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
           <div>
-            <label for="email" class="block text-sm text-neutral-500 mb-2">Email</label>
+            <label for="email" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">Email</label>
             <input
               id="email"
               type="email"
               bind:value={email}
-              class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+              class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
               placeholder="you@example.com"
               autocomplete="email"
               disabled={isLoading}
@@ -125,12 +134,12 @@
           </div>
           
           <div>
-            <label for="otp" class="block text-sm text-neutral-500 mb-2">OTP Code</label>
+            <label for="otp" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">OTP Code</label>
             <input
               id="otp"
               type="text"
               bind:value={otp}
-              class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+              class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
               placeholder="123456"
               autocomplete="off"
               disabled={isLoading}
@@ -138,12 +147,12 @@
           </div>
           
           <div>
-            <label for="password" class="block text-sm text-neutral-500 mb-2">New Password</label>
+            <label for="password" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">New Password</label>
             <input
               id="password"
               type="password"
               bind:value={password}
-              class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+              class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
               placeholder="••••••••"
               autocomplete="new-password"
               disabled={isLoading}
@@ -151,12 +160,12 @@
           </div>
           
           <div>
-            <label for="confirmPassword" class="block text-sm text-neutral-500 mb-2">Confirm Password</label>
+            <label for="confirmPassword" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">Confirm Password</label>
             <input
               id="confirmPassword"
               type="password"
               bind:value={confirmPassword}
-              class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+              class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
               placeholder="••••••••"
               autocomplete="new-password"
               disabled={isLoading}
@@ -173,13 +182,13 @@
         </form>
         
         <div class="mt-6 text-center text-sm">
-          <span class="text-neutral-500">Didn't receive the code?</span>
-          <a href="/forgot-password" class="text-neutral-100 hover:underline ml-1">Resend code</a>
+          <span class="{dark ? 'text-neutral-500' : 'text-gray-500'}">Didn't receive the code?</span>
+          <a href="/forgot-password" class="ml-1 hover:underline {dark ? 'text-neutral-100' : 'text-gray-900'}">Resend code</a>
         </div>
       {/if}
   </main>
 
-  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
+  <footer class="border-t px-6 py-6 text-center text-xs font-mono {dark ? 'border-neutral-800 text-neutral-600' : 'border-gray-200 text-gray-400'}">
     myfilepath.com
   </footer>
 </div>

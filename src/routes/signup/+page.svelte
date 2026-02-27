@@ -2,10 +2,19 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { browser } from '$app/environment';
   import { signUp } from '$lib/auth-client';
   import Nav from '$lib/components/Nav.svelte';
   import { X } from '@lucide/svelte';
   
+  let dark = $state(browser && document.documentElement.classList.contains('dark'));
+  if (browser) {
+    const observer = new MutationObserver(() => {
+      dark = document.documentElement.classList.contains('dark');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  }
+
   let email = $state('');
   let password = $state('');
   let confirmPassword = $state('');
@@ -70,7 +79,7 @@
   <title>Create Account - myfilepath.com</title>
 </svelte:head>
 
-<div class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
+<div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
   <Nav variant="centered" />
 
   <main class="max-w-sm mx-auto px-6 py-20">
@@ -78,7 +87,7 @@
       <svg width="48" height="48" viewBox="0 0 339 339" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-4">
         <path fill-rule="evenodd" clip-rule="evenodd" d="M119.261 35C128.462 35.0001 137.256 38.8378 143.569 45.6083L160.108 63.3453C166.421 70.1159 175.215 73.9536 184.416 73.9536H298.583C317.039 73.9536 332 89.0902 332 107.762V270.191C332 288.863 317.039 304 298.583 304H41.417C22.9613 304 8 288.863 8 270.191V68.8087C8.0001 50.1368 22.9614 35 41.417 35H119.261ZM169.23 219.37V259.415H291.318V219.37H169.23ZM50.7361 111.182L110.398 171.838L51.027 226.311L79.9846 258.994L169.77 173.606L82.022 81.2961L50.7361 111.182Z" fill="currentColor"/>
       </svg>
-      <h1 class="text-neutral-100 text-lg font-medium">Create your account</h1>
+      <h1 class="text-lg font-medium {dark ? 'text-neutral-100' : 'text-gray-900'}">Create your account</h1>
     </div>
 
     {#if error}
@@ -89,12 +98,12 @@
 
     <form class="space-y-4" onsubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
       <div>
-        <label for="email" class="block text-sm text-neutral-500 mb-2">Email</label>
+        <label for="email" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">Email</label>
         <input 
           id="email"
           type="email" 
           bind:value={email}
-          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
           placeholder="you@example.com"
           autocomplete="email"
           disabled={isLoading}
@@ -102,12 +111,12 @@
       </div>
 
       <div>
-        <label for="password" class="block text-sm text-neutral-500 mb-2">Password</label>
+        <label for="password" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">Password</label>
         <input 
           id="password"
           type="password" 
           bind:value={password}
-          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
           placeholder="••••••••"
           autocomplete="new-password"
           disabled={isLoading}
@@ -115,12 +124,12 @@
       </div>
 
       <div>
-        <label for="confirmPassword" class="block text-sm text-neutral-500 mb-2">Confirm Password</label>
+        <label for="confirmPassword" class="block text-sm mb-2 {dark ? 'text-neutral-500' : 'text-gray-500'}">Confirm Password</label>
         <input 
           id="confirmPassword"
           type="password" 
           bind:value={confirmPassword}
-          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          class="w-full border rounded px-4 py-3 focus:outline-none transition-colors duration-200 {dark ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-600 focus:border-neutral-600' : 'bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'}"
           placeholder="••••••••"
           autocomplete="new-password"
           disabled={isLoading}
@@ -137,12 +146,12 @@
     </form>
 
     <div class="mt-6 text-center text-sm">
-      <span class="text-neutral-500">Already have an account?</span>
-      <a href="/login" class="text-neutral-100 hover:underline ml-1">Sign in</a>
+      <span class="{dark ? 'text-neutral-500' : 'text-gray-500'}">Already have an account?</span>
+      <a href="/login" class="ml-1 hover:underline {dark ? 'text-neutral-100' : 'text-gray-900'}">Sign in</a>
     </div>
   </main>
 
-  <footer class="border-t border-neutral-800 px-6 py-6 text-center text-neutral-600 text-xs font-mono">
+  <footer class="border-t px-6 py-6 text-center text-xs font-mono {dark ? 'border-neutral-800 text-neutral-600' : 'border-gray-200 text-gray-400'}">
     myfilepath.com
   </footer>
 </div>

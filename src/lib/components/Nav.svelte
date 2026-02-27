@@ -80,11 +80,13 @@
   </button>
 {/snippet}
 
-{#snippet mobileLink(href: string, label: string, active: boolean)}
+{#snippet mobileLink(href: string, label: string, active: boolean, isDark: boolean)}
   <a
     {href}
     onclick={closeMobile}
-    class="block px-4 py-3 text-sm transition-colors {active ? 'text-neutral-100 bg-neutral-800/50' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/30'}"
+    class="block px-4 py-3 text-sm transition-colors {active
+      ? (isDark ? 'text-neutral-100 bg-neutral-800/50' : 'text-gray-900 bg-gray-100')
+      : (isDark ? 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/30' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100') }"
   >{label}</a>
 {/snippet}
 
@@ -105,19 +107,31 @@
 
 <!-- Logged-out (centered) nav -->
 {#if variant === 'centered'}
-  <nav class="border-b border-neutral-800 px-6 py-4 relative z-50 bg-neutral-950/50 backdrop-blur-sm">
+  <nav class="border-b px-6 py-4 relative z-50 backdrop-blur-sm {dark ? 'border-neutral-800 bg-neutral-950/50' : 'border-gray-200 bg-white/80'}">
     <div class="flex items-center justify-between max-w-6xl mx-auto">
       <a href="/" class="flex items-center gap-2">
         {@render logoIcon(24)}
-        <span class="text-neutral-100 font-medium">filepath</span>
+        <span class="font-medium text-sm {dark ? 'text-neutral-100' : 'text-gray-900'}">filepath</span>
       </a>
 
       <!-- Desktop links -->
       <div class="hidden md:flex items-center gap-4 text-sm">
-        <a href="/docs" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'docs'}>docs</a>
-        <a href="/pricing" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'pricing'}>pricing</a>
-        <a href="/login" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'login'}>login</a>
-        <a href="/signup" class="bg-neutral-100 text-neutral-900 px-3 py-1 rounded text-sm font-medium hover:bg-white transition-colors">sign up</a>
+        <a
+          href="/docs"
+          class="transition-colors {current === 'docs' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}"
+        >docs</a>
+        <a
+          href="/pricing"
+          class="transition-colors {current === 'pricing' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}"
+        >pricing</a>
+        <a
+          href="/login"
+          class="transition-colors {current === 'login' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}"
+        >login</a>
+        <a
+          href="/signup"
+          class="px-3 py-1 rounded text-sm font-medium transition-colors {dark ? 'bg-neutral-100 text-neutral-900 hover:bg-white' : 'bg-neutral-900 text-white hover:bg-black'}"
+        >sign up</a>
         {@render themeButton(dark)}
       </div>
 
@@ -126,12 +140,12 @@
 
     <!-- Mobile dropdown -->
     {#if mobileOpen}
-      <div class="md:hidden absolute left-0 right-0 top-full bg-neutral-950 border-b border-neutral-800 z-50">
-        {@render mobileLink('/docs', 'docs', current === 'docs')}
-        {@render mobileLink('/pricing', 'pricing', current === 'pricing')}
-        {@render mobileLink('/login', 'login', current === 'login')}
-        {@render mobileLink('/signup', 'sign up', current === 'signup')}
-        <div class="px-4 py-3 border-t border-neutral-800/50">
+      <div class="md:hidden absolute left-0 right-0 top-full border-b z-50 {dark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-gray-200'}">
+        {@render mobileLink('/docs', 'docs', current === 'docs', dark)}
+        {@render mobileLink('/pricing', 'pricing', current === 'pricing', dark)}
+        {@render mobileLink('/login', 'login', current === 'login', dark)}
+        {@render mobileLink('/signup', 'sign up', current === 'signup', dark)}
+        <div class="px-4 py-3 border-t {dark ? 'border-neutral-800/50' : 'border-gray-200'}">
           {@render themeButton(dark)}
         </div>
       </div>
@@ -140,25 +154,31 @@
 
 <!-- Logged-in (dashboard) nav -->
 {:else if variant === 'dashboard'}
-  <nav class="border-b border-neutral-800 px-6 py-3 bg-neutral-950/80 backdrop-blur-sm relative z-50">
+  <nav class="border-b px-6 py-3 backdrop-blur-sm relative z-50 {dark ? 'border-neutral-800 bg-neutral-950/80' : 'border-gray-200 bg-white/80'}">
     <div class="max-w-6xl mx-auto flex items-center justify-between">
       <a href="/dashboard" class="flex items-center gap-2 shrink-0">
         {@render logoIcon(20)}
-        <span class="text-neutral-100 font-medium text-sm">filepath</span>
+        <span class="font-medium text-sm {dark ? 'text-neutral-100' : 'text-gray-900'}">filepath</span>
       </a>
 
       <!-- Desktop links -->
       <div class="hidden md:flex items-center gap-5 text-sm">
-        <a href="/settings/api-keys" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'api-keys'}>keys</a>
+        <a
+          href="/settings/api-keys"
+          class="transition-colors {current === 'api-keys' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}"
+        >keys</a>
 
-        <a href="/settings/account" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'account'}>account</a>
+        <a
+          href="/settings/account"
+          class="transition-colors {current === 'account' ? (dark ? 'text-neutral-100' : 'text-gray-900') : (dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900')}"
+        >account</a>
         {#if email}
-          <span class="text-neutral-600 text-xs truncate max-w-[180px]">{email}</span>
+          <span class="text-xs truncate max-w-[180px] {dark ? 'text-neutral-600' : 'text-gray-500'}">{email}</span>
         {/if}
         {@render themeButton(dark)}
         <button
           onclick={signOutUser}
-          class="text-neutral-500 hover:text-neutral-100 transition-colors cursor-pointer"
+          class="transition-colors cursor-pointer {dark ? 'text-neutral-500 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900'}"
         >sign out</button>
       </div>
 
@@ -167,20 +187,20 @@
 
     <!-- Mobile dropdown -->
     {#if mobileOpen}
-      <div class="md:hidden absolute left-0 right-0 top-full bg-neutral-950 border-b border-neutral-800 z-50">
-        {@render mobileLink('/dashboard', 'sessions', current === 'sessions')}
-        {@render mobileLink('/settings/api-keys', 'api keys', current === 'api-keys')}
+      <div class="md:hidden absolute left-0 right-0 top-full border-b z-50 {dark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-gray-200'}">
+        {@render mobileLink('/dashboard', 'sessions', current === 'sessions', dark)}
+        {@render mobileLink('/settings/api-keys', 'api keys', current === 'api-keys', dark)}
 
-        {@render mobileLink('/settings/account', 'account', current === 'account')}
+        {@render mobileLink('/settings/account', 'account', current === 'account', dark)}
         {#if email}
-          <div class="px-4 py-2 text-xs  text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
+          <div class="px-4 py-2 text-xs truncate border-t {dark ? 'text-neutral-600 border-neutral-800/50' : 'text-gray-500 border-gray-200'}">{email}</div>
         {/if}
-        <div class="px-4 py-3 border-t border-neutral-800/50">
+        <div class="px-4 py-3 border-t {dark ? 'border-neutral-800/50' : 'border-gray-200'}">
           {@render themeButton(dark)}
         </div>
         <button
           onclick={() => { closeMobile(); signOutUser(); }}
-          class="w-full text-left px-4 py-3 text-sm text-neutral-500 hover:text-red-400 hover:bg-neutral-800/30 transition-colors cursor-pointer border-t border-neutral-800/50"
+          class="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer border-t {dark ? 'text-neutral-500 hover:text-red-400 hover:bg-neutral-800/30 border-neutral-800/50' : 'text-gray-600 hover:text-red-500 hover:bg-gray-100 border-gray-200'}"
         >sign out</button>
       </div>
     {/if}
@@ -188,31 +208,31 @@
 
 <!-- Session nav -->
 {:else if variant === 'session'}
-  <header class="flex items-center justify-between px-4 py-2 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur-sm relative z-50">
+  <header class="flex items-center justify-between px-4 py-2 border-b backdrop-blur-sm relative z-50 {dark ? 'border-neutral-800 bg-neutral-950/80' : 'border-gray-200 bg-white/80'}">
     <div class="flex items-center gap-3 min-w-0">
-      <a href="/dashboard" class="flex items-center gap-2 text-neutral-400 hover:text-neutral-100 transition-colors text-sm shrink-0">
+      <a href="/dashboard" class="flex items-center gap-2 transition-colors text-sm shrink-0 {dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900'}">
         {@render logoIcon(16)}
 					<span class="hidden sm:inline">dashboard</span>
 					<span class="sm:hidden">back</span>
       </a>
       {#if sessionId}
-        <span class="text-neutral-700 hidden sm:inline">|</span>
-        <span class=" text-xs text-neutral-500 truncate hidden sm:inline">{sessionId}</span>
+        <span class="hidden sm:inline {dark ? 'text-neutral-700' : 'text-gray-300'}">|</span>
+        <span class="text-xs truncate hidden sm:inline {dark ? 'text-neutral-500' : 'text-gray-500'}">{sessionId}</span>
       {/if}
     </div>
     
     <!-- Desktop links -->
     <div class="hidden md:flex items-center gap-5 text-sm">
-      <a href="/settings/api-keys" class="text-neutral-400 hover:text-neutral-100 transition-colors">keys</a>
+      <a href="/settings/api-keys" class="transition-colors {dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900'}">keys</a>
 
-      <a href="/settings/account" class="text-neutral-400 hover:text-neutral-100 transition-colors">account</a>
+      <a href="/settings/account" class="transition-colors {dark ? 'text-neutral-400 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900'}">account</a>
       {#if email}
-        <span class="text-neutral-600  text-xs truncate max-w-[180px]">{email}</span>
+        <span class="text-xs truncate max-w-[180px] {dark ? 'text-neutral-600' : 'text-gray-500'}">{email}</span>
       {/if}
       {@render themeButton(dark)}
       <button
         onclick={signOutUser}
-        class="text-neutral-500 hover:text-neutral-100 transition-colors cursor-pointer"
+        class="transition-colors cursor-pointer {dark ? 'text-neutral-500 hover:text-neutral-100' : 'text-gray-600 hover:text-gray-900'}"
       >sign out</button>
     </div>
 
@@ -220,23 +240,23 @@
 
     <!-- Mobile dropdown -->
     {#if mobileOpen}
-      <div class="md:hidden absolute left-0 right-0 top-full bg-neutral-950 border-b border-neutral-800 z-50">
+      <div class="md:hidden absolute left-0 right-0 top-full border-b z-50 {dark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-gray-200'}">
         {#if sessionId}
-          <div class="px-4 py-2 text-xs  text-neutral-600 truncate">{sessionId}</div>
+          <div class="px-4 py-2 text-xs truncate {dark ? 'text-neutral-600' : 'text-gray-500'}">{sessionId}</div>
         {/if}
-        {@render mobileLink('/dashboard', 'sessions', false)}
-        {@render mobileLink('/settings/api-keys', 'api keys', false)}
+        {@render mobileLink('/dashboard', 'sessions', false, dark)}
+        {@render mobileLink('/settings/api-keys', 'api keys', false, dark)}
 
-        {@render mobileLink('/settings/account', 'account', false)}
+        {@render mobileLink('/settings/account', 'account', false, dark)}
         {#if email}
-          <div class="px-4 py-2 text-xs  text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
+          <div class="px-4 py-2 text-xs truncate border-t {dark ? 'text-neutral-600 border-neutral-800/50' : 'text-gray-500 border-gray-200'}">{email}</div>
         {/if}
-        <div class="px-4 py-3 border-t border-neutral-800/50">
+        <div class="px-4 py-3 border-t {dark ? 'border-neutral-800/50' : 'border-gray-200'}">
           {@render themeButton(dark)}
         </div>
         <button
           onclick={() => { closeMobile(); signOutUser(); }}
-          class="w-full text-left px-4 py-3 text-sm text-neutral-500 hover:text-red-400 hover:bg-neutral-800/30 transition-colors cursor-pointer border-t border-neutral-800/50"
+          class="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer border-t {dark ? 'text-neutral-500 hover:text-red-400 hover:bg-neutral-800/30 border-neutral-800/50' : 'text-gray-600 hover:text-red-500 hover:bg-gray-100 border-gray-200'}"
         >sign out</button>
       </div>
     {/if}
