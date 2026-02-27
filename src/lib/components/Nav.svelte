@@ -70,7 +70,7 @@
 <!-- Logged-out (centered) nav -->
 {#if variant === 'centered'}
   <nav class="border-b border-neutral-800 px-6 py-4 relative z-50 bg-neutral-950/50 backdrop-blur-sm">
-    <div class="flex items-center justify-between max-w-2xl mx-auto">
+    <div class="flex items-center justify-between max-w-6xl mx-auto">
       <a href="/" class="flex items-center gap-2">
         {@render logoIcon(24)}
         <span class="text-neutral-100 font-medium">filepath</span>
@@ -113,7 +113,7 @@
 
         <a href="/settings/account" class="text-neutral-400 hover:text-neutral-100 transition-colors" class:text-neutral-100={current === 'account'}>account</a>
         {#if email}
-          <span class="text-neutral-600 font-mono text-xs truncate max-w-[180px]">{email}</span>
+          <span class="text-neutral-600 text-xs truncate max-w-[180px]">{email}</span>
         {/if}
         <button
           onclick={signOutUser}
@@ -132,7 +132,7 @@
 
         {@render mobileLink('/settings/account', 'account', current === 'account')}
         {#if email}
-          <div class="px-4 py-2 text-xs font-mono text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
+          <div class="px-4 py-2 text-xs  text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
         {/if}
         <button
           onclick={() => { closeMobile(); signOutUser(); }}
@@ -153,7 +153,7 @@
       </a>
       {#if sessionId}
         <span class="text-neutral-700 hidden sm:inline">|</span>
-        <span class="font-mono text-xs text-neutral-500 truncate hidden sm:inline">{sessionId}</span>
+        <span class=" text-xs text-neutral-500 truncate hidden sm:inline">{sessionId}</span>
       {/if}
     </div>
     
@@ -163,7 +163,7 @@
 
       <a href="/settings/account" class="text-neutral-400 hover:text-neutral-100 transition-colors">account</a>
       {#if email}
-        <span class="text-neutral-600 font-mono text-xs truncate max-w-[180px]">{email}</span>
+        <span class="text-neutral-600  text-xs truncate max-w-[180px]">{email}</span>
       {/if}
       <button
         onclick={signOutUser}
@@ -177,14 +177,14 @@
     {#if mobileOpen}
       <div class="md:hidden absolute left-0 right-0 top-full bg-neutral-950 border-b border-neutral-800 z-50">
         {#if sessionId}
-          <div class="px-4 py-2 text-xs font-mono text-neutral-600 truncate">{sessionId}</div>
+          <div class="px-4 py-2 text-xs  text-neutral-600 truncate">{sessionId}</div>
         {/if}
         {@render mobileLink('/dashboard', 'sessions', false)}
         {@render mobileLink('/settings/api-keys', 'api keys', false)}
 
         {@render mobileLink('/settings/account', 'account', false)}
         {#if email}
-          <div class="px-4 py-2 text-xs font-mono text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
+          <div class="px-4 py-2 text-xs  text-neutral-600 truncate border-t border-neutral-800/50">{email}</div>
         {/if}
         <button
           onclick={() => { closeMobile(); signOutUser(); }}
