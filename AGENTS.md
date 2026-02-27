@@ -82,7 +82,7 @@ bun run prd          # Run gates
 1. **`bun`/`bunx`** not npm/npx
 2. **Alchemy** not wrangler -- config in `alchemy.run.ts`
 3. **Svelte 5** -- `onclick` not `on:click`, runes not stores
-4. **Push with `--no-verify`** (pre-push hook is slow)
+4. **Pre-push hook required** -- runs type-check, build, gate validation. Do NOT use `--no-verify`
 5. **No explicit `any`** -- use `unknown`, generics, or specific types
 6. **Gates before implementation** -- write the test, then write the code
 7. **Simplicity always** -- fewer clicks, fewer concepts
