@@ -130,7 +130,7 @@
 </script>
 
 <div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-  <Nav variant="dashboard" current="account" />
+	<Nav current="account" />
 
   <main class="max-w-2xl mx-auto px-6 py-12">
     <div class="flex items-center justify-between mb-10">

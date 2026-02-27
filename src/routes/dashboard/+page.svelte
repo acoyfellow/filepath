@@ -116,7 +116,7 @@
 </svelte:head>
 
 <div class="dashboard dark">
-  <Nav variant="dashboard" email={page.data.user?.email ?? null} />
+	<Nav email={page.data.user?.email ?? null} />
 
   <main class="main">
     <div class="header-row">

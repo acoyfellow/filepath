@@ -77,7 +77,7 @@
 </svelte:head>
 
 <div class="min-h-screen font-sans flex flex-col {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-  <Nav variant="centered" />
+<Nav />
 
   <main class="flex-grow max-w-md mx-auto px-6 py-20">
     <div class="mb-8">

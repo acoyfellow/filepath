@@ -65,7 +65,7 @@
 </svelte:head>
 
 <div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-  <Nav variant="centered" />
+<Nav />
 
   <main class="max-w-sm mx-auto px-6 py-20">
     <div class="text-center mb-8">

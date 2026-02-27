@@ -123,7 +123,7 @@
 </svelte:head>
 
 <div class="min-h-screen font-sans {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
-  <Nav variant="dashboard" current="api-keys" email={page.data.user?.email} />
+	<Nav current="api-keys" email={page.data.user?.email} />
 
   <main class="max-w-3xl mx-auto px-6 py-12">
     <div class="flex items-center justify-between mb-10">

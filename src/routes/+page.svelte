@@ -25,11 +25,11 @@
     <div class="absolute bottom-0 left-0 w-full h-1/2 bg-linear-to-t {dark ? 'from-neutral-950' : 'from-gray-50'} to-transparent z-10"></div>
   </div>
 
-  <Nav variant="centered" />
+<Nav />
 
   <main class="max-w-6xl mx-auto px-6 py-12 md:py-20">
     <!-- Hero Section: Text + Demo -->
-    <div class="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start mb-16">
+    <div class="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start mb-16 [&>*:nth-child(2)]:min-w-0">
       <!-- Left: Value Prop -->
       <div class="lg:sticky lg:top-8">
         <h1 class="text-3xl md:text-4xl font-medium mb-4 leading-tight {dark ? 'text-neutral-100' : 'text-gray-900'}">
@@ -67,10 +67,10 @@
       </div>
       
       <!-- Right: Live Demo -->
-      <div class="lg:mt-0">
+      <div class="@container lg:mt-0 w-full min-w-0">
         <HeroDemo {dark} />
         <p class="text-center text-xs mt-3 {dark ? 'text-neutral-500' : 'text-gray-500'}">
-          This is the actual interface. Click agents in the tree to switch conversations.
+          Click agents in the tree to switch conversations.
         </p>
       </div>
     </div>
