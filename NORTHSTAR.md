@@ -4,6 +4,24 @@
 
 ## What filepath is
 
+filepath is an **orchestration layer** for AI agents. The core insight: agents and models should be **liquid** (interchangeable), and the infrastructure should provide **multiple interfaces** for coordination.
+
+**Liquid Agents** — Any agent that speaks the filepath protocol (FAP) runs on our infrastructure. Swap Claude Code for Codex for your custom container. Same interface, seamless handoff.
+
+**Liquid Models** — Every agent can use any model. Switch mid-session without restarting. The model is configuration, not architecture.
+
+**Orchestration Interfaces** — However you need to coordinate agents:
+- **Dashboard** — Tree + rich chat. Visual hierarchy, human-in-the-loop.
+- **REST API** — Programmatic access. Spawn, message, monitor.
+- **WebSocket** — Real-time streaming for live applications.
+- **MCP + TypeScript SDK** — Agents calling agents. Build autonomous workflows.
+
+You open filepath. You create a session. You spawn an agent — pick its type (claude-code, cursor, codex, whatever), pick its model, give it a name. You send it a message. It starts working in an isolated container with your repo cloned. You watch it work through rich chat — tool calls, file writes, commits, all inline. It spawns child agents. The tree grows. You click any node, see its conversation. You steer with messages. You close your laptop, open your phone, same state. That's it.
+
+> The definitive plan for filepath. Everything an agent needs to build this.
+
+## What filepath is
+
 filepath is a web UI for orchestrating trees of AI coding agents running in containers on Cloudflare.
 
 You open filepath. You create a session. You spawn an agent -- pick its type (claude-code, cursor, codex, whatever), pick its model, give it a name. You send it a message. It starts working in an isolated container with your repo cloned. You watch it work through rich chat -- tool calls, file writes, commits, all inline. It spawns child agents. The tree grows. You click any node, see its conversation. You steer with messages. You close your laptop, open your phone, same state. That's it.
@@ -30,7 +48,7 @@ We build bottom-up but prioritize top-down. Layer 1 exists (partially). Layer 3 
 
 - **Simplicity always wins.** Fewer clicks, fewer fields, fewer concepts. If it doesn't need to be there, it isn't.
 - **Every agent is the same primitive.** The tree defines topology, not a type system.
-- **Harness and model are liquid config.** Dropdowns at spawn, tags in a header. When these layers get abstracted away, you delete two `<span>` tags. Nothing else changes.
+- **Agents and models are liquid.** Interchangeable primitives. Swap Claude Code → Codex → your custom container. Switch claude-sonnet-4 → o3 → gemini-2.5-pro mid-session. Same protocol, seamless handoff.
 - **Chat-first (inspired by exe.dev).** The primary interface is conversation with the agent, not watching it work.
 - **Testing-first (gateproof).** Gates define "done" before implementation. Agents can't break what exists.
 - **Build the hard/right way first.** BYO agent protocol before built-in convenience. Tree schema before flat workarounds.
@@ -746,4 +764,4 @@ When execution begins, these existing files/directories are replaced or removed:
 7. **Simplicity always** -- fewer clicks, fewer fields, fewer concepts
 8. **Every agent is the same primitive** -- no special-casing orchestrator vs worker in UI
 9. **Zod schemas are the source of truth** -- protocol types, not ad-hoc interfaces
-10. **Commit after meaningful changes** -- descriptive messages, not batched dumps
+- **Liquid Agents, Liquid Models** — this is the core value prop. Emphasize interchangeability in all messaging.

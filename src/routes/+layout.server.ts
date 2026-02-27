@@ -1,9 +1,9 @@
 import type { LayoutServerLoad } from './$types';
-import type { user, session } from '$lib/schema';
+import type { User, Session } from 'better-auth';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
   return {
-    user: locals.user as typeof user | null,
-    session: locals.session as typeof session | null,
+    user: locals.user as User | null,
+    session: locals.session as Session | null,
   };
 };

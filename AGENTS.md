@@ -4,7 +4,17 @@
 
 ## North Star
 
-filepath is a web UI for orchestrating trees of AI coding agents in containers on Cloudflare. Tree on the left, rich chat on the right. Every agent is the same primitive. If your agent has a CLI, it runs on filepath.
+filepath is an **orchestration layer** for AI agents. The core insight: agents and models should be **liquid** (interchangeable), and the infrastructure should provide **multiple interfaces** for coordination.
+
+**Liquid Agents** — Any agent that speaks the filepath protocol (FAP) runs on our infrastructure. Swap Claude Code for Codex for your custom container. Same interface, seamless handoff.
+
+**Liquid Models** — Every agent can use any model. Switch mid-session without restarting. The model is configuration, not architecture.
+
+**Orchestration Interfaces** — However you need to coordinate agents:
+- **Dashboard** — Tree + rich chat. Visual hierarchy, human-in-the-loop.
+- **REST API** — Programmatic access. Spawn, message, monitor.
+- **WebSocket** — Real-time streaming for live applications.
+- **MCP + TypeScript SDK** — Agents calling agents. Build autonomous workflows.
 
 ## Stack
 
@@ -18,13 +28,30 @@ Browser ←WebSocket→ ChatAgent DO ←stdin/stdout→ Container (CLI agent)
                     D1 (tree state + message history)
 ```
 
-- **One ChatAgent DO per agent node** -- relay/conductor, NOT the agent brain
+- **One ChatAgent DO per agent node** — relay/conductor, NOT the agent brain
 - **Container runs the actual CLI agent** (claude-code, cursor, codex, shelley, etc.)
 - **Agent protocol (FAP):** NDJSON over stdout/stdin. Zod-validated event types.
 - **Model routing:** All LLM calls go through filepath API keys → CF AI Gateway → OpenRouter
 - **Tree structure:** `agentNode` table with `parentId` (self-referential). Workflowy-inspired.
 
+## Why Liquid Matters
+
+Traditional agent platforms lock you into specific agents or models. filepath treats both as **configuration**:
+
+| Traditional | filepath (Liquid) |
+|-------------|-------------------|
+| "We support Claude Code" | "Any FAP-compliant agent" |
+| "Powered by GPT-4" | "Model is a dropdown. Switch anytime." |
+| "Use our web UI" | "Dashboard, API, or SDK — your choice" |
+
+This matters because:
+- **Best tool for the job** — Research with Pi, code with Shelley, review with Claude Code, all in one session
+- **Future-proof** — New agent drops? Add it to your Dockerfile. New model? Select it in the dropdown.
+- **BYO logic** — Your proprietary agent logic runs alongside commercial tools
+
 ## Agent Catalog
+
+All agents are equal primitives. The only difference is what's inside the container.
 
 | Agent | CLI | Default Model | Description |
 |-------|-----|---------------|-------------|
@@ -34,7 +61,19 @@ Browser ←WebSocket→ ChatAgent DO ←stdin/stdout→ Container (CLI agent)
 | Codex | `codex` CLI | o3 | OpenAI's coding agent. |
 | Cursor | `cursor` CLI | claude-sonnet-4 | Cursor agent mode via CLI. |
 | Amp | `amp` CLI | claude-sonnet-4 | Sourcegraph's large codebase agent. |
-| Custom (BYO) | Your Dockerfile | claude-sonnet-4 | Speak the protocol, run on filepath. |
+| Custom (BYO) | Your Dockerfile | claude-sonnet-4 | Speak FAP, run on filepath. |
+
+### Adding Your Own Agent
+
+Any container that speaks FAP (filepath Agent Protocol) is a first-class agent:
+
+1. Create a Dockerfile with your agent
+2. Read `FILEPATH_TASK` env var for the initial task
+3. Read NDJSON from stdin for user messages
+4. Write NDJSON to stdout for events (text, tools, commands, etc.)
+5. Use the OpenRouter API key we inject for LLM calls
+
+See [NORTHSTAR.md](./NORTHSTAR.md) for the full protocol spec.
 
 ## CURRENT STATUS (Feb 24, 2026)
 
@@ -86,6 +125,9 @@ bun run prd          # Run gates
 5. **No explicit `any`** -- use `unknown`, generics, or specific types
 6. **Gates before implementation** -- write the test, then write the code
 7. **Simplicity always** -- fewer clicks, fewer concepts
+8. **Every agent is the same primitive** -- no special-casing orchestrator vs worker in UI
+9. **Zod schemas are the source of truth** -- protocol types, not ad-hoc interfaces
+10. **Liquid Agents, Liquid Models** — this is the core value prop. Emphasize interchangeability.
 
 ## Key Files
 
