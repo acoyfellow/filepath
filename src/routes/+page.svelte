@@ -69,9 +69,6 @@
       <!-- Right: Live Demo -->
       <div class="@container lg:mt-0 w-full min-w-0">
         <HeroDemo {dark} />
-        <p class="text-center text-xs mt-3 {dark ? 'text-neutral-500' : 'text-gray-500'}">
-          Click agents in the tree to switch conversations.
-        </p>
       </div>
     </div>
 
