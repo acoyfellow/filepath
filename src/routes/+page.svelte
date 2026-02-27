@@ -79,13 +79,13 @@ GET /session/abc-123/files/coverage/</pre>
       </ul>
     </section>
 
-    <!-- Pricing -->
+    <!-- BYOK Model -->
     <section class="mb-12">
-      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Pricing</h2>
+      <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Bring Your Own Key</h2>
       <div class="text-sm space-y-2">
-        <p><span class="text-neutral-100 font-mono">$0.01/min</span> while executing</p>
-        <p><span class="text-neutral-100 font-mono">$0.00/min</span> while idle (container sleeps)</p>
-        <p class="text-neutral-500 text-xs">Prepaid credits. Human approves spend threshold.</p>
+        <p><span class="text-neutral-100 font-mono">Your API keys</span> = your compute spend</p>
+        <p><span class="text-neutral-100 font-mono">OpenRouter, OpenAI, Anthropic</span> - any compatible provider</p>
+        <p class="text-neutral-500 text-xs">Add your key in Settings → Provider API Keys to start.</p>
       </div>
     </section>
 
@@ -114,7 +114,7 @@ GET /session/abc-123/files/coverage/</pre>
     <div class="text-neutral-500">
       <a href="https://github.com/acoyfellow/filepath" class="hover:text-neutral-300 transition-colors">Open source on GitHub</a>
       <span class="mx-2">•</span>
-      <span>Hosted: <span class="text-neutral-100 font-mono">$0.01/min</span> per active container</span>
+      <span>Hosted on Cloudflare</span>
     </div>
   </footer>
 </div>

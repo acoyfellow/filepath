@@ -1,8 +1,17 @@
 # filepath
 
-Open-source agent orchestration platform on Cloudflare.
+> Agent orchestration platform on Cloudflare. Tree of agents on the left, rich chat on the right. BYOK (bring your own key).
 
-Tree of agents on the left. Rich chat on the right. Every agent is the same primitive. If your agent has a CLI, it runs on filepath.
+## Quick Start
+
+1. **Sign up** at https://myfilepath.com
+2. **Add your API key** in Settings → Provider API Keys
+   - Get an OpenRouter key at https://openrouter.ai/keys
+   - Or use OpenAI, Anthropic, or any OpenAI-compatible provider
+3. **Create a session** from the dashboard
+4. **Spawn an agent** - pick type (claude-code, codex, cursor) and model
+5. **Send a message** - that's the agent's task
+6. **Watch it work** - tool calls, file writes, commits, all in real-time chat
 
 ## How it works
 
@@ -12,6 +21,8 @@ Tree of agents on the left. Rich chat on the right. Every agent is the same prim
 4. Watch it work through rich chat -- tool calls, file writes, commits, all inline
 5. It can spawn child agents. The tree grows. Click any node, see its conversation.
 6. Close your laptop, open your phone. Same state, real-time sync.
+
+**BYOK Model:** You bring your own LLM API keys. We don't charge for usage - your keys, your spend.
 
 ## Stack
 
@@ -42,6 +53,8 @@ bun run prd          # Run gates
 
 - [NORTHSTAR.md](./NORTHSTAR.md) -- The plan. Protocol spec, schema, UI components, execution phases.
 - [AGENTS.md](./AGENTS.md) -- Agent catalog, architecture, development rules.
+- [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) -- API endpoints
+- [llms.txt](./llms.txt) -- Context for AI tools
 
 ## License
 

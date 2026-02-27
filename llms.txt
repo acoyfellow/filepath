@@ -1,0 +1,128 @@
+# filepath
+
+> Agent orchestration platform on Cloudflare. Tree of agents on the left, rich chat on the right. BYOK (bring your own key) model.
+
+## Quick Start
+
+1. **Sign up** at https://myfilepath.com
+2. **Add your OpenRouter API key** in Settings → Provider API Keys
+   - Get key at https://openrouter.ai/keys
+   - Or use OpenAI, Anthropic, or any compatible provider
+3. **Create a session** from the dashboard
+4. **Spawn an agent** - pick type (claude-code, codex, cursor) and model
+5. **Send a message** - that's the agent's task
+6. **Watch it work** - tool calls, file writes, commits, all in real-time chat
+
+## Architecture
+
+- **Frontend:** SvelteKit (Svelte 5) with real-time WebSocket
+- **Backend:** Cloudflare Workers + Durable Objects (ChatAgent DO)
+- **Database:** D1 (SQLite)
+- **Containers:** Cloudflare Sandbox (Firecracker microVMs)
+- **Protocol:** NDJSON over stdin/stdout
+- **Deployment:** Alchemy (infrastructure as code)
+
+## The filepath Agent Protocol (FAP)
+
+Agents communicate via NDJSON over stdin/stdout. One JSON object per line.
+
+### Container Environment
+
+```
+FILEPATH_TASK=<natural language task>
+FILEPATH_API_KEY=<user's API key>
+FILEPATH_MODEL=<model identifier>
+FILEPATH_AGENT_ID=<unique node ID>
+FILEPATH_SESSION_ID=<session ID>
+FILEPATH_WORKSPACE=/workspace
+```
+
+### Event Types (Container → filepath)
+
+| Type | Schema | Description |
+|------|--------|-------------|
+| `text` | `{type:"text", content:"..."}` | Assistant message |
+| `tool` | `{type:"tool", name:"...", status:"..."}` | Tool call result |
+| `command` | `{type:"command", command:"..."}` | Command execution |
+| `commit` | `{type:"commit", message:"...", sha:"..."}` | Git commit |
+| `spawn` | `{type:"spawn", agent:"...", name:"..."}` | Spawn child agent |
+| `status` | `{type:"status", state:"..."}` | State change |
+| `done` | `{type:"done"}` | Task complete |
+
+### Input Types (filepath → Container)
+
+```json
+{"type":"message", "from":"user", "content":"..."}
+{"type":"signal", "action":"stop"}
+```
+
+## Agent Types
+
+Built-in agents (reference implementations):
+
+| Agent | CLI | Model |
+|-------|-----|-------|
+| Shelley | filepath-native | claude-sonnet-4 |
+| Claude Code | `claude` | claude-sonnet-4 |
+| Codex | `codex` | o3 |
+| Cursor | `cursor` | claude-sonnet-4 |
+| Amp | `amp` | claude-sonnet-4 |
+
+**BYO:** Bring your own Dockerfile that speaks FAP protocol.
+
+## API Overview
+
+Key endpoints:
+
+```
+POST /api/auth/sign-up/email        # Register
+POST /api/auth/sign-in/email        # Login
+
+POST /api/sessions                  # Create session
+POST /api/sessions/[id]/nodes       # Spawn agent node
+
+WS   /agents/chat-agent/[nodeId]    # WebSocket chat (real-time)
+
+POST /api/user/keys               # Save provider API key
+```
+
+## Key Features
+
+- **Stateful:** Sessions survive browser closes, device switches
+- **Tree Structure:** Agents spawn child agents, visual tree on left
+- **Real-time Sync:** WebSocket broadcast to all connected clients
+- **Isolation:** Each agent runs in its own container
+- **Persistence:** Chat history, files, state all persisted
+- **BYOK:** Users bring their own LLM API keys
+
+## Development
+
+```bash
+bun install
+bun run dev          # localhost:5173
+bun run deploy       # Production via Alchemy
+bun run prd          # Run production gates
+```
+
+## Stack
+
+- SvelteKit (Svelte 5 runes)
+- Cloudflare Workers
+- Agents SDK (Durable Objects)
+- D1 Database
+- Cloudflare Sandbox (containers)
+- Alchemy (infra as code)
+- Stripe (removed - BYOK model)
+
+## Schema
+
+Key tables:
+
+- `user` - accounts, encrypted API keys
+- `agent_session` - sessions, per-session API key override
+- `agent_node` - agent instances in tree
+- `apikey` - Better Auth API keys (not LLM keys)
+
+## License
+
+See LICENSE
