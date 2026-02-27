@@ -11,7 +11,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">API Reference</h1>
@@ -175,7 +175,7 @@
 
   <footer class="border-t border-neutral-800 pt-6 text-center">
     <p class="text-neutral-500 text-sm">
-      <a href="/docs/agents" class="text-neutral-300 hover:underline">Next: Agent Catalog →</a>
+        <a href="/docs/agents" class="text-neutral-300 hover:underline">Next: Agent Catalog</a>
     </p>
   </footer>
 </main>

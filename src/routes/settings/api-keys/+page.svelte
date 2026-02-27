@@ -123,7 +123,7 @@
         <p class="text-sm text-neutral-500">Manage access keys for your agents</p>
       </div>
       <div class="flex gap-3">
-        <a href="/dashboard" class="px-4 py-2 text-sm text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors">← back</a>
+			<a href="/dashboard" class="px-4 py-2 text-sm text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors">Back</a>
         <button
           onclick={() => { showCreateDialog = true; createdKey = null; error = null; }}
           class="px-4 py-2 text-sm font-medium bg-neutral-100 text-neutral-950 rounded hover:bg-white transition-colors cursor-pointer"

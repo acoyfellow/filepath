@@ -31,19 +31,19 @@
       <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Guarantees</h2>
       <ul class="space-y-3 text-sm">
         <li class="flex gap-3">
-          <span class="text-neutral-600">→</span>
+				<span class="text-neutral-600">to</span>
           <span>Stateful execution resumes automatically after interruption</span>
         </li>
         <li class="flex gap-3">
-          <span class="text-neutral-600">→</span>
+				<span class="text-neutral-600">to</span>
           <span>Artifacts have explicit addresses and persist indefinitely</span>
         </li>
         <li class="flex gap-3">
-          <span class="text-neutral-600">→</span>
+				<span class="text-neutral-600">to</span>
           <span>Recovery is expected, not exceptional</span>
         </li>
         <li class="flex gap-3">
-          <span class="text-neutral-600">→</span>
+				<span class="text-neutral-600">to</span>
           <span>Container state survives human context limits</span>
         </li>
       </ul>
@@ -85,7 +85,7 @@ GET /session/abc-123/files/coverage/</pre>
       <div class="text-sm space-y-2">
         <p><span class="text-neutral-100 font-mono">Your API keys</span> = your compute spend</p>
         <p><span class="text-neutral-100 font-mono">OpenRouter, OpenAI, Anthropic</span> - any compatible provider</p>
-        <p class="text-neutral-500 text-xs">Add your key in Settings → Provider API Keys to start.</p>
+			<p class="text-neutral-500 text-xs">Add your key in Settings / Provider API Keys to start.</p>
       </div>
     </section>
 
@@ -104,7 +104,7 @@ GET /session/abc-123/files/coverage/</pre>
     <section class="border-t border-neutral-800 pt-8">
       <a href="/docs" class="text-neutral-400 hover:underline ml-2">read the docs</a>
       <span class="text-neutral-600 mx-4">or</span>
-      <a href="/signup" class="text-neutral-100 hover:underline">Start executing → </a>
+				<a href="/signup" class="text-neutral-100 hover:underline">Start executing</a>
     </section>
   </main>
 

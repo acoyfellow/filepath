@@ -129,7 +129,7 @@
         <h1 class="text-neutral-100 text-xl font-medium mb-1">Account</h1>
         <p class="text-sm text-neutral-500">Manage your account settings</p>
       </div>
-      <a href="/dashboard" class="px-4 py-2 text-sm text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors">← back</a>
+			<a href="/dashboard" class="px-4 py-2 text-sm text-neutral-400 border border-neutral-800 rounded hover:border-neutral-600 transition-colors">Back</a>
     </div>
 
     <section class="mb-10">

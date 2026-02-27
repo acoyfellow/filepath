@@ -11,7 +11,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">How to Use Per-Session API Keys</h1>
@@ -29,7 +29,7 @@
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">How It Works</h2>
     <p class="text-neutral-400 mb-4">filepath supports a 3-tier key resolution:</p>
     <ol class="list-decimal list-inside text-neutral-400 space-y-2 mb-6">
-      <li><strong>Session key</strong> (if set) ← Highest priority</li>
+      <li><strong>Session key</strong> (if set) Highest priority</li>
       <li><strong>User account key</strong> (your default)</li>
       <li><strong>Global env key</strong> (for e2e tests only)</li>
     </ol>
@@ -66,7 +66,7 @@
 
     <h3 class="text-lg font-medium text-neutral-300 mt-6 mb-3">Removing a Session Key</h3>
     <ol class="list-decimal list-inside text-neutral-400 space-y-2 mb-6">
-      <li>Go to <strong>Session Settings → Provider API Key</strong></li>
+      <li>Go to <strong>Session Settings / Provider API Key</strong></li>
       <li>Click <strong>Remove Session Key</strong></li>
       <li>Confirm</li>
     </ol>
@@ -75,10 +75,10 @@
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Encryption & Security</h2>
     <p class="text-neutral-400 mb-4">Session keys are:</p>
     <ul class="space-y-2 text-neutral-400 mb-6">
-      <li>✓ Encrypted with AES-GCM (same as account keys)</li>
-      <li>✓ Never logged or exposed in UI</li>
-      <li>✓ Only decrypted when spawning containers</li>
-      <li>✓ Isolated to that session only</li>
+      <li>Encrypted with AES-GCM (same as account keys)</li>
+      <li>Never logged or exposed in UI</li>
+      <li>Only decrypted when spawning containers</li>
+      <li>Isolated to that session only</li>
     </ul>
     <p class="text-neutral-400">Even filepath admins cannot see your keys.</p>
 
@@ -114,17 +114,17 @@
     <div class="space-y-4 mb-6">
       <div class="bg-red-900/20 border border-red-800/50 rounded p-4">
         <h3 class="font-medium text-red-200 mb-2">"Invalid API key" error</h3>
-        <p class="text-red-300/80">→ Check the key is valid with the provider directly</p>
+      <p class="text-red-300/80">Check the key is valid with the provider directly</p>
       </div>
 
       <div class="bg-red-900/20 border border-red-800/50 rounded p-4">
         <h3 class="font-medium text-red-200 mb-2">"No API key configured for this session"</h3>
-        <p class="text-red-300/80">→ Either add a session key or ensure account key is set</p>
+      <p class="text-red-300/80">Either add a session key or ensure account key is set</p>
       </div>
 
       <div class="bg-yellow-900/20 border border-yellow-800/50 rounded p-4">
         <h3 class="font-medium text-yellow-200 mb-2">Session key not being used</h3>
-        <p class="text-yellow-300/80">→ Changes apply to NEW messages. Existing in-flight agents may still use old key.</p>
+      <p class="text-yellow-300/80">Changes apply to NEW messages. Existing in-flight agents may still use old key.</p>
       </div>
     </div>
 

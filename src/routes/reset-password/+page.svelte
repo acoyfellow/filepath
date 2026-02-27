@@ -91,7 +91,7 @@
       {#if success}
         <div class="bg-green-900/30 border border-green-800 rounded-lg p-4 mb-6">
           <div class="flex gap-3">
-            <div class="text-green-400 mt-0.5">✓</div>
+				<div class="text-green-400 mt-0.5">Success</div>
             <div>
               <p class="text-green-200 text-sm font-medium">Password reset successfully!</p>
               <p class="text-green-300/70 text-sm mt-1">

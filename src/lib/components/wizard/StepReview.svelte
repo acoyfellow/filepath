@@ -155,7 +155,7 @@
         </svg>
         Launching…
       {:else}
-        🚀 Launch Session
+			Launch Session
       {/if}
     </Button>
   </div>

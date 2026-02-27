@@ -1,5 +1,6 @@
 <script lang="ts">
   import Nav from '$lib/components/Nav.svelte';
+  import CodeBlock from '$lib/components/CodeBlock.svelte';
 </script>
 
 <svelte:head>
@@ -11,7 +12,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">How to Add a Custom Agent</h1>
@@ -36,11 +37,18 @@
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 1: Create the Dockerfile</h2>
     <p class="text-neutral-400 mb-4">Create a new directory for your agent:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">mkdir my-custom-agent
-cd my-custom-agent</pre>
+    <CodeBlock
+      language="bash"
+      className="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"
+      code={`mkdir my-custom-agent
+cd my-custom-agent`}
+    />
 
     <p class="text-neutral-400 mb-4">Create <code class="bg-neutral-800 px-2 py-1 rounded text-sm">Dockerfile</code>:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">FROM node:20-alpine
+    <CodeBlock
+      language="bash"
+      className="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"
+      code={`FROM node:20-alpine
 
 WORKDIR /workspace
 
@@ -51,11 +59,15 @@ COPY index.js .
 RUN npm install
 
 # The container starts here
-CMD ["node", "index.js"]</pre>
+CMD ["node", "index.js"]`}
+    />
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 2: Write the Agent Code</h2>
     <p class="text-neutral-400 mb-4">Create <code class="bg-neutral-800 px-2 py-1 rounded text-sm">index.js</code>:</p>
-    {@html `<pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">const readline = require('readline');
+    <CodeBlock
+      language="javascript"
+      className="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"
+      code={`const readline = require('readline');
 
 // Read environment variables from filepath
 const task = process.env.FILEPATH_TASK || '';
@@ -84,20 +96,20 @@ const rl = readline.createInterface({
 rl.on('line', async (line) => {
   try {
     const msg = JSON.parse(line);
-    
+
     if (msg.type === 'message') {
       // Echo back for demo purposes
       console.log(JSON.stringify({
         type: 'text',
         content: \`Received: \${msg.content}\`
       }));
-      
+
       // Simulate some work
       console.log(JSON.stringify({
         type: 'command',
         command: 'echo "Processing..."'
       }));
-      
+
       // Mark as done
       console.log(JSON.stringify({
         type: 'done'
@@ -118,30 +130,43 @@ process.on('SIGTERM', () => {
     state: 'idle'
   }));
   process.exit(0);
-});</pre>`}
+});`}
+    />
     <p class="text-neutral-400 mb-4">Create <code class="bg-neutral-800 px-2 py-1 rounded text-sm">package.json</code>:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6">{'{'}{""}"name": "my-custom-agent", "version": "1.0.0", "main": "index.js"{'}'}</pre>
+    <CodeBlock
+      language="json"
+      className="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"
+      code={`{"name": "my-custom-agent", "version": "1.0.0", "main": "index.js"}`}
+    />
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 3: Test Locally</h2>
     <p class="text-neutral-400 mb-4">Build and test your container:</p>
-    {@html `<pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"># Build
+    <CodeBlock
+      language="bash"
+      className="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"
+      code={`# Build
 docker build -t my-custom-agent .
 
 # Test locally
-echo '{""}"type":"message","content":"hello"' | docker run -i \\
+echo '{"type":"message","content":"hello"}' | docker run -i \\
   -e FILEPATH_TASK="Test task" \\
   -e FILEPATH_API_KEY="sk-test" \\
-  my-custom-agent</pre>`}
+  my-custom-agent`}
+    />
 
     <p class="text-neutral-400 mb-4">You should see NDJSON output.</p>
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 4: Push to Registry</h2>
     <p class="text-neutral-400 mb-4">Push your image to a container registry:</p>
-    <pre class="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"># Tag for registry
+    <CodeBlock
+      language="bash"
+      className="bg-neutral-900 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-6"
+      code={`# Tag for registry
 docker tag my-custom-agent:latest ghcr.io/YOURNAME/my-custom-agent:latest
 
 # Push
-docker push ghcr.io/YOURNAME/my-custom-agent:latest</pre>
+docker push ghcr.io/YOURNAME/my-custom-agent:latest`}
+    />
 
     <h2 class="text-xl font-medium text-neutral-200 mt-8 mb-4">Step 5: Register in filepath</h2>
     <p class="text-neutral-400 mb-6">Currently, custom agents are added via PR to the filepath repo. Submit a PR adding your agent to the catalog.</p>

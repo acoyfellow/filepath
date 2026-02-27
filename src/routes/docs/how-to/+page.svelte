@@ -11,7 +11,7 @@
 
 <main class="max-w-4xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">How-To Guides</h1>

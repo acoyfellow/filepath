@@ -18,7 +18,7 @@
 
 <div class="top">
   <div class="top-left">
-    <a href="/dashboard" class="back-link">← dashboard</a>
+		<a href="/dashboard" class="back-link">Dashboard</a>
     <span class="sep">·</span>
     <div class="top-logo">
       <svg width="14" height="14" viewBox="0 0 339 339" fill="none">

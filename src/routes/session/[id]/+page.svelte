@@ -134,7 +134,7 @@
       const existing = messagesByNode[nodeId] ?? [];
       messagesByNode = {
         ...messagesByNode,
-        [nodeId]: [...existing, { from: 'a', event: { type: 'text', content: `⚠️ ${msg.message}` } }],
+						[nodeId]: [...existing, { from: 'a', event: { type: 'text', content: `Warning: ${msg.message}` } }],
       };
     }
   }

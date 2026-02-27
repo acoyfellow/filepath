@@ -87,7 +87,7 @@
                   class="text-neutral-500 hover:text-red-400 h-8 w-8 p-0"
                   onclick={() => onRemove(worker.id)}
                 >
-                  ✕
+					Cancel
                 </Button>
               </div>
             </div>
@@ -133,7 +133,7 @@
           class="text-neutral-500 hover:text-white h-8 px-2 text-xs"
           onclick={() => (showPicker = false)}
         >
-          ✕ Cancel
+				Cancel
         </Button>
       </div>
       <div class="flex flex-wrap gap-2">

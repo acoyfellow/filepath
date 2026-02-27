@@ -86,7 +86,7 @@
           rel="noopener noreferrer"
           class="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 hover:underline"
         >
-          <span>📂</span>
+						<span>Dir</span>
           <span class="truncate">{session.gitRepoUrl.replace(/^https?:\/\//, '')}</span>
         </a>
       {/if}
@@ -186,7 +186,7 @@
         class="text-neutral-400 hover:text-neutral-200"
         aria-label="Dashboard"
       >
-        <span class="text-sm">←</span>
+							<span class="text-sm">Back</span>
       </Button>
     {:else}
       {#if session.status === 'draft' || session.status === 'stopped'}
@@ -216,7 +216,7 @@
         href="/dashboard"
         class="w-full text-neutral-400 hover:text-neutral-200"
       >
-        ← Back to Dashboard
+				Back to Dashboard
       </Button>
     {/if}
   </div>

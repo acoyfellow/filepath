@@ -18,41 +18,41 @@
     <!-- Tutorials -->
     <a href="/docs/tutorial" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
       <div class="flex items-center gap-3 mb-3">
-        <span class="text-2xl">🎓</span>
+        <span class="text-2xl">GS</span>
         <h2 class="text-xl font-medium text-neutral-200">Tutorial</h2>
       </div>
       <p class="text-neutral-400 text-sm mb-4">Learning-oriented. Get started with your first agent step-by-step.</p>
-      <span class="text-neutral-500 text-sm">Getting Started →</span>
+      <span class="text-neutral-500 text-sm">Getting Started</span>
     </a>
 
     <!-- How-To Guides -->
     <a href="/docs/how-to" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
       <div class="flex items-center gap-3 mb-3">
-        <span class="text-2xl">🔧</span>
+        <span class="text-2xl">HW</span>
         <h2 class="text-xl font-medium text-neutral-200">How-To Guides</h2>
       </div>
       <p class="text-neutral-400 text-sm mb-4">Task-oriented. Solve specific problems: custom agents, debugging, configuration.</p>
-      <span class="text-neutral-500 text-sm">View Guides →</span>
+      <span class="text-neutral-500 text-sm">View Guides</span>
     </a>
 
     <!-- Explanation -->
     <a href="/docs/explanation/architecture" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
       <div class="flex items-center gap-3 mb-3">
-        <span class="text-2xl">📖</span>
+        <span class="text-2xl">EX</span>
         <h2 class="text-xl font-medium text-neutral-200">Explanation</h2>
       </div>
       <p class="text-neutral-400 text-sm mb-4">Understanding-oriented. Deep dives into architecture and protocol.</p>
-      <span class="text-neutral-500 text-sm">Architecture →</span>
+      <span class="text-neutral-500 text-sm">Architecture</span>
     </a>
 
     <!-- Reference -->
     <a href="/docs/reference/api" class="block bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
       <div class="flex items-center gap-3 mb-3">
-        <span class="text-2xl">📚</span>
+        <span class="text-2xl">RF</span>
         <h2 class="text-xl font-medium text-neutral-200">Reference</h2>
       </div>
       <p class="text-neutral-400 text-sm mb-4">Information-oriented. API endpoints, protocol spec, agent catalog.</p>
-      <span class="text-neutral-500 text-sm">API Reference →</span>
+      <span class="text-neutral-500 text-sm">API Reference</span>
     </a>
   </div>
 
@@ -61,22 +61,22 @@
     <h2 class="text-neutral-100 text-lg mb-6">Quick Links</h2>
     <div class="grid gap-4 md:grid-cols-3">
       <a href="/docs/how-to/custom-agent" class="text-neutral-400 hover:text-neutral-200 text-sm">
-        → Build Custom Agent
+        Build Custom Agent
       </a>
       <a href="/docs/how-to/debug-containers" class="text-neutral-400 hover:text-neutral-200 text-sm">
-        → Debug Failures
+        Debug Failures
       </a>
       <a href="/docs/how-to/per-session-keys" class="text-neutral-400 hover:text-neutral-200 text-sm">
-        → Per-Session Keys
+        Per-Session Keys
       </a>
       <a href="/docs/explanation/protocol" class="text-neutral-400 hover:text-neutral-200 text-sm">
-        → FAP Protocol
+        FAP Protocol
       </a>
       <a href="https://github.com/acoyfellow/filepath/blob/main/llms.txt" class="text-neutral-400 hover:text-neutral-200 text-sm">
-        → llms.txt (for AI)
+        llms.txt (for AI)
       </a>
       <a href="https://github.com/acoyfellow/filepath" class="text-neutral-400 hover:text-neutral-200 text-sm">
-        → GitHub Repo
+        GitHub Repo
       </a>
     </div>
   </section>

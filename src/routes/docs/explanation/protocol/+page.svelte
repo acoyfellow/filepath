@@ -1,5 +1,6 @@
 <script lang="ts">
   import Nav from '$lib/components/Nav.svelte';
+  import CodeBlock from '$lib/components/CodeBlock.svelte';
 </script>
 
 <svelte:head>
@@ -11,7 +12,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">Protocol</h1>
@@ -35,43 +36,43 @@
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">text</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent sends text to the user</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"text","content":"Hello from the agent"}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"text","content":"Hello from the agent"}`} />
       </div>
 
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">tool</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent wants to call a tool</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"tool","tool":"writeFile","args":{"path":"/workspace/readme.md","content":"# Hello"}}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"tool","tool":"writeFile","args":{"path":"/workspace/readme.md","content":"# Hello"}}`} />
       </div>
 
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">command</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent wants to run a shell command</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"command","command":"npm install","timeout":60000}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"command","command":"npm install","timeout":60000}`} />
       </div>
 
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">spawn</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent wants to spawn a child agent</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"spawn","name":"Worker","agentType":"pi","task":"Research this topic"}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"spawn","name":"Worker","agentType":"pi","task":"Research this topic"}`} />
       </div>
 
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">commit</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent made changes, wants to commit</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"commit","message":"Add feature X","files":["src/feature.ts"]}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"commit","message":"Add feature X","files":["src/feature.ts"]}`} />
       </div>
 
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">done</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent finished its task</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"done"}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"done"}`} />
       </div>
 
       <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <h3 class="text-neutral-300 font-medium mb-2">status</h3>
         <p class="text-neutral-500 text-sm mb-2">Agent status update</p>
-        {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"status","state":"running"}</pre>`}
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"status","state":"running"}`} />
       </div>
     </div>
   </section>
@@ -83,7 +84,7 @@
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
       <h3 class="text-neutral-300 font-medium mb-2">message</h3>
       <p class="text-neutral-500 text-sm mb-2">User sent a message</p>
-      {@html `<pre class="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto">{"type":"message","content":"Write a function to...","id":"msg-123"}</pre>`}
+      <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-neutral-300 overflow-x-auto" code={`{"type":"message","content":"Write a function to...","id":"msg-123"}`} />
     </div>
   </section>
 
@@ -115,7 +116,7 @@
 
   <footer class="border-t border-neutral-800 pt-6 text-center">
     <p class="text-neutral-500 text-sm">
-      <a href="/docs/reference/api" class="text-neutral-300 hover:underline">Next: API Reference →</a>
+        <a href="/docs/reference/api" class="text-neutral-300 hover:underline">Next: API Reference</a>
     </p>
   </footer>
 </main>

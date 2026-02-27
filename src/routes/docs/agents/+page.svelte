@@ -1,5 +1,6 @@
 <script lang="ts">
   import Nav from '$lib/components/Nav.svelte';
+  import CodeBlock from '$lib/components/CodeBlock.svelte';
 </script>
 
 <svelte:head>
@@ -11,7 +12,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">Agent Catalog</h1>
@@ -21,7 +22,7 @@
     <!-- Shelley -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">🐚</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">Sh</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Shelley</h2>
@@ -39,7 +40,7 @@
     <!-- Pi -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">🔍</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">Pi</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Pi</h2>
@@ -57,7 +58,7 @@
     <!-- Claude Code -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">🤖</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">Cc</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Claude Code</h2>
@@ -75,7 +76,7 @@
     <!-- Codex -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">📜</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">Cx</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Codex</h2>
@@ -93,7 +94,7 @@
     <!-- Cursor -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">🖱️</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">Cu</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Cursor</h2>
@@ -111,7 +112,7 @@
     <!-- Amp -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">⚡</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">Am</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Amp</h2>
@@ -129,7 +130,7 @@
     <!-- OpenCode -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">⌨️</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">OC</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">OpenCode</h2>
@@ -147,14 +148,14 @@
     <!-- Custom -->
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6 border-dashed">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">📦</div>
+        <div class="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-2xl">BY</div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-xl font-medium text-neutral-200">Custom</h2>
             <code class="text-xs bg-neutral-800 text-neutral-300 px-2 py-1 rounded">custom</code>
           </div>
           <p class="text-neutral-400 mb-3">Bring your own agent. Dockerfile that speaks the filepath protocol.</p>
-          <a href="/docs/how-to/custom-agent" class="text-neutral-300 hover:underline text-sm">Learn how →</a>
+          <a href="/docs/how-to/custom-agent" class="text-neutral-300 hover:underline text-sm">Learn how</a>
         </div>
       </div>
     </div>
@@ -163,13 +164,17 @@
   <section class="mt-12 bg-neutral-900/50 border border-neutral-800 rounded-lg p-6">
     <h2 class="text-lg font-medium text-neutral-200 mb-4">How to Use</h2>
     <p class="text-neutral-400 mb-4">When spawning an agent, use the <code>agentType</code> field:</p>
-    {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST /api/sessions/{'{id}'}/nodes \\
+    <CodeBlock
+      language="bash"
+      className="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto"
+      code={`curl -X POST /api/sessions/{id}/nodes \\
   -H "Content-Type: application/json" \\
-  -d '{'{
+  -d '{
     "name": "My Researcher",
     "agentType": "pi",
     "model": "anthropic/claude-sonnet-4"
-  }'}'</pre>`}
+  }'`}
+    />
   </section>
 
   <footer class="border-t border-neutral-800 pt-6 mt-12 text-center">

@@ -11,7 +11,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">Architecture</h1>
@@ -32,13 +32,13 @@
     <h2 class="text-xl font-medium text-neutral-200 mb-4">Data Flow</h2>
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6 font-mono text-sm text-neutral-300">
       <div class="space-y-2">
-        <div>Browser ←→ Worker (SvelteKit + API routes)</div>
+      <div>Browser &lt;-&gt; Worker (SvelteKit + API routes)</div>
         <div class="pl-4 text-neutral-500">↓ WebSocket upgrade</div>
-        <div class="pl-4">Browser ←→ ChatAgent DO (per agent node)</div>
+      <div class="pl-4">Browser &lt;-&gt; ChatAgent DO (per agent node)</div>
         <div class="pl-8 text-neutral-500">↓ fetch / stdin-stdout</div>
-        <div class="pl-8">ChatAgent DO ←→ LLM API (OpenRouter)</div>
+      <div class="pl-8">ChatAgent DO &lt;-&gt; LLM API (OpenRouter)</div>
         <div class="pl-4 text-neutral-500">↓ D1 queries</div>
-        <div>ChatAgent DO ←→ D1 (node lookup, history)</div>
+      <div>ChatAgent DO &lt;-&gt; D1 (node lookup, history)</div>
       </div>
     </div>
   </section>
@@ -93,7 +93,7 @@
 
   <footer class="border-t border-neutral-800 pt-6 text-center">
     <p class="text-neutral-500 text-sm">
-      <a href="/docs/explanation/protocol" class="text-neutral-300 hover:underline">Next: Protocol Deep Dive →</a>
+        <a href="/docs/explanation/protocol" class="text-neutral-300 hover:underline">Next: Protocol Deep Dive</a>
     </p>
   </footer>
 </main>

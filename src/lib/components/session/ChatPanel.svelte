@@ -269,7 +269,7 @@
                   class="flex size-7 shrink-0 items-center justify-center rounded-full text-sm
                     {isAssistant ? 'bg-neutral-800' : 'bg-blue-900/50'}"
                 >
-                  {isAssistant ? agentIcon : '👤'}
+							{isAssistant ? agentIcon : 'User'}
                 </div>
 
                 <!-- Message bubble -->
@@ -302,11 +302,11 @@
                     {@const inv = ti.toolInvocation}
                     <div class="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-2 text-xs">
                       <div class="flex items-center gap-1.5 text-neutral-400">
-                        <span class="font-mono">⚙️ {inv.toolName}</span>
+									<span class="font-mono">Tool {inv.toolName}</span>
                         {#if inv.state === 'call'}
                           <span class="animate-pulse text-amber-500">● running</span>
                         {:else if inv.state === 'result'}
-                          <span class="text-emerald-500">✓ done</span>
+									<span class="text-emerald-500">done</span>
                         {/if}
                       </div>
                       {#if inv.args && Object.keys(inv.args).length > 0}

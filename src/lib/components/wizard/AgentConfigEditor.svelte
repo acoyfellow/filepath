@@ -124,7 +124,7 @@
             class="text-neutral-500 hover:text-red-400 h-8 w-8 p-0"
             onclick={() => removeEnvVar(pair.key)}
           >
-            ✕
+			Close
           </Button>
         </div>
       {/each}

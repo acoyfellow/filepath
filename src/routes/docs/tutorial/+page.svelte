@@ -11,7 +11,7 @@
 
 <main class="max-w-3xl mx-auto px-6 py-12">
   <div class="mb-8">
-    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">← Back to Docs</a>
+    <a href="/docs" class="text-neutral-500 hover:text-neutral-300 text-sm">Back to Docs</a>
   </div>
 
   <h1 class="text-3xl font-medium text-neutral-100 mb-4">Getting Started Tutorial</h1>
@@ -36,7 +36,7 @@
     <p class="text-neutral-400 mb-4">filepath is BYOK (Bring Your Own Key). We don't charge for AI usage—you pay the providers directly.</p>
     <ol class="space-y-2 text-neutral-400 list-decimal list-inside">
       <li>Get an OpenRouter key at <a href="https://openrouter.ai/keys" class="text-neutral-300 hover:underline" target="_blank">openrouter.ai/keys</a></li>
-      <li>Go to <a href="/settings/account" class="text-neutral-300 hover:underline">Settings → Account</a></li>
+      <li>Go to <a href="/settings/account" class="text-neutral-300 hover:underline">Settings / Account</a></li>
       <li>Paste your key (encrypted and stored securely)</li>
     </ol>
   </section>
@@ -104,7 +104,7 @@
     <div class="space-y-4">
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-neutral-300 font-medium">"No API key set"</h3>
-        <p class="text-neutral-500 text-sm">Add your OpenRouter key in Settings → Account. Or provide a per-session key when spawning.</p>
+    <p class="text-neutral-500 text-sm">Add your OpenRouter key in Settings / Account. Or provide a per-session key when spawning.</p>
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">

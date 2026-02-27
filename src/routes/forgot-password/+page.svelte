@@ -66,7 +66,7 @@
     {#if success}
       <div class="bg-green-900/30 border border-green-800 rounded-lg p-4 mb-6">
         <div class="flex gap-3">
-          <div class="text-green-400 mt-0.5">✓</div>
+				<div class="text-green-400 mt-0.5">Success</div>
           <div>
             <p class="text-green-200 text-sm font-medium">Check your email</p>
             <p class="text-green-300/70 text-sm mt-1">
@@ -79,7 +79,7 @@
       <div class="text-center">
         <a href="/reset-password" class="inline-flex items-center gap-2 text-neutral-100 hover:underline">
           Enter the code
-          <span class="text-neutral-500">→</span>
+				<span class="text-neutral-500">to</span>
         </a>
       </div>
     {:else}

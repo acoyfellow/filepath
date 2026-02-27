@@ -83,14 +83,14 @@
                 class="rounded px-2.5 py-1 text-xs font-medium transition-colors
                   {viewMode === 'chat' ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-500 hover:text-neutral-300'}"
               >
-                💬 Chat
+				Chat
               </button>
               <button
                 onclick={() => setViewMode(worker.id, 'terminal')}
                 class="rounded px-2.5 py-1 text-xs font-medium transition-colors
                   {viewMode === 'terminal' ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-500 hover:text-neutral-300'}"
               >
-                🖥️ Terminal
+				Terminal
               </button>
               <button
                 onclick={() => setViewMode(worker.id, 'split')}
@@ -157,7 +157,7 @@
               </div>
             {:else if worker.status === 'error'}
               <div class="flex w-full flex-col items-center justify-center gap-2">
-                <span class="text-2xl">⚠️</span>
+					<span class="text-2xl">Warning</span>
                 <p class="text-sm text-red-400">Worker encountered an error</p>
                 <p class="text-xs text-neutral-500">Try stopping and restarting the session</p>
               </div>
