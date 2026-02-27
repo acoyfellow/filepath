@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "05437a30-b5dc-4cd8-a15a-902920fab9a8",
+  "id": "f8818ab1-ac79-4fde-a6aa-b9bc8355bacf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -515,20 +515,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "credit_balance": {
-          "name": "credit_balance",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "budget_cap": {
-          "name": "budget_cap",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "total_usage_minutes": {
           "name": "total_usage_minutes",
           "type": "integer",
@@ -857,21 +843,6 @@
         },
         "role": {
           "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "credit_balance": {
-          "name": "credit_balance",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
-        },
-        "stripe_customer_id": {
-          "name": "stripe_customer_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

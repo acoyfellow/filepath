@@ -71,8 +71,6 @@ CREATE TABLE `apikey` (
 	`last_refill_at` integer,
 	`last_request` integer,
 	`permissions` text,
-	`credit_balance` integer,
-	`budget_cap` integer,
 	`total_usage_minutes` integer DEFAULT 0,
 	`encrypted_secrets` text,
 	`metadata` text,
@@ -121,8 +119,6 @@ CREATE TABLE `user` (
 	`image` text,
 	`banned` integer DEFAULT false,
 	`role` text,
-	`credit_balance` integer DEFAULT 0,
-	`stripe_customer_id` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
