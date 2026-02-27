@@ -10,14 +10,12 @@
         "@cloudflare/sandbox": "^0.7.0",
         "@simplewebauthn/browser": "^13.2.2",
         "@simplewebauthn/server": "^13.2.2",
-        "@stripe/stripe-js": "^8.7.0",
         "agents": "^0.3.7",
         "bits-ui": "^2.15.5",
         "clsx": "^2.1.1",
         "cookie": "^1.1.1",
         "form-data": "^4.0.5",
         "node-fetch": "^3.3.2",
-        "stripe": "^20.3.0",
         "tailwind-merge": "^3.4.0",
         "tailwind-variants": "^3.2.2",
         "zod": "^4.3.6",
@@ -32,7 +30,6 @@
         "@tailwindcss/typography": "^0.5.19",
         "@tailwindcss/vite": "^4.1.18",
         "@types/node": "^25.2.0",
-        "@types/stripe": "^8.0.417",
         "alchemy": "^0.83.1",
         "better-auth": "^1.5.0-beta.11",
         "better-sqlite3": "^12.6.2",
@@ -574,8 +571,6 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.0.0", "", {}, "sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA=="],
 
-    "@stripe/stripe-js": ["@stripe/stripe-js@8.7.0", "", {}, "sha512-tNUerSstwNC1KuHgX4CASGO0Md3CB26IJzSXmVlSuFvhsBP4ZaEPpY4jxWOn9tfdDscuVT4Kqb8cZ2o9nLCgRQ=="],
-
     "@sveltejs/acorn-typescript": ["@sveltejs/acorn-typescript@1.0.5", "", { "peerDependencies": { "acorn": "^8.9.0" } }, "sha512-IwQk4yfwLdibDlrXVE04jTZYlLnwsTT2PIOQQGNLWfjavGifnk1JD1LcZjZaBTRcxZu2FfPfNLOE04DSu9lqtQ=="],
 
     "@sveltejs/adapter-cloudflare": ["@sveltejs/adapter-cloudflare@7.2.6", "", { "dependencies": { "@cloudflare/workers-types": "^4.20250507.0", "worktop": "0.8.0-next.18" }, "peerDependencies": { "@sveltejs/kit": "^2.0.0", "wrangler": "^4.0.0" } }, "sha512-PmaWW6EdMue8s24bUwa9EMsnjMaCS1HroM8HwlvwSxO8Cq5LldAxnnaUS5cnJ3RdVRorJZtL71eMTs+wbuXHgw=="],
@@ -633,8 +628,6 @@
     "@types/node": ["@types/node@25.2.0", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-DZ8VwRFUNzuqJ5khrvwMXHmvPe+zGayJhr2CDNiKB1WBE1ST8Djl00D0IC4vvNmHMdj6DlbYRIaFE7WHjlDl5w=="],
 
     "@types/react": ["@types/react@19.2.10", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-WPigyYuGhgZ/cTPRXB2EwUw+XvsRA3GqHlsP4qteqrnnjDrApbS7MxcGr/hke5iUoeB7E/gQtrs9I37zAJ0Vjw=="],
-
-    "@types/stripe": ["@types/stripe@8.0.417", "", { "dependencies": { "stripe": "*" } }, "sha512-PTuqskh9YKNENnOHGVJBm4sM0zE8B1jZw1JIskuGAPkMB+OH236QeN8scclhYGPA4nG6zTtPXgwpXdp+HPDTVw=="],
 
     "@types/uuid": ["@types/uuid@9.0.8", "", {}, "sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA=="],
 
