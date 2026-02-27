@@ -100,19 +100,19 @@
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div class="rounded p-4 border transition-colors {dark ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-700' : 'bg-white border-gray-200 hover:border-gray-300'}">
           <span class="font-medium block {dark ? 'text-neutral-200' : 'text-gray-900'}">Shelley</span>
-          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">Full-stack engineering</span>
+          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">filepath-native reference</span>
         </div>
         <div class="rounded p-4 border transition-colors {dark ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-700' : 'bg-white border-gray-200 hover:border-gray-300'}">
           <span class="font-medium block {dark ? 'text-neutral-200' : 'text-gray-900'}">Pi</span>
-          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">Research and analysis</span>
+          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">Deep research specialist</span>
         </div>
         <div class="rounded p-4 border transition-colors {dark ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-700' : 'bg-white border-gray-200 hover:border-gray-300'}">
           <span class="font-medium block {dark ? 'text-neutral-200' : 'text-gray-900'}">Claude Code</span>
-          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">Multi-file changes</span>
+          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">Anthropic's coding agent</span>
         </div>
         <div class="rounded p-4 border transition-colors {dark ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-700' : 'bg-white border-gray-200 hover:border-gray-300'}">
           <span class="font-medium block {dark ? 'text-neutral-200' : 'text-gray-900'}">Codex</span>
-          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">Python and data</span>
+          <span class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">OpenAI's coding agent</span>
         </div>
       </div>
       <p class="text-sm mt-4 {dark ? 'text-neutral-500' : 'text-gray-600'}">

@@ -253,7 +253,8 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 
   // Handle tool invocation
   if (method === 'tools/call') {
-    const { name, arguments: args } = params;
+    const { name, arguments: rawArgs } = params;
+    const args = rawArgs as Record<string, string>;
     
     try {
       let result: unknown;
