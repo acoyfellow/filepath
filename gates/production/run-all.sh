@@ -23,6 +23,16 @@ echo "║  Target: $BASE_URL"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
+# --- Ensure test user exists before running gates ---
+echo "Provisioning test user..."
+echo ""
+if ! bash "$SCRIPT_DIR/ensure-test-user.sh" "$BASE_URL"; then
+  echo ""
+  echo "❌ FATAL: Cannot provision test user. Aborting all gates."
+  exit 1
+fi
+echo ""
+
 GATES=(
   "visual-regression"
   "terminal-start"

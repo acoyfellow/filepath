@@ -12,8 +12,8 @@ API_URL="${API_URL:-https://api.myfilepath.com}"
 COOKIE_JAR=$(mktemp)
 FAILED=0
 
-TEST_EMAIL="${TEST_EMAIL:-jordan@sendgrowth.com}"
-TEST_PASSWORD="${TEST_PASSWORD:-}"
+TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
+TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
 
 if [ -z "$TEST_PASSWORD" ]; then
   echo "❌ TEST_PASSWORD not set"
