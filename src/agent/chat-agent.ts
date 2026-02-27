@@ -329,7 +329,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       const { apiUrl, apiKey, model, headers } = this.resolveProvider();
 
       if (!apiKey) {
-        const errMsg = "No OPENROUTER_API_KEY configured.";
+        const errMsg = "No API key configured. Add your provider key in Settings → API Keys to continue.";
         this.saveMessage("assistant", `⚠️ ${errMsg}`);
         connection.send(JSON.stringify({ type: "error", message: errMsg }));
         this.broadcastStatus("idle");
