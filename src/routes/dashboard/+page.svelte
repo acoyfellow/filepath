@@ -4,11 +4,13 @@
   import { page } from "$app/state";
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import Nav from "$lib/components/Nav.svelte";
+  import type { SessionStatus } from "$lib/types/session";
+  import type { AgentStatus } from "$lib/protocol";
 
   interface SessionItem {
     id: string;
     name: string;
-    status: string;
+    status: SessionStatus;
     gitRepoUrl?: string;
     nodeCount: number;
     createdAt: number;
@@ -86,6 +88,22 @@
     newGitUrl = "";
     showNewModal = true;
   }
+
+  function toAgentStatus(status: SessionStatus): AgentStatus {
+    switch (status) {
+      case "running":
+        return "running";
+      case "error":
+        return "error";
+      case "paused":
+        return "thinking";
+      case "stopped":
+        return "done";
+      case "draft":
+      default:
+        return "idle";
+    }
+  }
 </script>
 
 <svelte:head>
@@ -136,7 +154,7 @@
           >
             <div class="session-row">
               <div class="session-info">
-                <StatusDot status={s.status} size={8} />
+                <StatusDot status={toAgentStatus(s.status)} size={8} />
                 <span class="session-name">{s.name}</span>
                 <span class="session-badge">{s.nodeCount} agent{s.nodeCount !== 1 ? "s" : ""}</span>
               </div>

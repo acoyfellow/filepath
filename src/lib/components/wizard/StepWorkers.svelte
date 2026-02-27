@@ -5,7 +5,7 @@
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
-  import { getAgentsByRole, getAgent } from '$lib/agents/catalog';
+  import { AGENT_LIST, getAgent } from '$lib/agents/catalog';
   import AgentConfigEditor from './AgentConfigEditor.svelte';
   import type { AgentType, AgentConfig } from '$lib/types/session';
 
@@ -26,7 +26,8 @@
 
   let { workers, onAdd, onRemove, onUpdateName, onUpdateConfig }: Props = $props();
 
-  const workerAgents = getAgentsByRole('worker');
+  const workerAgentIds: AgentType[] = ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'];
+  const workerAgents = AGENT_LIST.filter((agent) => workerAgentIds.includes(agent.id));
 
   let expandedId = $state<string | null>(null);
   let showPicker = $state(false);

@@ -12,7 +12,7 @@
 
   // ─── Server data ───
   let { data } = $props();
-  const sessionId = $derived($page.params.id);
+  const sessionId = $derived($page.params.id ?? "");
 
   // ─── Theme ───
   let dark = $state(false);
@@ -252,12 +252,12 @@
     ensureConnection(nodeId);
     const client = activeClients[nodeId];
     if (client) {
-      // Include nodeId and sessionId so the DO can auto-start the container
-      client.send(message, { nodeId, sessionId });
+      client.send(message);
     }
   }
 
   async function handleSpawn(req: SpawnRequest) {
+    if (!sessionId) return;
     const parentId = selectedAgent?.id ?? rootNode?.id;
 
     const res = await fetch(`/api/sessions/${sessionId}/nodes`, {
@@ -278,7 +278,8 @@
       return;
     }
 
-    const { id: newId } = await res.json();
+    const spawnResult = (await res.json()) as { id: string };
+    const newId = spawnResult.id;
 
     const newNode: AgentNode = {
       id: newId,

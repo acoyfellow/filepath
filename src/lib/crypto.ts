@@ -36,6 +36,10 @@ function fromBase64(b64: string): Uint8Array {
   return bytes;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return new Uint8Array(bytes).buffer;
+}
+
 /**
  * Encrypt a plaintext API key.
  * Returns a string safe for DB storage: `base64(iv):base64(ciphertext)`
@@ -66,8 +70,8 @@ export async function decryptApiKey(
   if (!ivB64 || !ctB64) throw new Error("Invalid encrypted key format");
 
   const key = await deriveKey(secret);
-  const iv = fromBase64(ivB64);
-  const ciphertext = fromBase64(ctB64);
+  const iv = toArrayBuffer(fromBase64(ivB64));
+  const ciphertext = toArrayBuffer(fromBase64(ctB64));
   const plaintext = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
     key,

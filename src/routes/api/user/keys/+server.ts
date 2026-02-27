@@ -5,6 +5,14 @@ import { eq } from "drizzle-orm";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "$lib/crypto";
 import type { RequestHandler } from "@sveltejs/kit";
 
+function getBetterAuthSecret(platform: App.Platform | undefined): string | undefined {
+  const secret =
+    platform?.env && "BETTER_AUTH_SECRET" in platform.env
+      ? platform.env.BETTER_AUTH_SECRET
+      : undefined;
+  return typeof secret === "string" ? secret : undefined;
+}
+
 /**
  * GET /api/user/keys — Retrieve masked provider keys for current user
  */
@@ -22,7 +30,7 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
     return json({ openrouter: null });
   }
 
-  const secret = (platform?.env as Record<string, string>)?.BETTER_AUTH_SECRET;
+  const secret = getBetterAuthSecret(platform);
   if (!secret) throw error(500, "Server misconfigured");
 
   try {
@@ -51,7 +59,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
   }
 
   const db = getDrizzle();
-  const secret = (platform?.env as Record<string, string>)?.BETTER_AUTH_SECRET;
+  const secret = getBetterAuthSecret(platform);
   if (!secret) throw error(500, "Server misconfigured");
 
   if (!body.key) {

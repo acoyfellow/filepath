@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
-  import { getAgentsByRole } from '$lib/agents/catalog';
+  import { AGENT_LIST } from '$lib/agents/catalog';
   import AgentConfigEditor from './AgentConfigEditor.svelte';
   import type { AgentType, AgentConfig } from '$lib/types/session';
 
@@ -13,7 +13,8 @@
 
   let { selectedType, config, onSelectAgent, onUpdateConfig }: Props = $props();
 
-  const orchestrators = getAgentsByRole('orchestrator');
+  const orchestratorIds: AgentType[] = ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'];
+  const orchestrators = AGENT_LIST.filter((agent) => orchestratorIds.includes(agent.id));
 
   function handleSelectAgent(agent: AgentType) {
     const entry = orchestrators.find((a) => a.id === agent);

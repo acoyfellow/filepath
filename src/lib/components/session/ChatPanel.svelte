@@ -82,8 +82,12 @@
       .join('');
   }
 
+  type ToolUIPart = Extract<
+    NonNullable<UIMessage['parts']>[number],
+    { type: `tool-${string}` }
+  >;
+
   interface ToolInvocation {
-    type: 'tool-invocation';
     toolInvocation: {
       toolName: string;
       args: Record<string, unknown>;
@@ -92,12 +96,59 @@
     };
   }
 
+  function isToolPart(
+    part: NonNullable<UIMessage['parts']>[number],
+  ): part is ToolUIPart {
+    return part.type.startsWith('tool-');
+  }
+
+  function toRecord(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
   /** Extract tool invocations from a message */
   function getToolInvocations(msg: UIMessage): ToolInvocation[] {
     if (!msg.parts) return [];
-    return msg.parts.filter(
-      (p): p is ToolInvocation => p.type === 'tool-invocation'
-    );
+    return msg.parts
+      .filter(isToolPart)
+      .map((part) => {
+        const args = toRecord(part.input);
+        const toolName = part.type.slice(5);
+
+        if (part.state === 'input-streaming') {
+          return {
+            toolInvocation: { toolName, args, state: 'partial-call' as const },
+          };
+        }
+
+        if (part.state === 'output-available') {
+          return {
+            toolInvocation: {
+              toolName,
+              args,
+              state: 'result' as const,
+              result: part.output,
+            },
+          };
+        }
+
+        if (part.state === 'output-error' || part.state === 'output-denied') {
+          return {
+            toolInvocation: {
+              toolName,
+              args,
+              state: 'result' as const,
+              result: part.errorText,
+            },
+          };
+        }
+
+        return {
+          toolInvocation: { toolName, args, state: 'call' as const },
+        };
+      });
   }
 
   interface ContentSegment {
