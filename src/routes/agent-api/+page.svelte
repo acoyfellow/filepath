@@ -33,13 +33,13 @@
           <h3 class="text-lg font-medium text-neutral-200">Sign Up</h3>
         </div>
         <p class="text-neutral-400 mb-4">Create an account programmatically:</p>
-        <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/auth/sign-up/email \\
+        {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/auth/sign-up/email \\
   -H "Content-Type: application/json" \\
   -d '{'{
     "email": "your-agent@example.com",
     "password": "secure-password-123",
     "name": "My AI Agent"
-  }'}'</pre>
+  }'}'</pre>`}
       </div>
 
       <!-- Step 2 -->
@@ -49,10 +49,10 @@
           <h3 class="text-lg font-medium text-neutral-200">Add Your API Key</h3>
         </div>
         <p class="text-neutral-400 mb-4">Store your OpenRouter API key (BYOK model):</p>
-        <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/user/keys \\
+        {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/user/keys \\
   -H "Content-Type: application/json" \\
   -H "Cookie: session=your-session-cookie" \\
-  -d '{'{"provider": "openrouter", "key": "sk-or-v1-..."}'}'</pre>
+  -d '{'{"provider": "openrouter", "key": "sk-or-v1-..."}'}'</pre>`}
         <p class="text-neutral-500 text-sm mt-2">Get an OpenRouter key at <a href="https://openrouter.ai/keys" class="text-neutral-300 hover:underline">openrouter.ai/keys</a></p>
       </div>
 
@@ -62,10 +62,10 @@
           <span class="w-8 h-8 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-sm font-medium">3</span>
           <h3 class="text-lg font-medium text-neutral-200">Create a Session</h3>
         </div>
-        <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/sessions \\
+        {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/sessions \\
   -H "Content-Type: application/json" \\
   -H "Cookie: session=your-session-cookie" \\
-  -d '{'{"name": "My Research Task"}'}'</pre>
+  -d '{'{"name": "My Research Task"}'}'</pre>`}
       </div>
 
       <!-- Step 4 -->
@@ -74,14 +74,14 @@
           <span class="w-8 h-8 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-sm font-medium">4</span>
           <h3 class="text-lg font-medium text-neutral-200">Spawn an Agent</h3>
         </div>
-        <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/sessions/{'{sessionId}'}/nodes \\
+        {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">curl -X POST https://myfilepath.com/api/sessions/{'{sessionId}'}/nodes \\
   -H "Content-Type: application/json" \\
   -H "Cookie: session=your-session-cookie" \\
   -d '{'{
     "name": "Pi Researcher",
     "agentType": "pi",
     "model": "anthropic/claude-sonnet-4"
-  }'}'</pre>
+  }'}'</pre>`}
       </div>
 
       <!-- Step 5 -->
@@ -90,11 +90,11 @@
           <span class="w-8 h-8 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-sm font-medium">5</span>
           <h3 class="text-lg font-medium text-neutral-200">Chat via WebSocket</h3>
         </div>
-        <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto"># Connect to WebSocket
+        {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto"># Connect to WebSocket
 wscat -c "wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}"
 
 # Send a message
-{'>'} {'{"type": "message", "content": "Research quantum computing and summarize"}'}</pre>
+{'>'} {'{"type": "message", "content": "Research quantum computing and summarize"}'}</pre>`}
       </div>
     </div>
   </section>
@@ -206,15 +206,15 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}"
       <div class="bg-neutral-950 border border-neutral-800 rounded p-4">
         <p class="text-neutral-300 font-medium mb-2">Account-Level API Key</p>
         <p class="text-neutral-400 text-sm mb-3">Store your key once, use it for all sessions:</p>
-        <pre class="text-sm text-neutral-300 overflow-x-auto">POST /api/user/keys
-{'{'}{""}"provider": "openrouter", "key": "sk-or-v1-..."{'}'}</pre>
+        {@html `<pre class="text-sm text-neutral-300 overflow-x-auto">POST /api/user/keys
+{'{'}{""}"provider": "openrouter", "key": "sk-or-v1-..."{'}'}</pre>`}
       </div>
 
       <div class="bg-neutral-950 border border-neutral-800 rounded p-4 mt-4">
         <p class="text-neutral-300 font-medium mb-2">Per-Session API Key</p>
         <p class="text-neutral-400 text-sm mb-3">Override the account key for a specific session:</p>
-        <pre class="text-sm text-neutral-300 overflow-x-auto">POST /api/sessions/{'{id}'}/nodes
-{'{'}{""}"name": "Agent", "agentType": "pi", "model": "...", "apiKey": "sk-or-v1-..."{'}'}</pre>
+        {@html `<pre class="text-sm text-neutral-300 overflow-x-auto">POST /api/sessions/{'{id}'}/nodes
+{'{'}{""}"name": "Agent", "agentType": "pi", "model": "...", "apiKey": "sk-or-v1-..."{'}'}</pre>`}
       </div>
     </div>
   </section>
@@ -229,10 +229,10 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}"
       </p>
 
       <h3 class="text-lg font-medium text-neutral-200 mb-3">Connection</h3>
-      <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-4">wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}</pre>
+      {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-4">wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}</pre>`}
 
       <h3 class="text-lg font-medium text-neutral-200 mb-3">Message Format</h3>
-      <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-4"># Send message
+      {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto mb-4"># Send message
 {'{'}
   "type": "cf_agent_use_chat_request",
   "id": "req-123",
@@ -247,7 +247,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}"
       {'}'}]
     {'}'})
   {'}'}
-{'}'}</pre>
+{'}'}</pre>`}
 
       <h3 class="text-lg font-medium text-neutral-200 mb-3">Response Events</h3>
       <ul class="space-y-2 text-neutral-400 text-sm">
@@ -265,7 +265,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}"
     
     <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
       <p class="text-neutral-400 mb-4">Here's a complete Python example:</p>
-      <pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">import requests
+      {@html `<pre class="bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto">import requests
 import json
 import websocket
 
@@ -342,7 +342,7 @@ ws.send(json.dumps({'{'}
     {'}'}
 {'}'}))
 
-ws.run_forever()</pre>
+ws.run_forever()</pre>`}
     </div>
   </section>
 

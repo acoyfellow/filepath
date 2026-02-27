@@ -26,6 +26,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
     const auth = initAuth(db, platform?.env as Record<string, unknown>, baseURL);
     
     // Get Better Auth's OpenAPI schema
+    // @ts-expect-error - generateOpenAPISchema exists at runtime
     const authSchema = auth.api.generateOpenAPISchema ? await auth.api.generateOpenAPISchema() : null;
     
     // filepath-specific API endpoints
