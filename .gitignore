@@ -30,3 +30,4 @@ dist/
 e2e-screenshots/
 preview/
 .sisyphus
+.dev.vars
