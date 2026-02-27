@@ -128,10 +128,10 @@
     <section class="mb-12">
       <h2 class="text-neutral-500 text-xs uppercase tracking-wide mb-4">Bring Your Own Key</h2>
       <div class="text-sm space-y-2">
-        <p>Your API keys = your compute spend. No markup.</p>
-        <p class="text-neutral-400">Works with OpenRouter, OpenAI, Anthropic — any OpenAI-compatible provider.</p>
+        <p>Your OpenRouter API key = your compute spend. No markup.</p>
+        <p class="text-neutral-400">Access 100+ models (Claude, GPT-4, Gemini) through one key.</p>
         <p class="text-neutral-500 text-xs mt-3">
-          Add your key in Settings / Account to start. Optional per-session overrides available.
+          Get an OpenRouter key at <a href="https://openrouter.ai/keys" class="text-neutral-400 hover:underline">openrouter.ai/keys</a>, then add it in Settings / Account.
         </p>
       </div>
     </section>
