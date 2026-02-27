@@ -7,8 +7,26 @@ import type { Handle } from "@sveltejs/kit";
 
 export const handle: Handle = async ({ event, resolve }) => {
   try {
+    // Handle API reference path - Better Auth Scalar UI has issues in dev
+    if (event.url.pathname === '/api/auth/reference' || event.url.pathname === '/api/auth/reference/') {
+      return new Response(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>filepath API Reference</title></head>
+        <body style="font-family: system-ui; padding: 40px; max-width: 800px; margin: 0 auto;">
+          <h1>API Reference</h1>
+          <p>The interactive Scalar UI is available in production.</p>
+          <p>In development, view the OpenAPI spec directly:</p>
+          <p><a href="/api/openapi.json">/api/openapi.json</a></p>
+        </body>
+        </html>
+      `, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200
+      });
+    }
+    
     const db = event.platform?.env?.DB;
-
     if (!db) {
       // D1 not available — serve page without auth (better than hard 500)
       console.warn('D1 database not available, serving without auth');
