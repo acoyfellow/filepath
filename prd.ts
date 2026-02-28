@@ -116,37 +116,33 @@ const stories = [
 // ─── Check for loop mode ───
 const loop = process.argv.includes("--loop");
 
-async function main() {
-  if (loop) {
-    console.log("\n  filepath PRD gates (loop mode)\n");
-    console.log(`  Target: ${BASE_URL}\n`);
+if (loop) {
+  console.log("\n  filepath PRD gates (loop mode)\n");
+  console.log(`  Target: ${BASE_URL}\n`);
 
-    const result: PrdLoopResult = await runPrdLoop(
-      { stories },
-      {
-        maxIterations: 10,
-        onIteration: (status) => {
-          console.log(
-            `  [${status.attempt}/${status.maxAttempts}] ${status.passed ? "✓ All passed" : `✗ Failed: ${status.failedStory?.id}`}`,
-          );
-        },
+  const result: PrdLoopResult = await runPrdLoop(
+    { stories },
+    {
+      maxIterations: 10,
+      onIteration: (status) => {
+        console.log(
+          `  [${status.attempt}/${status.maxAttempts}] ${status.passed ? "✓ All passed" : `✗ Failed: ${status.failedStory?.id}`}`,
+        );
       },
-    );
+    },
+  );
 
-    if (result.success) {
-      console.log(`\n  All gates passed after ${result.attempts} attempts!\n`);
-      process.exit(0);
-    } else {
-      console.log(
-        `\n  Gates failed after ${result.attempts} attempts. Convergence not reached.\n`,
-      );
-      process.exit(1);
-    }
+  if (result.success) {
+    console.log(`\n  All gates passed after ${result.attempts} attempts!\n`);
+    process.exit(0);
   } else {
-    // Single pass — use native runPrd
-    const result = await runPrd({ stories });
-    process.exit(result.success ? 0 : 1);
+    console.log(
+      `\n  Gates failed after ${result.attempts} attempts. Convergence not reached.\n`,
+    );
+    process.exit(1);
   }
+} else {
+  // Single pass — use native runPrd
+  const result = await runPrd({ stories });
+  process.exit(result.success ? 0 : 1);
 }
-
-main();
