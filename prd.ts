@@ -6,7 +6,9 @@
  * Loop with: bun run prd:loop
  */
 
-import { runPrd, runPrdLoop, type PrdLoopResult } from "gateproof/prd";
+import { execSync } from "child_process";
+import { runPrdLoop, type PrdLoopResult } from "gateproof/prd";
+
 const BASE_URL = process.env.BASE_URL || "https://myfilepath.com";
 
 const stories = [
@@ -142,7 +144,48 @@ if (loop) {
     process.exit(1);
   }
 } else {
-  // Single pass — use native runPrd
-  const result = await runPrd({ stories });
-  process.exit(result.success ? 0 : 1);
+  // Single pass — run bash gates directly (gateproof runPrd expects JS modules)
+  console.log("\n  filepath PRD gates\n");
+  console.log(`  Target: ${BASE_URL}`);
+  console.log();
+
+  let passed = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const story of stories) {
+    const exists = (() => {
+      try {
+        execSync(`test -f ${story.gateFile}`, { stdio: "pipe" });
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
+    if (!exists) {
+      console.log(`  ~ [${story.id}] ${story.title}`);
+      console.log(`    gate not written yet\n`);
+      skipped++;
+      continue;
+    }
+
+    console.log(`  > [${story.id}] ${story.title}`);
+    try {
+      execSync(`bash ${story.gateFile} ${BASE_URL}`, {
+        stdio: "pipe",
+        timeout: 30000,
+      });
+      console.log(`    PASSED\n`);
+      passed++;
+    } catch {
+      console.log(`    FAILED\n`);
+      failed++;
+    }
+  }
+
+  console.log(
+    `\n  ${passed} passed, ${failed} failed, ${skipped} pending\n`,
+  );
+  process.exit(failed === 0 ? 0 : 1);
 }
