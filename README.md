@@ -65,6 +65,26 @@ bun run deploy       # Alchemy (never wrangler)
 bun run prd          # Run gates
 ```
 
+## Agent Memory (Deja)
+
+This project uses [deja](https://deja.coey.dev) for persistent memory across agent sessions.
+
+Set `DEJA_API_KEY` in your `.env` (ask project owner for the key).
+
+```bash
+# Query memories at session start
+curl -s -X POST https://deja.coey.dev/inject \
+  -H "Authorization: Bearer $DEJA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"context": "filepath current status", "format": "prompt", "limit": 7}'
+
+# Store learnings after milestones
+curl -s -X POST https://deja.coey.dev/learn \
+  -H "Authorization: Bearer $DEJA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"trigger": "when to surface", "learning": "what was learned", "confidence": 0.9}'
+```
+
 ## Documentation
 
 - [NORTHSTAR.md](./NORTHSTAR.md) — The plan. Protocol spec, schema, UI components, execution phases.
