@@ -6,21 +6,15 @@
  * Each gate is a bash script that returns 0 (pass) or 1 (fail).
  *
  * Run with: bun run prd
- * Loop with: bun run prd:loop
+ * Loop with: bun run prd:loop (uses native gateproof runPrdLoop)
  */
 
 import { execSync } from "child_process";
+import { runPrd, runPrdLoop, type PrdLoopResult } from "gateproof/prd";
 
 const BASE_URL = process.env.BASE_URL || "https://myfilepath.com";
 
-interface Story {
-  id: string;
-  title: string;
-  gateFile: string;
-  phase: number;
-}
-
-const stories: Story[] = [
+const stories = [
   // ─── Phase 0: Foundation ───
   {
     id: "protocol-schemas",
@@ -124,28 +118,21 @@ const stories: Story[] = [
   },
 ];
 
+// ─── Check for loop mode ───
+const loop = process.argv.includes("--loop");
+
 // ─── Runner ───
 
-const loop = process.argv.includes("--loop");
-const phaseFilter = process.argv.find((a) => a.startsWith("--phase="));
-const targetPhase = phaseFilter ? parseInt(phaseFilter.split("=")[1]) : undefined;
-
-function run() {
-  const filtered =
-    targetPhase !== undefined
-      ? stories.filter((s) => s.phase === targetPhase)
-      : stories;
-
+async function runSingle() {
   console.log("\n  filepath PRD gates\n");
   console.log(`  Target: ${BASE_URL}`);
-  if (targetPhase !== undefined) console.log(`  Phase: ${targetPhase}`);
   console.log();
 
   let passed = 0;
   let failed = 0;
   let skipped = 0;
 
-  for (const story of filtered) {
+  for (const story of stories) {
     const exists = (() => {
       try {
         execSync(`test -f ${story.gateFile}`, { stdio: "pipe" });
@@ -173,7 +160,6 @@ function run() {
     } catch {
       console.log(`    FAILED\n`);
       failed++;
-      if (!loop) break;
     }
   }
 
@@ -183,18 +169,37 @@ function run() {
   return failed === 0;
 }
 
-if (loop) {
-  let attempt = 1;
-  while (true) {
-    console.log(`\n--- Attempt ${attempt} ---`);
-    if (run()) {
-      console.log("\n  All gates passed!\n");
-      process.exit(0);
-    }
-    attempt++;
-    console.log("  Retrying in 5s...\n");
-    execSync("sleep 5");
+async function runWithLoop() {
+  console.log("\n  filepath PRD gates (loop mode)\n");
+  console.log(`  Target: ${BASE_URL}`);
+  console.log();
+
+  const result: PrdLoopResult = await runPrdLoop(
+    { stories },
+    {
+      maxIterations: 10,
+      onIteration: (status) => {
+        console.log(
+          `  [${status.attempt}/${status.maxAttempts}] ${status.passed ? "✓ All passed" : `✗ Failed: ${status.failedStory?.id}`}`,
+        );
+      },
+    },
+  );
+
+  if (result.success) {
+    console.log(`\n  All gates passed after ${result.attempts} attempts!\n`);
+    process.exit(0);
+  } else {
+    console.log(
+      `\n  Gates failed after ${result.attempts} attempts. Convergence not reached.\n`,
+    );
+    process.exit(1);
   }
+}
+
+// ─── Main ───
+if (loop) {
+  runWithLoop();
 } else {
-  process.exit(run() ? 0 : 1);
+  runSingle().then((success) => process.exit(success ? 0 : 1));
 }
