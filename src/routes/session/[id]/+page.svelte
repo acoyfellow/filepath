@@ -1,5 +1,6 @@
 <script lang="ts">
   import "$lib/styles/theme.css";
+  import { dev } from "$app/environment";
   import { onMount, onDestroy } from "svelte";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
@@ -9,10 +10,11 @@
   import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
   import { page } from "$app/state";
   import { DEFAULT_MODEL } from "$lib/config";
-
+  
   // ─── Server data ───
   let { data } = $props();
   const sessionId = $derived(page.params.id ?? "");
+
 
   // ─── Spawn modal ───
   let showSpawn = $state(false);
@@ -37,14 +39,22 @@
   let activeClients = $state<Record<string, ReturnType<typeof createNodeClient>>>({});
   let connectionStates = $state<Record<string, ConnectionState>>({});
 
-  // Fetch worker URL on mount
+  // Determine WebSocket URL: dev = localhost:8787, prod = from config
   onMount(async () => {
-    try {
-      const res = await fetch('/api/config');
-      const cfg = await res.json() as { workerUrl: string };
-      workerUrl = cfg.workerUrl;
-    } catch (err) {
-      console.error('[Session] Failed to fetch config:', err);
+    if (dev) {
+      // Dev mode: wrangler dev runs on port 8787
+      workerUrl = 'http://localhost:8787';
+      console.log('[Session] Dev mode - using worker at', workerUrl);
+    } else {
+      // Production: fetch from config endpoint
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json() as { workerUrl: string };
+        workerUrl = cfg.workerUrl;
+        console.log('[Session] Production - using worker at', workerUrl);
+      } catch (err) {
+        console.error('[Session] Failed to fetch config:', err);
+      }
     }
   });
 
