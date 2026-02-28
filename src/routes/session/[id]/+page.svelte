@@ -39,12 +39,13 @@
   let activeClients = $state<Record<string, ReturnType<typeof createNodeClient>>>({});
   let connectionStates = $state<Record<string, ConnectionState>>({});
 
-  // Determine WebSocket URL: dev = localhost:8787, prod = from config
+  // Determine WebSocket URL: dev = same origin (Alchemy handles routing), prod = from config
   onMount(async () => {
     if (dev) {
-      // Dev mode: wrangler dev runs on port 8787
-      workerUrl = 'http://localhost:8787';
-      console.log('[Session] Dev mode - using worker at', workerUrl);
+      // Dev mode: Alchemy dev server handles /agents/* routing via custom script in alchemy.run.ts
+      // Use same origin as the page (e.g., localhost:5173) - the custom script routes /agents/* to the ChatAgent DO
+      workerUrl = window.location.origin;
+      console.log('[Session] Dev mode - using same origin for WebSocket:', workerUrl);
     } else {
       // Production: fetch from config endpoint
       try {
