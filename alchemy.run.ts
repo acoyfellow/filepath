@@ -5,9 +5,10 @@ import {
   Worker,
   DurableObjectNamespace,
   Container,
+  D1Database,
 } from "alchemy/cloudflare";
 
-import { CloudflareStateStore } from "alchemy/state";
+import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
 
 import type { TaskAgent } from "./src/agent/index.ts";
 import type { ChatAgent } from "./src/agent/chat-agent.ts";
@@ -21,7 +22,10 @@ const projectName = "filepath";
 
 const app = await alchemy(projectName, {
   password,
-  stateStore: (scope) => new CloudflareStateStore(scope, { forceUpdate: true }),
+  stateStore: (scope) =>
+    scope.local
+      ? new FileSystemStateStore(scope)
+      : new CloudflareStateStore(scope, { forceUpdate: true }),
 });
 
 // For prod: use fixed names (protect existing resources)
@@ -52,19 +56,14 @@ const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
 });
 
 // D1 database for auth + metadata
-// Manually created to bypass Alchemy state cache bug
-// Database UUID: 11c62299-1d8c-418f-b250-ff2598c699c6
-// Migrations applied via: wrangler d1 execute filepath-db --file=migrations/0000_initial_schema.sql --remote
-const DB = {
-  type: "d1" as const,
-  id: "11c62299-1d8c-418f-b250-ff2598c699c6", // Must be the UUID, not the name
+// Alchemy D1Database auto-applies migrations in local dev. Remote: adopt existing.
+const DB = await D1Database("filepath-db", {
   name: "filepath-db",
-  dev: {
-    id: "11c62299-1d8c-418f-b250-ff2598c699c6",
-    remote: true,
-  },
-  jurisdiction: "us" as const,
-} as any;
+  migrationsDir: "./migrations",
+  adopt: true,
+  dev: { remote: false },
+  jurisdiction: "us",
+});
 
 // Container for terminal sandboxes
 // Platform set to linux/amd64 because Cloudflare sandbox image only supports AMD64
