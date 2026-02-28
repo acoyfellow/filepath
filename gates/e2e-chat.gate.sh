@@ -1,10 +1,6 @@
 #!/bin/bash
-# E2E Chat Gate — verifies the full multi-agent chat flow
-# Usage: ./gates/e2e-chat.gate.sh [base_url]
-#
-# Prerequisites:
-# - JORDAN_TEST_PASSWORD set in env (or .env file)
-# - A valid LLM API key configured in production
+# E2E Chat Gate — verifies the full agent chat flow
+# Updated for tree architecture
 
 set -euo pipefail
 
@@ -12,15 +8,18 @@ BASE_URL="${1:-https://myfilepath.com}"
 API_URL="${2:-https://api.myfilepath.com}"
 COOKIE_JAR=$(mktemp)
 FAILED=0
-
-# Use existing test user from production gates
-TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
-TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
+SESSION_ID=""
+NODE_ID=""
+FAILED=0
 
 echo "=== E2E CHAT GATE ==="
 echo "Target: $BASE_URL"
 echo "API: $API_URL"
 echo ""
+
+# Use existing test user from production gates
+TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
+TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
 
 # Step 1: Login
 echo -n "1. Login... "
@@ -36,26 +35,17 @@ else
   FAILED=1
 fi
 
-# Step 2: Create multi-agent session
+# Step 2: Create session via tree API
 echo -n "2. Create session... "
-SESSION_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/session/multi" \
+SESSION_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions" \
   -H "Content-Type: application/json" \
   -b "$COOKIE_JAR" \
-  -d '{
-    "name": "E2E Chat Test",
-    "description": "Automated test — please respond briefly",
-    "orchestrator": {
-      "agentType": "shelley",
-      "name": "Test Orchestrator",
-      "config": {"model": "claude-sonnet-4", "systemPrompt": "You are a test agent. Respond with exactly: TEST_SUCCESS"}
-    },
-    "workers": []
-  }' --max-time 10 2>&1)
+  -d '{"name":"E2E Chat Test","gitRepoUrl":""}' --max-time 10 2>&1)
 SESSION_HTTP=$(echo "$SESSION_RESP" | tail -1)
 SESSION_BODY=$(echo "$SESSION_RESP" | sed '$d')
-SESSION_ID=$(echo "$SESSION_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id','') or d.get('sessionId',''))" 2>/dev/null || echo "")
+SESSION_ID=$(echo "$SESSION_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
 
-if [ "$SESSION_HTTP" = "200" ] && [ -n "$SESSION_ID" ]; then
+if [ "$SESSION_HTTP" = "201" ] && [ -n "$SESSION_ID" ]; then
   echo "PASS (session: $SESSION_ID)"
 else
   echo "FAIL (HTTP $SESSION_HTTP)"
@@ -64,12 +54,39 @@ else
   SESSION_ID=""
 fi
 
-# Step 3: WebSocket connection to ChatAgent DO
+# Step 3: Spawn root agent node
+echo -n "3. Spawn root agent... "
 if [ -n "$SESSION_ID" ]; then
-  echo -n "3. WebSocket to ChatAgent DO... "
-  # Use a Node.js script to test WebSocket
-  WS_RESULT=$(timeout 15 /home/exedev/.bun/bin/bun -e "
-    const ws = new (require('ws'))('wss://$(echo $API_URL | sed 's|https://||')/agents/chat-agent/chat-test-${SESSION_ID}');
+  NODE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
+    -H "Content-Type: application/json" \
+    -b "$COOKIE_JAR" \
+    -d '{
+      "agentType": "shelley",
+      "name": "Test Agent",
+      "model": "claude-sonnet-4"
+    }' --max-time 10 2>&1)
+  NODE_HTTP=$(echo "$NODE_RESP" | tail -1)
+  NODE_BODY=$(echo "$NODE_RESP" | sed '$d')
+  NODE_ID=$(echo "$NODE_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
+  
+  if [ "$NODE_HTTP" = "201" ] && [ -n "$NODE_ID" ]; then
+    echo "PASS (node: $NODE_ID)"
+  else
+    echo "FAIL (HTTP $NODE_HTTP)"
+    echo "  Body: $(echo "$NODE_BODY" | head -c 200)"
+    FAILED=1
+    NODE_ID=""
+  fi
+else
+  echo "SKIP (no session)"
+fi
+
+# Step 4: WebSocket connection to ChatAgent DO
+if [ -n "$NODE_ID" ]; then
+  echo -n "4. WebSocket to ChatAgent DO... "
+  # Simple WebSocket test using Node
+  WS_RESULT=$(timeout 15 bun -e "
+    const ws = new (require('ws'))('wss://$(echo $API_URL | sed 's|https://||')/agents/chat-agent/${NODE_ID}');
     ws.on('open', () => { console.log('CONNECTED'); ws.close(); process.exit(0); });
     ws.on('error', (e) => { console.log('ERROR:' + e.message); process.exit(1); });
     setTimeout(() => { console.log('TIMEOUT'); process.exit(1); }, 10000);
@@ -82,11 +99,11 @@ if [ -n "$SESSION_ID" ]; then
     FAILED=1
   fi
 else
-  echo "3. WebSocket test... SKIP (no session)"
+  echo "4. WebSocket test... SKIP (no node)"
 fi
 
-# Step 4: Config endpoint
-echo -n "4. Config endpoint... "
+# Step 5: Config endpoint
+echo -n "5. Config endpoint... "
 CONFIG_RESP=$(curl -s "$BASE_URL/api/config" --max-time 5 2>&1)
 CONFIG_URL=$(echo "$CONFIG_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('workerUrl',''))" 2>/dev/null || echo "")
 if [ -n "$CONFIG_URL" ]; then
