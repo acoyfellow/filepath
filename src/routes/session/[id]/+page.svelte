@@ -1,7 +1,6 @@
 <script lang="ts">
   import "$lib/styles/theme.css";
   import { onMount, onDestroy } from "svelte";
-  import { browser } from "$app/environment";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
   import SpawnModal from "$lib/components/session/SpawnModal.svelte";
@@ -10,15 +9,6 @@
   import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
   import { page } from "$app/state";
   import { DEFAULT_MODEL } from "$lib/config";
-  
-  let dark = $state(browser && document.documentElement.classList.contains('dark'));
-  
-  if (browser) {
-    const observer = new MutationObserver(() => {
-      dark = document.documentElement.classList.contains('dark');
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  }
 
   // ─── Server data ───
   let { data } = $props();
@@ -26,6 +16,21 @@
 
   // ─── Spawn modal ───
   let showSpawn = $state(false);
+  let treeExpanded = $state(true);
+  let containerRef: HTMLDivElement;
+
+  onMount(() => {
+    const el = containerRef;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const w = e.contentRect.width;
+        if (w > 0 && w < 520 && treeExpanded) treeExpanded = false;
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   // ─── WebSocket state ───
   let workerUrl = $state<string | null>(null);
@@ -248,6 +253,18 @@
     if (!selectedAgent) return;
     const nodeId = selectedAgent.id;
 
+    // Check connection state first
+    const connState = connectionStates[nodeId];
+    if (connState && connState !== 'open') {
+      // Show error in chat - not connected
+      const msgs = messagesByNode[nodeId] ?? [];
+      messagesByNode = {
+        ...messagesByNode,
+        [nodeId]: [...msgs, { from: 'a', event: { type: 'text', content: `⚠️ Cannot send: WebSocket ${connState}` } }],
+      };
+      return;
+    }
+
     // Add user message to local state immediately
     const msgs = messagesByNode[nodeId] ?? [];
     messagesByNode = {
@@ -259,7 +276,22 @@
     ensureConnection(nodeId);
     const client = activeClients[nodeId];
     if (client) {
-      client.send(message);
+      try {
+        client.send(message);
+      } catch (err) {
+        // Show error in chat if send fails
+        const errorMsg = err instanceof Error ? err.message : 'Failed to send message';
+        messagesByNode = {
+          ...messagesByNode,
+          [nodeId]: [...messagesByNode[nodeId], { from: 'a', event: { type: 'text', content: `⚠️ Error: ${errorMsg}` } }],
+        };
+      }
+    } else {
+      // Client not ready - show waiting state
+      messagesByNode = {
+        ...messagesByNode,
+        [nodeId]: [...messagesByNode[nodeId], { from: 'a', event: { type: 'text', content: '⏳ Connecting to agent...' } }],
+      };
     }
   }
 
@@ -320,32 +352,36 @@
   }
 </script>
 
-<div class="min-h-screen flex flex-col overflow-hidden transition-colors duration-200 {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-white text-gray-900'}">
-  <div class="flex flex-col flex-1 min-h-0 overflow-hidden {dark ? 'bg-neutral-900' : 'bg-gray-50'}">
+<div class="session-root flex flex-col flex-1 h-[calc(100vh-48px)] overflow-hidden bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300" bind:this={containerRef}>
+  <div class="session-container @container flex flex-1 h-full overflow-hidden">
     {#if rootNode}
       <AgentTree
         root={rootNode}
         {selectedId}
+        expanded={treeExpanded}
+        ontoggle={() => { treeExpanded = !treeExpanded; }}
         onselect={handleSelect}
         onspawn={() => { showSpawn = true; }}
       />
 
-      <div class="flex-1 flex flex-col overflow-hidden {dark ? 'bg-neutral-900' : 'bg-gray-50'}">
+      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AgentPanel
           agent={selectedAgent}
           messages={currentMessages}
           onsend={handleSend}
           onnavigate={handleNavigate}
+          ontogglesidebar={() => { treeExpanded = !treeExpanded; }}
+          showSidebarToggle={!treeExpanded}
         />
       </div>
     {:else}
       <!-- Empty session -- prompt to spawn first agent -->
-      <div class="flex-1 flex flex-col items-center justify-center gap-4 pt-8 {dark ? 'bg-neutral-900' : 'bg-gray-50'}">
-        <p class="text-sm {dark ? 'text-neutral-400' : 'text-gray-600'}">{data.session.name}</p>
-        <p class="text-xs {dark ? 'text-neutral-500' : 'text-gray-500'}">No agents yet. Spawn your first agent to get started.</p>
+      <div class="flex-1 flex flex-col items-center justify-center gap-4 pt-8 bg-gray-50 dark:bg-neutral-950">
+        <p class="text-sm text-gray-600 dark:text-neutral-300">{data.session.name}</p>
+        <p class="text-xs text-gray-500 dark:text-neutral-500">No agents yet. Spawn your first agent to get started.</p>
         <button
           onclick={() => { showSpawn = true; }}
-          class="px-5 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer {dark ? 'bg-indigo-500 hover:bg-indigo-400 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}"
+          class="px-5 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400"
         >
           + spawn agent
         </button>

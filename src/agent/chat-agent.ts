@@ -611,19 +611,23 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       console.log(`[ChatAgent] Using ${keySource} API key for session ${sessionId}`);
     }
 
+    // Short-name aliases; full OpenRouter ids (e.g. anthropic/claude-sonnet-4) pass through
     const modelMap: Record<string, string> = {
       [DEFAULT_MODEL]: DEFAULT_MODEL_FULL,
-      "claude-opus-4-6": "anthropic/claude-opus-4",
+      "claude-opus-4": "anthropic/claude-opus-4",
+      "claude-haiku-4": "anthropic/claude-haiku-4",
       "gpt-4o": "openai/gpt-4o",
       "o3": "openai/o3",
+      "o3-mini": "openai/o3-mini",
       "deepseek-r1": "deepseek/deepseek-r1",
       "gemini-2.5-pro": "google/gemini-2.5-pro-preview",
+      "gemini-2.5-flash": "google/gemini-2.5-flash-preview",
     };
 
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
       apiKey: resolvedKey,
-      model: modelMap[rawModel] || modelMap[DEFAULT_MODEL] || rawModel,
+      model: modelMap[rawModel] ?? rawModel ?? DEFAULT_MODEL_FULL,
       headers: { "HTTP-Referer": "https://myfilepath.com", "X-Title": "filepath" },
     };
   }
