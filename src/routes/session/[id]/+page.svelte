@@ -18,21 +18,8 @@
 
   // ─── Spawn modal ───
   let showSpawn = $state(false);
-  let treeExpanded = $state(true);
   let containerRef: HTMLDivElement;
 
-  onMount(() => {
-    const el = containerRef;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const w = e.contentRect.width;
-        if (w > 0 && w < 520 && treeExpanded) treeExpanded = false;
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  });
 
   // ─── WebSocket state ───
   let workerUrl = $state<string | null>(null);
@@ -369,8 +356,6 @@
       <AgentTree
         root={rootNode}
         {selectedId}
-        expanded={treeExpanded}
-        ontoggle={() => { treeExpanded = !treeExpanded; }}
         onselect={handleSelect}
         onspawn={() => { showSpawn = true; }}
       />
@@ -381,8 +366,6 @@
           messages={currentMessages}
           onsend={handleSend}
           onnavigate={handleNavigate}
-          ontogglesidebar={() => { treeExpanded = !treeExpanded; }}
-          showSidebarToggle={!treeExpanded}
         />
       </div>
     {:else}
