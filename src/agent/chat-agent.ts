@@ -5,6 +5,7 @@ import { parseAgentEvent } from "../lib/protocol";
 import type { AgentEventType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { ADAPTER_COMMANDS, buildAgentEnv } from '$lib/agents/adapters';
+import { cloneRepo, type ContainerEnv } from '$lib/agents/container';
 import { DEFAULT_MODEL, DEFAULT_MODEL_FULL } from '$lib/config';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
@@ -200,20 +201,21 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
   private async spawnContainer(nodeId: string): Promise<void> {
     // Get node config from D1
-    const row = await this.env.DB.prepare(
-      `SELECT n.agent_type, n.model, n.name, s.id as session_id,
-              s.api_key as session_key, u.openrouter_api_key as user_key
-       FROM agent_node n JOIN agent_session s ON n.session_id = s.id
-       JOIN user u ON s.user_id = u.id
-       WHERE n.id = ?`
-    ).bind(nodeId).first<{
-      agent_type: string;
-      model: string;
-      name: string;
+const row = await this.env.DB.prepare(
+      `SELECT n.agent_type, n.model, n.name, s.id as session_id, s.git_repo_url,
+s.api_key as session_key, u.openrouter_api_key as user_key
+FROM agent_node n JOIN agent_session s ON n.session_id = s.id
+JOIN user u ON s.user_id = u.id
+WHERE n.id = ?`
+).bind(nodeId).first<{
+agent_type: string;
+model: string;
+name: string;
       session_id: string;
-      session_key: string | null;
-      user_key: string | null;
-    }>();
+      git_repo_url: string | null;
+session_key: string | null;
+user_key: string | null;
+}>();
 
     if (!row) throw new Error(`Node ${nodeId} not found in D1`);
 
@@ -231,8 +233,22 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     if (!containerApiKey) {
       containerApiKey = this.env.OPENROUTER_API_KEY || '';
     }
-
     const sandbox = getSandbox(this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0], nodeId);
+
+    // Clone git repo if specified (before starting agent process)
+    if (row.git_repo_url) {
+      console.log(`[ChatAgent] Cloning repo: ${row.git_repo_url}`);
+      const cloned = await cloneRepo(
+        { Sandbox: this.env.Sandbox } as unknown as ContainerEnv,
+        nodeId,
+        row.git_repo_url,
+        '/workspace'
+      );
+      if (!cloned) {
+        console.error(`[ChatAgent] Failed to clone repo: ${row.git_repo_url}`);
+        // Continue anyway - agent can work with empty workspace
+      }
+    }
 
     const envVars: Record<string, string> = {
       ...buildAgentEnv({
