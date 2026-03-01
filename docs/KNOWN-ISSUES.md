@@ -37,8 +37,8 @@ curl -s -X POST https://deja.coey.dev/learn \
 
 ### Container Workflow Integration
 **Status:** 🔄 In Progress  
-**Issue:** ExecuteTaskWorkflow uses mock container execution  
-**Impact:** API orchestrator returns mock responses  
+**Issue:** ExecuteTaskWorkflow is not wired to real container execution yet  
+**Impact:** API orchestrator should fail until container execution is wired  
 **Plan:** Integrate real container spawning
 
 ### WebSocket Progress Streaming

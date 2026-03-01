@@ -62,11 +62,11 @@ Built-in agents (reference implementations):
 
 | Agent | CLI | Model |
 |-------|-----|-------|
-| Shelley | filepath-native | claude-sonnet-4 |
-| Claude Code | `claude` | claude-sonnet-4 |
+| Shelley | filepath-native | anthropic/claude-sonnet-4.5 |
+| Claude Code | `claude` | anthropic/claude-sonnet-4.5 |
 | Codex | `codex` | o3 |
-| Cursor | `cursor` | claude-sonnet-4 |
-| Amp | `amp` | claude-sonnet-4 |
+| Cursor | `cursor` | anthropic/claude-sonnet-4.5 |
+| Amp | `amp` | anthropic/claude-sonnet-4.5 |
 
 **BYO:** Bring your own Dockerfile that speaks FAP protocol.
 

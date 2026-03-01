@@ -13,7 +13,7 @@ export const GET: RequestHandler = async (event) => {
         <head><title>filepath API Reference</title></head>
         <body style="font-family: system-ui; padding: 40px; max-width: 800px; margin: 0 auto;">
           <h1>API Reference</h1>
-          <p>Development mode fallback.</p>
+          <p>Development mode reference page.</p>
           <p><a href="/api/openapi.json">View OpenAPI Spec</a></p>
         </body>
         </html>

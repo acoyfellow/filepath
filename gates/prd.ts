@@ -75,7 +75,7 @@ export const prd = definePrd({
       title: "Send message to agent → LLM responds → response displayed in chat",
       gateFile: "./gates/production/agent-chat.gate.sh",
       dependsOn: ["spawn-agent"],
-      progress: ["DONE — OpenAI fallback when OpenRouter key expired"],
+      progress: ["DONE — Route directly to OpenAI when OpenRouter key expired"],
     },
     {
       id: "agent-chat-multi",

@@ -28,7 +28,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Full-stack engineering agent. filepath-native reference implementation.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4</code>
+            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
           </div>
         </div>
       </div>
@@ -46,7 +46,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Research and analysis specialist. Deep dives into docs, APIs, codebases.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4</code>
+            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
           </div>
         </div>
       </div>
@@ -64,7 +64,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Anthropic's agentic coding tool. Complex multi-file changes.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4</code>
+            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
           </div>
         </div>
       </div>
@@ -82,7 +82,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">OpenAI's coding agent. Strong at Python, scripting, data.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">openai/o3</code>
+            <code class="text-gray-600 dark:text-neutral-400">openai/gpt-5</code>
           </div>
         </div>
       </div>
@@ -100,7 +100,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Cursor's agent mode via CLI. IDE-grade code intelligence.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4</code>
+            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
           </div>
         </div>
       </div>
@@ -118,7 +118,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Sourcegraph's agent. Large codebase navigation, cross-repo changes.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4</code>
+            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
           </div>
         </div>
       </div>
@@ -136,7 +136,7 @@
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Open-source coding agent. Terminal-based development.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4</code>
+            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
           </div>
         </div>
       </div>
@@ -169,7 +169,7 @@
   -d '{
     "name": "My Researcher",
     "agentType": "pi",
-    "model": "anthropic/claude-sonnet-4"
+    "model": "anthropic/claude-sonnet-4.5"
   }'`}
     />
   </section>

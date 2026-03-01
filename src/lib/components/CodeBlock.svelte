@@ -7,9 +7,15 @@
     code: string;
     language: SupportedLanguage;
     className?: string;
+    wrap?: boolean;
   }
 
-  let { code, language, className = 'bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto' }: Props = $props();
+  let {
+    code,
+    language,
+    className = 'bg-neutral-950 border border-neutral-800 rounded p-4 text-sm text-neutral-300 overflow-x-auto',
+    wrap = false
+  }: Props = $props();
 
   let highlightedHtml = $state('');
 
@@ -37,7 +43,7 @@
   });
 </script>
 
-<div class={className}>
+<div class={`${className} ${wrap ? 'wrap' : ''}`.trim()}>
   {#if highlightedHtml}
     {@html highlightedHtml}
   {:else}
@@ -50,6 +56,18 @@
     margin: 0;
     background: transparent !important;
     white-space: pre;
+  }
+
+  div.wrap :global(pre.shiki) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  div.wrap :global(pre) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   div :global(code) {

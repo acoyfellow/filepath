@@ -139,7 +139,7 @@ Agents receive context through environment variables:
 ```bash
 FILEPATH_TASK="Fix authentication in login flow"
 FILEPATH_API_KEY="sk-or-v1-xxx"
-FILEPATH_MODEL="claude-sonnet-4"
+FILEPATH_MODEL="anthropic/claude-sonnet-4.5"
 FILEPATH_AGENT_ID="node-abc-123"
 FILEPATH_SESSION_ID="session-xyz-789"
 FILEPATH_WORKSPACE="/workspace"

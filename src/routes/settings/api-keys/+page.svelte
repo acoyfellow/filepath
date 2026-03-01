@@ -72,19 +72,35 @@
         prefix: 'mfp_',
         metadata: {
           agentName: newKeyName.trim(),
-          secrets: secretsObj,
           shell: 'bash',
           createdVia: 'web-ui'
         }
       });
 
-      if (result.data?.key) {
+      if (result.data?.key && result.data?.id) {
+        const secretsResponse = await fetch('/api/user/api-keys/secrets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            keyId: result.data.id,
+            secrets: secretsObj,
+          }),
+        });
+
+        if (!secretsResponse.ok) {
+          const errData = await secretsResponse.json().catch(() => null) as { message?: string } | null;
+          error = errData?.message || 'Failed to store encrypted secrets';
+          return;
+        }
+
         createdKey = result.data.key;
         await loadApiKeys();
         newKeyName = '';
         newKeySecrets = '';
       } else if (result.error) {
         error = result.error.message || 'Failed to create API key';
+      } else {
+        error = 'Failed to create API key';
       }
     } catch (e) {
       error = 'Failed to create API key';

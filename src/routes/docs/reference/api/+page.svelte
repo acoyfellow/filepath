@@ -125,7 +125,7 @@
           <span class="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded">GET</span>
           <code class="text-gray-700 dark:text-neutral-300 text-sm">/api/user/keys</code>
         </div>
-        <p class="text-gray-500 dark:text-neutral-500 text-sm">Get masked API keys</p>
+        <p class="text-gray-500 dark:text-neutral-500 text-sm">Get masked router keys</p>
       </div>
 
       <div class="border-l-2 border-green-900 pl-4 py-2">
@@ -133,7 +133,7 @@
           <span class="text-xs bg-green-900/30 text-green-400 px-2 py-0.5 rounded">POST</span>
           <code class="text-gray-700 dark:text-neutral-300 text-sm">/api/user/keys</code>
         </div>
-        <p class="text-gray-500 dark:text-neutral-500 text-sm">Store encrypted API key</p>
+        <p class="text-gray-500 dark:text-neutral-500 text-sm">Validate and store an encrypted router key</p>
       </div>
 
       <div class="border-l-2 border-blue-900 pl-4 py-2">
@@ -141,7 +141,7 @@
           <span class="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded">GET</span>
           <code class="text-gray-700 dark:text-neutral-300 text-sm">/api/models</code>
         </div>
-        <p class="text-gray-500 dark:text-neutral-500 text-sm">List available LLM models</p>
+        <p class="text-gray-500 dark:text-neutral-500 text-sm">List live LLM models from the available routers</p>
       </div>
 
       <div class="border-l-2 border-blue-900 pl-4 py-2">

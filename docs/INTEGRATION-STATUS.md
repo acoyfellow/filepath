@@ -59,7 +59,7 @@ Last updated: Feb 5, 2026
 - **Files:** `src/agent/`
 
 ### Orchestrator API
-- **Status:** 🔄 Endpoints defined, mock implementation
+- **Status:** 🔄 Endpoints defined, execution not wired
 - **Endpoints:**
   - `POST /api/orchestrator` - Execute task
   - `POST /api/orchestrator/session` - Create session

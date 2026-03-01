@@ -135,7 +135,7 @@ docker build -t my-custom-agent .
 echo '{"type":"message","content":"hello"}' | docker run -i \
   -e FILEPATH_TASK="Test task" \
   -e FILEPATH_API_KEY="sk-test" \
-  -e FILEPATH_MODEL="claude-sonnet-4" \
+  -e FILEPATH_MODEL="anthropic/claude-sonnet-4.5" \
   my-custom-agent
 ```
 

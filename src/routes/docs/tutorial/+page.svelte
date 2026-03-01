@@ -34,6 +34,7 @@
     <p class="text-gray-600 dark:text-neutral-400 mb-4">filepath is BYOK (Bring Your Own Key). We don't charge for AI usage—you pay the providers directly.</p>
     <ol class="space-y-2 text-gray-600 dark:text-neutral-400 list-decimal list-inside">
       <li>Get an OpenRouter key at <a href="https://openrouter.ai/keys" class="text-gray-700 dark:text-neutral-300 hover:underline" target="_blank">openrouter.ai/keys</a></li>
+      <li>Or get an OpenCode Zen key at <a href="https://opencode.ai/zen" class="text-gray-700 dark:text-neutral-300 hover:underline" target="_blank">opencode.ai/zen</a></li>
       <li>Go to <a href="/settings/account" class="text-gray-700 dark:text-neutral-300 hover:underline">Settings / Account</a></li>
       <li>Paste your key (encrypted and stored securely)</li>
     </ol>
@@ -63,7 +64,7 @@
     <ol class="space-y-2 text-gray-600 dark:text-neutral-400 list-decimal list-inside">
       <li>In your session, click "Spawn Agent"</li>
       <li>Pick an agent type (Pi, Shelley, Claude Code, etc.)</li>
-      <li>Choose a model ( Claude Sonnet 4 recommended)</li>
+      <li>Choose a model (Claude 4.5 or GPT-5 are solid starting points)</li>
       <li>Click "Spawn"</li>
     </ol>
     <p class="text-gray-500 dark:text-neutral-500 text-sm mt-4">The agent appears in the tree on the left. Click it to chat.</p>
@@ -102,7 +103,7 @@
     <div class="space-y-4">
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium">"No API key set"</h3>
-    <p class="text-gray-500 dark:text-neutral-500 text-sm">Add your OpenRouter key in Settings / Account. Or provide a per-session key when spawning.</p>
+    <p class="text-gray-500 dark:text-neutral-500 text-sm">Add your OpenRouter or OpenCode Zen key in Settings / Account. Or provide a per-session key when spawning.</p>
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">
@@ -112,7 +113,7 @@
       
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium">Not getting responses</h3>
-        <p class="text-gray-500 dark:text-neutral-500 text-sm">Check your OpenRouter key has credits. Check the agent status in the tree sidebar.</p>
+        <p class="text-gray-500 dark:text-neutral-500 text-sm">Check your router key is valid and has credits. Check the agent status in the tree sidebar.</p>
       </div>
     </div>
   </section>
