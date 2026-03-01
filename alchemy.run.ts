@@ -28,11 +28,11 @@ const app = await alchemy(projectName, {
       : new CloudflareStateStore(scope, { forceUpdate: true }),
 });
 
-// For prod: use fixed names (protect existing resources)
-// For previews (pr-123): use stage-scoped names (isolated, disposable)
+// Use stable per-stage names. Prod can be recreated freely right now, so do not
+// adopt the legacy D1 database that predates migrations.
 const isProd = app.stage === "prod";
 const prefix = isProd ? projectName : `${app.stage}-${projectName}`;
-const dbName = isProd ? "filepath-db" : `${prefix}-db`;
+const dbName = isProd ? "filepath-prod-db" : `${prefix}-db`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 
@@ -56,13 +56,13 @@ const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
   scriptName: `${prefix}-worker`,
 });
 
-// D1 database for auth + metadata
+// D1 database for auth + metadata.
 // Local dev uses a local D1 file. CI previews get isolated disposable DBs.
-// Production adopts the long-lived existing DB.
+// Production uses a fresh managed database instead of adopting the old legacy DB.
 const DB = await D1Database(dbName, {
   name: dbName,
   migrationsDir: "./migrations",
-  adopt: isProd,
+  adopt: false,
   dev: { remote: false },
 });
 

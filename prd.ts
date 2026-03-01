@@ -7,7 +7,6 @@
  */
 
 import { execSync } from "child_process";
-import { runPrdLoop, type PrdLoopResult } from "gateproof/prd";
 
 const BASE_URL = process.env.BASE_URL || "https://myfilepath.com";
 
@@ -118,29 +117,100 @@ const stories = [
 // ─── Check for loop mode ───
 const loop = process.argv.includes("--loop");
 
+type RunSummary = {
+  success: boolean;
+  passed: number;
+  failed: number;
+  skipped: number;
+  failedStory?: (typeof stories)[number];
+};
+
+function gateExists(path: string) {
+  try {
+    execSync(`test -f ${path}`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runGate(gateFile: string) {
+  execSync(`bash ${gateFile} ${BASE_URL}`, {
+    stdio: "pipe",
+    timeout: 30000,
+  });
+}
+
+function runOnce(logOutput = true): RunSummary {
+  let passed = 0;
+  let failed = 0;
+  let skipped = 0;
+  let failedStory: (typeof stories)[number] | undefined;
+
+  for (const story of stories) {
+    const exists = gateExists(story.gateFile);
+
+    if (!exists) {
+      if (logOutput) {
+        console.log(`  ~ [${story.id}] ${story.title}`);
+        console.log(`    gate not written yet\n`);
+      }
+      skipped++;
+      continue;
+    }
+
+    if (logOutput) {
+      console.log(`  > [${story.id}] ${story.title}`);
+    }
+
+    try {
+      runGate(story.gateFile);
+      if (logOutput) {
+        console.log(`    PASSED\n`);
+      }
+      passed++;
+    } catch {
+      if (!failedStory) {
+        failedStory = story;
+      }
+      if (logOutput) {
+        console.log(`    FAILED\n`);
+      }
+      failed++;
+    }
+  }
+
+  return {
+    success: failed === 0,
+    passed,
+    failed,
+    skipped,
+    failedStory,
+  };
+}
+
 if (loop) {
   console.log("\n  filepath PRD gates (loop mode)\n");
   console.log(`  Target: ${BASE_URL}\n`);
 
-  const result: PrdLoopResult = await runPrdLoop(
-    { stories },
-    {
-      maxIterations: 10,
-      onIteration: (status) => {
-        console.log(
-          `  [${status.attempt}/${status.maxAttempts}] ${status.passed ? "✓ All passed" : `✗ Failed: ${status.failedStory?.id}`}`,
-        );
-      },
-    },
-  );
+  const maxIterations = 10;
+  let attempts = 0;
+  let last = runOnce(false);
 
-  if (result.success) {
-    console.log(`\n  All gates passed after ${result.attempts} attempts!\n`);
+  while (attempts < maxIterations) {
+    attempts += 1;
+    last = runOnce(false);
+    console.log(
+      `  [${attempts}/${maxIterations}] ${last.success ? "✓ All passed" : `✗ Failed: ${last.failedStory?.id}`}`,
+    );
+    if (last.success) break;
+  }
+
+  if (last.success) {
+    console.log(`\n  All gates passed after ${attempts} attempts!\n`);
     process.exit(0);
   } else {
-    console.log(
-      `\n  Gates failed after ${result.attempts} attempts. Convergence not reached.\n`,
-    );
+    console.log(`\n  Gates failed after ${attempts} attempts. Convergence not reached.\n`);
     process.exit(1);
   }
 } else {
@@ -149,43 +219,10 @@ if (loop) {
   console.log(`  Target: ${BASE_URL}`);
   console.log();
 
-  let passed = 0;
-  let failed = 0;
-  let skipped = 0;
-
-  for (const story of stories) {
-    const exists = (() => {
-      try {
-        execSync(`test -f ${story.gateFile}`, { stdio: "pipe" });
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-
-    if (!exists) {
-      console.log(`  ~ [${story.id}] ${story.title}`);
-      console.log(`    gate not written yet\n`);
-      skipped++;
-      continue;
-    }
-
-    console.log(`  > [${story.id}] ${story.title}`);
-    try {
-      execSync(`bash ${story.gateFile} ${BASE_URL}`, {
-        stdio: "pipe",
-        timeout: 30000,
-      });
-      console.log(`    PASSED\n`);
-      passed++;
-    } catch {
-      console.log(`    FAILED\n`);
-      failed++;
-    }
-  }
+  const result = runOnce(true);
 
   console.log(
-    `\n  ${passed} passed, ${failed} failed, ${skipped} pending\n`,
+    `\n  ${result.passed} passed, ${result.failed} failed, ${result.skipped} pending\n`,
   );
-  process.exit(failed === 0 ? 0 : 1);
+  process.exit(result.success ? 0 : 1);
 }
