@@ -3,8 +3,8 @@
  *
  * Exports:
  * - ChatAgent DO (chat + LLM, SQLite persistence)
- * - TaskAgent DO (legacy, kept for binding)
- * - SessionDO (stub, kept for binding)
+ * - TaskAgent DO (compatibility binding that fails closed)
+ * - SessionDO (compatibility binding that fails closed)
  * - Sandbox (re-export for Container binding)
  *
  * Routes:

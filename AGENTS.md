@@ -91,7 +91,7 @@ The production gate `gates/production/agent-chat.gate.sh` tests this end-to-end.
 - Billing: credit balance displays (10,000 credits), purchase tiers
 
 ### Known Bugs 🐛 (fix before calling it done)
-1. **OpenRouter API key expired** — using OpenAI fallback. Get new key.
+1. **OpenRouter API key expired** — routing directly to OpenAI. Get new key.
 2. **Dashboard shows 0 agents** for all sessions. Node count query wrong.
 3. **Chat history lost between DO restarts** — `chatHistory` is in-memory only.
 4. **Production gates fail** — old gates test terminal/billing, new agent-chat gate untested in CI.

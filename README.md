@@ -8,7 +8,7 @@ filepath is infrastructure for coordinating AI agents. Agents are interchangeabl
 
 **Liquid Agents** — Swap Claude Code for Codex for Shelley without changing your workflow. Same protocol, seamless handoff.
 
-**Liquid Models** — Switch models mid-session. Start with Claude Sonnet, escalate to o3 for reasoning, fallback to Gemini for speed.
+**Liquid Models** — Switch models mid-session. Start with Claude Sonnet, escalate to o3 for reasoning, switch to Gemini for speed.
 
 **Orchestration Infrastructure** — One platform, multiple interfaces:
 - **Dashboard** — Visual tree, rich chat, human-in-the-loop

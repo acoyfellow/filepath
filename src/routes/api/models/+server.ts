@@ -1,6 +1,5 @@
 import { json } from "@sveltejs/kit";
 import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
-import { DEFAULT_MODEL_FULL } from "$lib/config";
 
 /**
  * GET /api/models
@@ -32,19 +31,6 @@ interface ModelEntry {
 let cachedModels: ModelEntry[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
-// Curated fallback list if OpenRouter API is unreachable
-const FALLBACK_MODELS: ModelEntry[] = [
-  { id: DEFAULT_MODEL_FULL, name: "Default Model", provider: "Default" },
-  { id: "anthropic/claude-opus-4", name: "Claude Opus 4", provider: "Anthropic" },
-  { id: "anthropic/claude-haiku-4", name: "Claude Haiku 4", provider: "Anthropic" },
-  { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI" },
-  { id: "openai/o3", name: "o3", provider: "OpenAI" },
-  { id: "openai/o3-mini", name: "o3-mini", provider: "OpenAI" },
-  { id: "deepseek/deepseek-r1", name: "DeepSeek R1", provider: "DeepSeek" },
-  { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google" },
-  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "Google" },
-];
 
 function extractProvider(modelId: string): string {
   const slash = modelId.indexOf("/");
@@ -97,8 +83,11 @@ export const GET: RequestHandler = async ({ url }: RequestEvent) => {
     cacheTimestamp = now;
 
     return json({ models });
-  } catch {
-    // Return fallback on any error
-    return json({ models: cachedModels ?? FALLBACK_MODELS });
+  } catch (error) {
+    console.error("Failed to load models from OpenRouter:", error);
+    return json(
+      { error: "Model catalog unavailable" },
+      { status: 503 }
+    );
   }
 };

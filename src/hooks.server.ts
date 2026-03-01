@@ -1,7 +1,6 @@
 import { initAuth } from "$lib/auth";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
-import { error } from "@sveltejs/kit";
 
 import type { Handle } from "@sveltejs/kit";
 
@@ -28,11 +27,8 @@ export const handle: Handle = async ({ event, resolve }) => {
     
     const db = event.platform?.env?.DB;
     if (!db) {
-      // D1 not available — serve page without auth (better than hard 500)
-      console.warn('D1 database not available, serving without auth');
-      event.locals.user = null;
-      event.locals.session = null;
-      return await resolve(event);
+      console.error('D1 database not available');
+      return new Response('Authentication database unavailable', { status: 503 });
     }
 
     // Initialize auth for this origin (previews/prod/local)
@@ -60,16 +56,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   } catch (criticalError) {
     console.error('Critical error in handle:', criticalError);
-
-    // Graceful fallback - serve app without auth
-    event.locals.user = null;
-    event.locals.session = null;
-
-    try {
-      return await resolve(event);
-    } catch (resolveError) {
-      console.error('Failed to resolve even without auth:', resolveError);
-      return error(500, 'Service temporarily unavailable');
-    }
+    return new Response('Service temporarily unavailable', { status: 503 });
   }
 };
