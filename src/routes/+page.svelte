@@ -69,7 +69,7 @@ console.log(status.summary.running > 0); // true`;
         <p class="text-xs text-gray-500 dark:text-neutral-500">Tree on the left. Live chat on the right.</p>
       </div>
 
-      <div class="w-full overflow-hidden rounded-2xl border border-gray-200 bg-white/85 shadow-[0_28px_100px_-40px_rgba(15,23,42,0.55)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
+      <div class="@container w-full overflow-hidden rounded-2xl border border-gray-200 bg-white/85 shadow-[0_28px_100px_-40px_rgba(15,23,42,0.55)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
         <HeroDemo />
       </div>
     </section>
