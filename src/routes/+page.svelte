@@ -1,5 +1,6 @@
 <script lang="ts">
   import CodeBlock from '$lib/components/CodeBlock.svelte';
+  import HeroDemo from '$lib/components/HeroDemo.svelte';
 
   const heroCode = `const session = await fetch("/api/sessions", {
   method: "POST",
@@ -59,6 +60,17 @@ console.log(status.summary.running > 0); // true`;
           wrap={true}
           className="overflow-hidden px-4 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200 sm:px-6 sm:py-6"
         />
+      </div>
+    </section>
+
+    <section class="mb-16">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h2 class="text-xs uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">Click Around</h2>
+        <p class="text-xs text-gray-500 dark:text-neutral-500">Tree on the left. Live chat on the right.</p>
+      </div>
+
+      <div class="w-full overflow-hidden rounded-2xl border border-gray-200 bg-white/85 shadow-[0_28px_100px_-40px_rgba(15,23,42,0.55)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
+        <HeroDemo />
       </div>
     </section>
 
