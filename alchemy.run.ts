@@ -57,7 +57,7 @@ const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
 });
 
 // D1 database for auth + metadata
-// Local dev uses a local D1 file. Preview stages get isolated disposable DBs.
+// Local dev uses a local D1 file. CI previews get isolated disposable DBs.
 // Production adopts the long-lived existing DB.
 const DB = await D1Database(dbName, {
   name: dbName,

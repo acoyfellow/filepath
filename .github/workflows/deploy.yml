@@ -87,7 +87,11 @@ jobs:
 
       - name: Deploy Preview
         if: github.ref != 'refs/heads/main'
-        run: bun run deploy:preview
+        run: |
+          STAGE_KEY=$(echo "${BRANCH_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/_' '-' | sed 's/[^a-z0-9-]//g')
+          STAGE="preview-${STAGE_KEY}"
+          echo "Deploying preview stage: ${STAGE}"
+          bunx alchemy deploy --stage "${STAGE}"
         env:
           BRANCH_NAME: ${{ github.ref_name }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
