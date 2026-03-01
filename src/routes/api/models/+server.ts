@@ -49,7 +49,7 @@ function extractProvider(modelId: string): string {
   return providers[prefix] ?? prefix;
 }
 
-export const GET: RequestHandler = async ({ url }: RequestEvent) => {
+export const GET: RequestHandler = async (_event: RequestEvent) => {
   const now = Date.now();
 
   // Return cache if fresh

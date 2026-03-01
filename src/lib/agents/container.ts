@@ -187,9 +187,8 @@ export async function cloneRepo(
 /**
  * Start an agent process that speaks FAP over stdin/stdout.
  * Returns a handle for sending messages and reading responses.
- * 
- * TODO: Implement actual stdin/stdout streaming when Sandbox SDK supports it.
- * Current approach: Use exec() for single commands, need streaming for agents.
+ *
+ * This path is intentionally not wired until real stdin/stdout streaming exists.
  */
 export interface AgentProcessHandle {
   processId: string;
@@ -217,9 +216,8 @@ export async function startFAPAgent(
 /**
  * Mount an R2 bucket for session mode file sharing.
  * In session mode, all agents share the same filesystem (mounted from R2).
- * 
- * TODO: Implement actual R2 mount when Sandbox SDK supports it.
- * Current approach: Files synced via backup/restore for private mode.
+ *
+ * This path is intentionally not wired until real R2 mounting exists.
  */
 export interface MountBucketOptions {
   bucket: R2Bucket;

@@ -6,7 +6,7 @@ import type { Env } from '../types';
  * Will be replaced or removed when Container-based agent execution lands.
  */
 export class TaskAgent extends Agent<Env, Record<string, never>> {
-  async onRequest(request: Request): Promise<Response> {
+  async onRequest(_request: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'TaskAgent is not implemented' }), {
       status: 501,
       headers: { 'Content-Type': 'application/json' },
