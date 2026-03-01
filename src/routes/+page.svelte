@@ -1,4 +1,6 @@
 <script lang="ts">
+  import CodeBlock from '$lib/components/CodeBlock.svelte';
+
   const heroCode = `const session = await fetch("/api/sessions", {
   method: "POST",
   body: JSON.stringify({ name: "hello-world" })
@@ -13,9 +15,10 @@ await fetch(\`/api/sessions/\${session.id}/nodes\`, {
   })
 });
 
-// close the tab
-// come back later
-// the agent is still running`;
+const status = await fetch(\`/api/sessions/\${session.id}/status\`)
+  .then((res) => res.json());
+
+console.log(status.summary.running > 0); // true`;
 </script>
 
 <svelte:head>
@@ -50,7 +53,12 @@ await fetch(\`/api/sessions/\${session.id}/nodes\`, {
           <span class="ml-3 text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">hello-world.ts</span>
         </div>
 
-        <pre class="overflow-hidden px-4 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200 sm:px-6 sm:py-6"><code class="block whitespace-pre-wrap break-words font-mono">{heroCode}</code></pre>
+        <CodeBlock
+          code={heroCode}
+          language="typescript"
+          wrap={true}
+          className="overflow-hidden px-4 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200 sm:px-6 sm:py-6"
+        />
       </div>
     </section>
 
