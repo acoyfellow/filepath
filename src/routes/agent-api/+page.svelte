@@ -51,7 +51,7 @@
           <span class="w-8 h-8 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 flex items-center justify-center text-sm font-medium">2</span>
           <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200">Add Your API Key</h3>
         </div>
-        <p class="text-gray-600 dark:text-neutral-400 mb-4">Store your OpenRouter API key (BYOK model):</p>
+        <p class="text-gray-600 dark:text-neutral-400 mb-4">Store and validate a router key (OpenRouter or OpenCode Zen):</p>
         <CodeBlock
           language="bash"
           className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto"
@@ -60,7 +60,11 @@
   -H "Cookie: session=your-session-cookie" \\
   -d '{"provider": "openrouter", "key": "sk-or-v1-..."}'`}
         />
-        <p class="text-gray-500 dark:text-neutral-500 text-sm mt-2">Get an OpenRouter key at <a href="https://openrouter.ai/keys" class="text-gray-700 dark:text-neutral-300 hover:underline">openrouter.ai/keys</a></p>
+        <p class="text-gray-500 dark:text-neutral-500 text-sm mt-2">
+          OpenRouter: <a href="https://openrouter.ai/keys" class="text-gray-700 dark:text-neutral-300 hover:underline">openrouter.ai/keys</a>
+          <span class="mx-2">·</span>
+          OpenCode Zen: <a href="https://opencode.ai/zen" class="text-gray-700 dark:text-neutral-300 hover:underline">opencode.ai/zen</a>
+        </p>
       </div>
 
       <!-- Step 3 -->
@@ -214,12 +218,11 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
         filepath operates on a BYOK model. You bring your own LLM API keys—we don't charge for usage.
       </p>
       
-      <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Supported Providers</h3>
+      <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Supported Routers</h3>
       <ul class="space-y-2 text-gray-600 dark:text-neutral-400 mb-6">
-        <li>• <strong>OpenRouter</strong> — Recommended. Access 100+ models via one key.</li>
-        <li>• <strong>OpenAI</strong> — Direct OpenAI API access</li>
-        <li>• <strong>Anthropic</strong> — Claude API</li>
-        <li>• <strong>Any OpenAI-compatible provider</strong></li>
+        <li>• <strong>OpenRouter</strong> — Recommended. Access many upstream models via one key.</li>
+        <li>• <strong>OpenCode Zen</strong> — Hosted router for OpenAI-compatible chat completions.</li>
+        <li>• More routers can be added behind the same key validation + routing path.</li>
       </ul>
 
       <div class="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4">
@@ -231,6 +234,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           code={`POST /api/user/keys
 {"provider": "openrouter", "key": "sk-or-v1-..."}`}
         />
+        <p class="text-gray-500 dark:text-neutral-500 text-xs mt-2">To route a model through Zen, prefix it with <code class="text-gray-700 dark:text-neutral-300">zen/</code>, for example <code class="text-gray-700 dark:text-neutral-300">zen/openai/gpt-5</code>.</p>
       </div>
 
       <div class="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 mt-4">

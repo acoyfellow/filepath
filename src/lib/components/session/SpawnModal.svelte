@@ -1,5 +1,6 @@
 <script lang="ts">
   import { DEFAULT_MODEL } from "$lib/config";
+  import type { ProviderId } from "$lib/provider-keys";
   import type { AgentType, SpawnRequest } from "$lib/types/session";
   
   interface Props {
@@ -7,11 +8,20 @@
     onspawn: (req: SpawnRequest) => void;
     lastAgent?: AgentType;
     lastModel?: string;
-    accountKeyMasked?: string | null;
+    accountKeysMasked?: Record<ProviderId, string | null>;
   }
   
-  let { onclose, onspawn, lastAgent = "shelley", lastModel = DEFAULT_MODEL, accountKeyMasked = null }: Props = $props();
+  let {
+    onclose,
+    onspawn,
+    lastAgent = "shelley",
+    lastModel = DEFAULT_MODEL,
+    accountKeysMasked = { openrouter: null, zen: null },
+  }: Props = $props();
 
+  const initialAgent = lastAgent;
+  const initialModel = lastModel;
+  const initialHasAccountKey = Object.values(accountKeysMasked).some(Boolean);
 
   const NAMES = ["atlas","bolt","cipher","drift","echo","flux","ghost","helix","iris","kite","nova","orbit","pulse","relay","spark","trace","vortex","wave","zero"];
   const AGENTS: { id: AgentType; label: string }[] = [
@@ -23,8 +33,15 @@
     { id: "amp", label: "Amp" },
     { id: "custom", label: "Custom" },
   ];
-  // Default model list -- will be replaced by dynamic OpenRouter fetch
-  const MODELS = [DEFAULT_MODEL, "claude-opus-4-6", "gpt-4o", "o3", "deepseek-r1", "gemini-2.5-pro"];
+  const MODELS = [
+    DEFAULT_MODEL,
+    "anthropic/claude-sonnet-4.5",
+    "openai/gpt-5",
+    "openai/gpt-5-mini",
+    "google/gemini-2.5-pro",
+    "deepseek-r1",
+    "zen/openai/gpt-5",
+  ];
 
   function pickName(): string {
     const word = NAMES[Math.floor(Math.random() * NAMES.length)];
@@ -33,15 +50,19 @@
   }
 
   let name = $state(pickName());
-  let agent = $state<AgentType>(lastAgent);
-  let model = $state(lastModel);
+  let agent = $state<AgentType>(initialAgent);
+  let model = $state(initialModel);
   let modelFilter = $state("");
 
-  // BYOK state - accountKeyMasked comes from server-side props (no flicker!)
-  let hasAccountKey = $state(!!accountKeyMasked);
-  let keyMode = $state<'account' | 'session'>(accountKeyMasked ? 'account' : 'session');
+  let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
+  let keyMode = $state<'account' | 'session'>(initialHasAccountKey ? 'account' : 'session');
   let sessionKey = $state('');
   let keyLoading = $state(false); // Already have the data from server
+  let availableRouters = $derived(
+    Object.entries(accountKeysMasked)
+      .filter(([, value]) => Boolean(value))
+      .map(([provider, value]) => `${provider} (${value})`)
+  );
 
   let filteredModels = $derived(
     modelFilter
@@ -69,10 +90,10 @@
   <div class="modal" onclick={(e) => e.stopPropagation()}>
     <div class="modal-title">spawn agent</div>
     <div class="modal-body">
-      <label class="modal-label">name</label>
+      <label class="modal-label" for="spawn-name">name</label>
       <div class="modal-name-row">
-        <input bind:value={name} class="modal-input" />
-        <button class="modal-dice" onclick={() => { name = pickName(); }}>
+        <input id="spawn-name" bind:value={name} class="modal-input" />
+        <button class="modal-dice" onclick={() => { name = pickName(); }} aria-label="Generate name">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
             <path d="M1 6a5 5 0 018-4M11 6a5 5 0 01-8 4" />
             <path d="M9 1v2h2M3 11V9H1" />
@@ -80,7 +101,7 @@
         </button>
       </div>
 
-      <label class="modal-label">agent</label>
+      <div class="modal-label">agent</div>
       <div class="modal-options">
         {#each AGENTS as a}
           <button class="modal-option" class:on={agent === a.id} onclick={() => { agent = a.id; }}>
@@ -89,8 +110,9 @@
         {/each}
       </div>
 
-      <label class="modal-label">model</label>
+      <label class="modal-label" for="spawn-model-filter">model</label>
       <input
+        id="spawn-model-filter"
         class="modal-input modal-model-filter"
         placeholder="Search models..."
         bind:value={modelFilter}
@@ -104,13 +126,13 @@
         {/each}
       </div>
 
-      <label class="modal-label">api key</label>
+      <div class="modal-label">api key</div>
       {#if keyLoading}
         <div class="modal-key-info">loading...</div>
       {:else if hasAccountKey}
         <div class="modal-options">
           <button class="modal-option" class:on={keyMode === 'account'} onclick={() => { keyMode = 'account'; }}>
-            account key ({accountKeyMasked})
+            saved account key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
           </button>
           <button class="modal-option" class:on={keyMode === 'session'} onclick={() => { keyMode = 'session'; }}>
             different key
@@ -120,7 +142,7 @@
           <input
             class="modal-input modal-key-input"
             type="password"
-            placeholder="sk-or-v1-..."
+            placeholder="Paste the key for the router this model uses"
             bind:value={sessionKey}
           />
         {/if}
@@ -128,11 +150,11 @@
         <input
           class="modal-input modal-key-input"
           type="password"
-          placeholder="sk-or-v1-... (or set in Settings)"
+          placeholder="Paste an OpenRouter or Zen key"
           bind:value={sessionKey}
         />
         <div class="modal-key-info">
-          No account key set. <a href="/settings/account" class="modal-key-link">Add in Settings</a> or enter one for this session.
+          No account key set. <a href="/settings/account" class="modal-key-link">Add one in Settings</a> or enter one for this session.
         </div>
       {/if}
     </div>

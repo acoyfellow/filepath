@@ -27,7 +27,7 @@ export const AGENT_CATALOG: Record<AgentType, AgentCatalogEntry> = {
     id: "codex",
     name: "Codex",
     description: "OpenAI's coding agent. Strong at Python, scripting, data.",
-    defaultModel: "openai/o3",
+    defaultModel: "openai/gpt-5",
     icon: "scroll",
   },
   cursor: {

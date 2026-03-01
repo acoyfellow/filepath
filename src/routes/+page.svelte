@@ -43,7 +43,7 @@
           </div>
           <div class="flex items-start gap-2">
             <span class="text-green-600 dark:text-green-500/60 mt-0.5">→</span>
-            <span class="text-gray-600 dark:text-neutral-400">Change models mid-session (claude-sonnet-4 → o3)</span>
+            <span class="text-gray-600 dark:text-neutral-400">Change models mid-session (Claude 4.5 → GPT-5 → Gemini 2.5)</span>
           </div>
           <div class="flex items-start gap-2">
             <span class="text-green-600 dark:text-green-500/60 mt-0.5">→</span>
@@ -112,14 +112,17 @@
       <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Bring Your Own Key</h2>
       <div class="grid md:grid-cols-2 gap-6">
         <div>
-          <p class="mb-2 text-gray-900 dark:text-neutral-300">Your OpenRouter API key = your compute spend. No markup.</p>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Access 100+ models (Claude, GPT-4, Gemini) through one key.</p>
+          <p class="mb-2 text-gray-900 dark:text-neutral-300">Your router key = your compute spend. No markup.</p>
+          <p class="text-sm text-gray-600 dark:text-neutral-400">Bring OpenRouter or OpenCode Zen. Save one or both, then pick the router with your model string.</p>
         </div>
         <div class="flex flex-col justify-center">
           <a href="https://openrouter.ai/keys" class="text-sm transition-colors mb-1 text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-300" target="_blank">
-            Get a key at openrouter.ai/keys
+            OpenRouter keys
           </a>
-          <span class="text-xs text-gray-500 dark:text-neutral-600">Then add it in Settings → API Keys</span>
+          <a href="https://opencode.ai/zen" class="text-sm transition-colors mb-1 text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-300" target="_blank">
+            OpenCode Zen
+          </a>
+          <span class="text-xs text-gray-500 dark:text-neutral-600">Then validate and save it in Settings → Account</span>
         </div>
       </div>
     </section>

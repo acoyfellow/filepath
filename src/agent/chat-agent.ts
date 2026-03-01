@@ -9,6 +9,12 @@ import { cloneRepo, type ContainerEnv } from '$lib/agents/container';
 import { DEFAULT_MODEL, DEFAULT_MODEL_FULL } from '$lib/config';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
+import {
+  PROVIDERS,
+  deserializeStoredProviderKeys,
+  getProviderForModel,
+  normalizeModelForProvider,
+} from '$lib/provider-keys';
 
 /**
  * ChatAgent — Durable Object for a single agent node.
@@ -222,16 +228,30 @@ user_key: string | null;
     console.log(`[ChatAgent] Spawning container for node ${nodeId} (${row.agent_type})`);
 
     // Resolve API key for the container (same priority as callLLM)
+    const provider = getProviderForModel(row.model);
+    const providerDefinition = PROVIDERS[provider];
     let containerApiKey = '';
     const secret = this.env.BETTER_AUTH_SECRET;
     if (row.session_key && secret) {
-      try { containerApiKey = await decryptApiKey(row.session_key, secret); } catch { /* skip */ }
+      try {
+        containerApiKey = await decryptApiKey(row.session_key, secret);
+      } catch {
+        // Ignore unreadable session override.
+      }
     }
     if (!containerApiKey && row.user_key && secret) {
-      try { containerApiKey = await decryptApiKey(row.user_key, secret); } catch { /* skip */ }
+      try {
+        const decrypted = await decryptApiKey(row.user_key, secret);
+        containerApiKey = deserializeStoredProviderKeys(decrypted)[provider] || '';
+      } catch {
+        // Ignore unreadable stored user keys.
+      }
     }
     if (!containerApiKey) {
-      containerApiKey = this.env.OPENROUTER_API_KEY || '';
+      const envKey = this.env[providerDefinition.envKey as keyof Env];
+      if (typeof envKey === 'string') {
+        containerApiKey = envKey;
+      }
     }
     const sandbox = getSandbox(this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0], nodeId);
 
@@ -574,6 +594,8 @@ user_key: string | null;
   private async resolveProvider(): Promise<{ apiUrl: string; apiKey: string; model: string; headers: Record<string, string> }> {
     const rawModel = this.state?.model || DEFAULT_MODEL;
     const sessionId = this.state?.sessionId;
+    const provider = getProviderForModel(rawModel);
+    const providerDefinition = PROVIDERS[provider];
 
     let resolvedKey = "";
     let keySource: 'session' | 'user' | 'env' | undefined;
@@ -604,10 +626,14 @@ user_key: string | null;
         }
 
         if (!resolvedKey && row?.user_key && secret) {
-          // Priority 2: User's account key
+          // Priority 2: User's account key for the selected provider
           try {
-            resolvedKey = await decryptApiKey(row.user_key, secret);
-            keySource = 'user';
+            const decrypted = await decryptApiKey(row.user_key, secret);
+            const storedKeys = deserializeStoredProviderKeys(decrypted);
+            resolvedKey = storedKeys[provider] || "";
+            if (resolvedKey) {
+              keySource = 'user';
+            }
           } catch {
             console.warn(`[ChatAgent] Failed to decrypt user key for session ${sessionId}`);
           }
@@ -617,9 +643,10 @@ user_key: string | null;
       }
     }
 
-    if (!resolvedKey && this.env.OPENROUTER_API_KEY) {
+    const envKey = this.env[providerDefinition.envKey as keyof Env];
+    if (!resolvedKey && typeof envKey === "string" && envKey) {
       // Priority 3: Global env key (e2e tests / dev)
-      resolvedKey = this.env.OPENROUTER_API_KEY;
+      resolvedKey = envKey;
       keySource = 'env';
     }
 
@@ -627,24 +654,29 @@ user_key: string | null;
       console.log(`[ChatAgent] Using ${keySource} API key for session ${sessionId}`);
     }
 
-    // Short-name aliases; full OpenRouter ids (e.g. anthropic/claude-sonnet-4) pass through
+    // Short-name aliases; full provider ids pass through unchanged.
     const modelMap: Record<string, string> = {
       [DEFAULT_MODEL]: DEFAULT_MODEL_FULL,
-      "claude-opus-4": "anthropic/claude-opus-4",
-      "claude-haiku-4": "anthropic/claude-haiku-4",
+      "claude-sonnet-4": "anthropic/claude-sonnet-4",
+      "claude-opus-4-1": "anthropic/claude-opus-4.1",
+      "claude-sonnet-4-5": "anthropic/claude-sonnet-4.5",
       "gpt-4o": "openai/gpt-4o",
       "o3": "openai/o3",
       "o3-mini": "openai/o3-mini",
+      "gpt-5": "openai/gpt-5",
+      "gpt-5-mini": "openai/gpt-5-mini",
       "deepseek-r1": "deepseek/deepseek-r1",
-      "gemini-2.5-pro": "google/gemini-2.5-pro-preview",
-      "gemini-2.5-flash": "google/gemini-2.5-flash-preview",
+      "gemini-2.5-pro": "google/gemini-2.5-pro",
+      "gemini-2.5-flash": "google/gemini-2.5-flash",
     };
 
+    const normalizedModel = normalizeModelForProvider(rawModel);
+
     return {
-      apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+      apiUrl: providerDefinition.apiUrl,
       apiKey: resolvedKey,
-      model: modelMap[rawModel] ?? rawModel ?? DEFAULT_MODEL_FULL,
-      headers: { "HTTP-Referer": "https://myfilepath.com", "X-Title": "filepath" },
+      model: modelMap[normalizedModel] ?? normalizedModel ?? normalizeModelForProvider(DEFAULT_MODEL_FULL),
+      headers: providerDefinition.defaultHeaders ?? {},
     };
   }
 
