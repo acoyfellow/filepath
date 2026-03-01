@@ -195,7 +195,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
         get: {
           tags: ['Models'],
           summary: 'List available models',
-          description: 'Get all available LLM models',
+          description: 'Get live LLM models from the configured routers',
           responses: {
             '200': {
               description: 'List of models',

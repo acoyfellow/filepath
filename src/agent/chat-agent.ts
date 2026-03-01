@@ -10,6 +10,7 @@ import { DEFAULT_MODEL, DEFAULT_MODEL_FULL } from '$lib/config';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
 import {
+  canonicalizeStoredModel,
   PROVIDERS,
   deserializeStoredProviderKeys,
   getProviderForModel,
@@ -273,7 +274,7 @@ user_key: string | null;
     const envVars: Record<string, string> = {
       ...buildAgentEnv({
         agentType: row.agent_type as AgentType,
-        model: row.model,
+        model: canonicalizeStoredModel(row.model),
         apiKey: containerApiKey,
         task: row.name || '',
         workspacePath: '/workspace',
@@ -654,28 +655,12 @@ user_key: string | null;
       console.log(`[ChatAgent] Using ${keySource} API key for session ${sessionId}`);
     }
 
-    // Short-name aliases; full provider ids pass through unchanged.
-    const modelMap: Record<string, string> = {
-      [DEFAULT_MODEL]: DEFAULT_MODEL_FULL,
-      "claude-sonnet-4": "anthropic/claude-sonnet-4",
-      "claude-opus-4-1": "anthropic/claude-opus-4.1",
-      "claude-sonnet-4-5": "anthropic/claude-sonnet-4.5",
-      "gpt-4o": "openai/gpt-4o",
-      "o3": "openai/o3",
-      "o3-mini": "openai/o3-mini",
-      "gpt-5": "openai/gpt-5",
-      "gpt-5-mini": "openai/gpt-5-mini",
-      "deepseek-r1": "deepseek/deepseek-r1",
-      "gemini-2.5-pro": "google/gemini-2.5-pro",
-      "gemini-2.5-flash": "google/gemini-2.5-flash",
-    };
-
-    const normalizedModel = normalizeModelForProvider(rawModel);
+    const canonicalModel = canonicalizeStoredModel(rawModel ?? DEFAULT_MODEL_FULL);
 
     return {
       apiUrl: providerDefinition.apiUrl,
       apiKey: resolvedKey,
-      model: modelMap[normalizedModel] ?? normalizedModel ?? normalizeModelForProvider(DEFAULT_MODEL_FULL),
+      model: normalizeModelForProvider(canonicalModel),
       headers: providerDefinition.defaultHeaders ?? {},
     };
   }

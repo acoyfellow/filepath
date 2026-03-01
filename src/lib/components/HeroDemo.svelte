@@ -129,7 +129,7 @@
             <StatusDot status={selectedNode.status} size={6} />
             <span class="text-sm text-gray-900 dark:text-neutral-200">{selectedNode.name}</span>
           </div>
-          <span class="text-xs text-gray-400 dark:text-neutral-600">claude-sonnet-4.5</span>
+          <span class="text-xs text-gray-400 dark:text-neutral-600">anthropic/claude-sonnet-4.5</span>
         </div>
         
         <!-- Messages -->

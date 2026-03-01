@@ -1,7 +1,15 @@
 <script lang="ts">
   import { DEFAULT_MODEL } from "$lib/config";
-  import type { ProviderId } from "$lib/provider-keys";
+  import { onMount } from "svelte";
+  import { canonicalizeStoredModel, type ProviderId } from "$lib/provider-keys";
   import type { AgentType, SpawnRequest } from "$lib/types/session";
+
+  interface ModelEntry {
+    id: string;
+    name: string;
+    provider: string;
+    router: "openrouter" | "zen";
+  }
   
   interface Props {
     onclose: () => void;
@@ -20,7 +28,7 @@
   }: Props = $props();
 
   const initialAgent = lastAgent;
-  const initialModel = lastModel;
+  const initialModel = canonicalizeStoredModel(lastModel);
   const initialHasAccountKey = Object.values(accountKeysMasked).some(Boolean);
 
   const NAMES = ["atlas","bolt","cipher","drift","echo","flux","ghost","helix","iris","kite","nova","orbit","pulse","relay","spark","trace","vortex","wave","zero"];
@@ -33,16 +41,6 @@
     { id: "amp", label: "Amp" },
     { id: "custom", label: "Custom" },
   ];
-  const MODELS = [
-    DEFAULT_MODEL,
-    "anthropic/claude-sonnet-4.5",
-    "openai/gpt-5",
-    "openai/gpt-5-mini",
-    "google/gemini-2.5-pro",
-    "deepseek-r1",
-    "zen/openai/gpt-5",
-  ];
-
   function pickName(): string {
     const word = NAMES[Math.floor(Math.random() * NAMES.length)];
     const num = Math.floor(Math.random() * 99);
@@ -53,6 +51,17 @@
   let agent = $state<AgentType>(initialAgent);
   let model = $state(initialModel);
   let modelFilter = $state("");
+  let modelsLoading = $state(true);
+  let modelsError = $state("");
+  let modelWarnings = $state<string[]>([]);
+  let availableModels = $state<ModelEntry[]>([
+    {
+      id: initialModel || DEFAULT_MODEL,
+      name: initialModel || DEFAULT_MODEL,
+      provider: "Unknown",
+      router: "openrouter",
+    },
+  ]);
 
   let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
   let keyMode = $state<'account' | 'session'>(initialHasAccountKey ? 'account' : 'session');
@@ -66,9 +75,50 @@
 
   let filteredModels = $derived(
     modelFilter
-      ? MODELS.filter(m => m.toLowerCase().includes(modelFilter.toLowerCase()))
-      : MODELS
+      ? availableModels.filter((entry) =>
+          `${entry.id} ${entry.name} ${entry.provider} ${entry.router}`
+            .toLowerCase()
+            .includes(modelFilter.toLowerCase()),
+        )
+      : availableModels
   );
+
+  onMount(async () => {
+    try {
+      const response = await fetch("/api/models");
+      const data = await response.json().catch(() => ({})) as {
+        error?: string;
+        warnings?: string[];
+        models?: ModelEntry[];
+      };
+
+      modelWarnings = data.warnings ?? [];
+
+      if (!response.ok) {
+        modelsError = data.error ?? "Model catalog unavailable";
+        return;
+      }
+
+      const models = data.models ?? [];
+      const selected = model || DEFAULT_MODEL;
+      const uniqueModels = new Map(models.map((entry) => [entry.id, entry]));
+
+      if (selected && !uniqueModels.has(selected)) {
+        uniqueModels.set(selected, {
+          id: selected,
+          name: selected,
+          provider: "Unknown",
+          router: selected.startsWith("zen/") ? "zen" : "openrouter",
+        });
+      }
+
+      availableModels = Array.from(uniqueModels.values());
+    } catch {
+      modelsError = "Model catalog unavailable";
+    } finally {
+      modelsLoading = false;
+    }
+  });
 
   function handleSpawn() {
     if (!name.trim()) return;
@@ -114,14 +164,19 @@
       <input
         id="spawn-model-filter"
         class="modal-input modal-model-filter"
-        placeholder="Search models..."
+        placeholder={modelsLoading ? "Loading models..." : "Search live models..."}
         bind:value={modelFilter}
         onfocus={() => { modelFilter = ""; }}
       />
+      {#if modelsError}
+        <div class="modal-key-info modal-model-state">{modelsError}</div>
+      {:else if modelWarnings.length > 0}
+        <div class="modal-key-info modal-model-state">{modelWarnings.join(" · ")}</div>
+      {/if}
       <div class="modal-options">
         {#each filteredModels as m}
-          <button class="modal-option" class:on={model === m} onclick={() => { model = m; modelFilter = ""; }}>
-            {m}
+          <button class="modal-option" class:on={model === m.id} onclick={() => { model = m.id; modelFilter = ""; }}>
+            {m.id}
           </button>
         {/each}
       </div>

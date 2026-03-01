@@ -215,7 +215,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
     
     <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-6">
       <p class="text-gray-600 dark:text-neutral-400 mb-4">
-        filepath operates on a BYOK model. You bring your own LLM API keys—we don't charge for usage.
+        filepath operates on a BYOK model. You bring your own router keys—we don't charge for usage.
       </p>
       
       <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Supported Routers</h3>
@@ -234,7 +234,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           code={`POST /api/user/keys
 {"provider": "openrouter", "key": "sk-or-v1-..."}`}
         />
-        <p class="text-gray-500 dark:text-neutral-500 text-xs mt-2">To route a model through Zen, prefix it with <code class="text-gray-700 dark:text-neutral-300">zen/</code>, for example <code class="text-gray-700 dark:text-neutral-300">zen/openai/gpt-5</code>.</p>
+        <p class="text-gray-500 dark:text-neutral-500 text-xs mt-2">To route a model through Zen, prefix it with <code class="text-gray-700 dark:text-neutral-300">zen/</code>, for example <code class="text-gray-700 dark:text-neutral-300">zen/gpt-5</code>.</p>
       </div>
 
       <div class="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 mt-4">
