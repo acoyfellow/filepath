@@ -155,6 +155,10 @@ export const POST: RequestHandler = async ({ request, platform }) => {
     const metadata = parseMetadata(keyRecord.metadata);
     let envVars: Record<string, string> = {};
 
+    if ('secrets' in metadata && metadata.secrets != null) {
+      throw error(409, 'Legacy API key secrets must be rotated');
+    }
+
     if (keyRecord.encryptedSecrets) {
       const serverSecret = getServerSecret(platform);
       if (!serverSecret) {
