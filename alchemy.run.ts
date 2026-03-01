@@ -32,6 +32,7 @@ const app = await alchemy(projectName, {
 // For previews (pr-123): use stage-scoped names (isolated, disposable)
 const isProd = app.stage === "prod";
 const prefix = isProd ? projectName : `${app.stage}-${projectName}`;
+const dbName = isProd ? "filepath-db" : `${prefix}-db`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 
@@ -56,11 +57,12 @@ const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
 });
 
 // D1 database for auth + metadata
-// Alchemy D1Database auto-applies migrations in local dev. Remote: adopt existing.
-const DB = await D1Database("filepath-db", {
-  name: "filepath-db",
+// Local dev uses a local D1 file. Preview stages get isolated disposable DBs.
+// Production adopts the long-lived existing DB.
+const DB = await D1Database(dbName, {
+  name: dbName,
   migrationsDir: "./migrations",
-  adopt: true,
+  adopt: isProd,
   dev: { remote: false },
 });
 
