@@ -33,7 +33,7 @@ fi
 echo ""
 echo "Step 2: Welcome Email Verification"
 echo "   ⚠️  Check your Mailgun logs for email to: $TEST_EMAIL"
-echo "   Expected: Welcome to MyFilePath! with OTP code"
+echo "   Expected: Welcome to Filepath! with OTP code"
 
 # Step 3: Verify user in database
 echo ""

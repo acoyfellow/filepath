@@ -4,6 +4,14 @@ import { user } from "$lib/schema";
 import { eq } from "drizzle-orm";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "$lib/crypto";
 import type { RequestHandler } from "@sveltejs/kit";
+import {
+  deserializeStoredProviderKeys,
+  isProviderId,
+  maskProviderKeys,
+  type ProviderKeyMap,
+  serializeStoredProviderKeys,
+  validateProviderApiKey,
+} from "$lib/provider-keys";
 
 function getBetterAuthSecret(platform: App.Platform | undefined): string | undefined {
   const secret =
@@ -27,24 +35,24 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 
   const row = rows[0];
   if (!row?.openrouterApiKey) {
-    return json({ openrouter: null });
+    return json({ keys: { openrouter: null, zen: null } });
   }
 
   const secret = getBetterAuthSecret(platform);
   if (!secret) throw error(500, "Server misconfigured");
 
   try {
-    const plainKey = await decryptApiKey(row.openrouterApiKey, secret);
-    return json({ openrouter: maskApiKey(plainKey) });
+    const plainValue = await decryptApiKey(row.openrouterApiKey, secret);
+    return json({ keys: maskProviderKeys(deserializeStoredProviderKeys(plainValue)) });
   } catch {
     // Corrupted key — clear it
-    return json({ openrouter: null });
+    return json({ keys: { openrouter: null, zen: null } });
   }
 };
 
 /**
  * POST /api/user/keys — Save provider key
- * Body: { provider: "openrouter", key: "sk-or-..." } or { provider: "openrouter", key: null } to delete
+ * Body: { provider: "openrouter" | "zen", key: "..." } or { key: null } to delete
  */
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
   if (!locals.user) throw error(401, "Unauthorized");
@@ -54,35 +62,69 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
     key: string | null;
   };
 
-  if (body.provider !== "openrouter") {
-    throw error(400, "Only 'openrouter' provider is supported");
+  if (!isProviderId(body.provider)) {
+    return json({ message: "Unsupported provider" }, { status: 400 });
   }
 
   const db = getDrizzle();
   const secret = getBetterAuthSecret(platform);
   if (!secret) throw error(500, "Server misconfigured");
 
+  const rows = await db
+    .select({ openrouterApiKey: user.openrouterApiKey })
+    .from(user)
+    .where(eq(user.id, locals.user.id));
+
+  let keyMap: ProviderKeyMap = {};
+  const existingBlob = rows[0]?.openrouterApiKey;
+  if (existingBlob) {
+    try {
+      keyMap = deserializeStoredProviderKeys(await decryptApiKey(existingBlob, secret));
+    } catch {
+      keyMap = {};
+    }
+  }
+
   if (!body.key) {
-    // Delete key
+    const nextKeys = { ...keyMap, [body.provider]: undefined };
+    const serialized = serializeStoredProviderKeys(nextKeys);
     await db
       .update(user)
-      .set({ openrouterApiKey: null })
+      .set({ openrouterApiKey: serialized ? await encryptApiKey(serialized, secret) : null })
       .where(eq(user.id, locals.user.id));
-    return json({ ok: true, masked: null });
+    return json({
+      ok: true,
+      provider: body.provider,
+      masked: null,
+      keys: maskProviderKeys(nextKeys),
+    });
   }
 
-  // Validate key format (basic sanity)
   const trimmed = body.key.trim();
-  if (trimmed.length < 10) {
-    throw error(400, "API key too short");
+  try {
+    await validateProviderApiKey(body.provider, trimmed);
+  } catch (validationError) {
+    const message =
+      validationError instanceof Error ? validationError.message : "API key validation failed";
+    return json({ message }, { status: 400 });
   }
 
-  // Encrypt and store
-  const encrypted = await encryptApiKey(trimmed, secret);
+  const nextKeys = { ...keyMap, [body.provider]: trimmed };
+  const serialized = serializeStoredProviderKeys(nextKeys);
+  if (!serialized) {
+    return json({ message: "Failed to serialize provider keys" }, { status: 500 });
+  }
+
+  const encrypted = await encryptApiKey(serialized, secret);
   await db
     .update(user)
     .set({ openrouterApiKey: encrypted })
     .where(eq(user.id, locals.user.id));
 
-  return json({ ok: true, masked: maskApiKey(trimmed) });
+  return json({
+    ok: true,
+    provider: body.provider,
+    masked: maskApiKey(trimmed),
+    keys: maskProviderKeys(nextKeys),
+  });
 };

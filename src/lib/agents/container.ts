@@ -187,9 +187,8 @@ export async function cloneRepo(
 /**
  * Start an agent process that speaks FAP over stdin/stdout.
  * Returns a handle for sending messages and reading responses.
- * 
- * TODO: Implement actual stdin/stdout streaming when Sandbox SDK supports it.
- * Current approach: Use exec() for single commands, need streaming for agents.
+ *
+ * This path is intentionally not wired until real stdin/stdout streaming exists.
  */
 export interface AgentProcessHandle {
   processId: string;
@@ -199,31 +198,15 @@ export interface AgentProcessHandle {
 }
 
 export async function startFAPAgent(
-  env: ContainerEnv,
+  _env: ContainerEnv,
   containerId: string,
-  agentType: string,
-  config: AdapterConfig
+  _agentType: string,
+  _config: AdapterConfig
 ): Promise<AgentProcessHandle> {
-  // TODO: Implement actual FAP agent process with stdin/stdout
-  // For now, this is a stub that logs what would happen
-  
-  console.log(`[Container] Starting FAP agent ${agentType} in ${containerId}`);
-  console.log(`[Container] Task: ${config.task}`);
-  console.log(`[Container] Model: ${config.model}`);
-  
-  // Stub implementation - returns a handle that logs
-  return {
-    processId: 'stub',
-    send: async (message: string) => {
-      console.log(`[Container] Would send to stdin: ${message.slice(0, 100)}...`);
-    },
-    onEvent: (callback: (event: unknown) => void) => {
-      console.log(`[Container] Would register event callback`);
-    },
-    close: async () => {
-      console.log(`[Container] Would close agent process`);
-    }
-  };
+  throw new Error(
+    `startFAPAgent is not implemented yet for container ${containerId}. ` +
+    "Wire real stdin/stdout streaming before calling it."
+  );
 }
 
 // ================================================================
@@ -233,9 +216,8 @@ export async function startFAPAgent(
 /**
  * Mount an R2 bucket for session mode file sharing.
  * In session mode, all agents share the same filesystem (mounted from R2).
- * 
- * TODO: Implement actual R2 mount when Sandbox SDK supports it.
- * Current approach: Files synced via backup/restore for private mode.
+ *
+ * This path is intentionally not wired until real R2 mounting exists.
  */
 export interface MountBucketOptions {
   bucket: R2Bucket;
@@ -246,46 +228,38 @@ export interface MountBucketOptions {
 export async function mountBucket(
   _options: MountBucketOptions
 ): Promise<{ success: boolean; mountPath: string }> {
-  // TODO: Implement actual R2 bucket mounting to container filesystem
-  // For now, this is a stub
-  
-  console.log(`[Container] Would mount R2 bucket for session ${_options.sessionId}`);
-  console.log(`[Container] Prefix: ${_options.prefix || '(none)'}`);
-  
-  return {
-    success: true,
-    mountPath: '/workspace/session'
-  };
+  throw new Error(
+    `mountBucket is not implemented yet for session ${_options.sessionId}. ` +
+    "Wire real R2 mounting before calling it."
+  );
 }
 
 /**
  * Sync files from container to R2 bucket (for session mode persistence)
  */
 export async function syncToBucket(
-  bucket: R2Bucket,
+  _bucket: R2Bucket,
   sessionId: string,
   containerId: string,
-  sourcePath: string = '/workspace'
+  _sourcePath: string = '/workspace'
 ): Promise<boolean> {
-  // TODO: Implement actual file sync to R2
-  // For now, this is a stub
-  
-  console.log(`[Container] Would sync ${sourcePath} to R2 bucket for session ${sessionId}`);
-  return true;
+  throw new Error(
+    `syncToBucket is not implemented yet for session ${sessionId} (${containerId}). ` +
+    "Wire real R2 sync before calling it."
+  );
 }
 
 /**
  * Restore files from R2 bucket to container (for session mode resume)
  */
 export async function restoreFromBucket(
-  bucket: R2Bucket,
+  _bucket: R2Bucket,
   sessionId: string,
   containerId: string,
-  targetPath: string = '/workspace'
+  _targetPath: string = '/workspace'
 ): Promise<boolean> {
-  // TODO: Implement actual file restore from R2
-  // For now, this is a stub
-  
-  console.log(`[Container] Would restore ${targetPath} from R2 bucket for session ${sessionId}`);
-  return true;
+  throw new Error(
+    `restoreFromBucket is not implemented yet for session ${sessionId} (${containerId}). ` +
+    "Wire real R2 restore before calling it."
+  );
 }

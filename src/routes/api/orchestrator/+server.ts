@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
+import { decryptSecrets } from '$lib/crypto/secrets';
 import { apikey } from '$lib/schema';
 import type { RequestHandler } from './$types';
 
@@ -14,6 +15,39 @@ interface OrchestratorResponse {
   success: boolean;
   result?: string;
   error?: string;
+}
+
+function getServerSecret(platform: App.Platform | undefined): string | undefined {
+  const platformSecret =
+    platform?.env && 'BETTER_AUTH_SECRET' in platform.env
+      ? platform.env.BETTER_AUTH_SECRET
+      : undefined;
+
+  if (typeof platformSecret === 'string' && platformSecret) {
+    return platformSecret;
+  }
+
+  const processSecret = process.env.BETTER_AUTH_SECRET;
+  return typeof processSecret === 'string' && processSecret ? processSecret : undefined;
+}
+
+function parseMetadata(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return { ...(raw as Record<string, unknown>) };
+  }
+  if (typeof raw !== 'string') return {};
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { ...(parsed as Record<string, unknown>) };
+    }
+  } catch {
+    // Fall through to empty metadata for malformed rows.
+  }
+
+  return {};
 }
 
 // Base64url encode (RFC 4648 §5, no padding)
@@ -118,15 +152,34 @@ export const POST: RequestHandler = async ({ request, platform }) => {
     }
 
     const keyRecord = apiKeyResult.key;
-    const metadata = (keyRecord.metadata || {}) as {
-      secrets?: Record<string, string>;
-      shell?: string;
-      defaultDir?: string;
-    };
+    const metadata = parseMetadata(keyRecord.metadata);
+    let envVars: Record<string, string> = {};
 
-    const envVars = metadata.secrets || {};
-    const shell = metadata.shell || 'bash';
-    const defaultDir = metadata.defaultDir || '/home/user';
+    if ('secrets' in metadata && metadata.secrets != null) {
+      throw error(409, 'Legacy API key secrets must be rotated');
+    }
+
+    if (keyRecord.encryptedSecrets) {
+      const serverSecret = getServerSecret(platform);
+      if (!serverSecret) {
+        throw error(500, 'Server misconfigured');
+      }
+
+      envVars = await decryptSecrets(
+        serverSecret,
+        keyRecord.userId,
+        keyRecord.encryptedSecrets,
+      );
+    }
+
+    const shell =
+      typeof metadata.shell === 'string' && metadata.shell
+        ? metadata.shell
+        : 'bash';
+    const defaultDir =
+      typeof metadata.defaultDir === 'string' && metadata.defaultDir
+        ? metadata.defaultDir
+        : '/home/user';
 
     const worker = platform?.env?.WORKER;
     if (!worker) {

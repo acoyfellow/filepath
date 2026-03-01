@@ -8,7 +8,7 @@ filepath is infrastructure for coordinating AI agents. Agents are interchangeabl
 
 **Liquid Agents** — Swap Claude Code for Codex for Shelley without changing your workflow. Same protocol, seamless handoff.
 
-**Liquid Models** — Switch models mid-session. Start with Claude Sonnet, escalate to o3 for reasoning, fallback to Gemini for speed.
+**Liquid Models** — Switch models mid-session. Start with Claude 4.5, move to GPT-5 for reasoning, switch to Gemini 2.5 for speed.
 
 **Orchestration Infrastructure** — One platform, multiple interfaces:
 - **Dashboard** — Visual tree, rich chat, human-in-the-loop
@@ -21,7 +21,7 @@ filepath is infrastructure for coordinating AI agents. Agents are interchangeabl
 1. **Sign up** at https://myfilepath.com
 2. **Add your API key** in Settings → Provider API Keys
    - Get an OpenRouter key at https://openrouter.ai/keys
-   - Or use OpenAI, Anthropic, or any OpenAI-compatible provider
+   - Or get an OpenCode Zen key at https://opencode.ai/zen
 3. **Create a session** from the dashboard
 4. **Spawn an agent** — pick any agent type, pick any model
 5. **Send a message** — that's the agent's task
@@ -36,7 +36,7 @@ filepath is infrastructure for coordinating AI agents. Agents are interchangeabl
 5. Agents spawn child agents. The tree grows. Click any node, see its conversation.
 6. Close your laptop, open your phone. Same state, real-time sync.
 
-**BYOK Model:** You bring your own LLM API keys. We don't charge for usage — your keys, your spend.
+**BYOK Model:** You bring your own router key. We don't charge for usage — your keys, your spend.
 
 ## Stack
 

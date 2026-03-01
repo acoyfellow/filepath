@@ -115,7 +115,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
 
           const sendMail = async (subject: string, text: string, html: string) => {
             const form = new FormData();
-            form.append('from', `MyFilePath <support@${domain}>`);
+            form.append('from', `Filepath <support@${domain}>`);
             form.append('to', email);
             form.append('subject', subject);
             form.append('text', text);
@@ -141,9 +141,9 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
               );
             } else if (type === 'email-verification') {
               await sendMail(
-                'Welcome to MyFilePath!',
-                `Welcome to MyFilePath! Your verification code is: ${otp}\n\nMyFilePath is the platform for agents.`,
-                `<h1>Welcome to MyFilePath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>MyFilePath is the platform for agents.</p>`,
+                'Welcome to Filepath!',
+                `Welcome to Filepath! Your verification code is: ${otp}\n\nFilepath is the platform for agents.`,
+                `<h1>Welcome to Filepath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>Filepath is the platform for agents.</p>`,
               );
             }
           } catch (error) {
@@ -183,8 +183,8 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
 }
 
 // Export for CLI schema generation
-// Create a mock D1Database for schema generation (not used at runtime)
-const mockD1Database = {
+// Minimal D1-shaped adapter used only for schema generation, never at runtime.
+const schemaD1Database = {
   prepare: () => ({
     bind: () => ({}),
     first: async () => null,
@@ -194,12 +194,12 @@ const mockD1Database = {
   }),
   batch: async () => [],
   exec: async () => ({ count: 0, duration: 0 }),
-  withSession: () => mockD1Database,
+  withSession: () => schemaD1Database,
   dump: async () => new ArrayBuffer(0),
 } as unknown as D1Database;
 
 export const auth = betterAuth({
-  database: drizzleAdapter(drizzle(mockD1Database, {
+  database: drizzleAdapter(drizzle(schemaD1Database, {
     schema: {
       user,
       session,

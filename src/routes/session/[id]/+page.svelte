@@ -388,6 +388,6 @@
   <SpawnModal
     onclose={() => { showSpawn = false; }}
     onspawn={handleSpawn}
-    accountKeyMasked={data.accountKeyMasked}
+    accountKeysMasked={data.accountKeysMasked}
   />
 {/if}

@@ -1,104 +1,172 @@
 import { json } from "@sveltejs/kit";
-import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
-import { DEFAULT_MODEL_FULL } from "$lib/config";
-
-/**
- * GET /api/models
- *
- * Returns available models from OpenRouter API, cached for 1 hour.
- * Used by the spawn modal's searchable model dropdown.
- */
+import type { RequestEvent, RequestHandler } from "@sveltejs/kit";
+import { PROVIDERS, prefixModelForProvider, type ProviderId } from "$lib/provider-keys";
 
 interface OpenRouterModel {
   id: string;
   name: string;
-  pricing?: {
-    prompt?: string;
-    completion?: string;
-  };
   context_length?: number;
-  top_provider?: {
-    max_completion_tokens?: number;
-  };
+}
+
+interface ZenModel {
+  id: string;
 }
 
 interface ModelEntry {
   id: string;
   name: string;
   provider: string;
+  router: ProviderId;
   contextLength?: number;
 }
 
-let cachedModels: ModelEntry[] | null = null;
+interface CachedCatalog {
+  models: ModelEntry[];
+  warnings?: string[];
+}
+
+let cachedCatalog: CachedCatalog | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-// Curated fallback list if OpenRouter API is unreachable
-const FALLBACK_MODELS: ModelEntry[] = [
-  { id: DEFAULT_MODEL_FULL, name: "Default Model", provider: "Default" },
-  { id: "anthropic/claude-opus-4", name: "Claude Opus 4", provider: "Anthropic" },
-  { id: "anthropic/claude-haiku-4", name: "Claude Haiku 4", provider: "Anthropic" },
-  { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI" },
-  { id: "openai/o3", name: "o3", provider: "OpenAI" },
-  { id: "openai/o3-mini", name: "o3-mini", provider: "OpenAI" },
-  { id: "deepseek/deepseek-r1", name: "DeepSeek R1", provider: "DeepSeek" },
-  { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google" },
-  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "Google" },
-];
+function inferProvider(modelId: string): string {
+  const normalized = modelId.toLowerCase();
 
-function extractProvider(modelId: string): string {
-  const slash = modelId.indexOf("/");
-  if (slash === -1) return "Other";
-  const prefix = modelId.slice(0, slash);
-  const providers: Record<string, string> = {
-    anthropic: "Anthropic",
-    openai: "OpenAI",
-    google: "Google",
-    deepseek: "DeepSeek",
-    meta: "Meta",
-    mistralai: "Mistral",
-    cohere: "Cohere",
-    qwen: "Qwen",
-  };
-  return providers[prefix] ?? prefix;
+  if (normalized.includes("/")) {
+    const prefix = normalized.split("/", 1)[0];
+    const providers: Record<string, string> = {
+      anthropic: "Anthropic",
+      openai: "OpenAI",
+      google: "Google",
+      deepseek: "DeepSeek",
+      meta: "Meta",
+      mistralai: "Mistral",
+      cohere: "Cohere",
+      qwen: "Qwen",
+      moonshotai: "Moonshot AI",
+      moonshot: "Moonshot AI",
+    };
+    return providers[prefix] ?? prefix;
+  }
+
+  if (normalized.startsWith("claude")) return "Anthropic";
+  if (normalized.startsWith("gpt") || normalized.startsWith("o3") || normalized.startsWith("o4")) return "OpenAI";
+  if (normalized.startsWith("gemini")) return "Google";
+  if (normalized.startsWith("deepseek")) return "DeepSeek";
+  if (normalized.startsWith("qwen")) return "Qwen";
+  if (normalized.startsWith("kimi")) return "Moonshot AI";
+  if (normalized.startsWith("llama")) return "Meta";
+
+  return "Other";
 }
 
-export const GET: RequestHandler = async ({ url }: RequestEvent) => {
+function humanizeModelId(modelId: string): string {
+  return modelId
+    .split(/[/:_-]+/)
+    .filter(Boolean)
+    .map((part) => {
+      if (/^[0-9.]+$/.test(part)) return part;
+      if (part.length <= 3) return part.toUpperCase();
+      return part[0].toUpperCase() + part.slice(1);
+    })
+    .join(" ");
+}
+
+async function fetchOpenRouterModels(): Promise<ModelEntry[]> {
+  const response = await fetch(PROVIDERS.openrouter.modelsUrl, {
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter returned ${response.status}`);
+  }
+
+  const data = (await response.json()) as { data?: OpenRouterModel[] };
+
+  return (data.data ?? [])
+    .filter((model) => model.id && model.name)
+    .map((model) => ({
+      id: model.id,
+      name: model.name,
+      provider: inferProvider(model.id),
+      router: "openrouter" as const,
+      contextLength: model.context_length,
+    }));
+}
+
+async function fetchZenModels(): Promise<ModelEntry[]> {
+  const response = await fetch(PROVIDERS.zen.modelsUrl, {
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenCode Zen returned ${response.status}`);
+  }
+
+  const data = (await response.json()) as { data?: ZenModel[] };
+
+  return (data.data ?? [])
+    .filter((model) => model.id)
+    .map((model) => ({
+      id: prefixModelForProvider("zen", model.id),
+      name: `OpenCode Zen / ${humanizeModelId(model.id)}`,
+      provider: inferProvider(model.id),
+      router: "zen" as const,
+    }));
+}
+
+export const GET: RequestHandler = async (_event: RequestEvent) => {
   const now = Date.now();
 
-  // Return cache if fresh
-  if (cachedModels && now - cacheTimestamp < CACHE_TTL) {
-    return json({ models: cachedModels });
+  if (cachedCatalog && now - cacheTimestamp < CACHE_TTL) {
+    return json(cachedCatalog);
   }
 
-  try {
-    const resp = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(5000),
-    });
+  const [openRouterResult, zenResult] = await Promise.allSettled([
+    fetchOpenRouterModels(),
+    fetchZenModels(),
+  ]);
 
-    if (!resp.ok) {
-      throw new Error(`OpenRouter returned ${resp.status}`);
-    }
+  const models: ModelEntry[] = [];
+  const warnings: string[] = [];
 
-    const data = (await resp.json()) as { data: OpenRouterModel[] };
-
-    const models: ModelEntry[] = data.data
-      .filter((m) => m.id && m.name)
-      .map((m) => ({
-        id: m.id,
-        name: m.name,
-        provider: extractProvider(m.id),
-        contextLength: m.context_length,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    cachedModels = models;
-    cacheTimestamp = now;
-
-    return json({ models });
-  } catch {
-    // Return fallback on any error
-    return json({ models: cachedModels ?? FALLBACK_MODELS });
+  if (openRouterResult.status === "fulfilled") {
+    models.push(...openRouterResult.value);
+  } else {
+    console.error("Failed to load models from OpenRouter:", openRouterResult.reason);
+    warnings.push("OpenRouter model catalog unavailable");
   }
+
+  if (zenResult.status === "fulfilled") {
+    models.push(...zenResult.value);
+  } else {
+    console.error("Failed to load models from OpenCode Zen:", zenResult.reason);
+    warnings.push("OpenCode Zen model catalog unavailable");
+  }
+
+  const dedupedModels = Array.from(
+    new Map(models.map((model) => [model.id, model])).values(),
+  ).sort((a, b) => a.id.localeCompare(b.id));
+
+  if (dedupedModels.length === 0) {
+    return json(
+      {
+        error: "Model catalog unavailable",
+        warnings,
+      },
+      { status: 503 },
+    );
+  }
+
+  const payload: CachedCatalog = {
+    models: dedupedModels,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
+
+  cachedCatalog = payload;
+  cacheTimestamp = now;
+
+  return json(payload);
 };

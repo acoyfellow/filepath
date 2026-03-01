@@ -1,7 +1,6 @@
 import { initAuth } from "$lib/auth";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
-import { error } from "@sveltejs/kit";
 
 import type { Handle } from "@sveltejs/kit";
 
@@ -28,48 +27,34 @@ export const handle: Handle = async ({ event, resolve }) => {
     
     const db = event.platform?.env?.DB;
     if (!db) {
-      // D1 not available — serve page without auth (better than hard 500)
-      console.warn('D1 database not available, serving without auth');
-      event.locals.user = null;
-      event.locals.session = null;
-      return await resolve(event);
+      console.error('D1 database not available');
+      return new Response('Authentication database unavailable', { status: 503 });
     }
 
     // Initialize auth for this origin (previews/prod/local)
     const auth = initAuth(db, event.platform?.env, event.url.origin);
+    if (!auth) {
+      console.error('Auth initialization failed');
+      return new Response('Authentication service unavailable', { status: 503 });
+    }
 
-    if (auth) {
-      try {
-        const session = await auth.api.getSession({
-          headers: event.request.headers,
-        });
-        event.locals.user = session?.user || null;
-        event.locals.session = session?.session || null;
-      } catch (sessionError) {
-        console.error('Session loading error:', sessionError);
-        event.locals.user = null;
-        event.locals.session = null;
-      }
-    } else {
+    try {
+      const session = await auth.api.getSession({
+        headers: event.request.headers,
+      });
+      event.locals.user = session?.user || null;
+      event.locals.session = session?.session || null;
+    } catch (sessionError) {
+      console.error('Session loading error:', sessionError);
       event.locals.user = null;
       event.locals.session = null;
     }
 
-    const response = await svelteKitHandler({ event, resolve, auth: auth ?? undefined, building });
+    const response = await svelteKitHandler({ event, resolve, auth, building });
     return response;
 
   } catch (criticalError) {
     console.error('Critical error in handle:', criticalError);
-
-    // Graceful fallback - serve app without auth
-    event.locals.user = null;
-    event.locals.session = null;
-
-    try {
-      return await resolve(event);
-    } catch (resolveError) {
-      console.error('Failed to resolve even without auth:', resolveError);
-      return error(500, 'Service temporarily unavailable');
-    }
+    return new Response('Service temporarily unavailable', { status: 503 });
   }
 };

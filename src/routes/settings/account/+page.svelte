@@ -2,6 +2,7 @@
   import { authClient } from '$lib/auth-client';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { PROVIDER_IDS, PROVIDERS, type ProviderId } from '$lib/provider-keys';
   // ─── Delete account state ───
   let showDeleteDialog = $state(false);
   let password = $state('');
@@ -12,20 +13,31 @@
   const CONFIRM_PHRASE = 'delete my account';
 
   // ─── Provider API Keys state ───
-  let openrouterKey = $state('');
-  let maskedKey = $state<string | null>(null);
   let keyLoading = $state(true);
-  let keySaving = $state(false);
-  let keyError = $state('');
-  let keySuccess = $state('');
-  let showKeyInput = $state(false);
+  const providerList = PROVIDER_IDS.map((id) => PROVIDERS[id]);
+  let providerStates = $state<Record<ProviderId, {
+    masked: string | null;
+    draft: string;
+    saving: boolean;
+    error: string;
+    success: string;
+    showInput: boolean;
+  }>>({
+    openrouter: { masked: null, draft: '', saving: false, error: '', success: '', showInput: false },
+    zen: { masked: null, draft: '', saving: false, error: '', success: '', showInput: false },
+  });
 
   onMount(async () => {
     try {
       const res = await fetch('/api/user/keys');
       if (res.ok) {
-        const data = await res.json() as { openrouter: string | null };
-        maskedKey = data.openrouter;
+        const data = await res.json() as {
+          keys?: Record<ProviderId, string | null>;
+        };
+        const keys = data.keys ?? { openrouter: null, zen: null };
+        for (const provider of PROVIDER_IDS) {
+          providerStates[provider].masked = keys[provider] ?? null;
+        }
       }
     } catch {
       // silently fail on load
@@ -34,59 +46,75 @@
     }
   });
 
-  async function saveKey() {
-    keySaving = true;
-    keyError = '';
-    keySuccess = '';
+  async function saveKey(provider: ProviderId) {
+    const state = providerStates[provider];
+    state.saving = true;
+    state.error = '';
+    state.success = '';
 
     try {
       const res = await fetch('/api/user/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'openrouter', key: openrouterKey.trim() || null }),
+        body: JSON.stringify({ provider, key: state.draft.trim() || null }),
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({ message: 'Failed to save' })) as { message?: string };
-        keyError = errData.message || 'Failed to save key';
+        const errData = await res.json().catch(() => null) as { message?: string } | null;
+        state.error = errData?.message || 'Failed to save key';
         return;
       }
 
-      const data = await res.json() as { masked: string | null };
-      maskedKey = data.masked;
-      openrouterKey = '';
-      showKeyInput = false;
-      keySuccess = maskedKey ? 'Key saved' : 'Key removed';
-      setTimeout(() => { keySuccess = ''; }, 3000);
+      const data = await res.json() as {
+        keys?: Record<ProviderId, string | null>;
+      };
+      const keys = data.keys ?? { openrouter: null, zen: null };
+      for (const id of PROVIDER_IDS) {
+        providerStates[id].masked = keys[id] ?? null;
+      }
+      state.draft = '';
+      state.showInput = false;
+      state.success = state.masked ? 'Key saved' : 'Key removed';
+      setTimeout(() => { state.success = ''; }, 3000);
     } catch (err) {
-      keyError = err instanceof Error ? err.message : 'Failed to save key';
+      state.error = err instanceof Error ? err.message : 'Failed to save key';
     } finally {
-      keySaving = false;
+      state.saving = false;
     }
   }
 
-  async function removeKey() {
-    openrouterKey = '';
-    keySaving = true;
-    keyError = '';
+  async function removeKey(provider: ProviderId) {
+    const state = providerStates[provider];
+    state.draft = '';
+    state.saving = true;
+    state.error = '';
 
     try {
       const res = await fetch('/api/user/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'openrouter', key: null }),
+        body: JSON.stringify({ provider, key: null }),
       });
 
       if (res.ok) {
-        maskedKey = null;
-        showKeyInput = false;
-        keySuccess = 'Key removed';
-        setTimeout(() => { keySuccess = ''; }, 3000);
+        const data = await res.json() as {
+          keys?: Record<ProviderId, string | null>;
+        };
+        const keys = data.keys ?? { openrouter: null, zen: null };
+        for (const id of PROVIDER_IDS) {
+          providerStates[id].masked = keys[id] ?? null;
+        }
+        state.showInput = false;
+        state.success = 'Key removed';
+        setTimeout(() => { state.success = ''; }, 3000);
+      } else {
+        const errData = await res.json().catch(() => null) as { message?: string } | null;
+        state.error = errData?.message || 'Failed to remove key';
       }
     } catch {
-      keyError = 'Failed to remove key';
+      state.error = 'Failed to remove key';
     } finally {
-      keySaving = false;
+      state.saving = false;
     }
   }
 
@@ -136,70 +164,96 @@
     </section>
 
     <section class="mb-10">
-      <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Provider API Keys</h2>
+      <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Provider Router Keys</h2>
       <div class="border rounded p-5 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
         <p class="text-sm mb-4 text-gray-600 dark:text-neutral-400">
-          Bring your own API key. Your key is encrypted at rest and never shared.
+          Bring your own router key. Your key is encrypted at rest and never shared.
         </p>
-
-        <div class="mb-2">
-          <label for="openrouter-key" class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">OpenRouter API Key</label>
-        </div>
 
         {#if keyLoading}
           <p class="text-sm text-gray-400 dark:text-neutral-600">Loading...</p>
-        {:else if maskedKey && !showKeyInput}
-          <div class="flex items-center gap-3">
-            <code class="text-sm px-3 py-2 rounded border font-mono transition-colors duration-200 text-gray-600 bg-gray-50 border-gray-200 dark:text-neutral-400 dark:bg-neutral-950 dark:border-neutral-800">{maskedKey}</code>
-            <button
-              onclick={() => { showKeyInput = true; openrouterKey = ''; }}
-              class="px-3 py-1.5 text-xs border rounded transition-colors cursor-pointer text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
-            >
-              change
-            </button>
-            <button
-              onclick={removeKey}
-              disabled={keySaving}
-              class="px-3 py-1.5 text-xs text-red-400/70 border border-neutral-800 rounded hover:border-red-900 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              remove
-            </button>
-          </div>
         {:else}
-          <div class="flex gap-2">
-            <input
-              id="openrouter-key"
-              type="password"
-              placeholder="sk-or-v1-..."
-              bind:value={openrouterKey}
-              class="flex-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none transition-colors duration-200 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-950 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
-            />
-            <button
-              onclick={saveKey}
-              disabled={keySaving || !openrouterKey.trim()}
-              class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-gray-800 bg-gray-200 border-gray-300 hover:bg-gray-300 dark:text-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:hover:bg-neutral-700"
-            >
-              {keySaving ? 'saving...' : 'save'}
-            </button>
-            {#if showKeyInput}
-              <button
-                onclick={() => { showKeyInput = false; openrouterKey = ''; keyError = ''; }}
-                class="px-3 py-2 text-sm cursor-pointer text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300"
-              >
-                cancel
-              </button>
-            {/if}
-          </div>
-          <p class="text-xs mt-2 text-gray-400 dark:text-neutral-600">
-            Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="underline text-gray-600 hover:text-gray-800 dark:text-neutral-400 dark:hover:text-neutral-300">openrouter.ai/keys</a>
-          </p>
-        {/if}
+          <div class="space-y-5">
+            {#each providerList as provider (provider.id)}
+              <div class="border rounded p-4 bg-gray-50 border-gray-200 dark:bg-neutral-950 dark:border-neutral-800">
+                <div class="flex items-start justify-between gap-4 mb-3">
+                  <div>
+                    <label for={`${provider.id}-key`} class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">{provider.label}</label>
+                    <p class="text-xs mt-1 text-gray-400 dark:text-neutral-600">{provider.helpText}</p>
+                  </div>
+                  <a
+                    href={provider.docsUrl}
+                    target="_blank"
+                    rel="noopener"
+                    class="text-xs underline text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300"
+                  >
+                    get key
+                  </a>
+                </div>
 
-        {#if keyError}
-          <p class="text-red-400 text-sm mt-2">{keyError}</p>
-        {/if}
-        {#if keySuccess}
-          <p class="text-green-400/70 text-sm mt-2">{keySuccess}</p>
+                {#if providerStates[provider.id].masked && !providerStates[provider.id].showInput}
+                  <div class="flex items-center gap-3">
+                    <code class="text-sm px-3 py-2 rounded border font-mono transition-colors duration-200 text-gray-600 bg-white border-gray-200 dark:text-neutral-400 dark:bg-neutral-900 dark:border-neutral-800">
+                      {providerStates[provider.id].masked}
+                    </code>
+                    <button
+                      onclick={() => {
+                        providerStates[provider.id].showInput = true;
+                        providerStates[provider.id].draft = '';
+                        providerStates[provider.id].error = '';
+                      }}
+                      class="px-3 py-1.5 text-xs border rounded transition-colors cursor-pointer text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
+                    >
+                      change
+                    </button>
+                    <button
+                      onclick={() => removeKey(provider.id)}
+                      disabled={providerStates[provider.id].saving}
+                      class="px-3 py-1.5 text-xs text-red-400/70 border border-neutral-800 rounded hover:border-red-900 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      remove
+                    </button>
+                  </div>
+                {:else}
+                  <div class="flex gap-2">
+                    <input
+                      id={`${provider.id}-key`}
+                      type="password"
+                      placeholder={provider.keyPlaceholder}
+                      bind:value={providerStates[provider.id].draft}
+                      class="flex-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none transition-colors duration-200 bg-white border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-900 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
+                    />
+                    <button
+                      onclick={() => saveKey(provider.id)}
+                      disabled={providerStates[provider.id].saving || !providerStates[provider.id].draft.trim()}
+                      class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-gray-800 bg-gray-200 border-gray-300 hover:bg-gray-300 dark:text-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:hover:bg-neutral-700"
+                    >
+                      {providerStates[provider.id].saving ? 'saving...' : 'save'}
+                    </button>
+                    {#if providerStates[provider.id].showInput}
+                      <button
+                        onclick={() => {
+                          providerStates[provider.id].showInput = false;
+                          providerStates[provider.id].draft = '';
+                          providerStates[provider.id].error = '';
+                        }}
+                        class="px-3 py-2 text-sm cursor-pointer text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300"
+                      >
+                        cancel
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
+
+                {#if providerStates[provider.id].error}
+                  <p class="text-red-400 text-sm mt-2">{providerStates[provider.id].error}</p>
+                {/if}
+                {#if providerStates[provider.id].success}
+                  <p class="text-green-400/70 text-sm mt-2">{providerStates[provider.id].success}</p>
+                {/if}
+              </div>
+            {/each}
+          </div>
         {/if}
       </div>
     </section>

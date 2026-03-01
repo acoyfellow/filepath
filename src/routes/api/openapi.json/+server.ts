@@ -195,7 +195,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
         get: {
           tags: ['Models'],
           summary: 'List available models',
-          description: 'Get all available LLM models',
+          description: 'Get live LLM models from the configured routers',
           responses: {
             '200': {
               description: 'List of models',
@@ -226,8 +226,8 @@ export const GET: RequestHandler = async ({ platform, url }) => {
       '/api/user/keys': {
         get: {
           tags: ['User'],
-          summary: 'Get user API keys',
-          description: 'Retrieve masked provider API keys',
+          summary: 'Get user router keys',
+          description: 'Retrieve masked router keys by provider',
           security: [{ bearerAuth: [] }],
           responses: {
             '200': {
@@ -237,7 +237,13 @@ export const GET: RequestHandler = async ({ platform, url }) => {
                   schema: {
                     type: 'object',
                     properties: {
-                      openrouter: { type: 'string', nullable: true }
+                      keys: {
+                        type: 'object',
+                        properties: {
+                          openrouter: { type: 'string', nullable: true },
+                          zen: { type: 'string', nullable: true }
+                        }
+                      }
                     }
                   }
                 }
@@ -248,8 +254,8 @@ export const GET: RequestHandler = async ({ platform, url }) => {
         },
         post: {
           tags: ['User'],
-          summary: 'Save provider API key',
-          description: 'Store encrypted provider API key',
+          summary: 'Save provider router key',
+          description: 'Validate and store an encrypted router key for the selected provider',
           security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
@@ -259,7 +265,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
                   type: 'object',
                   required: ['provider', 'key'],
                   properties: {
-                    provider: { type: 'string', enum: ['openrouter'] },
+                    provider: { type: 'string', enum: ['openrouter', 'zen'] },
                     key: { type: 'string', description: 'API key (set to null to delete)' }
                   }
                 }
@@ -268,6 +274,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
           },
           responses: {
             '200': { description: 'Key saved' },
+            '400': { description: 'Validation failed' },
             '401': { description: 'Unauthorized' }
           }
         }

@@ -91,7 +91,7 @@
     <ul class="space-y-2 text-gray-600 dark:text-neutral-400 list-disc list-inside">
       <li><code>FILEPATH_TASK</code> — Initial task description</li>
       <li><code>FILEPATH_API_KEY</code> — API key for LLM calls</li>
-      <li><code>FILEPATH_MODEL</code> — Model to use (e.g., claude-sonnet-4)</li>
+      <li><code>FILEPATH_MODEL</code> — Model to use (e.g., anthropic/claude-sonnet-4.5)</li>
       <li><code>FILEPATH_AGENT_ID</code> — Unique agent node ID</li>
       <li><code>FILEPATH_SESSION_ID</code> — Session ID</li>
       <li><code>FILEPATH_PARENT_ID</code> — Parent agent ID (if any)</li>

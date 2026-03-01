@@ -8,7 +8,11 @@ import { eq } from 'drizzle-orm';
  * Get decrypted secrets for an API key
  * This should only be called when spawning a terminal
  */
-export async function getApikeySecrets(apiKeyId: string, userId: string): Promise<Record<string, string> | null> {
+export async function getApikeySecrets(
+  apiKeyId: string,
+  userId: string,
+  serverSecret: string
+): Promise<Record<string, string> | null> {
   try {
     const db = getDrizzle();
     
@@ -29,7 +33,7 @@ export async function getApikeySecrets(apiKeyId: string, userId: string): Promis
     }
     
     // Decrypt the secrets
-    const secrets = await decryptSecrets(userId, encryptedSecrets);
+    const secrets = await decryptSecrets(serverSecret, userId, encryptedSecrets);
     return secrets;
   } catch (error) {
     console.error('Error decrypting API key secrets:', error);

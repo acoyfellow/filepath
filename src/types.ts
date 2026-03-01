@@ -23,6 +23,7 @@ export interface Env {
   API_WS_HOST?: string;
   OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  OPENCODE_ZEN_API_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   MAILGUN_API_KEY?: string;
   MAILGUN_DOMAIN?: string;

@@ -1,29 +1,65 @@
 // Secret encryption utilities for myfilepath.com
+//
+// Web Crypto API is available in both browser and Cloudflare Workers.
+// Secrets must be bound to a real server secret, not a predictable user id.
 
-// Web Crypto API is available in both browser and Cloudflare Workers
+const VERSION = 'v2';
+const ITERATIONS = 100_000;
+const SALT_LENGTH = 16;
+const IV_LENGTH = 12;
+const CONTEXT = 'myfilepath-apikey-secrets';
 
-/**
- * Derive a key from a user's ID using PBKDF2
- * In a production environment, you might want to use a more secure method
- * like HKDF with a salt stored per user
- */
-async function deriveUserKey(userId: string): Promise<CryptoKey> {
-  // In production, use a proper salt stored per user
-  const salt = new TextEncoder().encode('myfilepath-salt-prefix-' + userId);
+function toBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function fromBase64(value: string): Uint8Array {
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+}
+
+function combineBytes(...parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+
+  return out;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+async function deriveUserKey(
+  secret: string,
+  userId: string,
+  salt: Uint8Array,
+): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    enc.encode(userId),
+    enc.encode(secret),
     { name: 'PBKDF2' },
     false,
     ['deriveKey']
   );
-  
-  return await crypto.subtle.deriveKey(
+
+  const scopedSalt = combineBytes(
+    enc.encode(`${CONTEXT}:${userId}:`),
+    salt,
+  );
+
+  return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: salt,
-      iterations: 100000,
+      salt: toArrayBuffer(scopedSalt),
+      iterations: ITERATIONS,
       hash: 'SHA-256',
     },
     keyMaterial,
@@ -34,20 +70,20 @@ async function deriveUserKey(userId: string): Promise<CryptoKey> {
 }
 
 /**
- * Encrypt secrets using a user's derived key
+ * Encrypt secrets using a server secret scoped to the user.
  */
-export async function encryptSecrets(userId: string, secrets: Record<string, string>): Promise<string> {
-  const key = await deriveUserKey(userId);
-  
-  // Convert secrets object to string
+export async function encryptSecrets(
+  secret: string,
+  userId: string,
+  secrets: Record<string, string>
+): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+  const key = await deriveUserKey(secret, userId, salt);
   const secretsStr = JSON.stringify(secrets);
   const enc = new TextEncoder();
   const data = enc.encode(secretsStr);
-  
-  // Generate a random IV
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  
-  // Encrypt the data
+
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const encryptedData = await crypto.subtle.encrypt(
     {
       name: 'AES-GCM',
@@ -56,43 +92,45 @@ export async function encryptSecrets(userId: string, secrets: Record<string, str
     key,
     data
   );
-  
-  // Combine IV and encrypted data
-  const result = new Uint8Array(iv.length + encryptedData.byteLength);
-  result.set(iv);
-  result.set(new Uint8Array(encryptedData), iv.length);
-  
-  // Return as base64 string
-  return btoa(String.fromCharCode(...result));
+
+  return [
+    VERSION,
+    toBase64(salt),
+    toBase64(iv),
+    toBase64(new Uint8Array(encryptedData)),
+  ].join(':');
 }
 
 /**
- * Decrypt secrets using a user's derived key
+ * Decrypt secrets using a server secret scoped to the user.
  */
-export async function decryptSecrets(userId: string, encryptedSecrets: string): Promise<Record<string, string>> {
-  const key = await deriveUserKey(userId);
-  
-  // Convert base64 string to bytes
-  const encryptedBytes = Uint8Array.from(atob(encryptedSecrets), c => c.charCodeAt(0));
-  
-  // Extract IV and encrypted data
-  const iv = encryptedBytes.slice(0, 12);
-  const data = encryptedBytes.slice(12);
-  
-  // Decrypt the data
+export async function decryptSecrets(
+  secret: string,
+  userId: string,
+  encryptedSecrets: string
+): Promise<Record<string, string>> {
+  const [version, saltB64, ivB64, ciphertextB64] = encryptedSecrets.split(':');
+  if (version !== VERSION || !saltB64 || !ivB64 || !ciphertextB64) {
+    throw new Error('Unsupported encrypted secret format');
+  }
+
+  const salt = fromBase64(saltB64);
+  const iv = fromBase64(ivB64);
+  const ciphertext = fromBase64(ciphertextB64);
+  const key = await deriveUserKey(secret, userId, salt);
+
   const decryptedData = await crypto.subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv: iv,
+      iv: toArrayBuffer(iv),
     },
     key,
-    data
+    toArrayBuffer(ciphertext)
   );
-  
-  // Convert to string and parse as JSON
+
   const dec = new TextDecoder();
   const secretsStr = dec.decode(decryptedData);
-  
+
   return JSON.parse(secretsStr);
 }
 

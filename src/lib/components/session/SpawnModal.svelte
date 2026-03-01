@@ -1,17 +1,35 @@
 <script lang="ts">
   import { DEFAULT_MODEL } from "$lib/config";
+  import { onMount } from "svelte";
+  import { canonicalizeStoredModel, type ProviderId } from "$lib/provider-keys";
   import type { AgentType, SpawnRequest } from "$lib/types/session";
+
+  interface ModelEntry {
+    id: string;
+    name: string;
+    provider: string;
+    router: "openrouter" | "zen";
+  }
   
   interface Props {
     onclose: () => void;
     onspawn: (req: SpawnRequest) => void;
     lastAgent?: AgentType;
     lastModel?: string;
-    accountKeyMasked?: string | null;
+    accountKeysMasked?: Record<ProviderId, string | null>;
   }
   
-  let { onclose, onspawn, lastAgent = "shelley", lastModel = DEFAULT_MODEL, accountKeyMasked = null }: Props = $props();
+  let {
+    onclose,
+    onspawn,
+    lastAgent = "shelley",
+    lastModel = DEFAULT_MODEL,
+    accountKeysMasked = { openrouter: null, zen: null },
+  }: Props = $props();
 
+  const initialAgent = lastAgent;
+  const initialModel = canonicalizeStoredModel(lastModel);
+  const initialHasAccountKey = Object.values(accountKeysMasked).some(Boolean);
 
   const NAMES = ["atlas","bolt","cipher","drift","echo","flux","ghost","helix","iris","kite","nova","orbit","pulse","relay","spark","trace","vortex","wave","zero"];
   const AGENTS: { id: AgentType; label: string }[] = [
@@ -23,9 +41,6 @@
     { id: "amp", label: "Amp" },
     { id: "custom", label: "Custom" },
   ];
-  // Default model list -- will be replaced by dynamic OpenRouter fetch
-  const MODELS = [DEFAULT_MODEL, "claude-opus-4-6", "gpt-4o", "o3", "deepseek-r1", "gemini-2.5-pro"];
-
   function pickName(): string {
     const word = NAMES[Math.floor(Math.random() * NAMES.length)];
     const num = Math.floor(Math.random() * 99);
@@ -33,21 +48,77 @@
   }
 
   let name = $state(pickName());
-  let agent = $state<AgentType>(lastAgent);
-  let model = $state(lastModel);
+  let agent = $state<AgentType>(initialAgent);
+  let model = $state(initialModel);
   let modelFilter = $state("");
+  let modelsLoading = $state(true);
+  let modelsError = $state("");
+  let modelWarnings = $state<string[]>([]);
+  let availableModels = $state<ModelEntry[]>([
+    {
+      id: initialModel || DEFAULT_MODEL,
+      name: initialModel || DEFAULT_MODEL,
+      provider: "Unknown",
+      router: "openrouter",
+    },
+  ]);
 
-  // BYOK state - accountKeyMasked comes from server-side props (no flicker!)
-  let hasAccountKey = $state(!!accountKeyMasked);
-  let keyMode = $state<'account' | 'session'>(accountKeyMasked ? 'account' : 'session');
+  let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
+  let keyMode = $state<'account' | 'session'>(initialHasAccountKey ? 'account' : 'session');
   let sessionKey = $state('');
   let keyLoading = $state(false); // Already have the data from server
+  let availableRouters = $derived(
+    Object.entries(accountKeysMasked)
+      .filter(([, value]) => Boolean(value))
+      .map(([provider, value]) => `${provider} (${value})`)
+  );
 
   let filteredModels = $derived(
     modelFilter
-      ? MODELS.filter(m => m.toLowerCase().includes(modelFilter.toLowerCase()))
-      : MODELS
+      ? availableModels.filter((entry) =>
+          `${entry.id} ${entry.name} ${entry.provider} ${entry.router}`
+            .toLowerCase()
+            .includes(modelFilter.toLowerCase()),
+        )
+      : availableModels
   );
+
+  onMount(async () => {
+    try {
+      const response = await fetch("/api/models");
+      const data = await response.json().catch(() => ({})) as {
+        error?: string;
+        warnings?: string[];
+        models?: ModelEntry[];
+      };
+
+      modelWarnings = data.warnings ?? [];
+
+      if (!response.ok) {
+        modelsError = data.error ?? "Model catalog unavailable";
+        return;
+      }
+
+      const models = data.models ?? [];
+      const selected = model || DEFAULT_MODEL;
+      const uniqueModels = new Map(models.map((entry) => [entry.id, entry]));
+
+      if (selected && !uniqueModels.has(selected)) {
+        uniqueModels.set(selected, {
+          id: selected,
+          name: selected,
+          provider: "Unknown",
+          router: selected.startsWith("zen/") ? "zen" : "openrouter",
+        });
+      }
+
+      availableModels = Array.from(uniqueModels.values());
+    } catch {
+      modelsError = "Model catalog unavailable";
+    } finally {
+      modelsLoading = false;
+    }
+  });
 
   function handleSpawn() {
     if (!name.trim()) return;
@@ -69,10 +140,10 @@
   <div class="modal" onclick={(e) => e.stopPropagation()}>
     <div class="modal-title">spawn agent</div>
     <div class="modal-body">
-      <label class="modal-label">name</label>
+      <label class="modal-label" for="spawn-name">name</label>
       <div class="modal-name-row">
-        <input bind:value={name} class="modal-input" />
-        <button class="modal-dice" onclick={() => { name = pickName(); }}>
+        <input id="spawn-name" bind:value={name} class="modal-input" />
+        <button class="modal-dice" onclick={() => { name = pickName(); }} aria-label="Generate name">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
             <path d="M1 6a5 5 0 018-4M11 6a5 5 0 01-8 4" />
             <path d="M9 1v2h2M3 11V9H1" />
@@ -80,7 +151,7 @@
         </button>
       </div>
 
-      <label class="modal-label">agent</label>
+      <div class="modal-label">agent</div>
       <div class="modal-options">
         {#each AGENTS as a}
           <button class="modal-option" class:on={agent === a.id} onclick={() => { agent = a.id; }}>
@@ -89,28 +160,34 @@
         {/each}
       </div>
 
-      <label class="modal-label">model</label>
+      <label class="modal-label" for="spawn-model-filter">model</label>
       <input
+        id="spawn-model-filter"
         class="modal-input modal-model-filter"
-        placeholder="Search models..."
+        placeholder={modelsLoading ? "Loading models..." : "Search live models..."}
         bind:value={modelFilter}
         onfocus={() => { modelFilter = ""; }}
       />
+      {#if modelsError}
+        <div class="modal-key-info modal-model-state">{modelsError}</div>
+      {:else if modelWarnings.length > 0}
+        <div class="modal-key-info modal-model-state">{modelWarnings.join(" · ")}</div>
+      {/if}
       <div class="modal-options">
         {#each filteredModels as m}
-          <button class="modal-option" class:on={model === m} onclick={() => { model = m; modelFilter = ""; }}>
-            {m}
+          <button class="modal-option" class:on={model === m.id} onclick={() => { model = m.id; modelFilter = ""; }}>
+            {m.id}
           </button>
         {/each}
       </div>
 
-      <label class="modal-label">api key</label>
+      <div class="modal-label">api key</div>
       {#if keyLoading}
         <div class="modal-key-info">loading...</div>
       {:else if hasAccountKey}
         <div class="modal-options">
           <button class="modal-option" class:on={keyMode === 'account'} onclick={() => { keyMode = 'account'; }}>
-            account key ({accountKeyMasked})
+            saved account key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
           </button>
           <button class="modal-option" class:on={keyMode === 'session'} onclick={() => { keyMode = 'session'; }}>
             different key
@@ -120,7 +197,7 @@
           <input
             class="modal-input modal-key-input"
             type="password"
-            placeholder="sk-or-v1-..."
+            placeholder="Paste the key for the router this model uses"
             bind:value={sessionKey}
           />
         {/if}
@@ -128,11 +205,11 @@
         <input
           class="modal-input modal-key-input"
           type="password"
-          placeholder="sk-or-v1-... (or set in Settings)"
+          placeholder="Paste an OpenRouter or Zen key"
           bind:value={sessionKey}
         />
         <div class="modal-key-info">
-          No account key set. <a href="/settings/account" class="modal-key-link">Add in Settings</a> or enter one for this session.
+          No account key set. <a href="/settings/account" class="modal-key-link">Add one in Settings</a> or enter one for this session.
         </div>
       {/if}
     </div>

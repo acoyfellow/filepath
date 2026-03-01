@@ -47,7 +47,7 @@ The session is now created and ready for agents.
    - **codex**: OpenAI's coding agent
    - **cursor**: Cursor's agent mode
    - **custom**: Bring your own container
-3. Select a model (e.g., `claude-sonnet-4`)
+3. Select a model (e.g., `anthropic/claude-sonnet-4.5`)
 4. (Optional) Set a specific API key for this session only
 5. Click **Spawn**
 
