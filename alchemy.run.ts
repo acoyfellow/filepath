@@ -62,7 +62,6 @@ const DB = await D1Database("filepath-db", {
   migrationsDir: "./migrations",
   adopt: true,
   dev: { remote: false },
-  jurisdiction: "us",
 });
 
 // Container for terminal sandboxes
