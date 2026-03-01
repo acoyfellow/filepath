@@ -64,59 +64,8 @@ console.log(status.summary.running > 0); // true`;
     </section>
 
     <section class="mb-16">
-      <div class="mb-4 flex items-center justify-between gap-3">
-        <h2 class="text-xs uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">Click Around</h2>
-        <p class="text-xs text-gray-500 dark:text-neutral-500">Tree on the left. Live chat on the right.</p>
-      </div>
-
       <div class="@container w-full overflow-hidden rounded-2xl border border-gray-200 bg-white/85 shadow-[0_28px_100px_-40px_rgba(15,23,42,0.55)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
         <HeroDemo />
-      </div>
-    </section>
-
-    <!-- What You Get: Three Things -->
-    <section class="mb-16">
-      <h2 class="text-xs uppercase tracking-wide mb-6 text-gray-500 dark:text-neutral-500">What you get</h2>
-      <div class="grid md:grid-cols-3 gap-5">
-        <div class="rounded-lg p-5 border bg-white border-gray-200 dark:bg-neutral-900/50 dark:border-neutral-800">
-          <h3 class="font-medium mb-2 text-gray-900 dark:text-neutral-200">Visual Tree</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">See every agent's status at a glance. Hierarchy shows who's working on what. Click any node to chat.</p>
-        </div>
-        <div class="rounded-lg p-5 border bg-white border-gray-200 dark:bg-neutral-900/50 dark:border-neutral-800">
-          <h3 class="font-medium mb-2 text-gray-900 dark:text-neutral-200">Rich Chat</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Watch tool calls, file writes, commits, and spawned agents appear inline. Real-time via WebSocket.</p>
-        </div>
-        <div class="rounded-lg p-5 border bg-white border-gray-200 dark:bg-neutral-900/50 dark:border-neutral-800">
-          <h3 class="font-medium mb-2 text-gray-900 dark:text-neutral-200">Persistent State</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Close your laptop, reopen on your phone — same tree, same conversations. Agents keep working.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- How It Works -->
-    <section class="mb-16">
-      <h2 class="text-xs uppercase tracking-wide mb-6 text-gray-500 dark:text-neutral-500">How it works</h2>
-      <div class="grid md:grid-cols-4 gap-4">
-        <div>
-          <div class="text-2xl font-medium mb-2 text-gray-300 dark:text-neutral-700">01</div>
-          <h3 class="font-medium mb-1 text-gray-900 dark:text-neutral-200">Create Session</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Like a project folder. Optional git repo to clone.</p>
-        </div>
-        <div>
-          <div class="text-2xl font-medium mb-2 text-gray-300 dark:text-neutral-700">02</div>
-          <h3 class="font-medium mb-1 text-gray-900 dark:text-neutral-200">Spawn Agent</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Pick type, model, give it a name. Appears in tree.</p>
-        </div>
-        <div>
-          <div class="text-2xl font-medium mb-2 text-gray-300 dark:text-neutral-700">03</div>
-          <h3 class="font-medium mb-1 text-gray-900 dark:text-neutral-200">Chat & Watch</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Send tasks. Watch code, commits, spawned helpers in real-time.</p>
-        </div>
-        <div>
-          <div class="text-2xl font-medium mb-2 text-gray-300 dark:text-neutral-700">04</div>
-          <h3 class="font-medium mb-1 text-gray-900 dark:text-neutral-200">Tree Grows</h3>
-          <p class="text-sm text-gray-600 dark:text-neutral-400">Agents spawn child agents. Workflow branches automatically.</p>
-        </div>
       </div>
     </section>
 

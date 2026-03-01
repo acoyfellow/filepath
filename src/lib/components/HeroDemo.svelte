@@ -1,44 +1,180 @@
 <script lang="ts">
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import type { AgentStatus } from "$lib/protocol";
-  import { onDestroy } from "svelte";
 
   type DemoMsg = { role: "user" | "agent"; content: string; showTools?: boolean };
-
-  // Per-agent initial messages
-  const initialMessagesByNode: Record<string, DemoMsg[]> = {
-    "1": [
-      { role: "user", content: "Build an API client with tests" },
-      { role: "agent", content: "I'll coordinate this. Spawning a researcher and test writer to work in parallel.", showTools: true },
-    ],
-    "2": [
-      { role: "user", content: "Research best practices for REST clients" },
-      { role: "agent", content: "Researching best practices for REST client design..." },
-    ],
-    "3": [
-      { role: "user", content: "Write unit tests for the API client" },
-      { role: "agent", content: "Writing unit tests for the API client module..." },
-    ],
-    "4": [
-      { role: "user", content: "Cover edge cases" },
-      { role: "agent", content: "Focusing on edge cases: timeouts, retries, invalid responses." },
-    ],
+  type DemoNode = {
+    id: string;
+    name: string;
+    status: AgentStatus;
+    depth: number;
+    hasChildren: boolean;
+  };
+  type DemoScenario = {
+    id: string;
+    step: string;
+    label: string;
+    title: string;
+    description: string;
+    sessionName: string;
+    shellStatus: AgentStatus;
+    model: string;
+    tree: DemoNode[];
+    selectedId: string;
+    messages: Record<string, DemoMsg[]>;
   };
 
-  let selectedId = $state("1");
-  let messagesByNode = $state<Record<string, DemoMsg[]>>(structuredClone(initialMessagesByNode));
-  let demoTree = $state([
-    { id: "1", name: "Project Manager", status: "running" as AgentStatus, depth: 0, hasChildren: true },
-    { id: "2", name: "API Research", status: "running" as AgentStatus, depth: 1, hasChildren: false },
-    { id: "3", name: "Write Tests", status: "idle" as AgentStatus, depth: 1, hasChildren: true },
-    { id: "4", name: "Edge Cases", status: "done" as AgentStatus, depth: 2, hasChildren: false },
-  ]);
+  const scenarios: DemoScenario[] = [
+    {
+      id: "create",
+      step: "01",
+      label: "Create Session",
+      title: "Start with a durable home for the work.",
+      description: "A session is the long-lived container. It gives you one place to reopen later before any agent work begins.",
+      sessionName: "demo / hello-world",
+      shellStatus: "idle",
+      model: "openai/gpt-5",
+      tree: [
+        { id: "1", name: "Session Root", status: "idle", depth: 0, hasChildren: false },
+      ],
+      selectedId: "1",
+      messages: {
+        "1": [
+          { role: "user", content: "Create a session called hello-world" },
+          { role: "agent", content: "Session created. You can spawn your first agent when you're ready." },
+        ],
+      },
+    },
+    {
+      id: "spawn",
+      step: "02",
+      label: "Spawn Agent",
+      title: "Drop in an agent and it becomes a clickable node.",
+      description: "Each agent gets its own place in the tree. The session stays persistent while the cast of workers grows.",
+      sessionName: "demo / shipping-api-client",
+      shellStatus: "running",
+      model: "openai/gpt-5",
+      tree: [
+        { id: "1", name: "Session Root", status: "idle", depth: 0, hasChildren: true },
+        { id: "2", name: "Codex", status: "running", depth: 1, hasChildren: false },
+      ],
+      selectedId: "2",
+      messages: {
+        "1": [
+          { role: "user", content: "Use this session for the shipping API client." },
+          { role: "agent", content: "Ready. Spawn an agent to start working inside the container." },
+        ],
+        "2": [
+          { role: "user", content: "Build the first pass of the API client." },
+          { role: "agent", content: "I am in the container and ready to start coding." },
+        ],
+      },
+    },
+    {
+      id: "chat",
+      step: "03",
+      label: "Chat & Watch",
+      title: "Send work and watch the thread fill in live.",
+      description: "Messages, tool activity, and spawned helpers show up in the same place, so you can see the work unfold instead of guessing.",
+      sessionName: "demo / shipping-api-client",
+      shellStatus: "running",
+      model: "openai/gpt-5",
+      tree: [
+        { id: "1", name: "Project Manager", status: "running", depth: 0, hasChildren: true },
+        { id: "2", name: "API Research", status: "running", depth: 1, hasChildren: false },
+        { id: "3", name: "Write Tests", status: "idle", depth: 1, hasChildren: true },
+        { id: "4", name: "Edge Cases", status: "done", depth: 2, hasChildren: false },
+      ],
+      selectedId: "1",
+      messages: {
+        "1": [
+          { role: "user", content: "Build an API client with tests" },
+          { role: "agent", content: "I'll coordinate this. Spawning a researcher and test writer to work in parallel.", showTools: true },
+        ],
+        "2": [
+          { role: "user", content: "Research best practices for REST clients" },
+          { role: "agent", content: "Researching best practices for REST client design..." },
+        ],
+        "3": [
+          { role: "user", content: "Write unit tests for the API client" },
+          { role: "agent", content: "Writing unit tests for the API client module..." },
+        ],
+        "4": [
+          { role: "user", content: "Cover edge cases" },
+          { role: "agent", content: "Focusing on edge cases: timeouts, retries, invalid responses." },
+        ],
+      },
+    },
+    {
+      id: "grow",
+      step: "04",
+      label: "Tree Grows",
+      title: "As work branches, every thread keeps its own context.",
+      description: "The tree becomes the control surface. Click any branch to inspect what that specific agent is doing without losing the rest.",
+      sessionName: "demo / shipping-api-client",
+      shellStatus: "running",
+      model: "openai/gpt-5",
+      tree: [
+        { id: "1", name: "Project Manager", status: "running", depth: 0, hasChildren: true },
+        { id: "2", name: "API Research", status: "done", depth: 1, hasChildren: false },
+        { id: "3", name: "Write Tests", status: "running", depth: 1, hasChildren: true },
+        { id: "4", name: "Edge Cases", status: "done", depth: 2, hasChildren: false },
+        { id: "5", name: "Release Check", status: "running", depth: 2, hasChildren: false },
+      ],
+      selectedId: "5",
+      messages: {
+        "1": [
+          { role: "user", content: "Keep the shipping API client moving." },
+          { role: "agent", content: "The tree is split across research, tests, and release checks." },
+        ],
+        "2": [
+          { role: "user", content: "Research best practices for REST clients" },
+          { role: "agent", content: "Research complete. Handing recommendations back to the root." },
+        ],
+        "3": [
+          { role: "user", content: "Write unit tests for the API client" },
+          { role: "agent", content: "Running the test plan and filling gaps." },
+        ],
+        "4": [
+          { role: "user", content: "Cover edge cases" },
+          { role: "agent", content: "Edge cases are covered. This branch is done." },
+        ],
+        "5": [
+          { role: "user", content: "Do a final release pass before we ship." },
+          { role: "agent", content: "Checking the tree, verifying tests, and preparing the release branch." },
+        ],
+      },
+    },
+  ];
 
-  let selectedNode = $derived(demoTree.find((n) => n.id === selectedId));
-  let currentMessages = $derived(messagesByNode[selectedId] ?? []);
+  const initialScenario = scenarios[0];
+
+  let activeScenarioId = $state(initialScenario.id);
+  let selectedId = $state(initialScenario.selectedId);
+  let messagesByNode = $state<Record<string, DemoMsg[]>>(structuredClone(initialScenario.messages));
+  let demoTree = $state<DemoNode[]>(structuredClone(initialScenario.tree));
   let isSending = $state(false);
-  let mobileTab = $state<"tree" | "chat">("tree");
+  let mobileTab = $state<"tree" | "chat">("chat");
   let inputValue = $state("");
+
+  let activeScenario = $derived(
+    scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0],
+  );
+  let selectedNode = $derived(demoTree.find((node) => node.id === selectedId));
+  let currentMessages = $derived(messagesByNode[selectedId] ?? []);
+
+  function loadScenario(id: string) {
+    const scenario = scenarios.find((item) => item.id === id);
+    if (!scenario) return;
+
+    activeScenarioId = scenario.id;
+    demoTree = structuredClone(scenario.tree);
+    messagesByNode = structuredClone(scenario.messages);
+    selectedId = scenario.selectedId;
+    isSending = false;
+    inputValue = "";
+    mobileTab = "chat";
+  }
 
   function selectNode(id: string) {
     selectedId = id;
@@ -47,62 +183,98 @@
   function handleSend() {
     const val = inputValue.trim();
     if (!val || isSending) return;
+
     const msgs = messagesByNode[selectedId] ?? [];
-    messagesByNode = { ...messagesByNode, [selectedId]: [...msgs, { role: "user", content: val }] };
+    messagesByNode = {
+      ...messagesByNode,
+      [selectedId]: [...msgs, { role: "user", content: val }],
+    };
     inputValue = "";
     isSending = true;
-    const agentResponse = selectedId === "1"
-      ? { role: "agent" as const, content: "Got it. I'll delegate to the team.", showTools: false }
-      : { role: "agent" as const, content: "Understood. Continuing work.", showTools: false };
+
+    const agentResponse =
+      selectedId === demoTree[0]?.id
+        ? { role: "agent" as const, content: "Got it. I'll route that through the right branch." }
+        : { role: "agent" as const, content: "Understood. Continuing work in this branch." };
+
     setTimeout(() => {
       messagesByNode = {
         ...messagesByNode,
         [selectedId]: [...(messagesByNode[selectedId] ?? []), agentResponse],
       };
       isSending = false;
-    }, 1500);
+    }, 1200);
   }
 
   function handleSpawn() {
     const nextId = String(demoTree.length + 1);
     demoTree = [
       ...demoTree,
-      { id: nextId, name: "Review", status: "idle" as AgentStatus, depth: 1, hasChildren: false },
+      { id: nextId, name: "New Branch", status: "idle", depth: 1, hasChildren: false },
     ];
-    messagesByNode = { ...messagesByNode, [nextId]: [] };
+    messagesByNode = {
+      ...messagesByNode,
+      [nextId]: [
+        { role: "agent", content: "Fresh branch created. This thread is ready for a new task." },
+      ],
+    };
+    selectedId = nextId;
+    mobileTab = "chat";
   }
-
-
-  onDestroy(() => {
-    // Cleanup if needed
-  });
-
 </script>
 
 <div class="w-full min-w-0 overflow-hidden bg-gray-100/80 dark:bg-neutral-950/60">
-  <div class="flex items-center justify-between gap-3 border-b border-gray-200/80 px-4 py-3 bg-white/70 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/70">
-    <div class="min-w-0">
-      <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">filepath session</div>
-      <div class="mt-1 truncate text-sm text-gray-900 dark:text-neutral-100">demo / shipping-api-client</div>
+  <div class="border-b border-gray-200/80 bg-white/78 px-4 py-4 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/70 md:px-5">
+    <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">How It Works</div>
+    <div class="mt-3 grid grid-cols-2 gap-2 @xl:grid-cols-4">
+      {#each scenarios as scenario}
+        <button
+          type="button"
+          class="rounded-xl border px-3 py-3 text-left transition-colors {activeScenarioId === scenario.id
+            ? 'border-gray-300 bg-gray-100 text-gray-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100'
+            : 'border-gray-200/80 bg-white/70 text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:border-neutral-800 dark:bg-neutral-950/40 dark:text-neutral-500 dark:hover:border-neutral-700 dark:hover:text-neutral-300'}"
+          onclick={() => loadScenario(scenario.id)}
+        >
+          <div class="text-[11px] uppercase tracking-[0.18em] opacity-70">{scenario.step}</div>
+          <div class="mt-1 text-sm">{scenario.label}</div>
+        </button>
+      {/each}
     </div>
-    <div class="flex items-center gap-3 text-[11px] text-gray-500 dark:text-neutral-500">
-      <span class="inline-flex items-center gap-1.5">
-        <StatusDot status={"running"} size={6} />
-        <span>running</span>
-      </span>
-      <span>4 agents</span>
+
+    <div class="mt-4 flex flex-col gap-2 @lg:flex-row @lg:items-end @lg:justify-between">
+      <div>
+        <div class="text-sm text-gray-900 dark:text-neutral-100">{activeScenario.title}</div>
+        <div class="mt-1 max-w-2xl text-sm leading-6 text-gray-600 dark:text-neutral-400">
+          {activeScenario.description}
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 dark:text-neutral-500">
+        Click the step tabs, then click around inside the seeded UI.
+      </div>
     </div>
   </div>
 
-  <!-- Side-by-side when container is wide enough; tabs when narrow -->
+  <div class="flex items-center justify-between gap-3 border-b border-gray-200/80 px-4 py-3 bg-white/70 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/70">
+    <div class="min-w-0">
+      <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">filepath session</div>
+      <div class="mt-1 truncate text-sm text-gray-900 dark:text-neutral-100">{activeScenario.sessionName}</div>
+    </div>
+    <div class="flex items-center gap-3 text-[11px] text-gray-500 dark:text-neutral-500">
+      <span class="inline-flex items-center gap-1.5">
+        <StatusDot status={activeScenario.shellStatus} size={6} />
+        <span>{activeScenario.shellStatus}</span>
+      </span>
+      <span>{demoTree.length} agents</span>
+    </div>
+  </div>
+
   <div class="hidden @md:grid @md:grid-cols-[240px_1fr] @lg:grid-cols-[290px_1fr] min-h-[460px]">
-    <!-- Left: Tree Panel -->
     <div class="border-r p-5 border-gray-200 dark:border-neutral-800 bg-white/55 dark:bg-neutral-900/35">
       <div class="flex items-center justify-between mb-5">
         <span class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Agents</span>
         <span class="text-xs text-gray-400 dark:text-neutral-600">{demoTree.length} active</span>
       </div>
-      
+
       <div class="space-y-1.5">
         {#each demoTree as node}
           <button
@@ -121,7 +293,7 @@
           </button>
         {/each}
       </div>
-      
+
       <div class="mt-8 pt-5 border-t border-gray-200 dark:border-neutral-800">
         <button
           type="button"
@@ -133,11 +305,9 @@
         </button>
       </div>
     </div>
-    
-    <!-- Right: Chat Panel -->
+
     <div class="flex flex-col bg-white dark:bg-neutral-950">
       {#if selectedNode}
-        <!-- Header -->
         <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-900/30">
           <div class="min-w-0">
             <div class="flex items-center gap-2">
@@ -148,15 +318,14 @@
               Working inside the session container
             </div>
           </div>
-          <span class="text-xs text-gray-400 dark:text-neutral-600">anthropic/claude-sonnet-4.5</span>
+          <span class="text-xs text-gray-400 dark:text-neutral-600">{activeScenario.model}</span>
         </div>
-        
-        <!-- Messages -->
+
         <div class="flex-1 p-5 space-y-5 overflow-y-auto min-h-[280px]">
           {#each currentMessages as msg}
             <div class="flex gap-3">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 bg-gray-200 dark:bg-neutral-800">
-                {msg.role === 'user' ? 'U' : 'A'}
+                {msg.role === "user" ? "U" : "A"}
               </div>
               <div class="flex-1">
                 <p class="text-sm leading-6 text-gray-700 dark:text-neutral-300">{msg.content}</p>
@@ -186,16 +355,15 @@
             </div>
           {/if}
         </div>
-        
-        <!-- Input -->
+
         <div class="p-4 border-t border-gray-200 dark:border-neutral-800 bg-gray-50/70 dark:bg-neutral-950">
           <div class="flex gap-2">
-            <input 
-              type="text" 
-              placeholder="Message..." 
+            <input
+              type="text"
+              placeholder="Message..."
               class="hero-demo-input flex-1 rounded-lg px-3 py-2.5 text-sm focus:outline-none bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 text-gray-700 dark:text-neutral-300 placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:border-gray-300 dark:focus:border-neutral-700"
               bind:value={inputValue}
-              onkeydown={(e) => e.key === 'Enter' && handleSend()}
+              onkeydown={(e) => e.key === "Enter" && handleSend()}
               disabled={isSending}
             />
             <button
@@ -211,23 +379,22 @@
       {/if}
     </div>
   </div>
-  
-  <!-- Tabs layout when container is narrow -->
+
   <div class="@md:hidden min-h-[360px]">
     <div class="flex border-b border-gray-200 dark:border-neutral-800">
       <button
         type="button"
         class="flex-1 text-xs py-2 {mobileTab === 'tree' ? 'border-b-2 border-gray-600 text-gray-900 dark:border-neutral-400 dark:text-neutral-200' : 'text-gray-500 dark:text-neutral-500'}"
-        onclick={() => mobileTab = 'tree'}
+        onclick={() => mobileTab = "tree"}
       >Tree</button>
       <button
         type="button"
         class="flex-1 text-xs py-2 {mobileTab === 'chat' ? 'border-b-2 border-gray-600 text-gray-900 dark:border-neutral-400 dark:text-neutral-200' : 'text-gray-500 dark:text-neutral-500'}"
-        onclick={() => mobileTab = 'chat'}
+        onclick={() => mobileTab = "chat"}
       >Chat</button>
     </div>
 
-    {#if mobileTab === 'tree'}
+    {#if mobileTab === "tree"}
       <div class="p-3 bg-gray-100 dark:bg-neutral-900/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Agents</span>
@@ -239,7 +406,10 @@
               type="button"
               class="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded {node.id === selectedId ? 'bg-gray-200 dark:bg-neutral-800/50' : ''}"
               style="padding-left: {node.depth * 12 + 8}px"
-              onclick={() => { selectNode(node.id); mobileTab = 'chat'; }}
+              onclick={() => {
+                selectNode(node.id);
+                mobileTab = "chat";
+              }}
             >
               <StatusDot status={node.status} size={5} />
               <span class="text-xs {node.id === selectedId ? 'text-gray-900 dark:text-neutral-200' : 'text-gray-600 dark:text-neutral-400'}">{node.name}</span>
@@ -256,15 +426,18 @@
       </div>
     {:else if selectedNode}
       <div class="flex flex-col bg-white dark:bg-neutral-950 min-h-[280px]" role="region" aria-label="Chat for {selectedNode.name}">
-        <div class="flex items-center gap-2 p-3 border-b border-gray-200 dark:border-neutral-800">
-          <StatusDot status={selectedNode.status} size={5} />
-          <span class="text-xs text-gray-900 dark:text-neutral-200">{selectedNode.name}</span>
+        <div class="flex items-center justify-between gap-2 p-3 border-b border-gray-200 dark:border-neutral-800">
+          <div class="flex items-center gap-2 min-w-0">
+            <StatusDot status={selectedNode.status} size={5} />
+            <span class="text-xs text-gray-900 dark:text-neutral-200">{selectedNode.name}</span>
+          </div>
+          <span class="text-[11px] text-gray-400 dark:text-neutral-600">{activeScenario.model}</span>
         </div>
         <div class="flex-1 p-3 space-y-2 overflow-y-auto">
           {#each currentMessages as msg}
             <div>
-              <p class="text-xs {msg.role === 'user' ? 'text-gray-500 dark:text-neutral-500' : 'text-gray-600 dark:text-neutral-400'}">
-                {msg.role === 'user' ? 'User' : 'Agent'}: {msg.content}
+              <p class="text-xs leading-5 {msg.role === 'user' ? 'text-gray-500 dark:text-neutral-500' : 'text-gray-600 dark:text-neutral-400'}">
+                {msg.role === "user" ? "User" : "Agent"}: {msg.content}
               </p>
             </div>
           {/each}
@@ -282,7 +455,7 @@
               placeholder="Message..."
               class="hero-demo-input flex-1 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-neutral-900 text-gray-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-800"
               bind:value={inputValue}
-              onkeydown={(e) => e.key === 'Enter' && handleSend()}
+              onkeydown={(e) => e.key === "Enter" && handleSend()}
               disabled={isSending}
             />
             <button
