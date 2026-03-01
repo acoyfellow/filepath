@@ -1,10 +1,26 @@
 <script lang="ts">
-  import HeroDemo from '$lib/components/HeroDemo.svelte';
+  const heroCode = `const session = await fetch("/api/sessions", {
+  method: "POST",
+  body: JSON.stringify({ name: "hello-world" })
+}).then((res) => res.json());
+
+await fetch(\`/api/sessions/\${session.id}/nodes\`, {
+  method: "POST",
+  body: JSON.stringify({
+    name: "ship-it",
+    agentType: "codex",
+    model: "openai/gpt-5"
+  })
+});
+
+// close the tab
+// come back later
+// the agent is still running`;
 </script>
 
 <svelte:head>
-  <title>filepath — Run AI agents on the edge</title>
-  <meta name="description" content="Persistent containers for AI agents. Minutes, hours, or days. Claude Code, Codex, Cursor, or your own. Runs on Cloudflare." />
+  <title>filepath — agents that keep running</title>
+  <meta name="description" content="Start an agent, close the tab, come back later. filepath keeps the session alive." />
 </svelte:head>
 
 <div class="min-h-screen font-sans relative z-10 transition-colors duration-200 bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300">
@@ -14,52 +30,29 @@
   </div>
 
   <main class="max-w-6xl mx-auto px-6 py-12 md:py-20">
-    <!-- Hero: Simple and Grounded -->
-    <div class="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start mb-16">
-      <div class="lg:sticky lg:top-8">
-        <h1 class="text-3xl md:text-4xl font-medium mb-4 leading-tight text-gray-900 dark:text-neutral-100">
-          Run AI agents<br/>on the edge.
+    <!-- Hero: headline, subhead, and the code -->
+    <section class="mb-16">
+      <div class="mx-auto max-w-4xl">
+        <h1 class="text-3xl md:text-5xl font-medium leading-tight tracking-tight text-gray-900 dark:text-neutral-100">
+          Agents that keep running.
         </h1>
-        
-        <p class="mb-8 leading-relaxed text-lg text-gray-600 dark:text-neutral-400">
-          Persistent containers that run for minutes, hours, or days. 
-          Claude Code, Codex, Cursor, or your own. Switch models mid-session. 
-          Close your laptop — they keep running.
+
+        <p class="mt-4 max-w-2xl text-base md:text-lg leading-relaxed text-gray-600 dark:text-neutral-400">
+          Start one. Close the tab. Come back later. filepath keeps the work alive.
         </p>
-        
-        <div class="flex flex-col sm:flex-row gap-3 mb-10">
-          <a href="/signup" class="inline-flex items-center justify-center px-6 py-3 rounded font-medium transition-colors bg-gray-900 hover:bg-gray-800 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950">
-            Start executing
-          </a>
-          <a href="/docs" class="inline-flex items-center justify-center px-6 py-3 border rounded transition-colors border-gray-300 hover:border-gray-400 dark:border-neutral-700 dark:hover:border-neutral-500">
-            Read the docs
-          </a>
-        </div>
-        
-        <div class="space-y-2 text-sm">
-          <div class="flex items-start gap-2">
-            <span class="text-green-600 dark:text-green-500/60 mt-0.5">→</span>
-            <span class="text-gray-600 dark:text-neutral-400">Switch Claude → Codex → your container anytime</span>
-          </div>
-          <div class="flex items-start gap-2">
-            <span class="text-green-600 dark:text-green-500/60 mt-0.5">→</span>
-            <span class="text-gray-600 dark:text-neutral-400">Change models mid-session (Claude 4.5 → GPT-5 → Gemini 2.5)</span>
-          </div>
-          <div class="flex items-start gap-2">
-            <span class="text-green-600 dark:text-green-500/60 mt-0.5">→</span>
-            <span class="text-gray-600 dark:text-neutral-400">Dashboard, API, WebSocket, or MCP — your choice</span>
-          </div>
-          <div class="flex items-start gap-2">
-            <span class="text-green-600 dark:text-green-500/60 mt-0.5">→</span>
-            <span class="text-gray-600 dark:text-neutral-400">Runs on Cloudflare. Your API key, your spend.</span>
-          </div>
-        </div>
       </div>
-      
-      <div class="@container w-full min-w-0">
-        <HeroDemo />
+
+      <div class="mx-auto mt-8 max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white/90 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.45)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
+        <div class="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-neutral-800">
+          <span class="h-2.5 w-2.5 rounded-full bg-rose-400/80"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-amber-400/80"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-400/80"></span>
+          <span class="ml-3 text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">hello-world.ts</span>
+        </div>
+
+        <pre class="overflow-hidden px-4 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200 sm:px-6 sm:py-6"><code class="block whitespace-pre-wrap break-words font-mono">{heroCode}</code></pre>
       </div>
-    </div>
+    </section>
 
     <!-- What You Get: Three Things -->
     <section class="mb-16">
