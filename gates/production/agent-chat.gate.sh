@@ -9,6 +9,7 @@ set -euo pipefail
 
 BASE_URL="${1:-${BASE_URL:-https://myfilepath.com}}"
 API_URL="${API_URL:-https://api.myfilepath.com}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COOKIE_JAR=$(mktemp)
 FAILED=0
 
@@ -82,62 +83,18 @@ fi
 # Step 4: WebSocket connect + send message + get response
 if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ]; then
   echo -n "4. Chat: send message + get LLM response... "
-  
-  # Check if ws module is available
-  if ! node -e "require('ws')" 2>/dev/null; then
-    echo "SKIP (ws module not installed — run 'npm i ws' to enable)"
-  else
-  CHAT_RESULT=$(timeout 30 node -e "
-    const WebSocket = require('ws');
-    const ws = new WebSocket('wss://$(echo $API_URL | sed 's|https://||')/agents/chat-agent/$NODE_ID');
-    let gotResponse = false;
-    
-    ws.on('open', () => {
-      ws.send(JSON.stringify({
-        type: 'message',
-        content: 'Reply with exactly: GATE_PASS',
-        nodeId: '$NODE_ID',
-        sessionId: '$SESSION_ID'
-      }));
-    });
-    
-    ws.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === 'event' && msg.event && msg.event.type === 'text') {
-          console.log('RESPONSE:' + msg.event.content.substring(0, 100));
-          gotResponse = true;
-          ws.close();
-          process.exit(0);
-        }
-        if (msg.type === 'error') {
-          console.log('ERROR:' + msg.message);
-          ws.close();
-          process.exit(1);
-        }
-      } catch(e) {}
-    });
-    
-    ws.on('error', (e) => {
-      console.log('WS_ERROR:' + e.message);
-      process.exit(1);
-    });
-    
-    setTimeout(() => {
-      if (!gotResponse) {
-        console.log('TIMEOUT');
-        process.exit(1);
-      }
-    }, 25000);
-  " 2>&1 || echo "TIMEOUT")
-
+  CHAT_RESULT=$(timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
+    "wss://$(echo "$API_URL" | sed 's|https://||')/agents/chat-agent/$NODE_ID" \
+    "$NODE_ID" \
+    "$SESSION_ID" \
+    "Reply with exactly: GATE_PASS" \
+    "25000" 2>&1 || echo "TIMEOUT")
   if echo "$CHAT_RESULT" | grep -q 'RESPONSE:'; then
     REPLY=$(echo "$CHAT_RESULT" | grep 'RESPONSE:' | sed 's/RESPONSE://')
     echo "PASS (reply: $REPLY)"
   else
     echo "FAIL ($CHAT_RESULT)"
     FAILED=$((FAILED + 1))
-  fi
   fi
 else
   echo "4. Chat... SKIP (no node)"

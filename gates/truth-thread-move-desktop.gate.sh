@@ -4,6 +4,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-${BASE_URL:-http://localhost:5173}}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COOKIE_JAR="$(mktemp)"
 EVENT_FILE="$(mktemp)"
 TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
@@ -95,18 +96,12 @@ if [ -z "$WORKER_URL" ]; then
   exit 1
 fi
 WS_URL="$(to_ws_url "$WORKER_URL")/session-events/$SESSION_ID"
-WS_URL="$WS_URL" EVENT_FILE="$EVENT_FILE" node -e '
-const fs = require("node:fs");
-const ws = new WebSocket(process.env.WS_URL);
-ws.onmessage = (event) => {
-  const text = String(event.data);
-  if (text.includes("\"type\":\"tree_update\"") && text.includes("\"action\":\"move\"")) {
-    fs.writeFileSync(process.env.EVENT_FILE, text);
-    process.exit(0);
-  }
-};
-setTimeout(() => process.exit(2), 8000);
-' &
+node "$SCRIPT_DIR/lib/wait-for-session-event.mjs" \
+  "$WS_URL" \
+  "tree_update" \
+  "move" \
+  "$EVENT_FILE" \
+  "8000" &
 WS_PID=$!
 sleep 1
 
