@@ -1,5 +1,5 @@
 #!/bin/bash
-# Gate: homepage "True Today" claims must be mirrored in the truth matrix with a real gate reference
+# Gate: homepage "True Today" claims must be mirrored in the internal truth matrix with a real gate reference
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ for claim in "${CLAIMS[@]}"; do
   fi
 
   echo -n "  ${claim} exists in truth matrix... "
-  if rg -F "| ${claim} |" docs/truth-matrix.md >/dev/null 2>&1; then
+  if rg -F "| ${claim} |" gates/truth-matrix.md >/dev/null 2>&1; then
     echo "PASS"
   else
     echo "FAIL"
@@ -39,7 +39,7 @@ for claim in "${CLAIMS[@]}"; do
   fi
 
   echo -n "  ${claim} has a gate reference... "
-  if rg -F "| ${claim} |" docs/truth-matrix.md | rg -v "none yet" >/dev/null 2>&1; then
+  if rg -F "| ${claim} |" gates/truth-matrix.md | rg -v "none yet" >/dev/null 2>&1; then
     echo "PASS"
   else
     echo "FAIL"

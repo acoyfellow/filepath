@@ -1,40 +1,42 @@
 # filepath
 
-> Orchestration layer for AI agents. Liquid agents, liquid models, multiple interfaces. BYOK (bring your own key).
+> Long-running sessions made of durable agent threads, backed by Cloudflare sandboxes.
 
-filepath is infrastructure for coordinating AI agents. Agents are interchangeable. Models are interchangeable. We provide the orchestration layer — Dashboard for humans, API/MCP/TypeScript for programs.
+filepath is the orchestration layer that stays thin around the real primitives: Cloudflare sandboxes, your chosen harness, your chosen model, and your own router keys. The product surface is:
+- a durable session
+- a thread tree that organizes work like a filesystem
+- a chat-first control surface
+- real process visibility and a workspace terminal when the runtime supports it
 
-## The Core Idea
+## What Is True Today
 
-**Liquid Agents** — Swap Claude Code for Codex for Shelley without changing your workflow. Same protocol, seamless handoff.
-
-**Liquid Models** — Switch models mid-session. Start with Claude 4.5, move to GPT-5 for reasoning, switch to Gemini 2.5 for speed.
-
-**Orchestration Infrastructure** — One platform, multiple interfaces:
-- **Dashboard** — Visual tree, rich chat, human-in-the-loop
-- **REST API** — Spawn agents, send messages, receive events
-- **WebSocket** — Real-time streaming for live collaboration
-- **MCP + TypeScript** — Agents calling agents programmatically
+- Each thread runs inside its own Cloudflare sandbox with its own filesystem and process space.
+- The selected thread exposes real runtime processes in the UI.
+- You can open a workspace terminal for a thread when the runtime supports it.
+- Sessions reconnect cleanly to the same tree and history.
+- Session state streams live across your own devices on the same account.
+- Threads can hand files to each other explicitly.
+- Threads can be moved and regrouped like files and folders.
 
 ## Quick Start
 
 1. **Sign up** at https://myfilepath.com
-2. **Add your API key** in Settings → Provider API Keys
+2. **Add your router key** in Settings → Provider Router Keys
    - Get an OpenRouter key at https://openrouter.ai/keys
    - Or get an OpenCode Zen key at https://opencode.ai/zen
 3. **Create a session** from the dashboard
-4. **Spawn an agent** — pick any agent type, pick any model
-5. **Send a message** — that's the agent's task
-6. **Watch it work** — tool calls, file writes, commits, all in real-time chat
+4. **Spawn a thread** — choose from the supported harnesses and use the exact model string from your router
+5. **Send a message** — chat is the thread's control surface
+6. **Watch it work** — process updates, tool calls, file writes, and explicit handoffs show up in the session
 
 ## How It Works
 
 1. Create a session (like a project folder). Optional git repo to clone.
-2. Spawn an agent — pick its **type** (Claude Code, Cursor, Codex, Shelley, or BYO), pick its **model** (Claude, GPT, Gemini, 100+ more)
-3. The agent works in an isolated container with your repo. Send it messages via chat.
-4. Watch through rich chat — tool calls, file writes, commits, all inline
-5. Agents spawn child agents. The tree grows. Click any node, see its conversation.
-6. Close your laptop, open your phone. Same state, real-time sync.
+2. Spawn a thread — choose a supported harness and the exact model string your router exposes
+3. The thread runs in its own sandboxed runtime. Send it work through chat.
+4. The selected thread can show real runtime processes, and you can open a workspace terminal when available.
+5. Threads can spawn child threads, hand files across the tree, and be reorganized while the work stays live.
+6. Reopen the session on another device on the same account and keep going.
 
 **BYOK Model:** You bring your own router key. We don't charge for usage — your keys, your spend.
 
@@ -42,11 +44,19 @@ filepath is infrastructure for coordinating AI agents. Agents are interchangeabl
 
 SvelteKit (Svelte 5) + Cloudflare Workers + Agents SDK + D1 + CF Sandbox + Alchemy
 
+## Thread Model
+
+- **Session**: the durable workspace
+- **Thread**: one agent lane inside the tree
+- **Process**: a live runtime process inside a thread's sandbox
+
+Chat is always primary. Terminal attach is additive. filepath does not promise a universal "headful mode" for every harness.
+
 ## The filepath Agent Protocol (FAP)
 
 Agents communicate via NDJSON over stdout/stdin. One JSON object per line, validated with Zod schemas.
 
-This protocol makes agents **liquid** — any agent that speaks FAP runs on filepath, regardless of what's inside the container.
+This protocol keeps filepath thin — the harness can vary, but the orchestration surface stays consistent.
 
 **Container receives:** repo at `/workspace`, task via `FILEPATH_TASK` env var, user messages on stdin.
 
@@ -54,7 +64,7 @@ This protocol makes agents **liquid** — any agent that speaks FAP runs on file
 
 Built-in agents (Shelley, Claude Code, Cursor, Codex, Amp) are reference implementations. BYO = bring a Dockerfile that speaks the protocol.
 
-See [NORTHSTAR.md](./NORTHSTAR.md) for the full protocol spec.
+See [NORTHSTAR.md](./NORTHSTAR.md) for the protocol and long-range direction.
 
 ## Development
 
@@ -87,10 +97,10 @@ curl -s -X POST https://deja.coey.dev/learn \
 
 ## Documentation
 
-- [NORTHSTAR.md](./NORTHSTAR.md) — The plan. Protocol spec, schema, UI components, execution phases.
-- [AGENTS.md](./AGENTS.md) — Agent catalog, architecture, development rules.
+- [NORTHSTAR.md](./NORTHSTAR.md) — protocol and long-range direction
+- [AGENTS.md](./AGENTS.md) — agent catalog, architecture, development rules
 - [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) — API endpoints
-- [llms.txt](./llms.txt) — Context for AI tools
+- [llms.txt](./llms.txt) — context for AI tools
 
 ## License
 

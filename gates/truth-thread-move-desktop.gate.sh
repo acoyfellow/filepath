@@ -95,12 +95,13 @@ if [ -z "$WORKER_URL" ]; then
   exit 1
 fi
 WS_URL="$(to_ws_url "$WORKER_URL")/session-events/$SESSION_ID"
-WS_URL="$WS_URL" EVENT_FILE="$EVENT_FILE" bun -e '
+WS_URL="$WS_URL" EVENT_FILE="$EVENT_FILE" node -e '
+const fs = require("node:fs");
 const ws = new WebSocket(process.env.WS_URL);
-ws.onmessage = async (event) => {
+ws.onmessage = (event) => {
   const text = String(event.data);
   if (text.includes("\"type\":\"tree_update\"") && text.includes("\"action\":\"move\"")) {
-    await Bun.write(process.env.EVENT_FILE, text);
+    fs.writeFileSync(process.env.EVENT_FILE, text);
     process.exit(0);
   }
 };
