@@ -8,11 +8,14 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ url, platform }) => {
   const hostname = url.hostname;
   const env = platform?.env as Record<string, unknown> | undefined;
+  const apiWsOrigin = env?.API_WS_ORIGIN as string | undefined;
   const apiWsHost = env?.API_WS_HOST as string | undefined;
 
   // Determine worker URL for WebSocket connections to ChatAgent DOs
   let workerUrl: string;
-  if (apiWsHost) {
+  if (apiWsOrigin) {
+    workerUrl = apiWsOrigin;
+  } else if (apiWsHost) {
     workerUrl = `https://${apiWsHost}`;
   } else if (hostname === 'myfilepath.com') {
     workerUrl = 'https://api.myfilepath.com';

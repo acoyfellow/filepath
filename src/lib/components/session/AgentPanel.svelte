@@ -149,11 +149,9 @@
           {/if}
         {/if}
       </div>
-      {#if agent.containerId}
-        <div class="process-secondary-row">
-          <button class="process-secondary-action" onclick={openArtifactModal}>Send File To...</button>
-        </div>
-      {/if}
+      <div class="process-secondary-row">
+        <button class="process-secondary-action" onclick={openArtifactModal}>Send File To...</button>
+      </div>
       {#if processes.length > 0}
         <div class="process-list">
           {#each processes as process}

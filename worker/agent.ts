@@ -18,7 +18,13 @@ import { routeAgentRequest } from 'agents';
 import { getSandbox, proxyToSandbox } from '@cloudflare/sandbox';
 import { ChatAgent } from '../src/agent/chat-agent';
 import { TaskAgent } from '../src/agent/index';
-import { ensureTerminalInContainer } from '../src/lib/agents/container';
+import {
+  ensureTerminalInContainer,
+  exportArtifactFromContainer,
+  importArtifactToContainer,
+  cloneRepo,
+  type ContainerEnv,
+} from '../src/lib/agents/container';
 import { SessionDO, Sandbox } from './index';
 import type { Env } from '../src/types';
 
@@ -91,6 +97,203 @@ export default {
         },
         body: request.body,
       });
+    }
+
+    const internalArtifactMatch = url.pathname.match(/^\/internal\/sessions\/([^/]+)\/artifacts$/);
+    if (internalArtifactMatch && request.method === 'POST') {
+      const [, sessionId] = internalArtifactMatch;
+      const body = await request.json().catch(() => null) as
+        | {
+            sourceNodeId?: string;
+            sourcePath?: string;
+            targetNodeId?: string;
+            targetPath?: string;
+          }
+        | null;
+
+      if (!body?.sourceNodeId || !body?.sourcePath || !body?.targetNodeId || !body?.targetPath) {
+        return new Response(
+          JSON.stringify({ error: 'sourceNodeId, sourcePath, targetNodeId, and targetPath are required' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const ensureThreadRuntime = async (nodeId: string) => {
+        const row = await env.DB.prepare(
+          `SELECT n.id, n.container_id as containerId, s.git_repo_url as gitRepoUrl
+             FROM agent_node n
+             JOIN agent_session s ON n.session_id = s.id
+            WHERE n.id = ? AND n.session_id = ?`,
+        )
+          .bind(nodeId, sessionId)
+          .first<{ id: string; containerId: string | null; gitRepoUrl: string | null }>();
+
+        if (!row) {
+          return null;
+        }
+
+        if (row.containerId) {
+          return { id: row.id, containerId: row.containerId };
+        }
+
+        const containerId = row.id;
+        if (row.gitRepoUrl) {
+          await cloneRepo(
+            { Sandbox: env.Sandbox } as unknown as ContainerEnv,
+            containerId,
+            row.gitRepoUrl,
+            '/workspace',
+          );
+        } else {
+          const sandbox = getSandbox(env.Sandbox as never, containerId) as {
+            exec(command: string, options?: { cwd?: string }): Promise<unknown>;
+          };
+          await sandbox.exec('mkdir -p /workspace');
+        }
+
+        await env.DB.prepare(
+          `UPDATE agent_node
+              SET container_id = ?, updated_at = unixepoch('subsecond') * 1000
+            WHERE id = ?`,
+        )
+          .bind(containerId, row.id)
+          .run();
+
+        return { id: row.id, containerId };
+      };
+
+      const sourceNode = await ensureThreadRuntime(body.sourceNodeId);
+      const targetNode = await ensureThreadRuntime(body.targetNodeId);
+
+      if (!sourceNode || !targetNode) {
+        return new Response(JSON.stringify({ error: 'Source or target thread not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      const artifactId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO agent_artifact
+          (id, session_id, source_node_id, target_node_id, source_path, target_path, bucket_key, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch('subsecond') * 1000, unixepoch('subsecond') * 1000)`,
+      )
+        .bind(
+          artifactId,
+          sessionId,
+          sourceNode.id,
+          targetNode.id,
+          body.sourcePath,
+          body.targetPath,
+          '',
+          'staged',
+        )
+        .run();
+
+      const sessionNamespace = env.SESSION_DO as any;
+      const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
+      const broadcast = async (payload: Record<string, unknown>) =>
+        stub.fetch('https://session/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+      await broadcast({
+        type: 'artifact_event',
+        action: 'artifact_staged',
+        artifactId,
+        sourceNodeId: sourceNode.id,
+        targetNodeId: targetNode.id,
+        sourcePath: body.sourcePath,
+        targetPath: body.targetPath,
+      });
+
+      try {
+        const artifactEnv = {
+          Sandbox: env.Sandbox,
+          ARTIFACTS: env.ARTIFACTS,
+        } as ContainerEnv & { ARTIFACTS: any };
+
+        const { bucketKey } = await exportArtifactFromContainer(
+          artifactEnv,
+          sourceNode.containerId,
+          sessionId,
+          sourceNode.id,
+          body.sourcePath,
+        );
+
+        await env.DB.prepare(
+          `UPDATE agent_artifact
+             SET bucket_key = ?, updated_at = unixepoch('subsecond') * 1000
+           WHERE id = ?`,
+        )
+          .bind(bucketKey, artifactId)
+          .run();
+
+        await importArtifactToContainer(
+          artifactEnv,
+          targetNode.containerId,
+          bucketKey,
+          body.targetPath,
+        );
+
+        await env.DB.prepare(
+          `UPDATE agent_artifact
+             SET status = ?, updated_at = unixepoch('subsecond') * 1000
+           WHERE id = ?`,
+        )
+          .bind('delivered', artifactId)
+          .run();
+
+        await broadcast({
+          type: 'artifact_event',
+          action: 'artifact_delivered',
+          artifactId,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          sourcePath: body.sourcePath,
+          targetPath: body.targetPath,
+        });
+
+        const artifact = await env.DB.prepare(
+          `SELECT id, session_id as sessionId, source_node_id as sourceNodeId, target_node_id as targetNodeId,
+                  source_path as sourcePath, target_path as targetPath, bucket_key as bucketKey,
+                  status, error_message as errorMessage, created_at as createdAt, updated_at as updatedAt
+             FROM agent_artifact WHERE id = ?`,
+        )
+          .bind(artifactId)
+          .first();
+
+        return new Response(JSON.stringify({ artifact }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Artifact transfer failed';
+        await env.DB.prepare(
+          `UPDATE agent_artifact
+             SET status = ?, error_message = ?, updated_at = unixepoch('subsecond') * 1000
+           WHERE id = ?`,
+        )
+          .bind('failed', message, artifactId)
+          .run();
+
+        await broadcast({
+          type: 'artifact_event',
+          action: 'artifact_failed',
+          artifactId,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          sourcePath: body.sourcePath,
+          targetPath: body.targetPath,
+          errorMessage: message,
+        });
+
+        return new Response(JSON.stringify({ error: message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const terminalMatch = url.pathname.match(

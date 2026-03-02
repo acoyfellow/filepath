@@ -22,6 +22,7 @@ export interface Env {
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   API_WS_HOST?: string;
+  API_WS_ORIGIN?: string;
   OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   OPENCODE_ZEN_API_KEY?: string;

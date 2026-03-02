@@ -1,6 +1,5 @@
-<script lang="ts">
+  <script lang="ts">
   import "$lib/styles/theme.css";
-  import { dev } from "$app/environment";
   import { onMount, onDestroy } from "svelte";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
@@ -35,23 +34,15 @@
   let connectionStates = $state<Record<string, ConnectionState>>({});
   let sessionEventsSocket = $state<WebSocket | null>(null);
 
-  // Determine WebSocket URL: dev = same origin (Alchemy handles routing), prod = from config
+  // Determine worker URL for ChatAgent and session event websocket connections.
   onMount(async () => {
-    if (dev) {
-      // Dev mode: Alchemy dev server handles /agents/* routing via custom script in alchemy.run.ts
-      // Use same origin as the page (e.g., localhost:5173) - the custom script routes /agents/* to the ChatAgent DO
-      workerUrl = window.location.origin;
-      console.log('[Session] Dev mode - using same origin for WebSocket:', workerUrl);
-    } else {
-      // Production: fetch from config endpoint
-      try {
-        const res = await fetch('/api/config');
-        const cfg = await res.json() as { workerUrl: string };
-        workerUrl = cfg.workerUrl;
-        console.log('[Session] Production - using worker at', workerUrl);
-      } catch (err) {
-        console.error('[Session] Failed to fetch config:', err);
-      }
+    try {
+      const res = await fetch('/api/config');
+      const cfg = await res.json() as { workerUrl: string };
+      workerUrl = cfg.workerUrl;
+      console.log('[Session] Using worker at', workerUrl);
+    } catch (err) {
+      console.error('[Session] Failed to fetch config:', err);
     }
   });
 

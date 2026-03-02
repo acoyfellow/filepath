@@ -14,12 +14,11 @@ declare global {
 		// interface PageData {}
 		// interface PageState {}
 		interface Platform {
-				env: {
-					SESSION_DO: DurableObjectNamespace;
-					Sandbox: DurableObjectNamespace;
-					WORKER: Fetcher;
-					DB: D1Database;
-					ARTIFACTS: R2Bucket;
+      env: {
+        SESSION_DO: DurableObjectNamespace;
+        WORKER: Fetcher;
+        DB: D1Database;
+        ARTIFACTS: R2Bucket;
 				};
 		}
 	}

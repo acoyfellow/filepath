@@ -130,7 +130,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     WORKER,
     DB,
     SESSION_DO,
-    Sandbox,
     ARTIFACTS,
   },
   url: true,
@@ -142,6 +141,7 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_URL: isProd 
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
+    API_WS_ORIGIN: isProd ? "https://api.myfilepath.com" : "http://localhost:1340",
     MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
     MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },
