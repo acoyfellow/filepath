@@ -14,7 +14,14 @@
 
   // Resize state
   let dragging = $state(false);
-  let treeWidth = $state(width);
+  let treeWidth = $state(220);
+  let widthInitialized = false;
+
+  $effect(() => {
+    if (widthInitialized) return;
+    treeWidth = width;
+    widthInitialized = true;
+  });
 
   function onMouseDown() {
     dragging = true;

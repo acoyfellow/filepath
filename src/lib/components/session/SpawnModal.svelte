@@ -29,10 +29,6 @@
     accountKeysError = null,
   }: Props = $props();
 
-  const initialAgent = lastAgent;
-  const initialModel = canonicalizeStoredModel(lastModel);
-  const initialHasAccountKey = Object.values(accountKeysMasked).some(Boolean);
-
   const NAMES = ["atlas","bolt","cipher","drift","echo","flux","ghost","helix","iris","kite","nova","orbit","pulse","relay","spark","trace","vortex","wave","zero"];
   const AGENTS: { id: AgentType; label: string }[] = [
     { id: "shelley", label: "Shelley" },
@@ -50,23 +46,23 @@
   }
 
   let name = $state(pickName());
-  let agent = $state<AgentType>(initialAgent);
-  let model = $state(initialModel);
+  let agent = $state<AgentType>("shelley");
+  let model = $state(canonicalizeStoredModel(DEFAULT_MODEL));
   let modelFilter = $state("");
   let modelsLoading = $state(true);
   let modelsError = $state("");
   let modelWarnings = $state<string[]>([]);
   let availableModels = $state<ModelEntry[]>([
     {
-      id: initialModel || DEFAULT_MODEL,
-      name: initialModel || DEFAULT_MODEL,
+      id: canonicalizeStoredModel(DEFAULT_MODEL) || DEFAULT_MODEL,
+      name: canonicalizeStoredModel(DEFAULT_MODEL) || DEFAULT_MODEL,
       provider: "Unknown",
       router: "openrouter",
     },
   ]);
 
   let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
-  let keyMode = $state<'account' | 'session'>(initialHasAccountKey ? 'account' : 'session');
+  let keyMode = $state<'account' | 'session'>('session');
   let sessionKey = $state('');
   let keyLoading = $state(false); // Already have the data from server
   let availableRouters = $derived(
@@ -84,6 +80,27 @@
         )
       : availableModels
   );
+
+  let initializedFromProps = false;
+
+  $effect(() => {
+    if (initializedFromProps) return;
+
+    const initialModel = canonicalizeStoredModel(lastModel);
+
+    agent = lastAgent;
+    model = initialModel;
+    availableModels = [
+      {
+        id: initialModel || DEFAULT_MODEL,
+        name: initialModel || DEFAULT_MODEL,
+        provider: "Unknown",
+        router: initialModel.startsWith("zen/") ? "zen" : "openrouter",
+      },
+    ];
+    keyMode = Object.values(accountKeysMasked).some(Boolean) ? 'account' : 'session';
+    initializedFromProps = true;
+  });
 
   onMount(async () => {
     try {

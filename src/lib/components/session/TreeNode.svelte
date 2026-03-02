@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Self from "./TreeNode.svelte";
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import type { AgentNode } from "$lib/types/session";
 
@@ -80,7 +81,7 @@
 
 {#if hasChildren && !collapsed}
   {#each node.children as child (child.id)}
-    <svelte:self
+    <Self
       node={child}
       {selectedId}
       depth={depth + 1}

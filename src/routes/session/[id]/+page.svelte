@@ -202,8 +202,7 @@
     return roots[0] ?? null;
   }
 
-  const initialRootNode = buildTree(data.nodes);
-  let rootNode = $state<AgentNode | null>(initialRootNode);
+  let rootNode = $state<AgentNode | null>(null);
 
   // ─── Messages (live from WebSocket) ───
   let messagesByNode = $state<Record<string, ChatMsg[]>>({});
@@ -216,7 +215,17 @@
   let terminalErrorsByNode = $state<Record<string, string>>({});
 
   // ─── State ───
-  let selectedId = $state<string | null>(initialRootNode?.id ?? null);
+  let selectedId = $state<string | null>(null);
+  let initializedSessionId: string | null = null;
+
+  $effect(() => {
+    if (!sessionId || initializedSessionId === sessionId) return;
+
+    const nextRootNode = buildTree(data.nodes);
+    rootNode = nextRootNode;
+    selectedId = nextRootNode?.id ?? null;
+    initializedSessionId = sessionId;
+  });
 
   // Auto-connect when selecting a node
   $effect(() => {
