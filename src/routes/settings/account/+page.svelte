@@ -148,6 +148,26 @@
       isDeleting = false;
     }
   }
+
+  function closeDeleteDialog() {
+    showDeleteDialog = false;
+  }
+
+  function handleDeleteDialogBackdropKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      closeDeleteDialog();
+    }
+  }
+
+  function stopDeleteDialogKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeDeleteDialog();
+      return;
+    }
+    e.stopPropagation();
+  }
 </script>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
@@ -287,10 +307,22 @@
 
 {#if showDeleteDialog}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center" onclick={() => showDeleteDialog = false}>
+  <div
+    class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
+    onclick={closeDeleteDialog}
+    onkeydown={handleDeleteDialogBackdropKeydown}
+  >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="border rounded-lg p-6 max-w-md w-full mx-4 transition-colors duration-200 bg-white border-gray-200 dark:bg-neutral-900 dark:border-neutral-800" onclick={(e) => e.stopPropagation()}>
-      <h2 class="text-red-400 text-lg font-medium mb-2">Delete account</h2>
+    <div
+      class="border rounded-lg p-6 max-w-md w-full mx-4 transition-colors duration-200 bg-white border-gray-200 dark:bg-neutral-900 dark:border-neutral-800"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-account-title"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={stopDeleteDialogKeydown}
+    >
+      <h2 class="text-red-400 text-lg font-medium mb-2" id="delete-account-title">Delete account</h2>
       <p class="text-sm mb-2 text-gray-600 dark:text-neutral-400">This will permanently delete:</p>
       <ul class="text-sm space-y-1 mb-6 ml-4 text-gray-500 dark:text-neutral-500">
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All sessions and terminals</li>

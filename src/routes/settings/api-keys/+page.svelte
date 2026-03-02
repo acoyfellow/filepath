@@ -121,6 +121,28 @@
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
   }
+
+  function closeCreateDialog() {
+    if (!createdKey) {
+      showCreateDialog = false;
+    }
+  }
+
+  function handleCreateDialogBackdropKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      closeCreateDialog();
+    }
+  }
+
+  function stopCreateDialogKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeCreateDialog();
+      return;
+    }
+    e.stopPropagation();
+  }
 </script>
 
 <svelte:head>
@@ -213,10 +235,22 @@
 <!-- Create Dialog -->
 {#if showCreateDialog}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center" onclick={() => { if (!createdKey) showCreateDialog = false; }}>
+  <div
+    class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
+    onclick={closeCreateDialog}
+    onkeydown={handleCreateDialogBackdropKeydown}
+  >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="border rounded-lg p-6 max-w-lg w-full mx-4 transition-colors duration-200 bg-white border-gray-200 dark:bg-neutral-900 dark:border-neutral-800" onclick={(e) => e.stopPropagation()}>
-      <h2 class="text-lg font-medium mb-4 text-gray-900 dark:text-neutral-100">
+    <div
+      class="border rounded-lg p-6 max-w-lg w-full mx-4 transition-colors duration-200 bg-white border-gray-200 dark:bg-neutral-900 dark:border-neutral-800"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-api-key-title"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={stopCreateDialogKeydown}
+    >
+      <h2 class="text-lg font-medium mb-4 text-gray-900 dark:text-neutral-100" id="create-api-key-title">
         {createdKey ? 'Key created' : 'Create API key'}
       </h2>
 

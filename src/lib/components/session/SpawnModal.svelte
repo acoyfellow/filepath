@@ -134,13 +134,37 @@
   function handleBackdrop(e: MouseEvent) {
     if (e.target === e.currentTarget) onclose();
   }
+
+  function handleBackdropKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onclose();
+    }
+  }
+
+  function stopModalKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onclose();
+      return;
+    }
+    e.stopPropagation();
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-bg" onclick={handleBackdrop}>
+<div class="modal-bg" onclick={handleBackdrop} onkeydown={handleBackdropKeydown}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
-    <div class="modal-title">spawn thread</div>
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="spawn-thread-title"
+    tabindex="-1"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={stopModalKeydown}
+  >
+    <div class="modal-title" id="spawn-thread-title">spawn thread</div>
     <div class="modal-body">
       <label class="modal-label" for="spawn-name">name</label>
       <div class="modal-name-row">
