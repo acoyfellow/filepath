@@ -79,8 +79,6 @@ export interface ProcessEntry {
   name: string;
   kind: "agent" | "shell" | "terminal" | "helper" | "unknown";
   status: "running" | "exited" | "starting";
-  attachable: boolean;
-  attachedPath?: string | null;
 }
 
 // ============================================================

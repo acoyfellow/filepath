@@ -308,7 +308,6 @@
       const existingSelected = selectedProcessByNode[nodeId];
       const nextSelected =
         nextProcesses.find((process) => process.id === existingSelected)?.id
-        ?? nextProcesses.find((process) => process.attachable)?.id
         ?? nextProcesses[0]?.id
         ?? null;
 
@@ -345,13 +344,11 @@
   async function handleOpenTerminal() {
     if (!selectedAgent || !sessionId) return;
 
-    const selectedProcess = (processesByNode[selectedAgent.id] ?? []).find(
-      (process) => process.id === selectedProcessByNode[selectedAgent.id],
-    );
-    if (!selectedProcess?.attachable) {
+    const processes = processesByNode[selectedAgent.id] ?? [];
+    if (processes.length === 0) {
       terminalErrorsByNode = {
         ...terminalErrorsByNode,
-        [selectedAgent.id]: 'Select a live process before opening the terminal.',
+        [selectedAgent.id]: 'No live runtime is available for this thread yet.',
       };
       return;
     }

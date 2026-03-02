@@ -173,9 +173,6 @@ export default {
           name: process.command.split(' ').slice(0, 3).join(' ') || nodeRow.name,
           kind,
           status,
-          attachable: status !== 'exited',
-          attachedPath:
-            status !== 'exited' ? `/terminal/session/${sessionId}/node/${nodeId}` : null,
         };
       });
 

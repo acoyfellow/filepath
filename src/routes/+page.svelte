@@ -30,27 +30,27 @@ console.log(status.summary.running > 0); // true`;
     },
     {
       eyebrow: 'True Today',
-      title: 'Any harness, any model, no vendor lock',
+      title: 'Supported harnesses, exact models, no extra lock-in',
       body:
-        'Pick the harness you want to run. Pick the model string you want to send through your configured router. filepath stays thin and lets the underlying primitives do the work.',
+        'Choose from the supported harnesses. Use the exact model string your configured router exposes. filepath stays thin and avoids layering a second abstraction on top.',
     },
     {
       eyebrow: 'True Today',
-      title: 'Long-running loops that stay cheaper',
+      title: 'Durable session state that reconnects cleanly',
       body:
-        'Sessions persist on the edge and wake back up when you reconnect. You are paying for work and resumability, not for keeping a traditional always-on machine warm.',
+        'Session state persists and reconnects cleanly. When you come back, you return to the same session tree and history while the runtime is resumed or re-entered when available.',
     },
     {
       eyebrow: 'True Today',
-      title: 'Realtime, shareable session state',
+      title: 'Realtime session state across your devices',
       body:
-        'A session can be reopened from another device and streamed live. The tree is your thread filesystem: a visible way to partition work, keep it grouped, and stay oriented.',
+        'A session can be reopened from another device on the same account and streamed live. The tree is your thread filesystem: a visible way to partition work, keep it grouped, and stay oriented.',
     },
     {
       eyebrow: 'True Today',
-      title: 'Visible runtime processes per thread',
+      title: 'Visible runtime processes, plus a workspace terminal',
       body:
-        'The selected thread now exposes its live processes in a simple strip above the input. When the runtime supports it, you can attach to a real terminal instead of guessing what is happening.',
+        'The selected thread exposes its real processes in a simple strip above the input. When the runtime supports it, you can open a workspace terminal for that thread instead of guessing what is happening.',
     },
   ];
 
@@ -98,7 +98,7 @@ console.log(status.summary.running > 0); // true`;
           Your agents. Your models. Your Cloudflare.
         </h1>
         <p class="mt-6 max-w-2xl text-base md:text-lg leading-8 text-gray-600 dark:text-neutral-400">
-          filepath runs long-running sessions inside Cloudflare sandboxes. Each thread is a real isolated runtime with its own filesystem. The tree is how you partition the work, like a filesystem for your threads, while the session stays shareable and live across devices.
+          filepath runs long-running sessions inside Cloudflare sandboxes. Each thread is a real isolated runtime with its own filesystem. The tree is how you partition the work, like a filesystem for your threads, while the session stays live across your own devices.
         </p>
 
         <div class="mt-8 flex flex-col sm:flex-row gap-3">
@@ -165,7 +165,7 @@ console.log(status.summary.running > 0); // true`;
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
             <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Realtime State</div>
             <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
-              Sessions are shareable and stream live. Reopen them later and you are back inside the same running loop.
+              Sessions stream live and can be reopened later on the same account. You come back to the same running loop without pretending there is a public share model.
             </p>
           </div>
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
@@ -183,7 +183,7 @@ console.log(status.summary.running > 0); // true`;
         <div>
           <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">Roadmap</div>
           <h2 class="mt-4 text-2xl md:text-3xl font-medium tracking-tight text-gray-900 dark:text-neutral-100">
-            What is next, but not yet fully true
+            What is next, and what we are still proving
           </h2>
         </div>
         <p class="max-w-2xl text-sm leading-7 text-gray-600 dark:text-neutral-400">
@@ -209,7 +209,7 @@ console.log(status.summary.running > 0); // true`;
           This is the actual session UI, not a separate landing-page toy.
         </h2>
         <p class="mt-4 max-w-3xl text-sm md:text-base leading-8 text-gray-600 dark:text-neutral-400">
-          The homepage uses the same tree and panel components as the app. That keeps the product pitch grounded in the literal interface you are shaping, instead of a fake parallel demo.
+          The homepage uses the same tree and panel components as the app. That keeps the product pitch grounded in the literal interface you are shaping, instead of a fake parallel demo or a replay that says more than the runtime can do.
         </p>
       </div>
 

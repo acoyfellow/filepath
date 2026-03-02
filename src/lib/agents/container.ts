@@ -9,7 +9,6 @@
  */
 
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
-import type { R2Bucket } from '@cloudflare/workers-types';
 import { ADAPTER_COMMANDS, type AdapterConfig } from './adapters';
 import { sanitizeEnvForLogging } from '$lib/env';
 
@@ -100,7 +99,7 @@ export async function getOrCreateContainer(
     return { id: `session-${sessionId}`, sessionId, status: 'ready', backupId };
   } catch (error) {
     console.error(`[Container] Failed to get/create container:`, error);
-    return { id: `session-${sessionId}`, sessionId, status: 'error', backupId };
+    throw new ContainerError(`Failed to get or create container for session ${sessionId}`, error);
   }
 }
 
@@ -131,7 +130,7 @@ export async function startAgentInContainer(
     return { processId: proc.pid ? String(proc.pid) : 'unknown', success: true };
   } catch (error) {
     console.error(`[Container] Failed to start agent ${agentType}:`, error);
-    return { processId: '', success: false };
+    throw new AgentStartError(`Failed to start ${agentType} in container ${containerId}`, error);
   }
 }
 
@@ -139,7 +138,7 @@ export async function createWorkspaceBackup(
   env: ContainerEnv,
   containerId: string,
   workspacePath: string = '/workspace'
-): Promise<BackupHandle | null> {
+): Promise<BackupHandle> {
   const sandbox = getSandbox(env.Sandbox, containerId) as SandboxWithBackup;
   try {
     console.log(`[Container] Creating backup of ${workspacePath}`);
@@ -149,7 +148,7 @@ export async function createWorkspaceBackup(
     return handle;
   } catch (error) {
     console.error(`[Container] Failed to create backup:`, error);
-    return null;
+    throw new BackupError(`Failed to create workspace backup for ${containerId}`, error);
   }
 }
 
@@ -165,7 +164,7 @@ export async function restoreWorkspaceBackup(
     return true;
   } catch (error) {
     console.error(`[Container] Failed to restore backup:`, error);
-    return false;
+    throw new BackupError(`Failed to restore workspace backup ${backupHandle.id}`, error);
   }
 }
 
@@ -179,10 +178,19 @@ export async function execInContainer(
   try {
     const result = await sandbox.exec(command, { cwd: options?.cwd, env: options?.env });
     const exitCode = (result as { code?: number }).code;
-    return { stdout: result.stdout, stderr: result.stderr, success: exitCode === 0 || exitCode === undefined };
+    if (exitCode !== 0 && exitCode !== undefined) {
+      throw new ContainerError(
+        `Command failed in container ${containerId}: ${command}`,
+        { stdout: result.stdout, stderr: result.stderr, exitCode }
+      );
+    }
+    return { stdout: result.stdout, stderr: result.stderr, success: true };
   } catch (error) {
     console.error(`[Container] Exec failed:`, error);
-    return { stdout: '', stderr: String(error), success: false };
+    if (error instanceof ContainerError) {
+      throw error;
+    }
+    throw new ContainerError(`Exec failed in container ${containerId}: ${command}`, error);
   }
 }
 
@@ -191,11 +199,16 @@ export async function cloneRepo(
   containerId: string,
   repoUrl: string,
   workspacePath: string = '/workspace'
-): Promise<boolean> {
+): Promise<void> {
   console.log(`[Container] Cloning ${repoUrl} to ${workspacePath}`);
-  const result = await execInContainer(env, containerId, `git clone ${repoUrl} .`, { cwd: workspacePath });
-  if (!result.success) console.error(`[Container] Clone failed: ${result.stderr}`);
-  return result.success;
+  try {
+    await execInContainer(env, containerId, `git clone ${repoUrl} .`, { cwd: workspacePath });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : `Unknown clone failure for ${repoUrl}`;
+    console.error(`[Container] Clone failed: ${message}`);
+    throw new ContainerError('Failed to clone the session repository into the sandbox workspace.', error);
+  }
 }
 
 export async function ensureTerminalInContainer(

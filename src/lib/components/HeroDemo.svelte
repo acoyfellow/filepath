@@ -143,7 +143,7 @@
         event: {
           type: "text",
           content:
-            "Release check is done. This thread is preserved in the same shared session.",
+            "Release check is done. This thread is preserved in the same session.",
         },
       },
     ],
@@ -151,19 +151,19 @@
 
   const seededProcesses: Record<string, ProcessEntry[]> = {
     root: [
-      { id: "root-agent", name: "codex loop", kind: "agent", status: "running", attachable: false },
-      { id: "root-shell", name: "watch status", kind: "helper", status: "starting", attachable: false },
+      { id: "root-agent", name: "codex loop", kind: "agent", status: "running" },
+      { id: "root-shell", name: "watch status", kind: "helper", status: "starting" },
     ],
     "app-shell": [
-      { id: "app-codex", name: "codex app shell", kind: "agent", status: "running", attachable: false },
-      { id: "app-build", name: "npm run dev", kind: "helper", status: "running", attachable: false },
+      { id: "app-codex", name: "codex app shell", kind: "agent", status: "running" },
+      { id: "app-build", name: "npm run dev", kind: "helper", status: "running" },
     ],
     "api-pass": [
-      { id: "api-shelley", name: "shelley api pass", kind: "agent", status: "starting", attachable: false },
+      { id: "api-shelley", name: "shelley api pass", kind: "agent", status: "starting" },
     ],
     "release-check": [
-      { id: "release-checker", name: "release check", kind: "agent", status: "running", attachable: false },
-      { id: "release-bash", name: "bash review", kind: "shell", status: "running", attachable: false },
+      { id: "release-checker", name: "release check", kind: "agent", status: "running" },
+      { id: "release-bash", name: "bash review", kind: "shell", status: "running" },
     ],
   };
 
@@ -247,7 +247,7 @@
     <div class="demo-actions">
       <span class="demo-pill">running</span>
       <span class="demo-pill">4 threads</span>
-      <button type="button" class="demo-btn">Share</button>
+      <button type="button" class="demo-btn">Reopen</button>
     </div>
   </div>
 

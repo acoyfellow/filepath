@@ -35,7 +35,7 @@ export interface ChatAgentState {
   model: string;
   initialized: boolean;
   /** Resolved API key source for logging (not the key itself) */
-  keySource?: 'session' | 'user' | 'env';
+  keySource?: 'session' | 'user';
 }
 
 interface MessageRow {
@@ -253,13 +253,6 @@ user_key: string | null;
         );
       }
     }
-    if (!containerApiKey && this.env.ALLOW_ENV_KEY_FALLBACK === 'true') {
-      const envKey = this.env[providerDefinition.envKey as keyof Env];
-      if (typeof envKey === 'string') {
-        containerApiKey = envKey;
-        keySource = 'env';
-      }
-    }
     if (!containerApiKey) {
       throw new Error(`No valid API key available for the ${providerDefinition.label} router.`);
     }
@@ -268,15 +261,12 @@ user_key: string | null;
     // Clone git repo if specified (before starting agent process)
     if (row.git_repo_url) {
       console.log(`[ChatAgent] Cloning repo: ${row.git_repo_url}`);
-      const cloned = await cloneRepo(
+      await cloneRepo(
         { Sandbox: this.env.Sandbox } as unknown as ContainerEnv,
         nodeId,
         row.git_repo_url,
         '/workspace'
       );
-      if (!cloned) {
-        throw new Error('Failed to clone the session repository into the sandbox workspace.');
-      }
     }
 
     const envVars: Record<string, string> = {

@@ -34,7 +34,7 @@
         <div class="pl-4 text-gray-500 dark:text-neutral-500">↓ WebSocket upgrade</div>
       <div class="pl-4">Browser &lt;-&gt; ChatAgent DO (per thread node)</div>
         <div class="pl-8 text-gray-500 dark:text-neutral-500">↓ fetch / stdin-stdout</div>
-      <div class="pl-8">ChatAgent DO &lt;-&gt; LLM API (OpenRouter)</div>
+      <div class="pl-8">ChatAgent DO &lt;-&gt; sandbox harness runtime</div>
         <div class="pl-4 text-gray-500 dark:text-neutral-500">↓ D1 queries</div>
       <div>ChatAgent DO &lt;-&gt; D1 (node lookup, history)</div>
       </div>
@@ -62,7 +62,7 @@
       
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">Sandbox Runtime</h3>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm">Cloudflare Sandbox runs the containerized harness for each thread runtime. If the sandbox path fails, the thread fails explicitly instead of bypassing the runtime.</p>
+        <p class="text-gray-600 dark:text-neutral-400 text-sm">Cloudflare Sandbox runs the containerized harness for each thread runtime. When terminal attach is available, it opens a workspace shell for that thread. If the sandbox path fails, the thread fails explicitly instead of bypassing the runtime.</p>
       </div>
     </div>
   </section>

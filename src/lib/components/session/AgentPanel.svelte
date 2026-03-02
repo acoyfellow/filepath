@@ -38,9 +38,6 @@
     oncloseterminal,
   }: Props = $props();
 
-  let selectedProcess = $derived(
-    selectedProcessId ? processes.find((process) => process.id === selectedProcessId) ?? null : null,
-  );
 </script>
 
 {#if agent}
@@ -88,11 +85,11 @@
         <span class="process-label">Processes</span>
         {#if processError}
           <span class="process-error">{processError}</span>
-        {:else if selectedProcess?.attachable}
+        {:else if processes.length > 0}
           {#if viewMode === "terminal"}
             <button class="process-action" onclick={() => oncloseterminal?.()}>Back To Chat</button>
           {:else}
-            <button class="process-action" onclick={() => onopenterminal?.()}>Open Terminal</button>
+            <button class="process-action" onclick={() => onopenterminal?.()}>Open Workspace Terminal</button>
           {/if}
         {/if}
       </div>
@@ -106,9 +103,6 @@
             >
               <span class="process-chip-dot" data-status={process.status}></span>
               <span class="process-chip-name">{process.name}</span>
-              {#if process.attachable}
-                <span class="process-chip-attach">attach</span>
-              {/if}
             </button>
           {/each}
         </div>
@@ -122,7 +116,7 @@
   </div>
 {:else}
   <div class="panel-empty">
-    <span>Select an agent</span>
+    <span>Select a thread</span>
   </div>
 {/if}
 
@@ -269,11 +263,6 @@
   .process-chip-name {
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .process-chip-attach {
-    color: var(--t5);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
   .process-empty {
     font-family: var(--m);
