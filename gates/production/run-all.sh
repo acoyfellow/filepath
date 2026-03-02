@@ -34,6 +34,7 @@ fi
 echo ""
 
 GATES=(
+  "roadmap-truth"
   "visual-regression"
   "terminal-start"
   "agent-chat"
