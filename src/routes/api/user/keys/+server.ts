@@ -45,8 +45,13 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
     const plainValue = await decryptApiKey(row.openrouterApiKey, secret);
     return json({ keys: maskProviderKeys(deserializeStoredProviderKeys(plainValue)) });
   } catch {
-    // Corrupted key — clear it
-    return json({ keys: { openrouter: null, zen: null } });
+    return json(
+      {
+        keys: { openrouter: null, zen: null },
+        error: "Stored provider keys are unreadable. Remove them or re-save them.",
+      },
+      { status: 409 },
+    );
   }
 };
 
@@ -77,16 +82,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
   let keyMap: ProviderKeyMap = {};
   const existingBlob = rows[0]?.openrouterApiKey;
+  let existingBlobUnreadable = false;
   if (existingBlob) {
     try {
       keyMap = deserializeStoredProviderKeys(await decryptApiKey(existingBlob, secret));
     } catch {
-      keyMap = {};
+      existingBlobUnreadable = true;
     }
   }
 
   if (!body.key) {
-    const nextKeys = { ...keyMap, [body.provider]: undefined };
+    const nextKeys = existingBlobUnreadable ? {} : { ...keyMap, [body.provider]: undefined };
     const serialized = serializeStoredProviderKeys(nextKeys);
     await db
       .update(user)
@@ -98,6 +104,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
       masked: null,
       keys: maskProviderKeys(nextKeys),
     });
+  }
+
+  if (existingBlobUnreadable) {
+    return json(
+      {
+        message: "Stored provider keys are unreadable. Remove them first, then save a new key.",
+      },
+      { status: 409 },
+    );
   }
 
   const trimmed = body.key.trim();

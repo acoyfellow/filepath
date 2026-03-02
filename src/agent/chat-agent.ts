@@ -6,7 +6,6 @@ import type { AgentEventType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { ADAPTER_COMMANDS, buildAgentEnv } from '$lib/agents/adapters';
 import { cloneRepo, type ContainerEnv } from '$lib/agents/container';
-import { DEFAULT_MODEL, DEFAULT_MODEL_FULL } from '$lib/config';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
 import {
@@ -14,7 +13,6 @@ import {
   PROVIDERS,
   deserializeStoredProviderKeys,
   getProviderForModel,
-  normalizeModelForProvider,
 } from '$lib/provider-keys';
 
 /**
@@ -23,8 +21,8 @@ import {
  * Responsibilities:
  * 1. Persist chat messages in DO SQLite (survives restarts)
  * 2. Relay messages between connected WebSocket clients (real-time sync)
- * 3. Spawn + manage containers for agent execution (primary path)
- * 4. Fall back to direct LLM call if container spawn fails
+ * 3. Spawn + manage containers for agent execution
+ * 4. Fail explicitly if the sandbox path is unavailable
  *
  * SQLite tables (created on first use):
  *   messages(id, role, content, created_at)
@@ -228,31 +226,42 @@ user_key: string | null;
 
     console.log(`[ChatAgent] Spawning container for node ${nodeId} (${row.agent_type})`);
 
-    // Resolve API key for the container (same priority as callLLM)
+    // Resolve API key for the container
     const provider = getProviderForModel(row.model);
     const providerDefinition = PROVIDERS[provider];
     let containerApiKey = '';
     const secret = this.env.BETTER_AUTH_SECRET;
+    let keySource: ChatAgentState["keySource"];
     if (row.session_key && secret) {
       try {
         containerApiKey = await decryptApiKey(row.session_key, secret);
+        keySource = 'session';
       } catch {
-        // Ignore unreadable session override.
+        throw new Error('Session API key is unreadable. Rotate this session key and try again.');
       }
     }
     if (!containerApiKey && row.user_key && secret) {
       try {
         const decrypted = await decryptApiKey(row.user_key, secret);
         containerApiKey = deserializeStoredProviderKeys(decrypted)[provider] || '';
+        if (containerApiKey) {
+          keySource = 'user';
+        }
       } catch {
-        // Ignore unreadable stored user keys.
+        throw new Error(
+          'Stored account router keys are unreadable. Re-save your account keys and try again.',
+        );
       }
     }
-    if (!containerApiKey) {
+    if (!containerApiKey && this.env.ALLOW_ENV_KEY_FALLBACK === 'true') {
       const envKey = this.env[providerDefinition.envKey as keyof Env];
       if (typeof envKey === 'string') {
         containerApiKey = envKey;
+        keySource = 'env';
       }
+    }
+    if (!containerApiKey) {
+      throw new Error(`No valid API key available for the ${providerDefinition.label} router.`);
     }
     const sandbox = getSandbox(this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0], nodeId);
 
@@ -266,8 +275,7 @@ user_key: string | null;
         '/workspace'
       );
       if (!cloned) {
-        console.error(`[ChatAgent] Failed to clone repo: ${row.git_repo_url}`);
-        // Continue anyway - agent can work with empty workspace
+        throw new Error('Failed to clone the session repository into the sandbox workspace.');
       }
     }
 
@@ -289,6 +297,14 @@ user_key: string | null;
       cwd: '/workspace',
     }) as unknown as ContainerProcess;
 
+    try {
+      await this.env.DB.prepare(
+        `UPDATE agent_node SET container_id = ?, updated_at = unixepoch('subsecond') * 1000 WHERE id = ?`,
+      ).bind(nodeId, nodeId).run();
+    } catch (err) {
+      console.error(`[ChatAgent] Failed to persist container id for ${nodeId}:`, err);
+    }
+
     const abortController = new AbortController();
     const handle: ContainerHandle = {
       sandbox,
@@ -298,6 +314,9 @@ user_key: string | null;
     };
 
     this.containers.set(nodeId, handle);
+    if (this.state) {
+      this.state.keySource = keySource;
+    }
 
     // Set up stdout relay in the background
     this.setupContainerRelay(nodeId, proc);
@@ -320,17 +339,21 @@ user_key: string | null;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[ChatAgent] Container spawn failed: ${msg}`);
-        // Fall back to direct LLM call
-        await this.callLLM(content, connection);
+        this.handleSandboxFailure(
+          connection,
+          `Could not start the sandbox for this branch: ${msg}`,
+        );
         return;
       }
     }
 
     const handle = this.containers.get(nodeId);
     if (!handle?.stdinWriter) {
-      // No stdin available, fall back to direct LLM
-      console.warn(`[ChatAgent] No stdin writer for container ${nodeId}, falling back to LLM`);
-      await this.callLLM(content, connection);
+      console.warn(`[ChatAgent] No stdin writer for container ${nodeId}`);
+      this.handleSandboxFailure(
+        connection,
+        "This branch has no live stdin pipe to its sandbox process",
+      );
       return;
     }
 
@@ -344,9 +367,12 @@ user_key: string | null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[ChatAgent] Failed to write to container stdin: ${msg}`);
-      // Container may have crashed — clean up and fall back
+      // Container may have crashed — clean up and fail explicitly.
       await this.stopContainer(nodeId);
-      await this.callLLM(content, connection);
+      this.handleSandboxFailure(
+        connection,
+        `The sandbox process stopped accepting input: ${msg}`,
+      );
     }
   }
 
@@ -373,75 +399,24 @@ user_key: string | null;
     await Promise.allSettled(nodeIds.map(id => this.stopContainer(id)));
   }
 
-  // ─── LLM ──────────────────────────────────────────────
+  // ─── Sandbox Failures ─────────────────────────────────
 
-  private async callLLM(_userMessage: string, connection: Connection): Promise<void> {
-    // Broadcast thinking status
+  private handleSandboxFailure(connection: Connection, reason: string): void {
+    const message =
+      `${reason}. filepath will not bypass the sandbox with a direct model call. ` +
+      "Restart the branch or inspect the container runtime.";
+    const messageId = this.saveMessage("assistant", `⚠️ ${message}`);
+
     this.broadcast(JSON.stringify({
       type: "event",
-      event: { type: "status", state: "thinking" },
+      event: { type: "text", content: `⚠️ ${message}` },
+      role: "assistant",
+      messageId,
       timestamp: Date.now(),
     }));
 
-    // Build conversation from persisted messages
-    const history = this.loadMessages();
-    const llmMessages = history.map(m => ({ role: m.role, content: m.content }));
-
-    try {
-      // Resolve provider + model
-      const { apiUrl, apiKey, model, headers } = await this.resolveProvider();
-
-      if (!apiKey) {
-        const errMsg = "No API key configured. Add your provider key in Settings → API Keys to continue.";
-        this.saveMessage("assistant", `⚠️ ${errMsg}`);
-        connection.send(JSON.stringify({ type: "error", message: errMsg }));
-        this.broadcastStatus("idle");
-        return;
-      }
-
-      let response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: this.systemPrompt() },
-            ...llmMessages,
-          ],
-          stream: false,
-        }),
-      });
-
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`${response.status}: ${errText.slice(0, 200)}`);
-      }
-
-      const data = await response.json() as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const reply = data.choices?.[0]?.message?.content || "(no response)";
-
-      // Persist assistant message
-      const replyId = this.saveMessage("assistant", reply);
-
-      // Broadcast response to all clients
-      this.broadcast(JSON.stringify({
-        type: "event",
-        event: { type: "text", content: reply },
-        role: "assistant",
-        messageId: replyId,
-        timestamp: Date.now(),
-      }));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[ChatAgent] LLM error: ${msg}`);
-      this.saveMessage("assistant", `⚠️ LLM error: ${msg}`);
-      connection.send(JSON.stringify({ type: "error", message: `LLM error: ${msg}` }));
-    }
-
-    this.broadcastStatus("idle");
+    this.broadcastStatus("error");
+    connection.send(JSON.stringify({ type: "error", message }));
   }
 
   // ─── Helpers ───────────────────────────────────────────
@@ -577,92 +552,6 @@ user_key: string | null;
       nodeId,
       timestamp,
     }));
-  }
-
-  private systemPrompt(): string {
-    const agentType = this.state?.agentType || "shelley";
-    const model = this.state?.model || "unknown";
-    return `You are a helpful AI assistant running on filepath, an agent orchestration platform. You are agent type "${agentType}" using model "${model}". Be concise and helpful.`;
-  }
-
-  /**
-   * Resolve API key with priority:
-   *   1. Session-specific key (per-session BYOK override)
-   *   2. User's account key (set in Settings → API Keys)
-   *   3. Global env key (OPENROUTER_API_KEY — e2e tests only)
-   *   4. Empty string → callLLM will show clear error
-   */
-  private async resolveProvider(): Promise<{ apiUrl: string; apiKey: string; model: string; headers: Record<string, string> }> {
-    const rawModel = this.state?.model || DEFAULT_MODEL;
-    const sessionId = this.state?.sessionId;
-    const provider = getProviderForModel(rawModel);
-    const providerDefinition = PROVIDERS[provider];
-
-    let resolvedKey = "";
-    let keySource: 'session' | 'user' | 'env' | undefined;
-
-    // Try to resolve key from D1 (session → user)
-    if (sessionId) {
-      try {
-        const row = await this.env.DB.prepare(
-          `SELECT s.api_key as session_key, u.openrouter_api_key as user_key
-           FROM agent_session s
-           JOIN user u ON s.user_id = u.id
-           WHERE s.id = ?`
-        ).bind(sessionId).first<{
-          session_key: string | null;
-          user_key: string | null;
-        }>();
-
-        const secret = this.env.BETTER_AUTH_SECRET;
-
-        if (row?.session_key && secret) {
-          // Priority 1: Session-specific key
-          try {
-            resolvedKey = await decryptApiKey(row.session_key, secret);
-            keySource = 'session';
-          } catch {
-            console.warn(`[ChatAgent] Failed to decrypt session key for ${sessionId}`);
-          }
-        }
-
-        if (!resolvedKey && row?.user_key && secret) {
-          // Priority 2: User's account key for the selected provider
-          try {
-            const decrypted = await decryptApiKey(row.user_key, secret);
-            const storedKeys = deserializeStoredProviderKeys(decrypted);
-            resolvedKey = storedKeys[provider] || "";
-            if (resolvedKey) {
-              keySource = 'user';
-            }
-          } catch {
-            console.warn(`[ChatAgent] Failed to decrypt user key for session ${sessionId}`);
-          }
-        }
-      } catch (err) {
-        console.error(`[ChatAgent] Key resolution DB error:`, err);
-      }
-    }
-
-    const envKey = this.env[providerDefinition.envKey as keyof Env];
-    if (!resolvedKey && typeof envKey === "string" && envKey) {
-      // Priority 3: Global env key (e2e tests / dev)
-      resolvedKey = envKey;
-      keySource = 'env';
-    }
-
-    if (keySource) {
-      console.log(`[ChatAgent] Using ${keySource} API key for session ${sessionId}`);
-    }
-
-    const canonicalModel = canonicalizeStoredModel(rawModel ?? DEFAULT_MODEL_FULL);
-
-    return {
-      apiUrl: providerDefinition.apiUrl,
-      apiKey: resolvedKey,
-      model: normalizeModelForProvider(canonicalModel),
-      headers: providerDefinition.defaultHeaders ?? {},
-    };
   }
 
   // ─── REST API (message history) ────────────────────────

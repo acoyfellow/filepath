@@ -32,6 +32,12 @@ export interface BackupHandle {
   createdAt: number;
 }
 
+export interface TerminalHandle {
+  port: number;
+  token: string;
+  url: string;
+}
+
 // Tagged Errors
 export class ContainerError extends Error {
   readonly _tag = 'ContainerError';
@@ -60,6 +66,18 @@ export class AgentStartError extends Error {
 // Container Service
 export interface ContainerEnv {
   Sandbox: DurableObjectNamespace<Sandbox>;
+}
+
+function getTerminalProtocol(hostname: string): 'http' | 'https' {
+  const lower = hostname.toLowerCase();
+  if (
+    lower.includes('localhost') ||
+    lower.startsWith('127.0.0.1') ||
+    lower.startsWith('[::1]')
+  ) {
+    return 'http';
+  }
+  return 'https';
 }
 
 export async function getOrCreateContainer(
@@ -178,6 +196,57 @@ export async function cloneRepo(
   const result = await execInContainer(env, containerId, `git clone ${repoUrl} .`, { cwd: workspacePath });
   if (!result.success) console.error(`[Container] Clone failed: ${result.stderr}`);
   return result.success;
+}
+
+export async function ensureTerminalInContainer(
+  env: ContainerEnv,
+  containerId: string,
+  hostname: string
+): Promise<TerminalHandle> {
+  const sandbox = getSandbox(env.Sandbox, containerId) as Sandbox & {
+    listProcesses(): Promise<Array<{ id: string; command: string; status: string }>>;
+    isPortExposed(port: number): Promise<boolean>;
+    exposePort(
+      port: number,
+      options: { hostname: string; token: string; name?: string }
+    ): Promise<{ url: string }>;
+  };
+  const port = 7681;
+  const token = `term-${containerId.slice(0, 8).toLowerCase()}`;
+  const terminalCommand = "ttyd --writable --port 7681 bash -lc 'cd /workspace && exec bash -l'";
+
+  const existingProcess = (await sandbox.listProcesses()).find(
+    (proc) => proc.command.includes('ttyd') && proc.status === 'running'
+  );
+
+  if (!existingProcess) {
+    try {
+      const proc = await sandbox.startProcess(terminalCommand, {
+        cwd: '/workspace',
+      });
+      await proc.waitForPort(port, { timeout: 5000 });
+    } catch (error) {
+      throw new Error(
+        `Unable to start a terminal for ${containerId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  const alreadyExposed = await sandbox.isPortExposed(port);
+  if (!alreadyExposed) {
+    await sandbox.exposePort(port, {
+      hostname,
+      token,
+      name: 'terminal',
+    });
+  }
+
+  const protocol = getTerminalProtocol(hostname);
+  return {
+    port,
+    token,
+    url: `${protocol}://${port}-${containerId}-${token}.${hostname}`,
+  };
 }
 
 // ================================================================

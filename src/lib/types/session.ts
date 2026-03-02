@@ -74,6 +74,15 @@ export interface SpawnRequest {
   apiKey?: string;
 }
 
+export interface ProcessEntry {
+  id: string;
+  name: string;
+  kind: "agent" | "shell" | "terminal" | "helper" | "unknown";
+  status: "running" | "exited" | "starting";
+  attachable: boolean;
+  attachedPath?: string | null;
+}
+
 // ============================================================
 // Legacy compat types -- needed until wizard + sidebar are rewritten for tree architecture
 // ============================================================

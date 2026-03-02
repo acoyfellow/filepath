@@ -44,7 +44,7 @@
 
 <div class="tree-container">
   <div class="tree" style:width="{treeWidth}px">
-    <div class="tree-header">agents</div>
+    <div class="tree-header">threads</div>
     <div class="tree-scroll" role="tree">
       {#if root}
         <TreeNode
@@ -54,7 +54,7 @@
           ontoggle={handleToggle}
         />
       {:else}
-        <div class="tree-empty">No agents yet</div>
+        <div class="tree-empty">No threads yet</div>
       {/if}
     </div>
     <div class="tree-footer">
@@ -62,7 +62,7 @@
         <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
           <path d="M6 2v8M2 6h8" />
         </svg>
-        spawn
+        new thread
       </button>
     </div>
   </div>

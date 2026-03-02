@@ -20,11 +20,68 @@ const status = await fetch(\`/api/sessions/\${session.id}/status\`)
   .then((res) => res.json());
 
 console.log(status.summary.running > 0); // true`;
+
+  const truths = [
+    {
+      eyebrow: 'True Today',
+      title: 'Cloudflare sandboxes with real isolation',
+      body:
+        'Each thread runs inside its own Cloudflare sandbox with its own filesystem and process space. The chat pane is the control surface for a real headless orchestrator, not a fake replay.',
+    },
+    {
+      eyebrow: 'True Today',
+      title: 'Any harness, any model, no vendor lock',
+      body:
+        'Pick the harness you want to run. Pick the model string you want to send through your configured router. filepath stays thin and lets the underlying primitives do the work.',
+    },
+    {
+      eyebrow: 'True Today',
+      title: 'Long-running loops that stay cheaper',
+      body:
+        'Sessions persist on the edge and wake back up when you reconnect. You are paying for work and resumability, not for keeping a traditional always-on machine warm.',
+    },
+    {
+      eyebrow: 'True Today',
+      title: 'Realtime, shareable session state',
+      body:
+        'A session can be reopened from another device and streamed live. The tree is your thread filesystem: a visible way to partition work, keep it grouped, and stay oriented.',
+    },
+    {
+      eyebrow: 'True Today',
+      title: 'Visible runtime processes per thread',
+      body:
+        'The selected thread now exposes its live processes in a simple strip above the input. When the runtime supports it, you can attach to a real terminal instead of guessing what is happening.',
+    },
+  ];
+
+  const roadmap = [
+    {
+      title: 'Cross-thread file handoff',
+      tag: 'Roadmap',
+      body:
+        'Threads should safely share files and communicate through explicit handoffs instead of hidden magic. That should feel like moving artifacts between folders, not invisible state sync.',
+    },
+    {
+      title: 'Move threads like files and folders',
+      tag: 'Roadmap',
+      body:
+        'The tree already acts like a filesystem for your threads. The next logical step is drag-and-drop moves so you can re-group a running workflow without rebuilding it.',
+    },
+    {
+      title: 'More routers, same contract',
+      tag: 'Roadmap',
+      body:
+        'OpenRouter and Zen are the start. More routers and OpenAPI-compatible providers should slot into the same model contract without filepath inventing a second abstraction layer.',
+    },
+  ];
 </script>
 
 <svelte:head>
-  <title>filepath — agents that keep running</title>
-  <meta name="description" content="Start an agent, close the tab, come back later. filepath keeps the session alive." />
+  <title>filepath — your agents, your models, your Cloudflare</title>
+  <meta
+    name="description"
+    content="Long-running agent sessions on Cloudflare sandboxes, with a clear line between what is true today and what is next."
+  />
 </svelte:head>
 
 <div class="min-h-screen font-sans relative z-10 transition-colors duration-200 bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300">
@@ -34,71 +91,134 @@ console.log(status.summary.running > 0); // true`;
   </div>
 
   <main class="max-w-6xl mx-auto px-6 py-12 md:py-20">
-    <!-- Hero: headline, subhead, and the code -->
-    <section class="mb-16">
-      <div class="mx-auto max-w-4xl">
-        <h1 class="text-3xl md:text-5xl font-medium leading-tight tracking-tight text-gray-900 dark:text-neutral-100">
-          Agents that keep running.
+    <section class="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+      <div>
+        <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500 dark:text-neutral-500">True Today + Roadmap</div>
+        <h1 class="mt-5 text-4xl md:text-6xl font-medium leading-[0.98] tracking-tight text-gray-900 dark:text-neutral-100">
+          Your agents. Your models. Your Cloudflare.
         </h1>
-
-        <p class="mt-4 max-w-2xl text-base md:text-lg leading-relaxed text-gray-600 dark:text-neutral-400">
-          Start one. Close the tab. Come back later. filepath keeps the work alive.
+        <p class="mt-6 max-w-2xl text-base md:text-lg leading-8 text-gray-600 dark:text-neutral-400">
+          filepath runs long-running sessions inside Cloudflare sandboxes. Each thread is a real isolated runtime with its own filesystem. The tree is how you partition the work, like a filesystem for your threads, while the session stays shareable and live across devices.
         </p>
+
+        <div class="mt-8 flex flex-col sm:flex-row gap-3">
+          <a href="/signup" class="inline-flex items-center justify-center px-6 py-3 rounded-full font-medium transition-colors bg-gray-900 hover:bg-gray-800 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950">
+            Create free account
+          </a>
+          <a href="/docs" class="inline-flex items-center justify-center px-6 py-3 rounded-full border transition-colors border-gray-300 hover:border-gray-400 dark:border-neutral-700 dark:hover:border-neutral-500">
+            Read docs
+          </a>
+        </div>
       </div>
 
-      <div class="mx-auto mt-8 max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white/90 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.45)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
-        <div class="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-neutral-800">
+      <div class="overflow-hidden rounded-3xl border border-gray-200 bg-white/92 shadow-[0_30px_90px_-40px_rgba(15,23,42,0.4)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/88">
+        <div class="flex items-center gap-2 border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
           <span class="h-2.5 w-2.5 rounded-full bg-rose-400/80"></span>
           <span class="h-2.5 w-2.5 rounded-full bg-amber-400/80"></span>
           <span class="h-2.5 w-2.5 rounded-full bg-emerald-400/80"></span>
           <span class="ml-3 text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">hello-world.ts</span>
         </div>
-
         <CodeBlock
           code={heroCode}
           language="typescript"
           wrap={true}
-          className="overflow-hidden px-4 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200 sm:px-6 sm:py-6"
+          className="overflow-hidden px-5 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200"
         />
       </div>
     </section>
 
-    <section class="mb-12">
-      <div class="@container w-full overflow-hidden rounded-2xl border border-gray-200 bg-white/85 shadow-[0_28px_100px_-40px_rgba(15,23,42,0.55)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
+    <section class="mt-16 md:mt-20 grid gap-4 md:grid-cols-2">
+      {#each truths as item}
+        <article class="rounded-3xl border border-gray-200 bg-white/84 p-6 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/35">
+          <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">{item.eyebrow}</div>
+          <h2 class="mt-4 text-xl font-medium text-gray-900 dark:text-neutral-100">{item.title}</h2>
+          <p class="mt-4 text-sm leading-7 text-gray-600 dark:text-neutral-400">{item.body}</p>
+        </article>
+      {/each}
+    </section>
+
+    <section class="mt-16 md:mt-20 rounded-3xl border border-gray-200 bg-white/84 p-6 md:p-8 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/35">
+      <div class="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <div>
+          <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">How It Works</div>
+          <h2 class="mt-4 text-2xl md:text-3xl font-medium tracking-tight text-gray-900 dark:text-neutral-100">
+            The UI stays thin. The primitives do the real work.
+          </h2>
+          <p class="mt-5 text-sm md:text-base leading-8 text-gray-600 dark:text-neutral-400">
+            Each thread is a headless orchestrator that hands work to the selected harness and model inside the sandbox. filepath tries to stay out of the way: no fake replay layer, no direct-model bypass, no hidden second execution path.
+          </p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
+            <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Each Thread</div>
+            <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
+              A thread is both a chat surface and a sandboxed runtime. The chat stays primary, and the runtime can expose real processes when it has them.
+            </p>
+          </div>
+          <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
+            <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">The Tree</div>
+            <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
+              The tree is your thread filesystem. It is how you isolate, group, and reason about parallel work.
+            </p>
+          </div>
+          <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
+            <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Realtime State</div>
+            <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
+              Sessions are shareable and stream live. Reopen them later and you are back inside the same running loop.
+            </p>
+          </div>
+          <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
+            <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Why It Stays Cheap</div>
+            <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
+              The edge handles persistence and wake-up. You do not need to keep a full-time box alive just to preserve a session.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-16 md:mt-20">
+      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">Roadmap</div>
+          <h2 class="mt-4 text-2xl md:text-3xl font-medium tracking-tight text-gray-900 dark:text-neutral-100">
+            What is next, but not yet fully true
+          </h2>
+        </div>
+        <p class="max-w-2xl text-sm leading-7 text-gray-600 dark:text-neutral-400">
+          This is the direction, not the sales fiction. We should only promote each item above once it is real enough to gate.
+        </p>
+      </div>
+
+      <div class="mt-8 grid gap-4 md:grid-cols-2">
+        {#each roadmap as item}
+          <article class="rounded-3xl border border-dashed border-gray-300 bg-white/72 p-6 dark:border-neutral-700 dark:bg-neutral-900/20">
+            <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">{item.tag}</div>
+            <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-neutral-100">{item.title}</h3>
+            <p class="mt-4 text-sm leading-7 text-gray-600 dark:text-neutral-400">{item.body}</p>
+          </article>
+        {/each}
+      </div>
+    </section>
+
+    <section class="mt-16 md:mt-20 rounded-3xl border border-gray-200 bg-white/88 p-6 md:p-8 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/35">
+      <div class="mb-6">
+        <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">Live Surface</div>
+        <h2 class="mt-4 text-2xl md:text-3xl font-medium tracking-tight text-gray-900 dark:text-neutral-100">
+          This is the actual session UI, not a separate landing-page toy.
+        </h2>
+        <p class="mt-4 max-w-3xl text-sm md:text-base leading-8 text-gray-600 dark:text-neutral-400">
+          The homepage uses the same tree and panel components as the app. That keeps the product pitch grounded in the literal interface you are shaping, instead of a fake parallel demo.
+        </p>
+      </div>
+
+      <div class="@container w-full overflow-hidden rounded-2xl border border-gray-200 bg-white/90 shadow-[0_28px_100px_-40px_rgba(15,23,42,0.45)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/80">
         <HeroDemo />
-      </div>
-    </section>
-
-    <section class="mb-16 grid gap-4 md:grid-cols-2">
-      <div class="rounded-2xl border border-gray-200 bg-white/85 p-5 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/35">
-        <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Own The Stack</div>
-        <p class="mt-3 text-sm leading-7 text-gray-900 dark:text-neutral-200">
-          Bring your own agent. Bring your own model. Bring your own router keys. filepath keeps the loop on your Cloudflare infra.
-        </p>
-      </div>
-      <div class="rounded-2xl border border-gray-200 bg-white/85 p-5 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/35">
-        <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Stay Cheap</div>
-        <p class="mt-3 text-sm leading-7 text-gray-900 dark:text-neutral-200">
-          Sessions are resumable, so you pay for work instead of babysitting an always-on box. Reopen the same tree from any device and keep going.
-        </p>
-      </div>
-    </section>
-
-    <!-- CTA -->
-    <section class="text-center py-12 border-t border-gray-200 dark:border-neutral-800">
-      <h2 class="text-xl mb-4 text-gray-900 dark:text-neutral-200">Ready to orchestrate?</h2>
-      <div class="flex flex-col sm:flex-row gap-3 justify-center">
-        <a href="/signup" class="inline-flex items-center justify-center px-6 py-3 rounded font-medium transition-colors bg-gray-900 hover:bg-gray-800 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950">
-          Create free account
-        </a>
-        <a href="/agent-api" class="inline-flex items-center justify-center px-6 py-3 border rounded transition-colors border-gray-300 hover:border-gray-400 dark:border-neutral-700 dark:hover:border-neutral-500">
-          API for agents
-        </a>
       </div>
     </section>
   </main>
 
-  <!-- Footer -->
   <footer class="px-6 py-8 text-center text-xs border-t border-gray-200 text-gray-500 dark:border-neutral-800 dark:text-neutral-600">
     <div class="mb-2">myfilepath.com</div>
     <div class="space-x-3">

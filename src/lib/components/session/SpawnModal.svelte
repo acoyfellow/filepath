@@ -17,6 +17,7 @@
     lastAgent?: AgentType;
     lastModel?: string;
     accountKeysMasked?: Record<ProviderId, string | null>;
+    accountKeysError?: string | null;
   }
   
   let {
@@ -25,6 +26,7 @@
     lastAgent = "shelley",
     lastModel = DEFAULT_MODEL,
     accountKeysMasked = { openrouter: null, zen: null },
+    accountKeysError = null,
   }: Props = $props();
 
   const initialAgent = lastAgent;
@@ -138,7 +140,7 @@
 <div class="modal-bg" onclick={handleBackdrop}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal" onclick={(e) => e.stopPropagation()}>
-    <div class="modal-title">spawn agent</div>
+    <div class="modal-title">spawn thread</div>
     <div class="modal-body">
       <label class="modal-label" for="spawn-name">name</label>
       <div class="modal-name-row">
@@ -151,7 +153,7 @@
         </button>
       </div>
 
-      <div class="modal-label">agent</div>
+      <div class="modal-label">agent harness</div>
       <div class="modal-options">
         {#each AGENTS as a}
           <button class="modal-option" class:on={agent === a.id} onclick={() => { agent = a.id; }}>
@@ -182,6 +184,11 @@
       </div>
 
       <div class="modal-label">api key</div>
+      {#if accountKeysError}
+        <div class="modal-key-info modal-key-error">
+          Saved account router keys are unreadable. Use a session key or re-save your keys in Settings.
+        </div>
+      {/if}
       {#if keyLoading}
         <div class="modal-key-info">loading...</div>
       {:else if hasAccountKey}
@@ -215,7 +222,7 @@
     </div>
     <div class="modal-footer">
       <button class="modal-cancel" onclick={onclose}>cancel</button>
-      <button class="modal-go" onclick={handleSpawn}>spawn</button>
+      <button class="modal-go" onclick={handleSpawn}>spawn thread</button>
     </div>
   </div>
 </div>
@@ -362,6 +369,9 @@
     color: var(--t5);
     margin-top: 4px;
     line-height: 1.4;
+  }
+  .modal-key-error {
+    color: #dc2626;
   }
   .modal-key-link {
     color: var(--t3);

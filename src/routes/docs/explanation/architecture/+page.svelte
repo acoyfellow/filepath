@@ -3,7 +3,7 @@
 
 <svelte:head>
   <title>Architecture Deep Dive | filepath</title>
-  <meta name="description" content="Understanding filepath's architecture: Cloudflare Workers, Durable Objects, D1, and the agent protocol." />
+  <meta name="description" content="Understanding filepath's architecture: sessions, threads, Cloudflare sandboxes, and the agent protocol." />
 </svelte:head>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
@@ -20,7 +20,7 @@
     <p class="text-gray-600 dark:text-neutral-400 mb-4">filepath runs on Cloudflare's edge infrastructure:</p>
     <ul class="space-y-2 text-gray-600 dark:text-neutral-400 list-disc list-inside">
       <li><strong>Cloudflare Workers</strong> — HTTP API, WebSocket handling, static assets</li>
-      <li><strong>Durable Objects (DO)</strong> — One ChatAgent DO per agent node</li>
+      <li><strong>Durable Objects (DO)</strong> — One ChatAgent DO per thread node</li>
       <li><strong>D1</strong> — SQLite database for sessions, nodes, users</li>
       <li><strong>Cloudflare Sandbox</strong> — Container runtime for agent code</li>
     </ul>
@@ -32,7 +32,7 @@
       <div class="space-y-2">
       <div>Browser &lt;-&gt; Worker (SvelteKit + API routes)</div>
         <div class="pl-4 text-gray-500 dark:text-neutral-500">↓ WebSocket upgrade</div>
-      <div class="pl-4">Browser &lt;-&gt; ChatAgent DO (per agent node)</div>
+      <div class="pl-4">Browser &lt;-&gt; ChatAgent DO (per thread node)</div>
         <div class="pl-8 text-gray-500 dark:text-neutral-500">↓ fetch / stdin-stdout</div>
       <div class="pl-8">ChatAgent DO &lt;-&gt; LLM API (OpenRouter)</div>
         <div class="pl-4 text-gray-500 dark:text-neutral-500">↓ D1 queries</div>
@@ -47,12 +47,12 @@
     <div class="space-y-6">
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">ChatAgent DO</h3>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm">One per agent node. Maintains WebSocket connection, message history, and calls LLM APIs. Not the "brain"—just a relay/conductor.</p>
+        <p class="text-gray-600 dark:text-neutral-400 text-sm">One per thread node. Maintains WebSocket connection, message history, and routes work into the sandbox harness. Not the "brain"—just a relay/conductor.</p>
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">D1 Database</h3>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm">SQLite on the edge. Stores agent sessions, nodes, user data, conversation history. Self-referential tree via agentNode.parentId.</p>
+        <p class="text-gray-600 dark:text-neutral-400 text-sm">SQLite on the edge. Stores sessions, thread nodes, user data, and conversation history. The self-referential tree lives in agentNode.parentId.</p>
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">
@@ -61,8 +61,8 @@
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">
-        <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">Sandbox (Future)</h3>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm">Cloudflare Sandbox for running containerized agents. Currently using direct LLM mode.</p>
+        <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">Sandbox Runtime</h3>
+        <p class="text-gray-600 dark:text-neutral-400 text-sm">Cloudflare Sandbox runs the containerized harness for each thread runtime. If the sandbox path fails, the thread fails explicitly instead of bypassing the runtime.</p>
       </div>
     </div>
   </section>

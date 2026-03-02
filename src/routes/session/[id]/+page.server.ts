@@ -51,6 +51,7 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
     openrouter: string | null;
     zen: string | null;
   };
+  let accountKeysError: string | null = null;
 
   const encryptedKeys = users[0]?.openrouterApiKey;
   const secret = getBetterAuthSecret(platform);
@@ -60,6 +61,8 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
       accountKeysMasked = maskProviderKeys(deserializeStoredProviderKeys(decrypted));
     } catch {
       accountKeysMasked = { openrouter: null, zen: null };
+      accountKeysError =
+        "Stored provider keys are unreadable. Re-save them in Settings -> Account.";
     }
   }
 
@@ -68,5 +71,6 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
     session,
     nodes,
     accountKeysMasked,
+    accountKeysError,
   };
 };

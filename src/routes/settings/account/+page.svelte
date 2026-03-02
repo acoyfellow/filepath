@@ -14,6 +14,7 @@
 
   // ─── Provider API Keys state ───
   let keyLoading = $state(true);
+  let keysLoadError = $state('');
   const providerList = PROVIDER_IDS.map((id) => PROVIDERS[id]);
   let providerStates = $state<Record<ProviderId, {
     masked: string | null;
@@ -30,17 +31,20 @@
   onMount(async () => {
     try {
       const res = await fetch('/api/user/keys');
-      if (res.ok) {
-        const data = await res.json() as {
-          keys?: Record<ProviderId, string | null>;
-        };
-        const keys = data.keys ?? { openrouter: null, zen: null };
-        for (const provider of PROVIDER_IDS) {
-          providerStates[provider].masked = keys[provider] ?? null;
-        }
+      const data = await res.json().catch(() => ({})) as {
+        error?: string;
+        keys?: Record<ProviderId, string | null>;
+      };
+      if (!res.ok) {
+        keysLoadError = data.error || 'Failed to load provider keys';
+        return;
+      }
+      const keys = data.keys ?? { openrouter: null, zen: null };
+      for (const provider of PROVIDER_IDS) {
+        providerStates[provider].masked = keys[provider] ?? null;
       }
     } catch {
-      // silently fail on load
+      keysLoadError = 'Failed to load provider keys';
     } finally {
       keyLoading = false;
     }
@@ -169,6 +173,12 @@
         <p class="text-sm mb-4 text-gray-600 dark:text-neutral-400">
           Bring your own router key. Your key is encrypted at rest and never shared.
         </p>
+
+        {#if keysLoadError}
+          <div class="mb-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300">
+            {keysLoadError}
+          </div>
+        {/if}
 
         {#if keyLoading}
           <p class="text-sm text-gray-400 dark:text-neutral-600">Loading...</p>

@@ -2,7 +2,7 @@
   import "$lib/styles/theme.css";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
-  import type { AgentNode } from "$lib/types/session";
+  import type { AgentNode, ProcessEntry } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
 
   const rootSeed: AgentNode = {
@@ -92,7 +92,7 @@
         event: {
           type: "text",
           content:
-            "Done. The same session stays live on your Cloudflare infra, and each branch keeps its own context.",
+            "Done. The same session stays live on your Cloudflare infra, and each thread keeps its own context.",
         },
       },
     ],
@@ -109,7 +109,7 @@
         event: {
           type: "text",
           content:
-            "Working on the app shell now. You can swap models later without losing this branch.",
+            "Working on the app shell now. You can swap models later without losing this thread.",
         },
       },
     ],
@@ -126,7 +126,7 @@
         event: {
           type: "text",
           content:
-            "Queued here. This branch is idle until you send more work, but it stays in the same session tree.",
+            "Queued here. This thread is idle until you send more work, but it stays in the same session tree.",
         },
       },
     ],
@@ -143,15 +143,39 @@
         event: {
           type: "text",
           content:
-            "Release check is done. This branch is preserved in the same shared session.",
+            "Release check is done. This thread is preserved in the same shared session.",
         },
       },
+    ],
+  };
+
+  const seededProcesses: Record<string, ProcessEntry[]> = {
+    root: [
+      { id: "root-agent", name: "codex loop", kind: "agent", status: "running", attachable: false },
+      { id: "root-shell", name: "watch status", kind: "helper", status: "starting", attachable: false },
+    ],
+    "app-shell": [
+      { id: "app-codex", name: "codex app shell", kind: "agent", status: "running", attachable: false },
+      { id: "app-build", name: "npm run dev", kind: "helper", status: "running", attachable: false },
+    ],
+    "api-pass": [
+      { id: "api-shelley", name: "shelley api pass", kind: "agent", status: "starting", attachable: false },
+    ],
+    "release-check": [
+      { id: "release-checker", name: "release check", kind: "agent", status: "running", attachable: false },
+      { id: "release-bash", name: "bash review", kind: "shell", status: "running", attachable: false },
     ],
   };
 
   let rootNode = $state<AgentNode>(structuredClone(rootSeed));
   let selectedId = $state<string | null>("release-check");
   let messagesByNode = $state<Record<string, ChatMsg[]>>(structuredClone(seededMessages));
+  let selectedProcessByNode = $state<Record<string, string | null>>({
+    root: "root-agent",
+    "app-shell": "app-codex",
+    "api-pass": "api-shelley",
+    "release-check": "release-checker",
+  });
 
   function findNode(node: AgentNode, id: string): AgentNode | null {
     if (node.id === id) return node;
@@ -168,6 +192,9 @@
 
   let currentMessages = $derived<ChatMsg[]>(
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
+  );
+  let currentProcesses = $derived<ProcessEntry[]>(
+    selectedAgent ? (seededProcesses[selectedAgent.id] ?? []) : [],
   );
 
   function handleSelect(id: string) {
@@ -194,7 +221,7 @@
           event: {
             type: "text",
             content:
-              "Still live. This exact branch will be here when you reopen the session from another device.",
+              "Still live. This exact thread will be here when you reopen the session from another device.",
           },
         },
       ],
@@ -204,17 +231,22 @@
   function handleSpawn() {
     // Homepage demo stays deterministic. Keep the same seeded structure.
   }
+
+  function handleSelectProcess(processId: string) {
+    if (!selectedAgent) return;
+    selectedProcessByNode = { ...selectedProcessByNode, [selectedAgent.id]: processId };
+  }
 </script>
 
 <div class="demo-shell">
   <div class="demo-topbar">
     <div class="demo-session">
       <div class="demo-name">demo / launch-loop</div>
-      <div class="demo-meta">Long-running loop on your Cloudflare session</div>
+      <div class="demo-meta">Long-running session on your Cloudflare infra</div>
     </div>
     <div class="demo-actions">
       <span class="demo-pill">running</span>
-      <span class="demo-pill">4 branches</span>
+      <span class="demo-pill">4 threads</span>
       <button type="button" class="demo-btn">Share</button>
     </div>
   </div>
@@ -233,6 +265,9 @@
         messages={currentMessages}
         onsend={handleSend}
         onnavigate={handleNavigate}
+        processes={currentProcesses}
+        selectedProcessId={selectedAgent ? selectedProcessByNode[selectedAgent.id] ?? null : null}
+        onselectprocess={handleSelectProcess}
       />
     </div>
   </div>

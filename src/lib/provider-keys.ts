@@ -67,6 +67,8 @@ export function deserializeStoredProviderKeys(raw: string): ProviderKeyMap {
   try {
     const parsed = JSON.parse(trimmed) as Record<string, unknown>;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      // Legacy read compatibility only: older installs stored a raw OpenRouter key string.
+      // The write path is canonical JSON, and this branch should be removed after normalization.
       return { openrouter: trimmed };
     }
 
@@ -79,6 +81,8 @@ export function deserializeStoredProviderKeys(raw: string): ProviderKeyMap {
     }
     return result;
   } catch {
+    // Legacy read compatibility only: older installs stored a raw OpenRouter key string.
+    // The write path is canonical JSON, and this branch should be removed after normalization.
     return { openrouter: trimmed };
   }
 }

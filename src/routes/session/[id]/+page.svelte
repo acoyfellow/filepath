@@ -5,7 +5,13 @@
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
   import SpawnModal from "$lib/components/session/SpawnModal.svelte";
-  import type { AgentNode, AgentType, AgentNodeConfig, SpawnRequest } from "$lib/types/session";
+  import type {
+    AgentNode,
+    AgentType,
+    AgentNodeConfig,
+    ProcessEntry,
+    SpawnRequest,
+  } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
   import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
   import { page } from "$app/state";
@@ -88,6 +94,9 @@
           if (node) {
             node.status = msg.event.state as AgentNode['status'];
             rootNode = rootNode;
+            if (selectedId === nodeId) {
+              void loadProcessesForNode(nodeId);
+            }
           }
         }
         return;
@@ -111,6 +120,9 @@
         if (node) {
           node.status = 'done';
           rootNode = rootNode;
+          if (selectedId === nodeId) {
+            void loadProcessesForNode(nodeId);
+          }
         }
       }
     } else if (msg.type === 'tree_update' && msg.action === 'spawn' && msg.node) {
@@ -190,18 +202,32 @@
     return roots[0] ?? null;
   }
 
-  let rootNode = $state<AgentNode | null>(buildTree(data.nodes));
+  const initialRootNode = buildTree(data.nodes);
+  let rootNode = $state<AgentNode | null>(initialRootNode);
 
   // ─── Messages (live from WebSocket) ───
   let messagesByNode = $state<Record<string, ChatMsg[]>>({});
+  let processesByNode = $state<Record<string, ProcessEntry[]>>({});
+  let processLoadingByNode = $state<Record<string, boolean>>({});
+  let processErrorsByNode = $state<Record<string, string>>({});
+  let selectedProcessByNode = $state<Record<string, string | null>>({});
+  let viewModeByNode = $state<Record<string, "chat" | "terminal">>({});
+  let terminalUrlsByNode = $state<Record<string, string | null>>({});
+  let terminalErrorsByNode = $state<Record<string, string>>({});
 
   // ─── State ───
-  let selectedId = $state<string | null>(rootNode?.id ?? null);
+  let selectedId = $state<string | null>(initialRootNode?.id ?? null);
 
   // Auto-connect when selecting a node
   $effect(() => {
     if (selectedId && workerUrl) {
       ensureConnection(selectedId);
+    }
+  });
+
+  $effect(() => {
+    if (selectedId) {
+      void loadProcessesForNode(selectedId);
     }
   });
 
@@ -233,9 +259,63 @@
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
   );
 
-  let currentConnectionState = $derived<ConnectionState | undefined>(
-    selectedAgent ? connectionStates[selectedAgent.id] : undefined,
+  let currentProcesses = $derived<ProcessEntry[]>(
+    selectedAgent ? (processesByNode[selectedAgent.id] ?? []) : [],
   );
+  let currentProcessError = $derived<string | null>(
+    selectedAgent ? (processErrorsByNode[selectedAgent.id] ?? null) : null,
+  );
+  let currentSelectedProcessId = $derived<string | null>(
+    selectedAgent ? (selectedProcessByNode[selectedAgent.id] ?? null) : null,
+  );
+  let currentViewMode = $derived<"chat" | "terminal">(
+    selectedAgent ? (viewModeByNode[selectedAgent.id] ?? "chat") : "chat",
+  );
+  let currentTerminalUrl = $derived<string | null>(
+    selectedAgent ? (terminalUrlsByNode[selectedAgent.id] ?? null) : null,
+  );
+  let currentTerminalError = $derived<string | null>(
+    selectedAgent ? (terminalErrorsByNode[selectedAgent.id] ?? null) : null,
+  );
+
+  async function loadProcessesForNode(nodeId: string) {
+    if (!sessionId) return;
+
+    processLoadingByNode = { ...processLoadingByNode, [nodeId]: true };
+    processErrorsByNode = { ...processErrorsByNode, [nodeId]: '' };
+
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/nodes/${nodeId}/processes`);
+      const data = await res.json().catch(() => ({})) as {
+        error?: string;
+        processes?: ProcessEntry[];
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load processes');
+      }
+
+      const nextProcesses = data.processes ?? [];
+      const existingSelected = selectedProcessByNode[nodeId];
+      const nextSelected =
+        nextProcesses.find((process) => process.id === existingSelected)?.id
+        ?? nextProcesses.find((process) => process.attachable)?.id
+        ?? nextProcesses[0]?.id
+        ?? null;
+
+      processesByNode = { ...processesByNode, [nodeId]: nextProcesses };
+      selectedProcessByNode = { ...selectedProcessByNode, [nodeId]: nextSelected };
+    } catch (err) {
+      processesByNode = { ...processesByNode, [nodeId]: [] };
+      selectedProcessByNode = { ...selectedProcessByNode, [nodeId]: null };
+      processErrorsByNode = {
+        ...processErrorsByNode,
+        [nodeId]: err instanceof Error ? err.message : 'Failed to load processes',
+      };
+    } finally {
+      processLoadingByNode = { ...processLoadingByNode, [nodeId]: false };
+    }
+  }
 
   function handleSelect(id: string) {
     selectedId = id;
@@ -245,6 +325,51 @@
     if (!rootNode) return;
     const node = findByName(rootNode, name);
     if (node) selectedId = node.id;
+  }
+
+  function handleSelectProcess(processId: string) {
+    if (!selectedAgent) return;
+    selectedProcessByNode = { ...selectedProcessByNode, [selectedAgent.id]: processId };
+    terminalErrorsByNode = { ...terminalErrorsByNode, [selectedAgent.id]: '' };
+  }
+
+  async function handleOpenTerminal() {
+    if (!selectedAgent || !sessionId) return;
+
+    const selectedProcess = (processesByNode[selectedAgent.id] ?? []).find(
+      (process) => process.id === selectedProcessByNode[selectedAgent.id],
+    );
+    if (!selectedProcess?.attachable) {
+      terminalErrorsByNode = {
+        ...terminalErrorsByNode,
+        [selectedAgent.id]: 'Select a live process before opening the terminal.',
+      };
+      return;
+    }
+
+    try {
+      const res = await fetch(`/terminal/session/${sessionId}/node/${selectedAgent.id}/meta`);
+      const data = await res.json().catch(() => ({})) as { message?: string; url?: string };
+      if (!res.ok || !data.url) {
+        throw new Error(data.message || 'Terminal unavailable for this thread.');
+      }
+
+      terminalUrlsByNode = { ...terminalUrlsByNode, [selectedAgent.id]: data.url };
+      terminalErrorsByNode = { ...terminalErrorsByNode, [selectedAgent.id]: '' };
+      viewModeByNode = { ...viewModeByNode, [selectedAgent.id]: 'terminal' };
+      void loadProcessesForNode(selectedAgent.id);
+    } catch (err) {
+      terminalErrorsByNode = {
+        ...terminalErrorsByNode,
+        [selectedAgent.id]:
+          err instanceof Error ? err.message : 'Terminal unavailable for this thread.',
+      };
+    }
+  }
+
+  function handleCloseTerminal() {
+    if (!selectedAgent) return;
+    viewModeByNode = { ...viewModeByNode, [selectedAgent.id]: 'chat' };
   }
 
   function handleSend(message: string) {
@@ -366,18 +491,27 @@
           messages={currentMessages}
           onsend={handleSend}
           onnavigate={handleNavigate}
+          processes={currentProcesses}
+          processError={currentProcessError ?? (selectedAgent && processLoadingByNode[selectedAgent.id] ? 'Loading processes...' : null)}
+          selectedProcessId={currentSelectedProcessId}
+          onselectprocess={handleSelectProcess}
+          viewMode={currentViewMode}
+          terminalUrl={currentTerminalUrl}
+          terminalError={currentTerminalError}
+          onopenterminal={handleOpenTerminal}
+          oncloseterminal={handleCloseTerminal}
         />
       </div>
     {:else}
-      <!-- Empty session -- prompt to spawn first agent -->
+      <!-- Empty session -- prompt to spawn first thread -->
       <div class="flex-1 flex flex-col items-center justify-center gap-4 pt-8 bg-gray-50 dark:bg-neutral-950">
         <p class="text-sm text-gray-600 dark:text-neutral-300">{data.session.name}</p>
-        <p class="text-xs text-gray-500 dark:text-neutral-500">No agents yet. Spawn your first agent to get started.</p>
+        <p class="text-xs text-gray-500 dark:text-neutral-500">No threads yet. Spawn your first thread to get started.</p>
         <button
           onclick={() => { showSpawn = true; }}
           class="px-5 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400"
         >
-          + spawn agent
+          + spawn thread
         </button>
       </div>
     {/if}
@@ -389,5 +523,6 @@
     onclose={() => { showSpawn = false; }}
     onspawn={handleSpawn}
     accountKeysMasked={data.accountKeysMasked}
+    accountKeysError={data.accountKeysError}
   />
 {/if}
