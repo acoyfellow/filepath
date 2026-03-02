@@ -41,6 +41,14 @@ else
   FAILED=1
 fi
 
+echo -n "5. Container helpers do not return soft-fail success flags... "
+if rg -n "success: false|success: true|return false" src/lib/agents/container.ts >/dev/null 2>&1; then
+  echo "FAIL"
+  FAILED=1
+else
+  echo "PASS"
+fi
+
 echo
 [ "$FAILED" -eq 0 ] && echo "✅ No fallback runtime gate passed" || echo "❌ No fallback runtime gate failed"
 exit "$FAILED"

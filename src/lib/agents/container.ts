@@ -108,7 +108,7 @@ export async function startAgentInContainer(
   containerId: string,
   agentType: string,
   config: AdapterConfig
-): Promise<{ processId: string; success: boolean }> {
+): Promise<{ processId: string }> {
   const sandbox = getSandbox(env.Sandbox, containerId);
   const command = ADAPTER_COMMANDS[agentType];
   if (!command) throw new AgentStartError(`Unknown agent type: ${agentType}`);
@@ -127,7 +127,7 @@ export async function startAgentInContainer(
 
   try {
     const proc = await sandbox.startProcess(command, { env: envVars, cwd: config.workspacePath });
-    return { processId: proc.pid ? String(proc.pid) : 'unknown', success: true };
+    return { processId: proc.pid ? String(proc.pid) : 'unknown' };
   } catch (error) {
     console.error(`[Container] Failed to start agent ${agentType}:`, error);
     throw new AgentStartError(`Failed to start ${agentType} in container ${containerId}`, error);
@@ -156,12 +156,11 @@ export async function restoreWorkspaceBackup(
   env: ContainerEnv,
   containerId: string,
   backupHandle: BackupHandle
-): Promise<boolean> {
+): Promise<void> {
   const sandbox = getSandbox(env.Sandbox, containerId) as SandboxWithBackup;
   try {
     console.log(`[Container] Restoring backup ${backupHandle.id}`);
     await sandbox.restoreBackup(backupHandle);
-    return true;
   } catch (error) {
     console.error(`[Container] Failed to restore backup:`, error);
     throw new BackupError(`Failed to restore workspace backup ${backupHandle.id}`, error);
@@ -173,7 +172,7 @@ export async function execInContainer(
   containerId: string,
   command: string,
   options?: { cwd?: string; env?: Record<string, string> }
-): Promise<{ stdout: string; stderr: string; success: boolean }> {
+): Promise<{ stdout: string; stderr: string }> {
   const sandbox = getSandbox(env.Sandbox, containerId);
   try {
     const result = await sandbox.exec(command, { cwd: options?.cwd, env: options?.env });
@@ -184,7 +183,7 @@ export async function execInContainer(
         { stdout: result.stdout, stderr: result.stderr, exitCode }
       );
     }
-    return { stdout: result.stdout, stderr: result.stderr, success: true };
+    return { stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     console.error(`[Container] Exec failed:`, error);
     if (error instanceof ContainerError) {
