@@ -9,6 +9,8 @@
  *
  * Routes:
  * - /agents/* → Agent SDK (WebSocket connections to ChatAgent)
+ * - session event routes for session-scoped websocket fan-out
+ * - internal session event fan-out routes
  * - Everything else → 404
  */
 
@@ -63,6 +65,31 @@ export default {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
         },
+      });
+    }
+
+    const sessionEventsMatch = url.pathname.match(/^\/session-events\/([^/]+)$/);
+    if (sessionEventsMatch) {
+      const [, sessionId] = sessionEventsMatch;
+      const sessionNamespace = env.SESSION_DO as any;
+      const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
+      return stub.fetch('https://session/connect', {
+        method: 'GET',
+        headers: request.headers,
+      });
+    }
+
+    const internalSessionEventMatch = url.pathname.match(/^\/internal\/sessions\/([^/]+)\/events$/);
+    if (internalSessionEventMatch && request.method === 'POST') {
+      const [, sessionId] = internalSessionEventMatch;
+      const sessionNamespace = env.SESSION_DO as any;
+      const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
+      return stub.fetch('https://session/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': request.headers.get('content-type') || 'application/json',
+        },
+        body: request.body,
       });
     }
 

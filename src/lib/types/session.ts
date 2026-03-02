@@ -81,6 +81,26 @@ export interface ProcessEntry {
   status: "running" | "exited" | "starting";
 }
 
+export interface ArtifactEntry {
+  id: string;
+  sessionId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourcePath: string;
+  targetPath: string;
+  bucketKey: string;
+  status: "staged" | "delivered" | "failed";
+  errorMessage?: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ThreadMovePayload {
+  nodeId: string;
+  parentId: string | null;
+  sortOrder: number;
+}
+
 // ============================================================
 // Legacy compat types -- needed until wizard + sidebar are rewritten for tree architecture
 // ============================================================

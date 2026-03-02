@@ -31,11 +31,14 @@ export const POST: RequestHandler = async ({
   params,
   request,
   locals,
+  platform,
 }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
 
   const sessionId = params.id!;
   const nodeId = params.nodeId!;
+  const sessionNamespace = platform?.env?.SESSION_DO as any;
+  if (!sessionNamespace) throw error(503, "Session event bus unavailable");
   const body = (await request.json()) as {
     parentId: string | null;
     sortOrder: number;
@@ -98,6 +101,19 @@ export const POST: RequestHandler = async ({
         .where(and(eq(agentNode.id, siblingIds[index]), eq(agentNode.sessionId, sessionId)));
     }
 
+    const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
+    await stub.fetch("https://session/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "tree_update",
+        action: "move",
+        nodeId,
+        parentId: movingNode.parentId,
+        sortOrder: clampIndex(body.sortOrder, siblingIds.length - 1),
+      }),
+    });
+
     return json({ ok: true });
   }
 
@@ -129,6 +145,19 @@ export const POST: RequestHandler = async ({
       })
       .where(and(eq(agentNode.id, newSiblingIds[index]), eq(agentNode.sessionId, sessionId)));
   }
+
+  const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
+  await stub.fetch("https://session/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "tree_update",
+      action: "move",
+      nodeId,
+      parentId: body.parentId,
+      sortOrder: clampIndex(body.sortOrder, newSiblingIds.length - 1),
+    }),
+  });
 
   return json({ ok: true });
 };

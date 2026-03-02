@@ -2,7 +2,7 @@
   import "$lib/styles/theme.css";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
-  import type { AgentNode, ProcessEntry } from "$lib/types/session";
+  import type { AgentNode, ArtifactEntry, ProcessEntry } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
 
   const rootSeed: AgentNode = {
@@ -16,6 +16,7 @@
     config: {},
     sortOrder: 0,
     tokens: 0,
+    containerId: "root",
     children: [
       {
         id: "app-shell",
@@ -28,7 +29,25 @@
         config: {},
         sortOrder: 1,
         tokens: 18234,
-        children: [],
+        containerId: "app-shell",
+        children: [
+          {
+            id: "release-check",
+            sessionId: "demo-session",
+            parentId: "app-shell",
+            name: "custom / release check",
+            agentType: "custom",
+            model: "openai/gpt-5",
+            status: "done",
+            config: {},
+            sortOrder: 0,
+            tokens: 4201,
+            containerId: "release-check",
+            children: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },
@@ -43,21 +62,7 @@
         config: {},
         sortOrder: 2,
         tokens: 9412,
-        children: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      {
-        id: "release-check",
-        sessionId: "demo-session",
-        parentId: "root",
-        name: "custom / release check",
-        agentType: "custom",
-        model: "openai/gpt-5",
-        status: "done",
-        config: {},
-        sortOrder: 3,
-        tokens: 4201,
+        containerId: "api-pass",
         children: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -167,8 +172,23 @@
     ],
   };
 
+  const seededArtifacts: ArtifactEntry[] = [
+    {
+      id: "artifact-1",
+      sessionId: "demo-session",
+      sourceNodeId: "app-shell",
+      targetNodeId: "release-check",
+      sourcePath: "dist/hero-copy.txt",
+      targetPath: "handoffs/release/hero-copy.txt",
+      bucketKey: "sessions/demo-session/artifacts/app-shell/artifact-1",
+      status: "delivered",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+  ];
+
   let rootNode = $state<AgentNode>(structuredClone(rootSeed));
-  let selectedId = $state<string | null>("release-check");
+  let selectedId = $state<string | null>("app-shell");
   let messagesByNode = $state<Record<string, ChatMsg[]>>(structuredClone(seededMessages));
   let selectedProcessByNode = $state<Record<string, string | null>>({
     root: "root-agent",
@@ -195,6 +215,22 @@
   );
   let currentProcesses = $derived<ProcessEntry[]>(
     selectedAgent ? (seededProcesses[selectedAgent.id] ?? []) : [],
+  );
+  let currentArtifacts = $derived<ArtifactEntry[]>(
+    selectedAgent
+      ? seededArtifacts.filter(
+          (artifact) =>
+            artifact.sourceNodeId === selectedAgent.id || artifact.targetNodeId === selectedAgent.id,
+        )
+      : [],
+  );
+  let threadChoices = $derived<Array<{ id: string; name: string }>>(
+    [
+      { id: "root", name: "Launch Loop" },
+      { id: "app-shell", name: "codex / app shell" },
+      { id: "release-check", name: "custom / release check" },
+      { id: "api-pass", name: "shelley / API pass" },
+    ],
   );
 
   function handleSelect(id: string) {
@@ -236,6 +272,14 @@
     if (!selectedAgent) return;
     selectedProcessByNode = { ...selectedProcessByNode, [selectedAgent.id]: processId };
   }
+
+  async function handleMove() {
+    // Homepage demo stays deterministic. Keep the same seeded structure.
+  }
+
+  async function handleSendArtifact() {
+    // Homepage demo stays deterministic. Keep the same seeded structure.
+  }
 </script>
 
 <div class="demo-shell">
@@ -257,6 +301,7 @@
       {selectedId}
       width={300}
       onselect={handleSelect}
+      onmove={handleMove}
       onspawn={handleSpawn}
     />
     <div class="demo-panel">
@@ -268,6 +313,9 @@
         processes={currentProcesses}
         selectedProcessId={selectedAgent ? selectedProcessByNode[selectedAgent.id] ?? null : null}
         onselectprocess={handleSelectProcess}
+        artifacts={currentArtifacts}
+        threads={threadChoices}
+        onsendartifact={handleSendArtifact}
       />
     </div>
   </div>

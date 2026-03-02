@@ -15,6 +15,8 @@ CLAIMS=(
   "Durable session state that reconnects cleanly"
   "Realtime session state across your devices"
   "Visible runtime processes, plus a workspace terminal"
+  "Cross-thread file handoff"
+  "Move threads like files and folders"
 )
 
 for claim in "${CLAIMS[@]}"; do
@@ -51,6 +53,16 @@ if rg -n "shareable" src/routes/+page.svelte src/lib/components/HeroDemo.svelte 
   FAILED=1
 else
   echo "PASS"
+fi
+
+echo -n "- Homepage keeps only deferred roadmap items in the roadmap section... "
+ROADMAP_COUNT="$(rg -o "tag: 'Roadmap'" src/routes/+page.svelte | wc -l | tr -d ' ')"
+if rg -F "More routers, same contract" src/routes/+page.svelte >/dev/null 2>&1 \
+  && [ "$ROADMAP_COUNT" = "1" ]; then
+  echo "PASS"
+else
+  echo "FAIL"
+  FAILED=1
 fi
 
 echo

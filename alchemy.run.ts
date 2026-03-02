@@ -6,6 +6,7 @@ import {
   DurableObjectNamespace,
   Container,
   D1Database,
+  R2Bucket,
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
@@ -66,6 +67,12 @@ const DB = await D1Database(dbName, {
   dev: { remote: false },
 });
 
+const artifactBucketName = isProd ? "filepath-artifacts" : `${prefix}-artifacts`;
+const ARTIFACTS = await R2Bucket(`${projectName}-artifacts`, {
+  name: artifactBucketName,
+  empty: true,
+});
+
 // Container for terminal sandboxes
 // Platform set to linux/amd64 because Cloudflare sandbox image only supports AMD64
 const Sandbox = await Container(`${projectName}-sandbox`, {
@@ -96,6 +103,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     SESSION_DO,
     Sandbox,
     DB,
+    ARTIFACTS,
 
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
@@ -121,6 +129,9 @@ export const APP = await SvelteKit(`${projectName}-app`, {
   bindings: {
     WORKER,
     DB,
+    SESSION_DO,
+    Sandbox,
+    ARTIFACTS,
   },
   url: true,
   adopt: true,
@@ -161,6 +172,10 @@ export const APP = await SvelteKit(`${projectName}-app`, {
         
         // Route /agents/* to worker for Agent SDK WebSocket connections
         if (url.pathname.startsWith('/agents/')) {
+          return env.WORKER.fetch(request);
+        }
+
+        if (url.pathname.startsWith('/session-events/')) {
           return env.WORKER.fetch(request);
         }
         

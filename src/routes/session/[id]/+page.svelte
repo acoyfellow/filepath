@@ -9,8 +9,10 @@
     AgentNode,
     AgentType,
     AgentNodeConfig,
+    ArtifactEntry,
     ProcessEntry,
     SpawnRequest,
+    ThreadMovePayload,
   } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
   import { createNodeClient, type DOMessage, type ConnectionState } from "$lib/agents/node-client";
@@ -31,6 +33,7 @@
   let workerUrl = $state<string | null>(null);
   let activeClients = $state<Record<string, ReturnType<typeof createNodeClient>>>({});
   let connectionStates = $state<Record<string, ConnectionState>>({});
+  let sessionEventsSocket = $state<WebSocket | null>(null);
 
   // Determine WebSocket URL: dev = same origin (Alchemy handles routing), prod = from config
   onMount(async () => {
@@ -57,6 +60,7 @@
     for (const client of Object.values(activeClients)) {
       client.close();
     }
+    sessionEventsSocket?.close();
   });
 
   /** Connect to a node's ChatAgent DO if not already connected */
@@ -71,6 +75,69 @@
     });
 
     activeClients = { ...activeClients, [nodeId]: client };
+  }
+
+  function ensureSessionEventsConnection() {
+    if (!workerUrl || !sessionId || sessionEventsSocket) return;
+
+    const wsBase = workerUrl.replace(/^http/, 'ws');
+    const socket = new WebSocket(`${wsBase}/session-events/${sessionId}`);
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data as string) as
+          | ({ type: 'tree_update'; action?: string } & ThreadMovePayload)
+          | {
+              type: 'artifact_event';
+              action: 'artifact_staged' | 'artifact_delivered' | 'artifact_failed';
+              sourceNodeId?: string;
+              targetNodeId?: string;
+              sourcePath?: string;
+              targetPath?: string;
+              errorMessage?: string;
+            };
+
+        if (data.type === 'tree_update' && data.action === 'move') {
+          void refreshSessionSnapshot();
+          return;
+        }
+
+        if (data.type === 'artifact_event') {
+          void loadArtifacts();
+          if (data.sourceNodeId) {
+            const existing = messagesByNode[data.sourceNodeId] ?? [];
+            const message =
+              data.action === 'artifact_failed'
+                ? `Artifact transfer failed: ${data.errorMessage ?? 'unknown error'}`
+                : data.action === 'artifact_delivered'
+                  ? `Artifact delivered: ${data.sourcePath} -> ${data.targetPath}`
+                  : `Artifact staged: ${data.sourcePath} -> ${data.targetPath}`;
+            messagesByNode = {
+              ...messagesByNode,
+              [data.sourceNodeId]: [
+                ...existing,
+                { from: 'a', event: { type: 'text', content: message } },
+              ],
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('[Session] Unparseable session event:', err);
+      }
+    };
+
+    socket.onclose = () => {
+      if (sessionEventsSocket === socket) {
+        sessionEventsSocket = null;
+      }
+    };
+    socket.onerror = () => {
+      if (sessionEventsSocket === socket) {
+        sessionEventsSocket = null;
+      }
+    };
+
+    sessionEventsSocket = socket;
   }
 
   /** Handle messages from the ChatAgent DO */
@@ -206,6 +273,7 @@
 
   // ─── Messages (live from WebSocket) ───
   let messagesByNode = $state<Record<string, ChatMsg[]>>({});
+  let artifactsBySession = $state<ArtifactEntry[]>([]);
   let processesByNode = $state<Record<string, ProcessEntry[]>>({});
   let processLoadingByNode = $state<Record<string, boolean>>({});
   let processErrorsByNode = $state<Record<string, string>>({});
@@ -235,8 +303,20 @@
   });
 
   $effect(() => {
+    if (sessionId && workerUrl) {
+      ensureSessionEventsConnection();
+    }
+  });
+
+  $effect(() => {
     if (selectedId) {
       void loadProcessesForNode(selectedId);
+    }
+  });
+
+  $effect(() => {
+    if (sessionId) {
+      void loadArtifacts();
     }
   });
 
@@ -286,6 +366,28 @@
   let currentTerminalError = $derived<string | null>(
     selectedAgent ? (terminalErrorsByNode[selectedAgent.id] ?? null) : null,
   );
+  let currentArtifacts = $derived<ArtifactEntry[]>(
+    selectedAgent
+      ? artifactsBySession.filter(
+          (artifact) =>
+            artifact.sourceNodeId === selectedAgent.id || artifact.targetNodeId === selectedAgent.id,
+        )
+      : [],
+  );
+
+  let threadChoices = $derived<Array<{ id: string; name: string }>>(
+    rootNode
+      ? (() => {
+          const collected: Array<{ id: string; name: string }> = [];
+          const collect = (node: AgentNode) => {
+            collected.push({ id: node.id, name: node.name });
+            for (const child of node.children) collect(child);
+          };
+          collect(rootNode);
+          return collected;
+        })()
+      : [],
+  );
 
   async function loadProcessesForNode(nodeId: string) {
     if (!sessionId) return;
@@ -322,6 +424,57 @@
       };
     } finally {
       processLoadingByNode = { ...processLoadingByNode, [nodeId]: false };
+    }
+  }
+
+  async function refreshSessionSnapshot() {
+    if (!sessionId) return;
+
+    const res = await fetch(`/api/sessions/${sessionId}`);
+    const payload = await res.json().catch(() => ({})) as {
+      tree?: Array<Record<string, unknown>>;
+    };
+    if (!res.ok || !payload.tree) return;
+
+    const flatten = (
+      nodes: Array<Record<string, unknown>>,
+      out: Array<Record<string, unknown>> = [],
+    ) => {
+      for (const node of nodes) {
+        out.push({
+          ...node,
+          children: undefined,
+        });
+        const children = Array.isArray(node.children)
+          ? (node.children as Array<Record<string, unknown>>)
+          : [];
+        flatten(children, out);
+      }
+      return out;
+    };
+
+    const flatNodes = flatten(payload.tree);
+    const nextRootNode = buildTree(
+      flatNodes as typeof data.nodes,
+    );
+    rootNode = nextRootNode;
+    if (selectedId && nextRootNode && !findNode(nextRootNode, selectedId)) {
+      selectedId = nextRootNode.id;
+    }
+  }
+
+  async function loadArtifacts() {
+    if (!sessionId) return;
+
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/artifacts`);
+      const payload = await res.json().catch(() => ({})) as { artifacts?: ArtifactEntry[] };
+      if (!res.ok) {
+        throw new Error("Failed to load artifacts");
+      }
+      artifactsBySession = payload.artifacts ?? [];
+    } catch (err) {
+      console.error("[Session] Failed to load artifacts:", err);
     }
   }
 
@@ -376,6 +529,48 @@
   function handleCloseTerminal() {
     if (!selectedAgent) return;
     viewModeByNode = { ...viewModeByNode, [selectedAgent.id]: 'chat' };
+  }
+
+  async function handleSendArtifact(payload: {
+    sourceNodeId: string;
+    sourcePath: string;
+    targetNodeId: string;
+    targetPath: string;
+  }) {
+    if (!sessionId) return;
+
+    const res = await fetch(`/api/sessions/${sessionId}/artifacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error || "Artifact transfer failed");
+    }
+
+    await loadArtifacts();
+  }
+
+  async function handleMoveThread(payload: ThreadMovePayload) {
+    if (!sessionId) return;
+
+    const res = await fetch(`/api/sessions/${sessionId}/nodes/${payload.nodeId}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parentId: payload.parentId,
+        sortOrder: payload.sortOrder,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({})) as { message?: string };
+    if (!res.ok) {
+      throw new Error(data.message || "Unable to move thread");
+    }
+
+    await refreshSessionSnapshot();
   }
 
   function handleSend(message: string) {
@@ -488,6 +683,7 @@
         root={rootNode}
         {selectedId}
         onselect={handleSelect}
+        onmove={handleMoveThread}
         onspawn={() => { showSpawn = true; }}
       />
 
@@ -506,6 +702,9 @@
           terminalError={currentTerminalError}
           onopenterminal={handleOpenTerminal}
           oncloseterminal={handleCloseTerminal}
+          artifacts={currentArtifacts}
+          threads={threadChoices}
+          onsendartifact={handleSendArtifact}
         />
       </div>
     {:else}

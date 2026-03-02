@@ -64,7 +64,8 @@ export class AgentStartError extends Error {
 
 // Container Service
 export interface ContainerEnv {
-  Sandbox: DurableObjectNamespace<Sandbox>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Sandbox: any;
 }
 
 function getTerminalProtocol(hostname: string): 'http' | 'https' {
@@ -291,56 +292,89 @@ export async function startFAPAgent(
 }
 
 // ================================================================
-// Session Mode: R2 Bucket Mounting
+// Explicit Artifact Transport
 // ================================================================
 
-/**
- * Mount an R2 bucket for session mode file sharing.
- * In session mode, all agents share the same filesystem (mounted from R2).
- *
- * This path is intentionally not wired until real R2 mounting exists.
- */
-export interface MountBucketOptions {
-  bucket: R2Bucket;
-  sessionId: string;
-  prefix?: string;
+function normalizeWorkspacePath(inputPath: string, label: string): string {
+  let normalized = inputPath.trim();
+  if (!normalized) {
+    throw new ContainerError(`${label} is required.`);
+  }
+  if (normalized === '/workspace') {
+    throw new ContainerError(`${label} must point to a file inside /workspace.`);
+  }
+  if (normalized.startsWith('/workspace/')) {
+    normalized = normalized.slice('/workspace/'.length);
+  } else if (normalized.startsWith('/')) {
+    normalized = normalized.slice(1);
+  }
+
+  const parts = normalized.split('/');
+  if (parts.some((part) => !part || part === '.' || part === '..')) {
+    throw new ContainerError(`${label} must stay inside the thread workspace.`);
+  }
+
+  return parts.join('/');
 }
 
-export async function mountBucket(
-  _options: MountBucketOptions
-): Promise<{ success: boolean; mountPath: string }> {
-  throw new Error(
-    `mountBucket is not implemented yet for session ${_options.sessionId}. ` +
-    "Wire real R2 mounting before calling it."
-  );
-}
+const MAX_ARTIFACT_BASE64_LENGTH = 512_000;
 
-/**
- * Sync files from container to R2 bucket (for session mode persistence)
- */
-export async function syncToBucket(
-  _bucket: R2Bucket,
-  sessionId: string,
+export async function exportArtifactFromContainer(
+  env: ContainerEnv & { ARTIFACTS: R2Bucket },
   containerId: string,
-  _sourcePath: string = '/workspace'
-): Promise<boolean> {
-  throw new Error(
-    `syncToBucket is not implemented yet for session ${sessionId} (${containerId}). ` +
-    "Wire real R2 sync before calling it."
+  sessionId: string,
+  nodeId: string,
+  sourcePath: string
+): Promise<{ bucketKey: string }> {
+  const relativeSourcePath = normalizeWorkspacePath(sourcePath, 'Source path');
+  const exportResult = await execInContainer(
+    env,
+    containerId,
+    "bash -lc 'set -euo pipefail; test -f \"$FILEPATH_SOURCE_PATH\"; base64 < \"$FILEPATH_SOURCE_PATH\" | tr -d \"\\n\"'",
+    {
+      cwd: '/workspace',
+      env: {
+        FILEPATH_SOURCE_PATH: relativeSourcePath,
+      },
+    }
   );
+
+  if (exportResult.stdout.length > MAX_ARTIFACT_BASE64_LENGTH) {
+    throw new ContainerError('Artifact is too large for v1 transfer. Keep transfers under 384KB.');
+  }
+
+  const bucketKey = `sessions/${sessionId}/artifacts/${nodeId}/${crypto.randomUUID()}`;
+  await env.ARTIFACTS.put(bucketKey, exportResult.stdout.trim());
+  return { bucketKey };
 }
 
-/**
- * Restore files from R2 bucket to container (for session mode resume)
- */
-export async function restoreFromBucket(
-  _bucket: R2Bucket,
-  sessionId: string,
+export async function importArtifactToContainer(
+  env: ContainerEnv & { ARTIFACTS: R2Bucket },
   containerId: string,
-  _targetPath: string = '/workspace'
-): Promise<boolean> {
-  throw new Error(
-    `restoreFromBucket is not implemented yet for session ${sessionId} (${containerId}). ` +
-    "Wire real R2 restore before calling it."
+  bucketKey: string,
+  targetPath: string
+): Promise<void> {
+  const relativeTargetPath = normalizeWorkspacePath(targetPath, 'Target path');
+  const storedObject = await env.ARTIFACTS.get(bucketKey);
+  if (!storedObject) {
+    throw new BackupError(`Artifact ${bucketKey} was not found in storage.`);
+  }
+
+  const base64Payload = (await storedObject.text()).trim();
+  if (!base64Payload) {
+    throw new BackupError(`Artifact ${bucketKey} is empty or unreadable.`);
+  }
+
+  await execInContainer(
+    env,
+    containerId,
+    "bash -lc 'set -euo pipefail; mkdir -p \"$(dirname \"$FILEPATH_TARGET_PATH\")\"; printf \"%s\" \"$FILEPATH_ARTIFACT_BASE64\" | base64 -d > \"$FILEPATH_TARGET_PATH\"'",
+    {
+      cwd: '/workspace',
+      env: {
+        FILEPATH_TARGET_PATH: relativeTargetPath,
+        FILEPATH_ARTIFACT_BASE64: base64Payload,
+      },
+    }
   );
 }

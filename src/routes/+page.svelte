@@ -52,21 +52,21 @@ console.log(status.summary.running > 0); // true`;
       body:
         'The selected thread exposes its real processes in a simple strip above the input. When the runtime supports it, you can open a workspace terminal for that thread instead of guessing what is happening.',
     },
+    {
+      eyebrow: 'True Today',
+      title: 'Cross-thread file handoff',
+      body:
+        'Threads can hand files to each other explicitly. The transfer is visible, persisted, and scoped to the session instead of relying on invisible shared state.',
+    },
+    {
+      eyebrow: 'True Today',
+      title: 'Move threads like files and folders',
+      body:
+        'The tree is now an active organizer. You can reparent and reorder running threads, and the session stays coherent while the structure changes around live work.',
+    },
   ];
 
   const roadmap = [
-    {
-      title: 'Cross-thread file handoff',
-      tag: 'Roadmap',
-      body:
-        'Threads should safely share files and communicate through explicit handoffs instead of hidden magic. That should feel like moving artifacts between folders, not invisible state sync.',
-    },
-    {
-      title: 'Move threads like files and folders',
-      tag: 'Roadmap',
-      body:
-        'The tree already acts like a filesystem for your threads. The next logical step is drag-and-drop moves so you can re-group a running workflow without rebuilding it.',
-    },
     {
       title: 'More routers, same contract',
       tag: 'Roadmap',
@@ -183,15 +183,15 @@ console.log(status.summary.running > 0); // true`;
         <div>
           <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">Roadmap</div>
           <h2 class="mt-4 text-2xl md:text-3xl font-medium tracking-tight text-gray-900 dark:text-neutral-100">
-            What is next, and what we are still proving
+            What is next
           </h2>
         </div>
         <p class="max-w-2xl text-sm leading-7 text-gray-600 dark:text-neutral-400">
-          This is the direction, not the sales fiction. We should only promote each item above once it is real enough to gate.
+          The roadmap only holds the pieces that are still intentionally deferred. When something becomes real enough to gate, it moves out of this list.
         </p>
       </div>
 
-      <div class="mt-8 grid gap-4 md:grid-cols-2">
+      <div class="mt-8 grid gap-4 md:grid-cols-1">
         {#each roadmap as item}
           <article class="rounded-3xl border border-dashed border-gray-300 bg-white/72 p-6 dark:border-neutral-700 dark:bg-neutral-900/20">
             <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">{item.tag}</div>
@@ -209,7 +209,7 @@ console.log(status.summary.running > 0); // true`;
           This is the actual session UI, not a separate landing-page toy.
         </h2>
         <p class="mt-4 max-w-3xl text-sm md:text-base leading-8 text-gray-600 dark:text-neutral-400">
-          The homepage uses the same tree and panel components as the app. That keeps the product pitch grounded in the literal interface you are shaping, instead of a fake parallel demo or a replay that says more than the runtime can do.
+          The homepage uses the same tree and panel components as the app. This seed now shows explicit file handoff and a moved nested thread inside the actual interface, so the landing page stays grounded in the literal product surface instead of a fake parallel demo.
         </p>
       </div>
 
