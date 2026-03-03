@@ -33,14 +33,27 @@
   let activeClients = $state<Record<string, ReturnType<typeof createNodeClient>>>({});
   let connectionStates = $state<Record<string, ConnectionState>>({});
   let sessionEventsSocket = $state<WebSocket | null>(null);
+  let sessionEventsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let sessionEventsReconnectAttempts = 0;
+  const MAX_SESSION_EVENT_RECONNECTS = 5;
+  const SESSION_EVENT_RECONNECT_BASE_DELAY = 1000;
 
   // Determine worker URL for ChatAgent and session event websocket connections.
   onMount(async () => {
+    if (selectedId) {
+      void loadProcessesForNode(selectedId);
+    }
+    void loadArtifacts();
+
     try {
       const res = await fetch('/api/config');
       const cfg = await res.json() as { workerUrl: string };
       workerUrl = cfg.workerUrl;
       console.log('[Session] Using worker at', workerUrl);
+      ensureSessionEventsConnection();
+      if (selectedId) {
+        ensureConnection(selectedId);
+      }
     } catch (err) {
       console.error('[Session] Failed to fetch config:', err);
     }
@@ -50,6 +63,10 @@
   onDestroy(() => {
     for (const client of Object.values(activeClients)) {
       client.close();
+    }
+    if (sessionEventsReconnectTimer) {
+      clearTimeout(sessionEventsReconnectTimer);
+      sessionEventsReconnectTimer = null;
     }
     sessionEventsSocket?.close();
   });
@@ -73,6 +90,10 @@
 
     const wsBase = workerUrl.replace(/^http/, 'ws');
     const socket = new WebSocket(`${wsBase}/session-events/${sessionId}`);
+
+    socket.onopen = () => {
+      sessionEventsReconnectAttempts = 0;
+    };
 
     socket.onmessage = (event) => {
       try {
@@ -120,15 +141,29 @@
     socket.onclose = () => {
       if (sessionEventsSocket === socket) {
         sessionEventsSocket = null;
+        scheduleSessionEventsReconnect();
       }
     };
     socket.onerror = () => {
       if (sessionEventsSocket === socket) {
         sessionEventsSocket = null;
+        scheduleSessionEventsReconnect();
       }
     };
 
     sessionEventsSocket = socket;
+  }
+
+  function scheduleSessionEventsReconnect() {
+    if (!workerUrl || !sessionId || sessionEventsSocket || sessionEventsReconnectTimer) return;
+    if (sessionEventsReconnectAttempts >= MAX_SESSION_EVENT_RECONNECTS) return;
+
+    const delay = SESSION_EVENT_RECONNECT_BASE_DELAY * Math.pow(2, sessionEventsReconnectAttempts);
+    sessionEventsReconnectAttempts += 1;
+    sessionEventsReconnectTimer = setTimeout(() => {
+      sessionEventsReconnectTimer = null;
+      ensureSessionEventsConnection();
+    }, delay);
   }
 
   /** Handle messages from the ChatAgent DO */
@@ -260,7 +295,17 @@
     return roots[0] ?? null;
   }
 
-  let rootNode = $state<AgentNode | null>(null);
+  function createInitialSessionTreeState() {
+    const initialRootNode = buildTree(data.nodes);
+    return {
+      rootNode: initialRootNode,
+      selectedId: initialRootNode?.id ?? null,
+    };
+  }
+
+  const initialSessionTreeState = createInitialSessionTreeState();
+
+  let rootNode = $state<AgentNode | null>(initialSessionTreeState.rootNode);
 
   // ─── Messages (live from WebSocket) ───
   let messagesByNode = $state<Record<string, ChatMsg[]>>({});
@@ -274,42 +319,7 @@
   let terminalErrorsByNode = $state<Record<string, string>>({});
 
   // ─── State ───
-  let selectedId = $state<string | null>(null);
-  let initializedSessionId: string | null = null;
-
-  $effect(() => {
-    if (!sessionId || initializedSessionId === sessionId) return;
-
-    const nextRootNode = buildTree(data.nodes);
-    rootNode = nextRootNode;
-    selectedId = nextRootNode?.id ?? null;
-    initializedSessionId = sessionId;
-  });
-
-  // Auto-connect when selecting a node
-  $effect(() => {
-    if (selectedId && workerUrl) {
-      ensureConnection(selectedId);
-    }
-  });
-
-  $effect(() => {
-    if (sessionId && workerUrl) {
-      ensureSessionEventsConnection();
-    }
-  });
-
-  $effect(() => {
-    if (selectedId) {
-      void loadProcessesForNode(selectedId);
-    }
-  });
-
-  $effect(() => {
-    if (sessionId) {
-      void loadArtifacts();
-    }
-  });
+  let selectedId = $state<string | null>(initialSessionTreeState.selectedId);
 
   /** Find a node by ID in the tree */
   function findNode(node: AgentNode, id: string): AgentNode | null {
@@ -449,8 +459,17 @@
       flatNodes as typeof data.nodes,
     );
     rootNode = nextRootNode;
-    if (selectedId && nextRootNode && !findNode(nextRootNode, selectedId)) {
+    if (!nextRootNode) {
+      selectedId = null;
+      return;
+    }
+
+    if (!selectedId || !findNode(nextRootNode, selectedId)) {
       selectedId = nextRootNode.id;
+      if (workerUrl) {
+        ensureConnection(nextRootNode.id);
+        void loadProcessesForNode(nextRootNode.id);
+      }
     }
   }
 
@@ -470,7 +489,12 @@
   }
 
   function handleSelect(id: string) {
+    if (selectedId === id) return;
     selectedId = id;
+    if (workerUrl) {
+      ensureConnection(id);
+      void loadProcessesForNode(id);
+    }
   }
 
   function handleNavigate(name: string) {
@@ -664,6 +688,10 @@
 
     showSpawn = false;
     selectedId = newId;
+    if (workerUrl) {
+      ensureConnection(newId);
+      void loadProcessesForNode(newId);
+    }
   }
 </script>
 

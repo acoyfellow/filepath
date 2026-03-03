@@ -45,24 +45,38 @@
     return `${word}-${num}`;
   }
 
+  function createInitialSpawnState() {
+    const initialModel = canonicalizeStoredModel(lastModel);
+    const initialHasAccountKey = Object.values(accountKeysMasked).some(Boolean);
+
+    return {
+      agent: lastAgent,
+      model: initialModel,
+      hasAccountKey: initialHasAccountKey,
+      availableModels: [
+        {
+          id: initialModel || DEFAULT_MODEL,
+          name: initialModel || DEFAULT_MODEL,
+          provider: "Unknown",
+          router: initialModel.startsWith("zen/") ? "zen" : "openrouter",
+        },
+      ] satisfies ModelEntry[],
+    };
+  }
+
+  const initialSpawnState = createInitialSpawnState();
+
   let name = $state(pickName());
-  let agent = $state<AgentType>("shelley");
-  let model = $state(canonicalizeStoredModel(DEFAULT_MODEL));
+  let agent = $state<AgentType>(initialSpawnState.agent);
+  let model = $state(initialSpawnState.model);
   let modelFilter = $state("");
   let modelsLoading = $state(true);
   let modelsError = $state("");
   let modelWarnings = $state<string[]>([]);
-  let availableModels = $state<ModelEntry[]>([
-    {
-      id: canonicalizeStoredModel(DEFAULT_MODEL) || DEFAULT_MODEL,
-      name: canonicalizeStoredModel(DEFAULT_MODEL) || DEFAULT_MODEL,
-      provider: "Unknown",
-      router: "openrouter",
-    },
-  ]);
+  let availableModels = $state<ModelEntry[]>(initialSpawnState.availableModels);
 
   let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
-  let keyMode = $state<'account' | 'session'>('session');
+  let keyMode = $state<'account' | 'session'>(initialSpawnState.hasAccountKey ? 'account' : 'session');
   let sessionKey = $state('');
   let keyLoading = $state(false); // Already have the data from server
   let availableRouters = $derived(
@@ -80,27 +94,6 @@
         )
       : availableModels
   );
-
-  let initializedFromProps = false;
-
-  $effect(() => {
-    if (initializedFromProps) return;
-
-    const initialModel = canonicalizeStoredModel(lastModel);
-
-    agent = lastAgent;
-    model = initialModel;
-    availableModels = [
-      {
-        id: initialModel || DEFAULT_MODEL,
-        name: initialModel || DEFAULT_MODEL,
-        provider: "Unknown",
-        router: initialModel.startsWith("zen/") ? "zen" : "openrouter",
-      },
-    ];
-    keyMode = Object.values(accountKeysMasked).some(Boolean) ? 'account' : 'session';
-    initializedFromProps = true;
-  });
 
   onMount(async () => {
     try {
