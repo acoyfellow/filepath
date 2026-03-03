@@ -59,7 +59,7 @@
     "durable-objects"
   ],
   "scripts": {
-    "postinstall": "node patches/fix-alchemy-d1.js",
+    "postinstall": "node patches/fix-alchemy-d1.js && node patches/fix-alchemy-container-binding.js",
     "dev": "alchemy dev",
     "deploy": "NODE_ENV=production alchemy deploy --stage prod",
     "deploy:preview": "alchemy deploy",
