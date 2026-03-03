@@ -4,7 +4,7 @@
  * Exports:
  * - ChatAgent DO (chat + LLM, SQLite persistence)
  * - TaskAgent DO (compatibility binding that fails closed)
- * - SessionDO (compatibility binding that fails closed)
+ * - SessionEventBusV2 (session-scoped event bus)
  * - Sandbox (re-export for Container binding)
  *
  * Routes:
@@ -25,13 +25,13 @@ import {
   cloneRepo,
   type ContainerEnv,
 } from '../src/lib/agents/container';
-import { SessionDO, Sandbox } from './index';
+import { SessionEventBusV2, Sandbox } from './index';
 import type { Env } from '../src/types';
 
 // Export DO classes (Alchemy needs these)
 export { ChatAgent };
 export { TaskAgent };
-export { SessionDO };
+export { SessionEventBusV2 };
 export { Sandbox };
 
 export default {

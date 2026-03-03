@@ -54,7 +54,7 @@ const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-age
 
 // Session DO (terminal tab state management)
 const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do-${resetGeneration}`, {
-  className: "SessionDO",
+  className: "SessionEventBusV2",
   scriptName: `${prefix}-worker`,
 });
 

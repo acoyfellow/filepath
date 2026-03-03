@@ -40,6 +40,15 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Apply Production D1 Migrations
+        if: github.ref == 'refs/heads/main'
+        run: bunx wrangler d1 migrations apply filepath-v2-db --remote
+        env:
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy Production
         if: github.ref == 'refs/heads/main'
         run: bun run deploy

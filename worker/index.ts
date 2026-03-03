@@ -1,7 +1,7 @@
 /**
  * Worker support classes.
  * The Sandbox re-export is required by alchemy.run.ts Container binding.
- * SessionDO now acts as a thin session-scoped event bus for tree/artifact updates.
+ * SessionEventBusV2 now acts as a thin session-scoped event bus for tree/artifact updates.
  */
 
 import { Sandbox } from '@cloudflare/sandbox';
@@ -10,7 +10,7 @@ import { DurableObject } from 'cloudflare:workers';
 // Re-export Sandbox for Container binding (alchemy.run.ts references it)
 export { Sandbox };
 
-export class SessionDO extends DurableObject {
+export class SessionEventBusV2 extends DurableObject {
   private sockets = new Set<WebSocket>();
 
   async fetch(request: Request): Promise<Response> {
