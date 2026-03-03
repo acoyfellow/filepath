@@ -87,12 +87,12 @@ The plugin requires a new `passkey` table with the following fields:
 
 Run the migration to create this table:
 ```bash
-npx @better-auth/cli migrate
+bun run db:generate
 ```
 
-Or generate the schema manually:
+Then apply it to a fresh environment:
 ```bash
-npx @better-auth/cli generate
+bun run db:migrate
 ```
 
 ## Usage
@@ -210,7 +210,7 @@ If you're using Drizzle ORM, add this schema to your database schema file:
 
 ```typescript
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import { user } from "./auth-schema"; // your user table
+import { user } from "./schema"; // your user table
 
 export const passkey = sqliteTable("passkey", {
     id: text("id").primaryKey(),
@@ -231,7 +231,7 @@ Or for PostgreSQL:
 
 ```typescript
 import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
-import { user } from "./auth-schema"; // your user table
+import { user } from "./schema"; // your user table
 
 export const passkey = pgTable("passkey", {
     id: text("id").primaryKey(),

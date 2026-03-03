@@ -62,14 +62,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
   const rows = await db
     .select({
       id: apikey.id,
-      userId: apikey.userId,
+      referenceId: apikey.referenceId,
       metadata: apikey.metadata,
     })
     .from(apikey)
     .where(
       and(
         eq(apikey.id, keyId),
-        eq(apikey.userId, locals.user.id),
+        eq(apikey.referenceId, locals.user.id),
       ),
     )
     .limit(1);
@@ -95,7 +95,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
   const encryptedSecrets =
     Object.keys(normalizedSecrets).length > 0
-      ? await encryptSecrets(serverSecret, locals.user.id, normalizedSecrets)
+      ? await encryptSecrets(serverSecret, keyRow.referenceId, normalizedSecrets)
       : null;
 
   await db

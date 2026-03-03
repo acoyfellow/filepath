@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm';
  */
 export async function getApikeySecrets(
   apiKeyId: string,
-  userId: string,
+  _referenceId: string,
   serverSecret: string
 ): Promise<Record<string, string> | null> {
   try {
@@ -18,6 +18,7 @@ export async function getApikeySecrets(
     
     // Get the API key with encrypted secrets
     const keys = await db.select({
+      referenceId: apikey.referenceId,
       encryptedSecrets: apikey.encryptedSecrets
     }).from(apikey).where(eq(apikey.id, apiKeyId));
     
@@ -33,7 +34,11 @@ export async function getApikeySecrets(
     }
     
     // Decrypt the secrets
-    const secrets = await decryptSecrets(serverSecret, userId, encryptedSecrets);
+    const secrets = await decryptSecrets(
+      serverSecret,
+      keys[0].referenceId,
+      encryptedSecrets,
+    );
     return secrets;
   } catch (error) {
     console.error('Error decrypting API key secrets:', error);

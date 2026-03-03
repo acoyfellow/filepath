@@ -16,6 +16,27 @@ CREATE TABLE `account` (
 );
 --> statement-breakpoint
 CREATE INDEX `account_userId_idx` ON `account` (`user_id`);--> statement-breakpoint
+CREATE TABLE `agent_artifact` (
+	`id` text PRIMARY KEY NOT NULL,
+	`session_id` text NOT NULL,
+	`source_node_id` text NOT NULL,
+	`target_node_id` text NOT NULL,
+	`source_path` text NOT NULL,
+	`target_path` text NOT NULL,
+	`bucket_key` text NOT NULL,
+	`status` text NOT NULL,
+	`error_message` text,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	FOREIGN KEY (`session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`source_node_id`) REFERENCES `agent_node`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`target_node_id`) REFERENCES `agent_node`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `agent_artifact_session_id_idx` ON `agent_artifact` (`session_id`);--> statement-breakpoint
+CREATE INDEX `agent_artifact_source_node_id_idx` ON `agent_artifact` (`source_node_id`);--> statement-breakpoint
+CREATE INDEX `agent_artifact_target_node_id_idx` ON `agent_artifact` (`target_node_id`);--> statement-breakpoint
+CREATE INDEX `agent_artifact_status_idx` ON `agent_artifact` (`status`);--> statement-breakpoint
 CREATE TABLE `agent_node` (
 	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
@@ -55,11 +76,12 @@ CREATE INDEX `agent_session_user_id_idx` ON `agent_session` (`user_id`);--> stat
 CREATE INDEX `agent_session_status_idx` ON `agent_session` (`status`);--> statement-breakpoint
 CREATE TABLE `apikey` (
 	`id` text PRIMARY KEY NOT NULL,
+	`config_id` text DEFAULT 'default' NOT NULL,
 	`name` text,
 	`start` text,
 	`prefix` text,
 	`key` text NOT NULL,
-	`user_id` text NOT NULL,
+	`reference_id` text NOT NULL,
 	`expires_at` integer,
 	`enabled` integer DEFAULT true,
 	`rate_limit_enabled` integer DEFAULT true,
@@ -77,10 +99,11 @@ CREATE TABLE `apikey` (
 	`metadata` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`reference_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `apikey_user_id_idx` ON `apikey` (`user_id`);--> statement-breakpoint
+CREATE INDEX `apikey_config_id_idx` ON `apikey` (`config_id`);--> statement-breakpoint
+CREATE INDEX `apikey_reference_id_idx` ON `apikey` (`reference_id`);--> statement-breakpoint
 CREATE INDEX `apikey_key_idx` ON `apikey` (`key`);--> statement-breakpoint
 CREATE TABLE `passkey` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -93,6 +116,7 @@ CREATE TABLE `passkey` (
 	`backed_up` integer NOT NULL,
 	`transports` text,
 	`created_at` integer NOT NULL,
+	`aaguid` text,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint

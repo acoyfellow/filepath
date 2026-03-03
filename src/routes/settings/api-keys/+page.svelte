@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { authClient } from '$lib/auth-client';
+  import { apiKeysApi } from '$lib/auth-client';
   type ApiKeyData = {
     id: string;
     name: string | null;
@@ -13,6 +13,11 @@
     expiresAt: Date | null;
     metadata: Record<string, unknown> | null;
     permissions: Record<string, string[]> | null;
+  };
+  type ApiKeyRecord = Omit<ApiKeyData, 'createdAt' | 'updatedAt' | 'expiresAt'> & {
+    createdAt: string | Date;
+    updatedAt: string | Date;
+    expiresAt: string | Date | null;
   };
 
   let apiKeys = $state<ApiKeyData[]>([]);
@@ -34,9 +39,9 @@
   async function loadApiKeys() {
     isLoading = true;
     try {
-      const result = await authClient.apiKey.list();
+      const result = await apiKeysApi.list();
       if (result.data) {
-        apiKeys = result.data.apiKeys.map(key => ({
+        apiKeys = result.data.apiKeys.map((key: ApiKeyRecord) => ({
           ...key,
           createdAt: new Date(key.createdAt),
           updatedAt: new Date(key.updatedAt),
@@ -67,7 +72,7 @@
         }
       }
 
-      const result = await authClient.apiKey.create({
+      const result = await apiKeysApi.create({
         name: newKeyName.trim(),
         prefix: 'mfp_',
         metadata: {
@@ -111,7 +116,7 @@
     if (!confirm('Are you sure you want to delete this API key?')) return;
 
     try {
-      await authClient.apiKey.delete({ keyId });
+      await apiKeysApi.delete({ keyId });
       await loadApiKeys();
     } catch (e) {
       error = 'Failed to delete API key';

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5ef12c73-0978-4206-86e9-3ccc2e492f6b",
+  "id": "f360487c-3df6-43bd-b052-969f9a2121da",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -116,6 +116,164 @@
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "agent_artifact": {
+      "name": "agent_artifact",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_node_id": {
+          "name": "source_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_node_id": {
+          "name": "target_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_path": {
+          "name": "source_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_path": {
+          "name": "target_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bucket_key": {
+          "name": "bucket_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "agent_artifact_session_id_idx": {
+          "name": "agent_artifact_session_id_idx",
+          "columns": [
+            "session_id"
+          ],
+          "isUnique": false
+        },
+        "agent_artifact_source_node_id_idx": {
+          "name": "agent_artifact_source_node_id_idx",
+          "columns": [
+            "source_node_id"
+          ],
+          "isUnique": false
+        },
+        "agent_artifact_target_node_id_idx": {
+          "name": "agent_artifact_target_node_id_idx",
+          "columns": [
+            "target_node_id"
+          ],
+          "isUnique": false
+        },
+        "agent_artifact_status_idx": {
+          "name": "agent_artifact_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "agent_artifact_session_id_agent_session_id_fk": {
+          "name": "agent_artifact_session_id_agent_session_id_fk",
+          "tableFrom": "agent_artifact",
+          "tableTo": "agent_session",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_artifact_source_node_id_agent_node_id_fk": {
+          "name": "agent_artifact_source_node_id_agent_node_id_fk",
+          "tableFrom": "agent_artifact",
+          "tableTo": "agent_node",
+          "columnsFrom": [
+            "source_node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_artifact_target_node_id_agent_node_id_fk": {
+          "name": "agent_artifact_target_node_id_agent_node_id_fk",
+          "tableFrom": "agent_artifact",
+          "tableTo": "agent_node",
+          "columnsFrom": [
+            "target_node_id"
           ],
           "columnsTo": [
             "id"
@@ -400,6 +558,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "config_id": {
+          "name": "config_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'default'"
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -428,8 +594,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "user_id": {
-          "name": "user_id",
+        "reference_id": {
+          "name": "reference_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -562,10 +728,17 @@
         }
       },
       "indexes": {
-        "apikey_user_id_idx": {
-          "name": "apikey_user_id_idx",
+        "apikey_config_id_idx": {
+          "name": "apikey_config_id_idx",
           "columns": [
-            "user_id"
+            "config_id"
+          ],
+          "isUnique": false
+        },
+        "apikey_reference_id_idx": {
+          "name": "apikey_reference_id_idx",
+          "columns": [
+            "reference_id"
           ],
           "isUnique": false
         },
@@ -578,12 +751,12 @@
         }
       },
       "foreignKeys": {
-        "apikey_user_id_user_id_fk": {
-          "name": "apikey_user_id_user_id_fk",
+        "apikey_reference_id_user_id_fk": {
+          "name": "apikey_reference_id_user_id_fk",
           "tableFrom": "apikey",
           "tableTo": "user",
           "columnsFrom": [
-            "user_id"
+            "reference_id"
           ],
           "columnsTo": [
             "id"
@@ -667,6 +840,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "aaguid": {
+          "name": "aaguid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },

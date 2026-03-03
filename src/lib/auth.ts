@@ -1,15 +1,16 @@
 import { betterAuth, type Auth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
-import { apiKey, mcp, multiSession, organization, admin, openAPI } from 'better-auth/plugins';
-import { passkey } from '@better-auth/passkey';
+import { mcp, multiSession, organization, admin, openAPI } from 'better-auth/plugins';
+import { apiKey } from '@better-auth/api-key';
+import { passkey as passkeyPlugin } from '@better-auth/passkey';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
-import { user, session, account, verification, apikey } from './schema';
+import { user, session, account, verification, apikey, passkey as passkeyTable } from './schema';
 import { getRequestEvent } from '$app/server';
 // Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
-import type { D1Database, DurableObjectNamespace, Fetcher } from '@cloudflare/workers-types';
+import type { D1Database } from '@cloudflare/workers-types';
 
 let authInstance: Auth | undefined = undefined;
 let authBaseURL: string | null = null;
@@ -47,6 +48,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
         account,
         verification,
         apikey,
+        passkey: passkeyTable,
       },
     });
   }
@@ -68,7 +70,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
         account,
         verification,
         apikey,
-        passkey,
+        passkey: passkeyTable,
       },
     }),
     emailAndPassword: {
@@ -92,6 +94,8 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
     plugins: [
       sveltekitCookies(getRequestEvent),
       apiKey({
+        configId: 'default',
+        references: 'user',
         // Prefix for agent API keys
         apiKeyHeaders: ['x-api-key', 'authorization'],
         // Enable metadata for storing agent name, owner info
@@ -103,7 +107,7 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
           maxRequests: 1000,
         },
       }),
-      passkey({
+      passkeyPlugin({
         rpID: baseURL.includes('localhost') ? 'localhost' : 'myfilepath.com',
         rpName: 'myfilepath',
         origin: baseURL,
@@ -206,10 +210,22 @@ export const auth = betterAuth({
       account,
       verification,
       apikey,
-      passkey,
+      passkey: passkeyTable,
     },
   }), { provider: 'sqlite' }),
   emailAndPassword: { enabled: true },
+  plugins: [
+    apiKey({
+      configId: 'default',
+      references: 'user',
+      apiKeyHeaders: ['x-api-key', 'authorization'],
+      enableMetadata: true,
+    }),
+    passkeyPlugin(),
+    emailOTP({
+      sendVerificationOTP: async () => {},
+    }),
+  ],
   secret: 'temp',
   baseURL: 'http://localhost:5173',
 }) as unknown as Auth; 

@@ -20,6 +20,7 @@ if (!password) {
 }
 
 const projectName = "filepath";
+const resetGeneration = "v2";
 
 const app = await alchemy(projectName, {
   password,
@@ -33,26 +34,26 @@ const app = await alchemy(projectName, {
 // adopt the legacy D1 database that predates migrations.
 const isProd = app.stage === "prod";
 const prefix = isProd ? projectName : `${app.stage}-${projectName}`;
-const dbName = isProd ? "filepath-prod-db" : `${prefix}-db`;
+const dbName = isProd ? `${projectName}-${resetGeneration}-db` : `${prefix}-db`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 
 // Task Agent Durable Object (Agents SDK)
-const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-agent`, {
+const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-agent-${resetGeneration}`, {
   className: "TaskAgent",
   scriptName: `${prefix}-worker`,
   sqlite: true
 });
 
 // Chat Agent Durable Object (relay between frontend and container)
-const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent`, {
+const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent-${resetGeneration}`, {
   className: "ChatAgent",
   scriptName: `${prefix}-worker`,
   sqlite: true
 });
 
 // Session DO (terminal tab state management)
-const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
+const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do-${resetGeneration}`, {
   className: "SessionDO",
   scriptName: `${prefix}-worker`,
 });
@@ -67,8 +68,8 @@ const DB = await D1Database(dbName, {
   dev: { remote: false },
 });
 
-const artifactBucketName = isProd ? "filepath-artifacts" : `${prefix}-artifacts`;
-const ARTIFACTS = await R2Bucket(`${projectName}-artifacts`, {
+const artifactBucketName = isProd ? `${projectName}-artifacts-${resetGeneration}` : `${prefix}-artifacts`;
+const ARTIFACTS = await R2Bucket(`${projectName}-artifacts-${resetGeneration}`, {
   name: artifactBucketName,
   empty: true,
 });

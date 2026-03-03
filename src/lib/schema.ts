@@ -106,16 +106,17 @@ export const passkey = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    credentialId: text("credential_id").notNull().unique(),
+    credentialID: text("credential_id").notNull().unique(),
     counter: integer("counter").notNull(),
     deviceType: text("device_type").notNull(),
     backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
     transports: text("transports"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    aaguid: text("aaguid"),
   },
   (table) => [
     index("passkey_user_id_idx").on(table.userId),
-    index("passkey_credential_id_unique").on(table.credentialId),
+    index("passkey_credential_id_unique").on(table.credentialID),
   ],
 );
 
@@ -127,11 +128,12 @@ export const apikey = sqliteTable(
   "apikey",
   {
     id: text("id").primaryKey(),
+    configId: text("config_id").notNull().default("default"),
     name: text("name"),
     start: text("start"),
     prefix: text("prefix"),
     key: text("key").notNull(),  // hashed key - better-auth expects 'key'
-    userId: text("user_id")
+    referenceId: text("reference_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
@@ -160,7 +162,8 @@ export const apikey = sqliteTable(
       .notNull(),
   },
   (table) => [
-    index("apikey_user_id_idx").on(table.userId),
+    index("apikey_config_id_idx").on(table.configId),
+    index("apikey_reference_id_idx").on(table.referenceId),
     index("apikey_key_idx").on(table.key),
   ],
 );
@@ -200,7 +203,7 @@ export const passkeyRelations = relations(passkey, ({ one }) => ({
 
 export const apikeyRelations = relations(apikey, ({ one }) => ({
   user: one(user, {
-    fields: [apikey.userId],
+    fields: [apikey.referenceId],
     references: [user.id],
   }),
 }));
