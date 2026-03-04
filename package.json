@@ -75,7 +75,7 @@
     "test": "bun run prd.ts",
     "prd": "bun run prd.ts",
     "prd:loop": "bun run prd.ts --loop",
-    "postinstall": "node ./scripts/patch-alchemy-cli.js"
+    "postinstall": "bun ./scripts/patch-alchemy-cli.js"
   },
   "type": "module"
 }
