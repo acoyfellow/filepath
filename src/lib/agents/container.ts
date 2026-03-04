@@ -198,14 +198,15 @@ export async function cloneRepo(
   env: ContainerEnv,
   containerId: string,
   repoUrl: string,
-  workspacePath: string = '/workspace'
+  workspacePath?: string
 ): Promise<void> {
-  console.log(`[Container] Cloning ${repoUrl} to ${workspacePath}`);
+  const targetWorkspacePath = workspacePath ?? resolveWorkspaceRoot(repoUrl);
+  console.log(`[Container] Cloning ${repoUrl} to ${targetWorkspacePath}`);
   const sandbox = getSandbox(env.Sandbox, containerId);
   try {
     try {
       await sandbox.gitCheckout(repoUrl, {
-        targetDir: workspacePath,
+        targetDir: targetWorkspacePath,
         depth: 1,
       });
     } catch (error) {
@@ -217,7 +218,7 @@ export async function cloneRepo(
 
     let checkoutEntries;
     try {
-      checkoutEntries = await sandbox.listFiles(workspacePath, {
+      checkoutEntries = await sandbox.listFiles(targetWorkspacePath, {
         recursive: false,
         includeHidden: true,
       });
@@ -249,6 +250,25 @@ export async function cloneRepo(
       error,
     );
   }
+}
+
+function deriveRepoDirectoryName(repoUrl: string): string {
+  const trimmed = repoUrl.trim().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const lastSegment = trimmed.split('/').pop() || '';
+  const withoutGitSuffix = lastSegment.replace(/\.git$/i, '');
+  const safeName = withoutGitSuffix.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '');
+  return safeName || 'repo';
+}
+
+export function resolveWorkspaceRoot(repoUrl?: string | null): string {
+  if (!repoUrl) {
+    return '/workspace';
+  }
+  return `/workspace/${deriveRepoDirectoryName(repoUrl)}`;
+}
+
+function toWorkspaceAbsolutePath(workspaceRoot: string, relativePath: string): string {
+  return `${workspaceRoot.replace(/\/+$/, '')}/${relativePath}`;
 }
 
 export async function ensureTerminalInContainer(
@@ -335,15 +355,22 @@ export async function startFAPAgent(
 // Explicit Artifact Transport
 // ================================================================
 
-function normalizeWorkspacePath(inputPath: string, label: string): string {
+function normalizeWorkspacePath(
+  inputPath: string,
+  label: string,
+  workspaceRoot: string = '/workspace'
+): string {
   let normalized = inputPath.trim();
   if (!normalized) {
     throw new ContainerError(`${label} is required.`);
   }
-  if (normalized === '/workspace') {
-    throw new ContainerError(`${label} must point to a file inside /workspace.`);
+  if (normalized === workspaceRoot || normalized === '/workspace') {
+    throw new ContainerError(`${label} must point to a file inside the thread workspace.`);
   }
-  if (normalized.startsWith('/workspace/')) {
+  const rootedPrefix = `${workspaceRoot.replace(/\/+$/, '')}/`;
+  if (normalized.startsWith(rootedPrefix)) {
+    normalized = normalized.slice(rootedPrefix.length);
+  } else if (normalized.startsWith('/workspace/')) {
     normalized = normalized.slice('/workspace/'.length);
   } else if (normalized.startsWith('/')) {
     normalized = normalized.slice(1);
@@ -371,10 +398,11 @@ export async function exportArtifactFromContainer(
   containerId: string,
   sessionId: string,
   nodeId: string,
-  sourcePath: string
+  sourcePath: string,
+  workspaceRoot: string = '/workspace'
 ): Promise<{ bucketKey: string }> {
-  const relativeSourcePath = normalizeWorkspacePath(sourcePath, 'Source path');
-  const sourceAbsolutePath = `/workspace/${relativeSourcePath}`;
+  const relativeSourcePath = normalizeWorkspacePath(sourcePath, 'Source path', workspaceRoot);
+  const sourceAbsolutePath = toWorkspaceAbsolutePath(workspaceRoot, relativeSourcePath);
   const sandbox = getSandbox(env.Sandbox, containerId);
   const existsResult = await sandbox.exists(sourceAbsolutePath);
   if (!existsResult.exists) {
@@ -407,9 +435,10 @@ export async function importArtifactToContainer(
   env: ContainerEnv & { ARTIFACTS: R2Bucket },
   containerId: string,
   bucketKey: string,
-  targetPath: string
+  targetPath: string,
+  workspaceRoot: string = '/workspace'
 ): Promise<void> {
-  const relativeTargetPath = normalizeWorkspacePath(targetPath, 'Target path');
+  const relativeTargetPath = normalizeWorkspacePath(targetPath, 'Target path', workspaceRoot);
   const storedObject = await env.ARTIFACTS.get(bucketKey);
   if (!storedObject) {
     throw new BackupError(`Artifact ${bucketKey} was not found in storage.`);
@@ -432,10 +461,10 @@ export async function importArtifactToContainer(
     throw new BackupError(`Artifact ${bucketKey} payload is incomplete.`);
   }
 
-  const targetAbsolutePath = `/workspace/${relativeTargetPath}`;
+  const targetAbsolutePath = toWorkspaceAbsolutePath(workspaceRoot, relativeTargetPath);
   const lastSlash = targetAbsolutePath.lastIndexOf('/');
   const targetParent =
-    lastSlash > 0 ? targetAbsolutePath.slice(0, lastSlash) : '/workspace';
+    lastSlash > 0 ? targetAbsolutePath.slice(0, lastSlash) : workspaceRoot;
   const sandbox = getSandbox(env.Sandbox, containerId);
   await sandbox.mkdir(targetParent, { recursive: true });
   await sandbox.writeFile(targetAbsolutePath, payload.content, {

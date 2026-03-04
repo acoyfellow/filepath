@@ -5,7 +5,7 @@ import { parseAgentEvent } from "../lib/protocol";
 import type { AgentEventType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { ADAPTER_COMMANDS, buildAgentEnv } from '$lib/agents/adapters';
-import { cloneRepo, type ContainerEnv } from '$lib/agents/container';
+import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
 import {
@@ -258,6 +258,8 @@ user_key: string | null;
     }
     const sandbox = getSandbox(this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0], nodeId);
 
+    const workspaceRoot = resolveWorkspaceRoot(row.git_repo_url);
+
     // Clone git repo if specified (before starting agent process)
     if (row.git_repo_url) {
       console.log(`[ChatAgent] Cloning repo: ${row.git_repo_url}`);
@@ -265,7 +267,7 @@ user_key: string | null;
         { Sandbox: this.env.Sandbox } as unknown as ContainerEnv,
         nodeId,
         row.git_repo_url,
-        '/workspace'
+        workspaceRoot
       );
     }
 
@@ -275,7 +277,7 @@ user_key: string | null;
         model: canonicalizeStoredModel(row.model),
         apiKey: containerApiKey,
         task: row.name || '',
-        workspacePath: '/workspace',
+        workspacePath: workspaceRoot,
       }),
       FILEPATH_AGENT_ID: nodeId,
       FILEPATH_SESSION_ID: row.session_id,
@@ -284,7 +286,7 @@ user_key: string | null;
     const command = ADAPTER_COMMANDS[row.agent_type] ?? ADAPTER_COMMANDS['shelley'];
     const proc = await sandbox.startProcess(command, {
       env: envVars,
-      cwd: '/workspace',
+      cwd: workspaceRoot,
     }) as unknown as ContainerProcess;
 
     try {

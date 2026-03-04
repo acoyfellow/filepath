@@ -23,6 +23,7 @@ import {
   exportArtifactFromContainer,
   importArtifactToContainer,
   cloneRepo,
+  resolveWorkspaceRoot,
   type ContainerEnv,
 } from '../src/lib/agents/container';
 import { SessionEventBusV2, Sandbox } from './index';
@@ -154,8 +155,9 @@ export default {
       };
 
       const ensureThreadRuntime = async (row: { id: string; containerId: string | null; gitRepoUrl: string | null }) => {
+        const workspaceRoot = resolveWorkspaceRoot(row.gitRepoUrl);
         if (row.containerId) {
-          return { id: row.id, containerId: row.containerId };
+          return { id: row.id, containerId: row.containerId, workspaceRoot };
         }
 
         const containerId = row.id;
@@ -164,13 +166,13 @@ export default {
             { Sandbox: env.Sandbox } as unknown as ContainerEnv,
             containerId,
             row.gitRepoUrl,
-            '/workspace',
+            workspaceRoot,
           );
         } else {
           const sandbox = getSandbox(env.Sandbox as never, containerId) as {
             mkdir(path: string, options?: { recursive?: boolean }): Promise<unknown>;
           };
-          await sandbox.mkdir('/workspace', { recursive: true });
+          await sandbox.mkdir(workspaceRoot, { recursive: true });
         }
 
         await env.DB.prepare(
@@ -181,7 +183,7 @@ export default {
           .bind(containerId, row.id)
           .run();
 
-        return { id: row.id, containerId };
+        return { id: row.id, containerId, workspaceRoot };
       };
 
       const sourceRow = await getThread(body.sourceNodeId);
@@ -244,6 +246,7 @@ export default {
           sessionId,
           sourceNode.id,
           body.sourcePath,
+          sourceNode.workspaceRoot,
         );
 
         const targetNode = await ensureThreadRuntime(targetRow);
@@ -261,6 +264,7 @@ export default {
           targetNode.containerId,
           bucketKey,
           body.targetPath,
+          targetNode.workspaceRoot,
         );
 
         await env.DB.prepare(
