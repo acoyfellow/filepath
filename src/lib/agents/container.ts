@@ -203,37 +203,6 @@ export async function cloneRepo(
   console.log(`[Container] Cloning ${repoUrl} to ${workspacePath}`);
   const sandbox = getSandbox(env.Sandbox, containerId);
   try {
-    let existsResult;
-    try {
-      existsResult = await sandbox.exists(workspacePath);
-    } catch (error) {
-      throw new ContainerError(
-        `Failed to clone the session repository into the sandbox workspace: workspace existence check failed: ${error instanceof Error ? error.message : String(error)}`,
-        error,
-      );
-    }
-
-    if (existsResult.exists) {
-      let existing;
-      try {
-        existing = await sandbox.listFiles(workspacePath, {
-          recursive: false,
-          includeHidden: true,
-        });
-      } catch (error) {
-        throw new ContainerError(
-          `Failed to clone the session repository into the sandbox workspace: workspace preflight listing failed: ${error instanceof Error ? error.message : String(error)}`,
-          error,
-        );
-      }
-
-      if (existing.count > 0) {
-        throw new ContainerError(
-          `Failed to clone the session repository into the sandbox workspace: ${workspacePath} already contains files.`,
-        );
-      }
-    }
-
     try {
       await sandbox.gitCheckout(repoUrl, {
         targetDir: workspacePath,
