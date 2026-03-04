@@ -1,8 +1,8 @@
-FROM docker.io/cloudflare/sandbox:0.7.0
+FROM docker.io/cloudflare/sandbox:0.7.10
 
-# Install ttyd for terminal access
+# Install runtime tools for thread sandboxes
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ttyd && \
+    apt-get install -y --no-install-recommends git ttyd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

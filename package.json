@@ -9,7 +9,7 @@
     "@ai-sdk/openai": "^3.0.39",
     "@better-auth/api-key": "^1.5.2",
     "@better-auth/passkey": "^1.5.2",
-    "@cloudflare/sandbox": "^0.7.8",
+    "@cloudflare/sandbox": "^0.7.10",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.3",
     "agents": "^0.3.10",
@@ -42,7 +42,7 @@
     "drizzle-orm": "^0.45.1",
     "paneforge": "^1.0.2",
     "playwright": "^1.58.2",
-    "svelte": "^5.53.6",
+    "svelte": "^5.53.7",
     "svelte-check": "^4.4.4",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
@@ -74,7 +74,8 @@
     "db:studio": "drizzle-kit studio",
     "test": "bun run prd.ts",
     "prd": "bun run prd.ts",
-    "prd:loop": "bun run prd.ts --loop"
+    "prd:loop": "bun run prd.ts --loop",
+    "postinstall": "node ./scripts/patch-alchemy-cli.js"
   },
   "type": "module"
 }

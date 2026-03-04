@@ -201,13 +201,54 @@ export async function cloneRepo(
   workspacePath: string = '/workspace'
 ): Promise<void> {
   console.log(`[Container] Cloning ${repoUrl} to ${workspacePath}`);
+  const sandbox = getSandbox(env.Sandbox, containerId);
   try {
-    await execInContainer(env, containerId, `git clone ${repoUrl} .`, { cwd: workspacePath });
+    const existsResult = await sandbox.exists(workspacePath);
+    if (existsResult.exists) {
+      const existing = await sandbox.listFiles(workspacePath, { recursive: false, includeHidden: true });
+      if (existing.count > 0) {
+        throw new ContainerError(
+          `Failed to clone the session repository into the sandbox workspace: ${workspacePath} already contains files.`,
+        );
+      }
+    } else {
+      await sandbox.mkdir(workspacePath, { recursive: true });
+    }
+
+    const checkoutPath = `/tmp/filepath-checkout-${crypto.randomUUID()}`;
+    await sandbox.gitCheckout(repoUrl, {
+      targetDir: checkoutPath,
+      depth: 1,
+    });
+
+    const checkoutEntries = await sandbox.listFiles(checkoutPath, {
+      recursive: false,
+      includeHidden: true,
+    });
+    if (checkoutEntries.count === 0) {
+      throw new ContainerError(
+        'Failed to clone the session repository into the sandbox workspace: the checkout completed without any files.',
+      );
+    }
+
+    for (const entry of checkoutEntries.files) {
+      await sandbox.moveFile(entry.absolutePath, `${workspacePath}/${entry.name}`);
+    }
   } catch (error) {
-    const message =
+    let detail =
       error instanceof Error ? error.message : `Unknown clone failure for ${repoUrl}`;
-    console.error(`[Container] Clone failed: ${message}`);
-    throw new ContainerError('Failed to clone the session repository into the sandbox workspace.', error);
+    if (
+      detail.startsWith('Failed to clone the session repository into the sandbox workspace:')
+    ) {
+      detail = detail.slice(
+        'Failed to clone the session repository into the sandbox workspace:'.length,
+      ).trim();
+    }
+    console.error(`[Container] Clone failed: ${detail}`);
+    throw new ContainerError(
+      `Failed to clone the session repository into the sandbox workspace: ${detail}`,
+      error,
+    );
   }
 }
 
@@ -317,7 +358,14 @@ function normalizeWorkspacePath(inputPath: string, label: string): string {
   return parts.join('/');
 }
 
-const MAX_ARTIFACT_BASE64_LENGTH = 512_000;
+interface StoredArtifactPayload {
+  content: string;
+  encoding: 'utf-8' | 'base64';
+  isBinary: boolean;
+  mimeType: string | null;
+}
+
+const MAX_ARTIFACT_CONTENT_LENGTH = 512_000;
 
 export async function exportArtifactFromContainer(
   env: ContainerEnv & { ARTIFACTS: R2Bucket },
@@ -327,24 +375,32 @@ export async function exportArtifactFromContainer(
   sourcePath: string
 ): Promise<{ bucketKey: string }> {
   const relativeSourcePath = normalizeWorkspacePath(sourcePath, 'Source path');
-  const exportResult = await execInContainer(
-    env,
-    containerId,
-    "bash -lc 'set -euo pipefail; test -f \"$FILEPATH_SOURCE_PATH\"; base64 < \"$FILEPATH_SOURCE_PATH\" | tr -d \"\\n\"'",
-    {
-      cwd: '/workspace',
-      env: {
-        FILEPATH_SOURCE_PATH: relativeSourcePath,
-      },
-    }
-  );
+  const sourceAbsolutePath = `/workspace/${relativeSourcePath}`;
+  const sandbox = getSandbox(env.Sandbox, containerId);
+  const existsResult = await sandbox.exists(sourceAbsolutePath);
+  if (!existsResult.exists) {
+    throw new ContainerError('Source path does not exist.');
+  }
 
-  if (exportResult.stdout.length > MAX_ARTIFACT_BASE64_LENGTH) {
+  const file = await sandbox.readFile(sourceAbsolutePath) as {
+    content: string;
+    encoding?: string;
+    isBinary?: boolean;
+    mimeType?: string;
+  };
+  const payload: StoredArtifactPayload = {
+    content: file.content,
+    encoding: file.encoding === 'base64' ? 'base64' : 'utf-8',
+    isBinary: Boolean(file.isBinary),
+    mimeType: file.mimeType ?? null,
+  };
+
+  if (payload.content.length > MAX_ARTIFACT_CONTENT_LENGTH) {
     throw new ContainerError('Artifact is too large for v1 transfer. Keep transfers under 384KB.');
   }
 
   const bucketKey = `sessions/${sessionId}/artifacts/${nodeId}/${crypto.randomUUID()}`;
-  await env.ARTIFACTS.put(bucketKey, exportResult.stdout.trim());
+  await env.ARTIFACTS.put(bucketKey, JSON.stringify(payload));
   return { bucketKey };
 }
 
@@ -360,21 +416,30 @@ export async function importArtifactToContainer(
     throw new BackupError(`Artifact ${bucketKey} was not found in storage.`);
   }
 
-  const base64Payload = (await storedObject.text()).trim();
-  if (!base64Payload) {
+  const rawPayload = (await storedObject.text()).trim();
+  if (!rawPayload) {
     throw new BackupError(`Artifact ${bucketKey} is empty or unreadable.`);
   }
+  let payload: StoredArtifactPayload;
+  try {
+    payload = JSON.parse(rawPayload) as StoredArtifactPayload;
+  } catch (error) {
+    throw new BackupError(`Artifact ${bucketKey} payload is invalid.`, error);
+  }
+  if (
+    typeof payload.content !== 'string' ||
+    (payload.encoding !== 'utf-8' && payload.encoding !== 'base64')
+  ) {
+    throw new BackupError(`Artifact ${bucketKey} payload is incomplete.`);
+  }
 
-  await execInContainer(
-    env,
-    containerId,
-    "bash -lc 'set -euo pipefail; mkdir -p \"$(dirname \"$FILEPATH_TARGET_PATH\")\"; printf \"%s\" \"$FILEPATH_ARTIFACT_BASE64\" | base64 -d > \"$FILEPATH_TARGET_PATH\"'",
-    {
-      cwd: '/workspace',
-      env: {
-        FILEPATH_TARGET_PATH: relativeTargetPath,
-        FILEPATH_ARTIFACT_BASE64: base64Payload,
-      },
-    }
-  );
+  const targetAbsolutePath = `/workspace/${relativeTargetPath}`;
+  const lastSlash = targetAbsolutePath.lastIndexOf('/');
+  const targetParent =
+    lastSlash > 0 ? targetAbsolutePath.slice(0, lastSlash) : '/workspace';
+  const sandbox = getSandbox(env.Sandbox, containerId);
+  await sandbox.mkdir(targetParent, { recursive: true });
+  await sandbox.writeFile(targetAbsolutePath, payload.content, {
+    encoding: payload.encoding,
+  });
 }

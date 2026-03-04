@@ -1,7 +1,7 @@
 import { error, json } from "@sveltejs/kit";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDrizzle } from "$lib/auth";
-import { agentArtifact, agentNode, agentSession } from "$lib/schema";
+import { agentNode, agentSession } from "$lib/schema";
 import type { RequestEvent, RequestHandler } from "@sveltejs/kit";
 
 interface ArtifactRequestBody {
@@ -24,20 +24,32 @@ async function verifySessionOwnership(
   if (rows.length === 0) throw error(404, "Session not found");
 }
 
-export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
+export const GET: RequestHandler = async ({ params, locals, platform, request }: RequestEvent) => {
   if (!locals.user) throw error(401, "Unauthorized");
 
   const sessionId = params.id!;
   const db = getDrizzle();
   await verifySessionOwnership(db, sessionId, locals.user.id);
+  const worker = platform?.env?.WORKER;
+  if (!worker) {
+    throw error(503, "Worker binding unavailable");
+  }
+  const requestUrl = new URL(request.url);
+  requestUrl.pathname = `/internal/sessions/${sessionId}/artifacts`;
 
-  const artifacts = await db
-    .select()
-    .from(agentArtifact)
-    .where(eq(agentArtifact.sessionId, sessionId))
-    .orderBy(desc(agentArtifact.createdAt));
+  const response = await worker.fetch(requestUrl.toString(), {
+    method: "GET",
+  });
+  const payload = (await response.json().catch(() => ({ artifacts: [] }))) as {
+    artifacts?: unknown[];
+    error?: string;
+    message?: string;
+  };
+  if (!response.ok) {
+    throw error(response.status, payload.error || payload.message || "Failed to load artifacts");
+  }
 
-  return json({ artifacts });
+  return json({ artifacts: payload.artifacts ?? [] });
 };
 
 export const POST: RequestHandler = async ({

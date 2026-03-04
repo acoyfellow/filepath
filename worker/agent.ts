@@ -100,6 +100,24 @@ export default {
     }
 
     const internalArtifactMatch = url.pathname.match(/^\/internal\/sessions\/([^/]+)\/artifacts$/);
+    if (internalArtifactMatch && request.method === 'GET') {
+      const [, sessionId] = internalArtifactMatch;
+      const artifacts = await env.DB.prepare(
+        `SELECT id, session_id as sessionId, source_node_id as sourceNodeId, target_node_id as targetNodeId,
+                source_path as sourcePath, target_path as targetPath, bucket_key as bucketKey,
+                status, error_message as errorMessage, created_at as createdAt, updated_at as updatedAt
+           FROM agent_artifact
+          WHERE session_id = ?
+          ORDER BY created_at DESC`,
+      )
+        .bind(sessionId)
+        .all();
+
+      return new Response(JSON.stringify({ artifacts: artifacts.results ?? [] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     if (internalArtifactMatch && request.method === 'POST') {
       const [, sessionId] = internalArtifactMatch;
       const body = await request.json().catch(() => null) as
@@ -118,7 +136,7 @@ export default {
         );
       }
 
-      const ensureThreadRuntime = async (nodeId: string) => {
+      const getThread = async (nodeId: string) => {
         const row = await env.DB.prepare(
           `SELECT n.id, n.container_id as containerId, s.git_repo_url as gitRepoUrl
              FROM agent_node n
@@ -132,6 +150,10 @@ export default {
           return null;
         }
 
+        return row;
+      };
+
+      const ensureThreadRuntime = async (row: { id: string; containerId: string | null; gitRepoUrl: string | null }) => {
         if (row.containerId) {
           return { id: row.id, containerId: row.containerId };
         }
@@ -146,9 +168,9 @@ export default {
           );
         } else {
           const sandbox = getSandbox(env.Sandbox as never, containerId) as {
-            exec(command: string, options?: { cwd?: string }): Promise<unknown>;
+            mkdir(path: string, options?: { recursive?: boolean }): Promise<unknown>;
           };
-          await sandbox.exec('mkdir -p /workspace');
+          await sandbox.mkdir('/workspace', { recursive: true });
         }
 
         await env.DB.prepare(
@@ -162,15 +184,16 @@ export default {
         return { id: row.id, containerId };
       };
 
-      const sourceNode = await ensureThreadRuntime(body.sourceNodeId);
-      const targetNode = await ensureThreadRuntime(body.targetNodeId);
+      const sourceRow = await getThread(body.sourceNodeId);
+      const targetRow = await getThread(body.targetNodeId);
 
-      if (!sourceNode || !targetNode) {
+      if (!sourceRow || !targetRow) {
         return new Response(JSON.stringify({ error: 'Source or target thread not found' }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
         });
       }
+
       const artifactId = crypto.randomUUID();
       await env.DB.prepare(
         `INSERT INTO agent_artifact
@@ -180,8 +203,8 @@ export default {
         .bind(
           artifactId,
           sessionId,
-          sourceNode.id,
-          targetNode.id,
+          sourceRow.id,
+          targetRow.id,
           body.sourcePath,
           body.targetPath,
           '',
@@ -202,13 +225,14 @@ export default {
         type: 'artifact_event',
         action: 'artifact_staged',
         artifactId,
-        sourceNodeId: sourceNode.id,
-        targetNodeId: targetNode.id,
+        sourceNodeId: sourceRow.id,
+        targetNodeId: targetRow.id,
         sourcePath: body.sourcePath,
         targetPath: body.targetPath,
       });
 
       try {
+        const sourceNode = await ensureThreadRuntime(sourceRow);
         const artifactEnv = {
           Sandbox: env.Sandbox,
           ARTIFACTS: env.ARTIFACTS,
@@ -221,6 +245,8 @@ export default {
           sourceNode.id,
           body.sourcePath,
         );
+
+        const targetNode = await ensureThreadRuntime(targetRow);
 
         await env.DB.prepare(
           `UPDATE agent_artifact
@@ -249,8 +275,8 @@ export default {
           type: 'artifact_event',
           action: 'artifact_delivered',
           artifactId,
-          sourceNodeId: sourceNode.id,
-          targetNodeId: targetNode.id,
+          sourceNodeId: sourceRow.id,
+          targetNodeId: targetRow.id,
           sourcePath: body.sourcePath,
           targetPath: body.targetPath,
         });
@@ -282,8 +308,8 @@ export default {
           type: 'artifact_event',
           action: 'artifact_failed',
           artifactId,
-          sourceNodeId: sourceNode.id,
-          targetNodeId: targetNode.id,
+          sourceNodeId: sourceRow.id,
+          targetNodeId: targetRow.id,
           sourcePath: body.sourcePath,
           targetPath: body.targetPath,
           errorMessage: message,
