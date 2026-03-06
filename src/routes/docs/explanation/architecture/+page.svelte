@@ -62,7 +62,7 @@
       
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">Sandbox Runtime</h3>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm">Cloudflare Sandbox runs the containerized runtime for each thread. When terminal attach is available, it opens a workspace shell for that thread. If the sandbox path fails, the thread fails explicitly instead of bypassing the runtime.</p>
+        <p class="text-gray-600 dark:text-neutral-400 text-sm">Cloudflare Sandbox runs the containerized runtime for each thread. The runtime stays headless and reports through the filepath protocol. If the sandbox path fails, the thread fails explicitly instead of bypassing the runtime.</p>
       </div>
     </div>
   </section>

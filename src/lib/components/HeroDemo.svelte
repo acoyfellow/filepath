@@ -2,7 +2,7 @@
   import "$lib/styles/theme.css";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
-  import type { AgentNode, ArtifactEntry, ProcessEntry } from "$lib/types/session";
+  import type { AgentNode, ArtifactEntry } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
 
   const rootSeed: AgentNode = {
@@ -154,24 +154,6 @@
     ],
   };
 
-  const seededProcesses: Record<string, ProcessEntry[]> = {
-    root: [
-      { id: "root-agent", name: "codex loop", kind: "agent", status: "running" },
-      { id: "root-shell", name: "watch status", kind: "helper", status: "starting" },
-    ],
-    "app-shell": [
-      { id: "app-codex", name: "codex app shell", kind: "agent", status: "running" },
-      { id: "app-build", name: "npm run dev", kind: "helper", status: "running" },
-    ],
-    "api-pass": [
-      { id: "api-shelley", name: "shelley api pass", kind: "agent", status: "starting" },
-    ],
-    "release-check": [
-      { id: "release-checker", name: "release check", kind: "agent", status: "running" },
-      { id: "release-bash", name: "bash review", kind: "shell", status: "running" },
-    ],
-  };
-
   const seededArtifacts: ArtifactEntry[] = [
     {
       id: "artifact-1",
@@ -190,12 +172,6 @@
   let rootNode = $state<AgentNode>(structuredClone(rootSeed));
   let selectedId = $state<string | null>("app-shell");
   let messagesByNode = $state<Record<string, ChatMsg[]>>(structuredClone(seededMessages));
-  let selectedProcessByNode = $state<Record<string, string | null>>({
-    root: "root-agent",
-    "app-shell": "app-codex",
-    "api-pass": "api-shelley",
-    "release-check": "release-checker",
-  });
 
   function findNode(node: AgentNode, id: string): AgentNode | null {
     if (node.id === id) return node;
@@ -212,9 +188,6 @@
 
   let currentMessages = $derived<ChatMsg[]>(
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
-  );
-  let currentProcesses = $derived<ProcessEntry[]>(
-    selectedAgent ? (seededProcesses[selectedAgent.id] ?? []) : [],
   );
   let currentArtifacts = $derived<ArtifactEntry[]>(
     selectedAgent
@@ -268,11 +241,6 @@
     // Homepage demo stays deterministic. Keep the same seeded structure.
   }
 
-  function handleSelectProcess(processId: string) {
-    if (!selectedAgent) return;
-    selectedProcessByNode = { ...selectedProcessByNode, [selectedAgent.id]: processId };
-  }
-
   async function handleMove() {
     // Homepage demo stays deterministic. Keep the same seeded structure.
   }
@@ -310,9 +278,6 @@
         messages={currentMessages}
         onsend={handleSend}
         onnavigate={handleNavigate}
-        processes={currentProcesses}
-        selectedProcessId={selectedAgent ? selectedProcessByNode[selectedAgent.id] ?? null : null}
-        onselectprocess={handleSelectProcess}
         artifacts={currentArtifacts}
         threads={threadChoices}
         onsendartifact={handleSendArtifact}

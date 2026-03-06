@@ -26,22 +26,28 @@
 
   let { messages, status, task, onnavigate }: Props = $props();
 
-  let scrollRef: HTMLDivElement | undefined = $state(undefined);
   let showTyping = $derived(
     (status === "running" || status === "thinking") && messages.length > 0,
   );
 
-  // Auto-scroll to bottom when messages change
-  $effect(() => {
-    // Access messages.length to create dependency
-    messages.length;
-    if (scrollRef) {
-      scrollRef.scrollTop = scrollRef.scrollHeight;
-    }
-  });
+  function autoscroll(node: HTMLDivElement, _deps: { messageCount: number; showTyping: boolean }) {
+    const scrollToBottom = () => {
+      queueMicrotask(() => {
+        node.scrollTop = node.scrollHeight;
+      });
+    };
+
+    scrollToBottom();
+
+    return {
+      update(_nextDeps: { messageCount: number; showTyping: boolean }) {
+        scrollToBottom();
+      },
+    };
+  }
 </script>
 
-<div class="chat-scroll" bind:this={scrollRef}>
+<div class="chat-scroll" use:autoscroll={{ messageCount: messages.length, showTyping }}>
   {#if messages.length === 0}
     <div class="chat-empty">
       <div class="chat-empty-icon">

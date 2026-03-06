@@ -19,6 +19,8 @@ declare global {
         WORKER: Fetcher;
         DB: D1Database;
         ARTIFACTS: R2Bucket;
+        API_WS_HOST?: string;
+        API_WS_ORIGIN?: string;
 				};
 		}
 	}

@@ -48,9 +48,9 @@ console.log(status.summary.running > 0); // true`;
     },
     {
       eyebrow: 'True Today',
-      title: 'Visible runtime processes, plus a workspace terminal',
+      title: 'Chat-first runtime visibility',
       body:
-        'The selected thread exposes its real processes in a simple strip above the input. When the runtime supports it, you can open a workspace terminal for that thread instead of guessing what is happening.',
+        'The selected thread shows durable status, event history, tool calls, commits, and explicit handoffs in chat. The runtime stays headless instead of splitting the product into chat plus a terminal viewer.',
     },
     {
       eyebrow: 'True Today',
@@ -153,7 +153,7 @@ console.log(status.summary.running > 0); // true`;
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
             <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Each Thread</div>
             <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
-              A thread is both a chat surface and a sandboxed runtime. The chat stays primary, and the runtime can expose real processes when it has them.
+              A thread is a chat surface backed by a sandboxed runtime. The runtime stays headless and reports through the protocol instead of becoming a second UI.
             </p>
           </div>
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">

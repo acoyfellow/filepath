@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import TreeNode from "./TreeNode.svelte";
   import type { AgentNode } from "$lib/types/session";
 
@@ -16,12 +17,9 @@
   // Resize state
   let dragging = $state(false);
   let treeWidth = $state(220);
-  let widthInitialized = false;
 
-  $effect(() => {
-    if (widthInitialized) return;
+  onMount(() => {
     treeWidth = width;
-    widthInitialized = true;
   });
 
   function onMouseDown() {

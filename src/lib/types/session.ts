@@ -74,13 +74,6 @@ export interface SpawnRequest {
   apiKey?: string;
 }
 
-export interface ProcessEntry {
-  id: string;
-  name: string;
-  kind: "agent" | "shell" | "terminal" | "helper" | "unknown";
-  status: "running" | "exited" | "starting";
-}
-
 export interface ArtifactEntry {
   id: string;
   sessionId: string;

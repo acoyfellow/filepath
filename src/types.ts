@@ -8,14 +8,9 @@ export interface Env {
   DB: D1Database;
 
   // Durable Object bindings
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ChatAgent: DurableObjectNamespace<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TaskAgent: DurableObjectNamespace<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  SESSION_DO: DurableObjectNamespace<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Sandbox: DurableObjectNamespace<any>;
+  ChatAgent: DurableObjectNamespace;
+  SESSION_DO: DurableObjectNamespace;
+  Sandbox: DurableObjectNamespace;
   ARTIFACTS: R2Bucket;
 
   // Environment variables
