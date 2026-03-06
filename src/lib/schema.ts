@@ -242,6 +242,31 @@ export const agentSession = sqliteTable(
   ],
 );
 
+export const agentHarness = sqliteTable(
+  "agent_harness",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    adapter: text("adapter").notNull(),
+    entryCommand: text("entry_command").notNull(),
+    defaultModel: text("default_model").notNull(),
+    icon: text("icon").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    config: text("config").notNull().default("{}"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("agent_harness_enabled_idx").on(table.enabled),
+  ],
+);
+
 export const agentNode = sqliteTable(
   "agent_node",
   {
@@ -252,8 +277,9 @@ export const agentNode = sqliteTable(
     parentId: text("parent_id"),
     // Self-referential. NULL = root node. FK enforced at app level.
     name: text("name").notNull(),
-    agentType: text("agent_type").notNull(),
-    // 'shelley' | 'pi' | 'claude-code' | 'codex' | 'cursor' | 'amp' | 'custom'
+    agentType: text("agent_type")
+      .notNull()
+      .references(() => agentHarness.id),
     model: text("model").notNull(),
     status: text("status").notNull().default("idle"),
     // 'idle' | 'thinking' | 'running' | 'done' | 'error'
@@ -324,10 +350,18 @@ export const agentSessionRelations = relations(agentSession, ({ one, many }) => 
   artifacts: many(agentArtifact),
 }));
 
+export const agentHarnessRelations = relations(agentHarness, ({ many }) => ({
+  nodes: many(agentNode),
+}));
+
 export const agentNodeRelations = relations(agentNode, ({ one, many }) => ({
   session: one(agentSession, {
     fields: [agentNode.sessionId],
     references: [agentSession.id],
+  }),
+  harness: one(agentHarness, {
+    fields: [agentNode.agentType],
+    references: [agentHarness.id],
   }),
   parent: one(agentNode, {
     fields: [agentNode.parentId],

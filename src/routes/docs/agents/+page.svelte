@@ -3,7 +3,7 @@
 
 <svelte:head>
   <title>Agent Catalog | filepath</title>
-  <meta name="description" content="Available agents on filepath: Shelley, Pi, Claude Code, Codex, Cursor, Amp, OpenCode, and custom agents." />
+  <meta name="description" content="Available agents on filepath: Shelley, Pi, Claude Code, Codex, Cursor, Amp, and custom agents." />
 </svelte:head>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
@@ -116,24 +116,6 @@
             <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">amp</code>
           </div>
           <p class="text-gray-600 dark:text-neutral-400 mb-3">Sourcegraph's agent. Large codebase navigation, cross-repo changes.</p>
-          <div class="flex gap-2 text-sm">
-            <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
-            <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- OpenCode -->
-    <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-6">
-      <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded bg-gray-100 dark:bg-neutral-800 flex items-center justify-center text-2xl">OC</div>
-        <div class="flex-1">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200">OpenCode</h2>
-            <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">opencode</code>
-          </div>
-          <p class="text-gray-600 dark:text-neutral-400 mb-3">Open-source coding agent. Terminal-based development.</p>
           <div class="flex gap-2 text-sm">
             <span class="text-gray-500 dark:text-neutral-500">Default model:</span>
             <code class="text-gray-600 dark:text-neutral-400">anthropic/claude-sonnet-4.5</code>

@@ -4,7 +4,7 @@ import type { Env } from "../types";
 import { parseAgentEvent } from "../lib/protocol";
 import type { AgentEventType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
-import { ADAPTER_COMMANDS, buildAgentEnv } from '$lib/agents/adapters';
+import { buildAgentEnv } from '$lib/agents/adapters';
 import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
 import type { AgentType } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
@@ -206,21 +206,25 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
   private async spawnContainer(nodeId: string): Promise<void> {
     // Get node config from D1
-const row = await this.env.DB.prepare(
+    const row = await this.env.DB.prepare(
       `SELECT n.agent_type, n.model, n.name, s.id as session_id, s.git_repo_url,
-s.api_key as session_key, u.openrouter_api_key as user_key
-FROM agent_node n JOIN agent_session s ON n.session_id = s.id
-JOIN user u ON s.user_id = u.id
-WHERE n.id = ?`
-).bind(nodeId).first<{
-agent_type: string;
-model: string;
-name: string;
+              s.api_key as session_key, u.openrouter_api_key as user_key,
+              h.entry_command as entry_command
+         FROM agent_node n
+         JOIN agent_session s ON n.session_id = s.id
+         JOIN user u ON s.user_id = u.id
+         JOIN agent_harness h ON h.id = n.agent_type
+        WHERE n.id = ?`,
+    ).bind(nodeId).first<{
+      agent_type: string;
+      model: string;
+      name: string;
       session_id: string;
       git_repo_url: string | null;
-session_key: string | null;
-user_key: string | null;
-}>();
+      session_key: string | null;
+      user_key: string | null;
+      entry_command: string;
+    }>();
 
     if (!row) throw new Error(`Node ${nodeId} not found in D1`);
 
@@ -283,8 +287,11 @@ user_key: string | null;
       FILEPATH_SESSION_ID: row.session_id,
     };
 
-    const command = ADAPTER_COMMANDS[row.agent_type] ?? ADAPTER_COMMANDS['shelley'];
-    const proc = await sandbox.startProcess(command, {
+    if (!row.entry_command) {
+      throw new Error(`Harness ${row.agent_type} has no entry command.`);
+    }
+
+    const proc = await sandbox.startProcess(row.entry_command, {
       env: envVars,
       cwd: workspaceRoot,
     }) as unknown as ContainerProcess;

@@ -1,6 +1,6 @@
 import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
-import { agentSession, agentNode } from "$lib/schema";
+import { agentHarness, agentSession, agentNode } from "$lib/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { encryptApiKey } from "$lib/crypto";
 import type { RequestHandler, RequestEvent } from "@sveltejs/kit";
@@ -80,6 +80,21 @@ export const POST: RequestHandler = async ({ params, request, locals, platform }
 
   const db = getDrizzle();
   await verifySession(db, id, locals.user.id);
+
+  const harnesses = await db
+    .select({
+      id: agentHarness.id,
+      enabled: agentHarness.enabled,
+    })
+    .from(agentHarness)
+    .where(eq(agentHarness.id, body.agentType));
+
+  if (harnesses.length === 0) {
+    throw error(400, "Harness not found");
+  }
+  if (!harnesses[0].enabled) {
+    throw error(400, "Harness is disabled");
+  }
 
   // If parentId specified, verify it exists in this session
   if (body.parentId) {

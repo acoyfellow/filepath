@@ -1,15 +1,7 @@
 import type { AgentStatus as AgentStatusType } from "$lib/protocol";
 
-/** Supported agent types (harnesses) */
-export type AgentType =
-  | "shelley"
-  | "pi"
-  | "claude-code"
-  | "codex"
-  | "cursor"
-  | "amp"
-  | "opencode"
-  | "custom";
+/** Dynamic harness identifier */
+export type AgentType = string;
 
 /** Agent node status (mirrors protocol AgentStatus) */
 export type NodeStatus = AgentStatusType;
@@ -55,13 +47,17 @@ export interface AgentSession {
   updatedAt: number;
 }
 
-/** Agent catalog entry */
-export interface AgentCatalogEntry {
+/** Spawnable harness entry */
+export interface AgentHarness {
   id: AgentType;
   name: string;
   description: string;
+  adapter: string;
+  entryCommand: string;
   defaultModel: string;
   icon: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
 }
 
 /** Spawn request (from spawn modal) */

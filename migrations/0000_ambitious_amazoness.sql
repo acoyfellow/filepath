@@ -37,6 +37,30 @@ CREATE INDEX `agent_artifact_session_id_idx` ON `agent_artifact` (`session_id`);
 CREATE INDEX `agent_artifact_source_node_id_idx` ON `agent_artifact` (`source_node_id`);--> statement-breakpoint
 CREATE INDEX `agent_artifact_target_node_id_idx` ON `agent_artifact` (`target_node_id`);--> statement-breakpoint
 CREATE INDEX `agent_artifact_status_idx` ON `agent_artifact` (`status`);--> statement-breakpoint
+CREATE TABLE `agent_harness` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`description` text NOT NULL,
+	`adapter` text NOT NULL,
+	`entry_command` text NOT NULL,
+	`default_model` text NOT NULL,
+	`icon` text NOT NULL,
+	`enabled` integer DEFAULT true NOT NULL,
+	`config` text DEFAULT '{}' NOT NULL,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `agent_harness_enabled_idx` ON `agent_harness` (`enabled`);--> statement-breakpoint
+INSERT INTO `agent_harness` (`id`, `name`, `description`, `adapter`, `entry_command`, `default_model`, `icon`, `enabled`, `config`)
+VALUES
+	('shelley', 'Shelley', 'Full-stack engineering agent. filepath-native reference implementation.', 'shelley', 'node /opt/filepath/adapters/shelley/index.mjs', 'anthropic/claude-sonnet-4.5', 'shell', 1, '{}'),
+	('pi', 'Pi', 'Research and analysis. Deep dives into docs, APIs, codebases.', 'pi', 'node /opt/filepath/adapters/pi/index.mjs', 'anthropic/claude-sonnet-4.5', 'search', 1, '{}'),
+	('claude-code', 'Claude Code', 'Anthropic''s agentic coding tool. Complex multi-file changes.', 'claude-code', 'node /opt/filepath/adapters/claude-code/index.mjs', 'anthropic/claude-sonnet-4.5', 'bot', 1, '{}'),
+	('codex', 'Codex', 'OpenAI''s coding agent. Strong at Python, scripting, data.', 'codex', 'node /opt/filepath/adapters/codex/index.mjs', 'openai/gpt-5', 'scroll', 1, '{}'),
+	('cursor', 'Cursor', 'Cursor''s agent mode via CLI. IDE-grade code intelligence.', 'cursor', 'node /opt/filepath/adapters/cursor/index.mjs', 'anthropic/claude-sonnet-4.5', 'mouse-pointer', 1, '{}'),
+	('amp', 'Amp', 'Sourcegraph''s agent. Large codebase navigation, cross-repo changes.', 'amp', 'node /opt/filepath/adapters/amp/index.mjs', 'anthropic/claude-sonnet-4.5', 'zap', 1, '{}'),
+	('custom', 'Custom', 'Bring your own agent. Register a harness that speaks the filepath protocol.', 'custom', '', 'anthropic/claude-sonnet-4.5', 'box', 1, '{}');--> statement-breakpoint
 CREATE TABLE `agent_node` (
 	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
@@ -51,7 +75,8 @@ CREATE TABLE `agent_node` (
 	`tokens` integer DEFAULT 0 NOT NULL,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
-	FOREIGN KEY (`session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`agent_type`) REFERENCES `agent_harness`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE INDEX `agent_node_session_id_idx` ON `agent_node` (`session_id`);--> statement-breakpoint

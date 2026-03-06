@@ -9,8 +9,7 @@
  */
 
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
-import { ADAPTER_COMMANDS, type AdapterConfig } from './adapters';
-import { sanitizeEnvForLogging } from '$lib/env';
+import type { AdapterConfig } from './adapters';
 
 // Extend Sandbox type to include backup methods (Feb 2026 API)
 type SandboxWithBackup = Sandbox & {
@@ -82,37 +81,6 @@ export async function getOrCreateContainer(
   } catch (error) {
     console.error(`[Container] Failed to get/create container:`, error);
     throw new ContainerError(`Failed to get or create container for session ${sessionId}`, error);
-  }
-}
-
-export async function startAgentInContainer(
-  env: ContainerEnv,
-  containerId: string,
-  agentType: string,
-  config: AdapterConfig
-): Promise<{ processId: string }> {
-  const sandbox = getSandbox(env.Sandbox, containerId);
-  const command = ADAPTER_COMMANDS[agentType];
-  if (!command) throw new AgentStartError(`Unknown agent type: ${agentType}`);
-
-  const envVars = {
-    FILEPATH_TASK: config.task || '',
-    FILEPATH_API_KEY: config.apiKey,
-    FILEPATH_MODEL: config.model,
-    FILEPATH_AGENT_TYPE: config.agentType,
-    FILEPATH_WORKSPACE: config.workspacePath,
-    ...config.envVars,
-  };
-
-  // Log sanitized version - never log actual secrets
-  console.log(`[Container] Starting agent ${agentType} with env:`, sanitizeEnvForLogging(envVars));
-
-  try {
-    const proc = await sandbox.startProcess(command, { env: envVars, cwd: config.workspacePath });
-    return { processId: proc.pid ? String(proc.pid) : 'unknown' };
-  } catch (error) {
-    console.error(`[Container] Failed to start agent ${agentType}:`, error);
-    throw new AgentStartError(`Failed to start ${agentType} in container ${containerId}`, error);
   }
 }
 

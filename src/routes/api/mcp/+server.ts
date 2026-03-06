@@ -98,9 +98,8 @@ const TOOLS = [
         sessionId: { type: 'string', description: 'Session ID' },
         name: { type: 'string', description: 'Agent name' },
         agentType: { 
-          type: 'string', 
-          enum: ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'],
-          description: 'Type of agent to spawn'
+          type: 'string',
+          description: 'Harness ID from /api/harnesses'
         },
         model: { type: 'string', description: `LLM model (e.g., ${DEFAULT_MODEL_FULL})` },
         parentId: { type: 'string', description: 'Parent node ID for nested agents' },

@@ -1,67 +1,82 @@
-import type { AgentCatalogEntry, AgentType } from "$lib/types/session";
 import { DEFAULT_MODEL_FULL } from "$lib/config";
+import type { AgentHarness } from "$lib/types/session";
 
-export const AGENT_CATALOG: Record<AgentType, AgentCatalogEntry> = {
-  shelley: {
+export const BUILTIN_HARNESSES: AgentHarness[] = [
+  {
     id: "shelley",
     name: "Shelley",
     description: "Full-stack engineering agent. filepath-native reference implementation.",
+    adapter: "shelley",
+    entryCommand: "node /opt/filepath/adapters/shelley/index.mjs",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "shell",
+    enabled: true,
+    config: {},
   },
-  pi: {
+  {
     id: "pi",
     name: "Pi",
     description: "Research and analysis. Deep dives into docs, APIs, codebases.",
+    adapter: "pi",
+    entryCommand: "node /opt/filepath/adapters/pi/index.mjs",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "search",
+    enabled: true,
+    config: {},
   },
-  "claude-code": {
+  {
     id: "claude-code",
     name: "Claude Code",
     description: "Anthropic's agentic coding tool. Complex multi-file changes.",
+    adapter: "claude-code",
+    entryCommand: "node /opt/filepath/adapters/claude-code/index.mjs",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "bot",
+    enabled: true,
+    config: {},
   },
-  codex: {
+  {
     id: "codex",
     name: "Codex",
     description: "OpenAI's coding agent. Strong at Python, scripting, data.",
+    adapter: "codex",
+    entryCommand: "node /opt/filepath/adapters/codex/index.mjs",
     defaultModel: "openai/gpt-5",
     icon: "scroll",
+    enabled: true,
+    config: {},
   },
-  cursor: {
+  {
     id: "cursor",
     name: "Cursor",
     description: "Cursor's agent mode via CLI. IDE-grade code intelligence.",
+    adapter: "cursor",
+    entryCommand: "node /opt/filepath/adapters/cursor/index.mjs",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "mouse-pointer",
+    enabled: true,
+    config: {},
   },
-  amp: {
+  {
     id: "amp",
     name: "Amp",
     description: "Sourcegraph's agent. Large codebase navigation, cross-repo changes.",
+    adapter: "amp",
+    entryCommand: "node /opt/filepath/adapters/amp/index.mjs",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "zap",
+    enabled: true,
+    config: {},
   },
-  opencode: {
-    id: "opencode",
-    name: "OpenCode",
-    description: "Open-source coding agent. Terminal-based development.",
-    defaultModel: DEFAULT_MODEL_FULL,
-    icon: "terminal",
-  },
-  custom: {
+  {
     id: "custom",
     name: "Custom",
-    description: "Bring your own agent. Dockerfile that speaks the filepath protocol.",
+    description: "Bring your own agent. Register a harness that speaks the filepath protocol.",
+    adapter: "custom",
+    entryCommand: "",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "box",
+    enabled: true,
+    config: {},
   },
-};
-
-export const AGENT_LIST = Object.values(AGENT_CATALOG);
-
-export function getAgent(id: AgentType): AgentCatalogEntry {
-  return AGENT_CATALOG[id] ?? AGENT_CATALOG.custom;
-}
+];

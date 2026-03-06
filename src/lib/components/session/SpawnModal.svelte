@@ -2,7 +2,7 @@
   import { DEFAULT_MODEL } from "$lib/config";
   import { onMount } from "svelte";
   import { canonicalizeStoredModel, type ProviderId } from "$lib/provider-keys";
-  import type { AgentType, SpawnRequest } from "$lib/types/session";
+  import type { AgentHarness, AgentType, SpawnRequest } from "$lib/types/session";
 
   interface ModelEntry {
     id: string;
@@ -30,15 +30,6 @@
   }: Props = $props();
 
   const NAMES = ["atlas","bolt","cipher","drift","echo","flux","ghost","helix","iris","kite","nova","orbit","pulse","relay","spark","trace","vortex","wave","zero"];
-  const AGENTS: { id: AgentType; label: string }[] = [
-    { id: "shelley", label: "Shelley" },
-    { id: "pi", label: "Pi" },
-    { id: "claude-code", label: "Claude Code" },
-    { id: "codex", label: "Codex" },
-    { id: "cursor", label: "Cursor" },
-    { id: "amp", label: "Amp" },
-    { id: "custom", label: "Custom" },
-  ];
   function pickName(): string {
     const word = NAMES[Math.floor(Math.random() * NAMES.length)];
     const num = Math.floor(Math.random() * 99);
@@ -74,6 +65,9 @@
   let modelsError = $state("");
   let modelWarnings = $state<string[]>([]);
   let availableModels = $state<ModelEntry[]>(initialSpawnState.availableModels);
+  let harnessesLoading = $state(true);
+  let harnessesError = $state("");
+  let availableHarnesses = $state<AgentHarness[]>([]);
 
   let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
   let keyMode = $state<'account' | 'session'>(initialSpawnState.hasAccountKey ? 'account' : 'session');
@@ -96,6 +90,28 @@
   );
 
   onMount(async () => {
+    try {
+      const response = await fetch("/api/harnesses");
+      const data = await response.json().catch(() => ({})) as {
+        harnesses?: AgentHarness[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        harnessesError = data.error ?? "Harness catalog unavailable";
+      } else {
+        const harnesses = (data.harnesses ?? []).filter((entry) => entry.enabled);
+        availableHarnesses = harnesses;
+        if (harnesses.length > 0 && !harnesses.some((entry) => entry.id === agent)) {
+          agent = harnesses[0].id;
+        }
+      }
+    } catch {
+      harnessesError = "Harness catalog unavailable";
+    } finally {
+      harnessesLoading = false;
+    }
+
     try {
       const response = await fetch("/api/models");
       const data = await response.json().catch(() => ({})) as {
@@ -188,12 +204,19 @@
       </div>
 
       <div class="modal-label">agent harness</div>
+      {#if harnessesError}
+        <div class="modal-key-info modal-model-state">{harnessesError}</div>
+      {/if}
       <div class="modal-options">
-        {#each AGENTS as a}
-          <button class="modal-option" class:on={agent === a.id} onclick={() => { agent = a.id; }}>
-            {a.label}
-          </button>
-        {/each}
+        {#if harnessesLoading}
+          <div class="modal-key-info">Loading harnesses...</div>
+        {:else}
+          {#each availableHarnesses as harness}
+            <button class="modal-option" class:on={agent === harness.id} onclick={() => { agent = harness.id; }}>
+              {harness.name}
+            </button>
+          {/each}
+        {/if}
       </div>
 
       <label class="modal-label" for="spawn-model-filter">model</label>

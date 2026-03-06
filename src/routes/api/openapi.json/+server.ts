@@ -143,9 +143,8 @@ export const GET: RequestHandler = async ({ platform, url }) => {
                   properties: {
                     name: { type: 'string', description: 'Agent name' },
                     agentType: { 
-                      type: 'string', 
-                      enum: ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'],
-                      description: 'Type of agent to spawn'
+                      type: 'string',
+                      description: 'Harness ID from /api/harnesses'
                     },
                     model: { type: 'string', description: `LLM model (e.g., ${DEFAULT_MODEL_FULL})` },
                     parentId: { type: 'string', description: 'Parent node ID for nested agents' },
@@ -298,6 +297,18 @@ export const GET: RequestHandler = async ({ platform, url }) => {
                 }
               }
             }
+          }
+        }
+      },
+      '/api/harnesses': {
+        get: {
+          tags: ['Harnesses'],
+          summary: 'List available harnesses',
+          description: 'Get registered agent harnesses from the database-backed harness registry',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': { description: 'List of harnesses' },
+            '401': { description: 'Unauthorized' }
           }
         }
       }

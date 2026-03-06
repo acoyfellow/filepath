@@ -204,7 +204,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
     </div>
 
     <p class="text-gray-500 dark:text-neutral-500 text-sm mt-4">
-      Also available: cursor, amp, opencode, custom. 
+      Also available: cursor, amp, custom.
       <a href="/docs/agents" class="text-gray-700 dark:text-neutral-300 hover:underline">View full catalog</a>
     </p>
   </section>
