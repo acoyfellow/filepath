@@ -119,7 +119,7 @@
     <div class="header-row">
       <div>
         <h1 class="title">Sessions</h1>
-        <p class="subtitle">Long-running workspaces for your agent threads</p>
+        <p class="subtitle">Long-running workspaces for your tree of agents</p>
       </div>
       <button class="px-4 py-2 text-xs font-medium rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white dark:bg-indigo-500 dark:hover:bg-indigo-400" onclick={openNewModal}>+ New session</button>
     </div>
@@ -153,7 +153,7 @@
               <div class="flex items-center gap-3">
                 <StatusDot status={toAgentStatus(s.status)} size={8} />
                 <span class="text-sm font-medium text-gray-900 dark:text-neutral-200">{s.name}</span>
-                <span class="text-xs px-1.5 py-0.5 rounded border text-gray-600 dark:text-neutral-400 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/50">{s.nodeCount} thread{s.nodeCount !== 1 ? "s" : ""}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded border text-gray-600 dark:text-neutral-400 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/50">{s.nodeCount} agent{s.nodeCount !== 1 ? "s" : ""}</span>
               </div>
               <div class="flex items-center gap-3">
                 {#if s.status === "draft" || s.status === "stopped"}

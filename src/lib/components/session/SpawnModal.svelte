@@ -185,12 +185,12 @@
     class="modal"
     role="dialog"
     aria-modal="true"
-    aria-labelledby="spawn-thread-title"
+    aria-labelledby="spawn-agent-title"
     tabindex="-1"
     onclick={(e) => e.stopPropagation()}
     onkeydown={stopModalKeydown}
   >
-    <div class="modal-title" id="spawn-thread-title">spawn thread</div>
+    <div class="modal-title" id="spawn-agent-title">spawn agent</div>
     <div class="modal-body">
       <label class="modal-label" for="spawn-name">name</label>
       <div class="modal-name-row">
@@ -279,7 +279,7 @@
     </div>
     <div class="modal-footer">
       <button class="modal-cancel" onclick={onclose}>cancel</button>
-      <button class="modal-go" onclick={handleSpawn}>spawn thread</button>
+      <button class="modal-go" onclick={handleSpawn}>spawn agent</button>
     </div>
   </div>
 </div>

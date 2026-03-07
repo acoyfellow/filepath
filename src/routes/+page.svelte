@@ -26,7 +26,7 @@ console.log(status.summary.running > 0); // true`;
       eyebrow: 'True Today',
       title: 'Cloudflare sandboxes with real isolation',
       body:
-        'Each thread runs inside its own Cloudflare sandbox with its own filesystem and process space. The chat pane is the control surface for a real headless orchestrator, not a fake replay.',
+        'Each agent runs inside its own Cloudflare sandbox with its own filesystem and process space. The chat pane is the control surface for a real headless runtime, not a fake replay.',
     },
     {
       eyebrow: 'True Today',
@@ -44,19 +44,19 @@ console.log(status.summary.running > 0); // true`;
       eyebrow: 'True Today',
       title: 'Realtime session state across your devices',
       body:
-        'A session can be reopened from another device on the same account and streamed live. The tree is your thread filesystem: a visible way to partition work, keep it grouped, and stay oriented.',
+        'A session can be reopened from another device on the same account and streamed live. The tree is your agent filesystem: a visible way to partition work, keep it grouped, and stay oriented.',
     },
     {
       eyebrow: 'True Today',
       title: 'Chat-first runtime visibility',
       body:
-        'The selected thread shows durable status, event history, tool calls, commits, and exhaustion markers in chat. The runtime stays headless instead of splitting the product into chat plus a terminal viewer.',
+        'The selected agent shows durable status, event history, tool calls, commits, and exhaustion markers in chat. The runtime stays headless instead of splitting the product into chat plus a terminal viewer.',
     },
     {
       eyebrow: 'True Today',
-      title: 'Move threads like files and folders',
+      title: 'Move agents like files and folders',
       body:
-        'The tree is now an active organizer. You can reparent and reorder running threads, and the session stays coherent while the structure changes around live work.',
+        'The tree is now an active organizer. You can reparent and reorder running agents, and the session stays coherent while the structure changes around live work.',
     },
   ];
 
@@ -92,7 +92,7 @@ console.log(status.summary.running > 0); // true`;
           Your agents. Your models. Your Cloudflare.
         </h1>
         <p class="mt-6 max-w-2xl text-base md:text-lg leading-8 text-gray-600 dark:text-neutral-400">
-          filepath runs long-running sessions inside Cloudflare sandboxes. Each thread is a real isolated runtime with its own filesystem. The tree is how you partition the work, like a filesystem for your threads, while the session stays live across your own devices.
+          filepath runs long-running sessions inside Cloudflare sandboxes. Each agent is a real isolated runtime with its own filesystem. The tree is how you partition the work, like a filesystem for your agents, while the session stays live across your own devices.
         </p>
 
         <div class="mt-8 flex flex-col sm:flex-row gap-3">
@@ -139,7 +139,7 @@ console.log(status.summary.running > 0); // true`;
             The UI stays thin. The primitives do the real work.
           </h2>
           <p class="mt-5 text-sm md:text-base leading-8 text-gray-600 dark:text-neutral-400">
-            Each thread is a headless orchestrator that hands work to the selected harness and model inside the sandbox. filepath tries to stay out of the way: no fake replay layer, no direct-model bypass, no hidden second execution path.
+            Each agent is a headless runtime driven by the selected harness and model inside the sandbox. filepath tries to stay out of the way: no fake replay layer, no direct-model bypass, no hidden second execution path.
           </p>
         </div>
 
@@ -147,13 +147,13 @@ console.log(status.summary.running > 0); // true`;
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
             <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Each Thread</div>
             <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
-              A thread is a chat surface backed by a sandboxed runtime. The runtime stays headless and reports through the protocol instead of becoming a second UI.
+              An agent is a chat surface backed by a sandboxed runtime. The runtime stays headless and reports through the protocol instead of becoming a second UI.
             </p>
           </div>
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
             <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">The Tree</div>
             <p class="mt-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
-              The tree is your thread filesystem. It is how you isolate, group, and reason about parallel work.
+              The tree is your agent filesystem. It is how you isolate, group, and reason about parallel work.
             </p>
           </div>
           <div class="rounded-2xl border border-gray-200/90 bg-gray-50/80 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">

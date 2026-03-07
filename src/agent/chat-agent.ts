@@ -4,6 +4,7 @@ import type { Env } from "../types";
 import { parseAgentEvent } from "../lib/protocol";
 import type { AgentEventType, AgentStatusType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
+import { initAuth, resolveRequestAuth } from '$lib/auth';
 import { buildAgentEnv } from '$lib/agents/adapters';
 import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
 import type { AgentType } from '$lib/types/session';
@@ -103,7 +104,25 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
   // ─── WebSocket lifecycle ──────────────────────────────
 
-  onConnect(connection: Connection, _ctx: ConnectionContext): void {
+  async onConnect(connection: Connection, ctx: ConnectionContext): Promise<void> {
+    const url = new URL(ctx.request.url);
+    const token = url.searchParams.get("token");
+
+    const auth = await resolveRequestAuth({
+      db: this.env.DB,
+      env: {
+        BETTER_AUTH_SECRET: this.env.BETTER_AUTH_SECRET,
+      },
+      baseURL: url.origin,
+      headers: ctx.request.headers,
+      apiKeyOverride: token,
+    });
+
+    if (!auth.user) {
+      connection.close(4001, "Unauthorized");
+      return;
+    }
+
     // Send full message history to newly connected client
     const messages = this.loadMessages();
     connection.send(JSON.stringify({

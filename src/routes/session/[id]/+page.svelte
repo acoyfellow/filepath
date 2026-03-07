@@ -370,7 +370,7 @@
 
     if (!response.ok) {
       const data = await response.json() as { message?: string };
-      throw new Error(data.message || "Unable to move thread");
+      throw new Error(data.message || "Unable to move agent");
     }
 
     await refreshSessionSnapshot();
@@ -441,7 +441,7 @@
 
     if (!response.ok) {
       const data = await response.json() as { error?: string };
-      throw new Error(data.error || "Failed to spawn thread");
+      throw new Error(data.error || "Failed to spawn agent");
     }
 
     const data = await response.json() as { id: string };
@@ -502,7 +502,7 @@
       <div class="flex flex-1 flex-col items-center justify-center gap-4 bg-gray-50 pt-8 dark:bg-neutral-950">
         <p class="text-sm text-gray-600 dark:text-neutral-300">{data.session.name}</p>
         <p class="text-xs text-gray-500 dark:text-neutral-500">
-          No threads yet. Spawn your first thread to get started.
+          No agents yet. Spawn your first agent to get started.
         </p>
         <button
           onclick={() => {
@@ -510,7 +510,7 @@
           }}
           class="cursor-pointer rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
         >
-          + spawn thread
+          + spawn agent
         </button>
       </div>
     {/if}

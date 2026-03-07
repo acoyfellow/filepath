@@ -95,7 +95,7 @@
 
 <div class="tree-container">
   <div class="tree" style:width="{treeWidth}px">
-    <div class="tree-header">threads</div>
+    <div class="tree-header">agents</div>
     <div class="tree-scroll" role="tree">
       {#if root}
         <TreeNode
@@ -107,7 +107,7 @@
           ontoggle={handleToggle}
         />
       {:else}
-        <div class="tree-empty">No threads yet</div>
+        <div class="tree-empty">No agents yet</div>
       {/if}
     </div>
     <div class="tree-footer">
@@ -115,7 +115,7 @@
         <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
           <path d="M6 2v8M2 6h8" />
         </svg>
-        new thread
+        new agent
       </button>
     </div>
   </div>
@@ -125,9 +125,9 @@
 </div>
 
 {#if moveDialogNodeId}
-  <div class="move-overlay" role="dialog" aria-modal="true" aria-labelledby="move-thread-title">
+  <div class="move-overlay" role="dialog" aria-modal="true" aria-labelledby="move-agent-title">
     <div class="move-sheet">
-      <div class="move-title" id="move-thread-title">Move thread</div>
+      <div class="move-title" id="move-agent-title">Move agent</div>
       <label class="move-field">
         <span>Destination parent</span>
         <select bind:value={moveTargetParentId}>
