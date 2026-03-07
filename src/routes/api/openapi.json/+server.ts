@@ -310,6 +310,94 @@ export const GET: RequestHandler = async ({ platform, url }) => {
             '200': { description: 'List of harnesses' },
             '401': { description: 'Unauthorized' }
           }
+        },
+        post: {
+          tags: ['Harnesses'],
+          summary: 'Create a harness',
+          description: 'Admin-only. Add a harness to the registry.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['id', 'name', 'description', 'adapter', 'defaultModel', 'icon'],
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                    adapter: { type: 'string' },
+                    entryCommand: { type: 'string' },
+                    defaultModel: { type: 'string' },
+                    icon: { type: 'string' },
+                    enabled: { type: 'boolean' },
+                    config: { type: 'object' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '201': { description: 'Harness created' },
+            '401': { description: 'Unauthorized' },
+            '403': { description: 'Admin only' },
+            '409': { description: 'Harness already exists' }
+          }
+        }
+      },
+      '/api/harnesses/{id}': {
+        patch: {
+          tags: ['Harnesses'],
+          summary: 'Update a harness',
+          description: 'Admin-only. Update a registered harness.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } }
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['name', 'description', 'adapter', 'defaultModel', 'icon'],
+                  properties: {
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                    adapter: { type: 'string' },
+                    entryCommand: { type: 'string' },
+                    defaultModel: { type: 'string' },
+                    icon: { type: 'string' },
+                    enabled: { type: 'boolean' },
+                    config: { type: 'object' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '200': { description: 'Harness updated' },
+            '401': { description: 'Unauthorized' },
+            '403': { description: 'Admin only' },
+            '404': { description: 'Harness not found' }
+          }
+        },
+        delete: {
+          tags: ['Harnesses'],
+          summary: 'Delete a harness',
+          description: 'Admin-only. Delete a registered harness when it is not in use.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } }
+          ],
+          responses: {
+            '200': { description: 'Harness deleted' },
+            '401': { description: 'Unauthorized' },
+            '403': { description: 'Admin only' },
+            '404': { description: 'Harness not found' },
+            '409': { description: 'Harness is in use' }
+          }
         }
       }
     };
