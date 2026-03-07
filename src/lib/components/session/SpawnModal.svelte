@@ -2,7 +2,7 @@
   import { DEFAULT_MODEL } from "$lib/config";
   import { onMount } from "svelte";
   import { canonicalizeStoredModel, type ProviderId } from "$lib/provider-keys";
-  import type { AgentHarness, AgentType, SpawnRequest } from "$lib/types/session";
+  import type { AgentHarness, HarnessId, SpawnRequest } from "$lib/types/session";
 
   interface ModelEntry {
     id: string;
@@ -14,7 +14,7 @@
   interface Props {
     onclose: () => void;
     onspawn: (req: SpawnRequest) => void;
-    lastAgent?: AgentType;
+    lastAgent?: HarnessId;
     lastModel?: string;
     accountKeysMasked?: Record<ProviderId, string | null>;
     accountKeysError?: string | null;
@@ -58,7 +58,7 @@
   const initialSpawnState = createInitialSpawnState();
 
   let name = $state(pickName());
-  let agent = $state<AgentType>(initialSpawnState.agent);
+  let agent = $state<HarnessId>(initialSpawnState.agent);
   let model = $state(initialSpawnState.model);
   let modelFilter = $state("");
   let modelsLoading = $state(true);
@@ -150,7 +150,7 @@
 
   function handleSpawn() {
     if (!name.trim()) return;
-    const req: SpawnRequest = { name: name.trim(), agentType: agent, model };
+    const req: SpawnRequest = { name: name.trim(), harnessId: agent, model };
     if (keyMode === 'session' && sessionKey.trim()) {
       req.apiKey = sessionKey.trim();
     }

@@ -277,7 +277,7 @@ export const agentNode = sqliteTable(
     parentId: text("parent_id"),
     // Self-referential. NULL = root node. FK enforced at app level.
     name: text("name").notNull(),
-    agentType: text("agent_type")
+    harnessId: text("harness_id")
       .notNull()
       .references(() => agentHarness.id),
     model: text("model").notNull(),
@@ -325,7 +325,7 @@ export const agentNodeRelations = relations(agentNode, ({ one, many }) => ({
     references: [agentSession.id],
   }),
   harness: one(agentHarness, {
-    fields: [agentNode.agentType],
+    fields: [agentNode.harnessId],
     references: [agentHarness.id],
   }),
   parent: one(agentNode, {

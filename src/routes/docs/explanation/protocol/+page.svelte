@@ -51,7 +51,7 @@
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">spawn</h3>
         <p class="text-gray-500 dark:text-neutral-500 text-sm mb-2">Agent wants to spawn a child agent</p>
-        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto" code={`{"type":"spawn","name":"Worker","agentType":"pi","task":"Research this topic"}`} />
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto" code={`{"type":"spawn","name":"Worker","harnessId":"pi","task":"Research this topic"}`} />
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4">

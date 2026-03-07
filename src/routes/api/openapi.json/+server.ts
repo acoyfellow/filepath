@@ -139,10 +139,10 @@ export const GET: RequestHandler = async ({ platform, url }) => {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['name', 'agentType', 'model'],
+                  required: ['name', 'harnessId', 'model'],
                   properties: {
                     name: { type: 'string', description: 'Agent name' },
-                    agentType: { 
+                    harnessId: {
                       type: 'string',
                       description: 'Harness ID from /api/harnesses'
                     },
@@ -488,7 +488,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
             properties: {
               id: { type: 'string' },
               name: { type: 'string' },
-              agentType: { type: 'string' },
+              harnessId: { type: 'string' },
               model: { type: 'string' },
               status: { type: 'string', enum: ['idle', 'thinking', 'running', 'done', 'exhausted', 'error'] },
               parentId: { type: 'string', nullable: true }

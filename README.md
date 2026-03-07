@@ -13,8 +13,7 @@ filepath is the orchestration layer that stays thin around the real primitives: 
 - Each agent runs inside its own Cloudflare sandbox with its own filesystem and process space.
 - Sessions reconnect cleanly to the same tree and history.
 - Session state streams live across your own devices on the same account.
-- Threads can hand files to each other explicitly.
-- Threads can be moved and regrouped like files and folders.
+- Agents can be moved and regrouped inside the tree.
 
 ## Quick Start
 
@@ -41,7 +40,7 @@ filepath is the orchestration layer that stays thin around the real primitives: 
 
 SvelteKit (Svelte 5) + Cloudflare Workers + Agents SDK + D1 + CF Sandbox + Alchemy
 
-## Thread Model
+## Core Model
 
 - **Session**: the durable workspace
 - **Agent**: one harness + model lane inside the tree

@@ -38,7 +38,7 @@
 
   function handleDragStart(event: DragEvent) {
     event.dataTransfer?.setData("text/plain", node.id);
-    event.dataTransfer?.setData("application/x-filepath-thread", node.id);
+    event.dataTransfer?.setData("application/x-filepath-agent", node.id);
     event.dataTransfer?.setDragImage(event.currentTarget as Element, 16, 16);
   }
 
@@ -59,7 +59,7 @@
   async function handleDrop(event: DragEvent) {
     event.preventDefault();
     const draggedId =
-      event.dataTransfer?.getData("application/x-filepath-thread") ||
+      event.dataTransfer?.getData("application/x-filepath-agent") ||
       event.dataTransfer?.getData("text/plain");
     if (!draggedId || draggedId === node.id || !dropMode) {
       dropMode = null;

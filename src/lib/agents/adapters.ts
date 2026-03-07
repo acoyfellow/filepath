@@ -11,7 +11,7 @@
 /** Configuration for starting an agent adapter */
 export interface AdapterConfig {
   /** Agent type identifier */
-  agentType: string;
+  harnessId: string;
   /** Model to use for LLM calls */
   model: string;
   /** API key for LLM provider */
@@ -32,7 +32,8 @@ export function buildAgentEnv(config: AdapterConfig): Record<string, string> {
     FILEPATH_TASK: config.task || "",
     FILEPATH_API_KEY: config.apiKey,
     FILEPATH_MODEL: config.model,
-    FILEPATH_AGENT_TYPE: config.agentType,
+    FILEPATH_HARNESS_ID: config.harnessId,
+    FILEPATH_AGENT_TYPE: config.harnessId,
     FILEPATH_WORKSPACE: config.workspacePath,
     ...config.envVars,
   };

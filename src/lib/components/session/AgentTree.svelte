@@ -84,7 +84,7 @@
       });
       moveDialogNodeId = null;
     } catch (error) {
-      moveDialogError = error instanceof Error ? error.message : "Unable to move thread";
+      moveDialogError = error instanceof Error ? error.message : "Unable to move agent";
     } finally {
       moveSubmitting = false;
     }

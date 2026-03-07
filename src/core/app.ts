@@ -92,7 +92,7 @@ export type HarnessUpdateInput = Schema.Schema.Type<typeof HarnessUpdateInputSch
 
 export const NodeSpawnInputSchema = Schema.Struct({
   name: Schema.String,
-  agentType: Schema.String,
+  harnessId: Schema.String,
   model: Schema.String,
   parentId: Schema.optional(Schema.String),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
@@ -306,14 +306,14 @@ export function deleteHarness(ctx: AppContext, id: string) {
     ),
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select({ id: agentNode.id }).from(agentNode).where(eq(agentNode.agentType, id)),
+        () => ctx.db.select({ id: agentNode.id }).from(agentNode).where(eq(agentNode.harnessId, id)),
         "Failed to load linked agents",
       ),
     ),
     Effect.flatMap((rows) =>
       rows.length === 0
         ? Effect.void
-        : Effect.fail(new Conflict({ message: "Harness is in use by existing threads" })),
+        : Effect.fail(new Conflict({ message: "Harness is in use by existing agents" })),
     ),
     Effect.flatMap(() =>
       fromPromise(
@@ -466,7 +466,7 @@ export function spawnNode(ctx: AppContext, sessionId: string, input: NodeSpawnIn
           ctx.db
             .select({ id: agentHarness.id, enabled: agentHarness.enabled })
             .from(agentHarness)
-            .where(eq(agentHarness.id, input.agentType)),
+            .where(eq(agentHarness.id, input.harnessId)),
         "Failed to load harness",
       ),
     ),
@@ -523,7 +523,7 @@ export function spawnNode(ctx: AppContext, sessionId: string, input: NodeSpawnIn
             sessionId,
             parentId: input.parentId || null,
             name: input.name,
-            agentType: input.agentType,
+            harnessId: input.harnessId,
             model: input.model,
             config: JSON.stringify(input.config ?? {}),
             sortOrder: nextSort,
@@ -816,7 +816,7 @@ export function getSessionStatus(ctx: AppContext, sessionId: string) {
               name: agentNode.name,
               status: agentNode.status,
               parentId: agentNode.parentId,
-              agentType: agentNode.agentType,
+              harnessId: agentNode.harnessId,
               tokens: agentNode.tokens,
               containerId: agentNode.containerId,
             })

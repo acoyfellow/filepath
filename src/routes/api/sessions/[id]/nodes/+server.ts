@@ -18,7 +18,7 @@ export const GET: RequestHandler = async (event: RequestEvent) => {
 
 /**
  * POST /api/sessions/[id]/nodes - Spawn a new agent node
- * Body: { name, agentType, model, parentId?, config? }
+ * Body: { name, harnessId, model, parentId?, config? }
  */
 export const POST: RequestHandler = async (event: RequestEvent) => {
   if (!event.locals.user) throw error(401, "Unauthorized");

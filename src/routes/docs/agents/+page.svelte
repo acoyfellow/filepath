@@ -142,7 +142,7 @@
 
   <section class="mt-12 bg-gray-100 dark:bg-neutral-900/50 border border-gray-200 dark:border-neutral-800 rounded-lg p-6">
     <h2 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-4">How to Use</h2>
-    <p class="text-gray-600 dark:text-neutral-400 mb-4">When spawning an agent, use the <code>agentType</code> field:</p>
+    <p class="text-gray-600 dark:text-neutral-400 mb-4">When spawning an agent, use the <code>harnessId</code> field:</p>
     <CodeBlock
       language="bash"
       className="bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto"
@@ -150,7 +150,7 @@
   -H "Content-Type: application/json" \\
   -d '{
     "name": "My Researcher",
-    "agentType": "pi",
+    "harnessId": "pi",
     "model": "anthropic/claude-sonnet-4.5"
   }'`}
     />

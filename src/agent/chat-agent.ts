@@ -7,7 +7,7 @@ import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { initAuth, resolveRequestAuth } from '$lib/auth';
 import { buildAgentEnv } from '$lib/agents/adapters';
 import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
-import type { AgentType } from '$lib/types/session';
+import type { HarnessId } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
 import {
   canonicalizeStoredModel,
@@ -32,7 +32,7 @@ import {
 export interface ChatAgentState {
   nodeId: string;
   sessionId: string;
-  agentType: string;
+  harnessId: string;
   model: string;
   status: AgentStatusType;
   initialized: boolean;
@@ -203,13 +203,13 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   private async initFromNode(nodeId: string, sessionId?: string): Promise<void> {
     try {
       const row = await this.env.DB.prepare(
-        `SELECT n.agent_type, n.model, n.status, s.id as session_id, s.api_key as session_api_key,
+        `SELECT n.harness_id, n.model, n.status, s.id as session_id, s.api_key as session_api_key,
                 s.user_id, u.openrouter_api_key as user_api_key
          FROM agent_node n JOIN agent_session s ON n.session_id = s.id
          JOIN user u ON s.user_id = u.id
          WHERE n.id = ?`
       ).bind(nodeId).first<{
-        agent_type: string;
+        harness_id: string;
         model: string;
         status: AgentStatusType;
         session_id: string;
@@ -222,7 +222,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
         this.setState({
           nodeId,
           sessionId: sessionId || row.session_id,
-          agentType: row.agent_type,
+          harnessId: row.harness_id,
           model: row.model,
           status: row.status,
           initialized: true,
@@ -238,16 +238,16 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   private async spawnContainer(nodeId: string): Promise<void> {
     // Get node config from D1
     const row = await this.env.DB.prepare(
-      `SELECT n.agent_type, n.model, n.name, s.id as session_id, s.git_repo_url,
+      `SELECT n.harness_id, n.model, n.name, s.id as session_id, s.git_repo_url,
               s.api_key as session_key, u.openrouter_api_key as user_key,
               h.entry_command as entry_command
          FROM agent_node n
          JOIN agent_session s ON n.session_id = s.id
          JOIN user u ON s.user_id = u.id
-         JOIN agent_harness h ON h.id = n.agent_type
+         JOIN agent_harness h ON h.id = n.harness_id
         WHERE n.id = ?`,
     ).bind(nodeId).first<{
-      agent_type: string;
+      harness_id: string;
       model: string;
       name: string;
       session_id: string;
@@ -259,7 +259,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
     if (!row) throw new Error(`Node ${nodeId} not found in D1`);
 
-    console.log(`[ChatAgent] Spawning container for node ${nodeId} (${row.agent_type})`);
+    console.log(`[ChatAgent] Spawning container for node ${nodeId} (${row.harness_id})`);
 
     // Resolve API key for the container
     const provider = getProviderForModel(row.model);
@@ -308,7 +308,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
     const envVars: Record<string, string> = {
       ...buildAgentEnv({
-        agentType: row.agent_type as AgentType,
+        harnessId: row.harness_id as HarnessId,
         model: canonicalizeStoredModel(row.model),
         apiKey: containerApiKey,
         task: row.name || '',
@@ -319,7 +319,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     };
 
     if (!row.entry_command) {
-      throw new Error(`Harness ${row.agent_type} has no entry command.`);
+      throw new Error(`Harness ${row.harness_id} has no entry command.`);
     }
 
     const proc = await sandbox.startProcess(row.entry_command, {

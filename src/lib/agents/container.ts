@@ -240,7 +240,7 @@ export interface AgentProcessHandle {
 export async function startFAPAgent(
   _env: ContainerEnv,
   containerId: string,
-  _agentType: string,
+  _harnessId: string,
   _config: AdapterConfig
 ): Promise<AgentProcessHandle> {
   throw new Error(
@@ -263,7 +263,7 @@ function normalizeWorkspacePath(
     throw new ContainerError(`${label} is required.`);
   }
   if (normalized === workspaceRoot || normalized === '/workspace') {
-    throw new ContainerError(`${label} must point to a file inside the thread workspace.`);
+    throw new ContainerError(`${label} must point to a file inside the agent workspace.`);
   }
   const rootedPrefix = `${workspaceRoot.replace(/\/+$/, '')}/`;
   if (normalized.startsWith(rootedPrefix)) {
@@ -276,7 +276,7 @@ function normalizeWorkspacePath(
 
   const parts = normalized.split('/');
   if (parts.some((part) => !part || part === '.' || part === '..')) {
-    throw new ContainerError(`${label} must stay inside the thread workspace.`);
+    throw new ContainerError(`${label} must stay inside the agent workspace.`);
   }
 
   return parts.join('/');

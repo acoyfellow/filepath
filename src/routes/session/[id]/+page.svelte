@@ -11,7 +11,7 @@
   import type {
     AgentNode,
     AgentNodeConfig,
-    AgentType,
+    HarnessId,
     SpawnRequest,
     ThreadMovePayload,
   } from "$lib/types/session";
@@ -21,7 +21,7 @@
     sessionId: string;
     parentId: string | null;
     name: string;
-    agentType: string;
+    harnessId: string;
     model: string;
     status: string;
     config: string | AgentNodeConfig | null;
@@ -81,7 +81,7 @@
         sessionId: node.sessionId,
         parentId: node.parentId,
         name: node.name,
-        agentType: node.agentType as AgentType,
+        harnessId: node.harnessId as HarnessId,
         model: node.model,
         status: node.status as AgentNode["status"],
         config: parseNodeConfig(node.config),
@@ -117,7 +117,7 @@
         sessionId: String(node.sessionId),
         parentId: typeof node.parentId === "string" ? node.parentId : null,
         name: String(node.name),
-        agentType: String(node.agentType),
+        harnessId: String(node.harnessId),
         model: String(node.model),
         status: String(node.status),
         config: (node.config ?? null) as string | AgentNodeConfig | null,
@@ -295,7 +295,7 @@
           sessionId: String(node.sessionId ?? sessionId),
           parentId: String(node.parentId ?? nodeId),
           name: String(node.name ?? "agent"),
-          agentType: String(node.agentType ?? "shelley") as AgentType,
+          harnessId: String(node.harnessId ?? "shelley") as HarnessId,
           model: String(node.model ?? DEFAULT_MODEL),
           status: "idle",
           config: {},
@@ -432,7 +432,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: request.name,
-        agentType: request.agentType,
+        harnessId: request.harnessId,
         model: request.model,
         parentId,
         apiKey: request.apiKey,

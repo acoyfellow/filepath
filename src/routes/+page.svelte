@@ -11,7 +11,7 @@ await fetch(\`/api/sessions/\${session.id}/nodes\`, {
   method: "POST",
   body: JSON.stringify({
     name: "ship-it",
-    agentType: "codex",
+    harnessId: "codex",
     model: "openai/gpt-5"
   })
 });

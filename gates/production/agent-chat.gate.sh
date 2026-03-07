@@ -64,7 +64,7 @@ if [ -n "$SESSION_ID" ]; then
   NODE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
     -H "Content-Type: application/json" \
     -b "$COOKIE_JAR" \
-    -d '{"name": "gate-agent", "agentType": "shelley", "model": "claude-sonnet-4"}' --max-time 15 2>&1)
+    -d '{"name": "gate-agent", "harnessId": "shelley", "model": "claude-sonnet-4"}' --max-time 15 2>&1)
   NODE_HTTP=$(echo "$NODE_RESP" | tail -1)
   NODE_BODY=$(echo "$NODE_RESP" | sed '$d')
   NODE_ID=$(echo "$NODE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")

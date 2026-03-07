@@ -28,7 +28,7 @@ echo "Session: $SESSION_ID"
 echo "Spawning agent..."
 NODE_RESP=$(curl -s -b "$COOKIES" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
   -H "Content-Type: application/json" \
-  -d '{"name":"test-agent", "agentType": "shelley", "model": "claude-sonnet-4"}')
+  -d '{"name":"test-agent", "harnessId": "shelley", "model": "claude-sonnet-4"}')
 NODE_ID=$(echo "$NODE_RESP" | jq -r .id)
 echo "Node: $NODE_ID"
 

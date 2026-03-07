@@ -109,7 +109,7 @@ const TOOLS = [
       properties: {
         sessionId: { type: 'string', description: 'Session ID' },
         name: { type: 'string', description: 'Agent name' },
-        agentType: { 
+        harnessId: {
           type: 'string',
           description: 'Harness ID from /api/harnesses'
         },
@@ -117,7 +117,7 @@ const TOOLS = [
         parentId: { type: 'string', description: 'Parent node ID for nested agents' },
         task: { type: 'string', description: 'Initial task/message for the agent' }
       },
-      required: ['sessionId', 'name', 'agentType', 'model']
+      required: ['sessionId', 'name', 'harnessId', 'model']
     }
   },
   {
@@ -308,7 +308,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
           const input = await runOrThrow(
             decodeInput(NodeSpawnInputSchema, {
               name: args.name,
-              agentType: args.agentType,
+              harnessId: args.harnessId,
               model: args.model,
               parentId: args.parentId
             })

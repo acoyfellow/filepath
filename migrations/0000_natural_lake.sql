@@ -36,7 +36,7 @@ CREATE TABLE `agent_node` (
 	`session_id` text NOT NULL,
 	`parent_id` text,
 	`name` text NOT NULL,
-	`agent_type` text NOT NULL,
+	`harness_id` text NOT NULL,
 	`model` text NOT NULL,
 	`status` text DEFAULT 'idle' NOT NULL,
 	`config` text DEFAULT '{}' NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE `agent_node` (
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	FOREIGN KEY (`session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`agent_type`) REFERENCES `agent_harness`(`id`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (`harness_id`) REFERENCES `agent_harness`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE INDEX `agent_node_session_id_idx` ON `agent_node` (`session_id`);--> statement-breakpoint

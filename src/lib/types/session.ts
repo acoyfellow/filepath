@@ -1,7 +1,7 @@
 import type { AgentStatus as AgentStatusType } from "$lib/protocol";
 
 /** Dynamic harness identifier */
-export type AgentType = string;
+export type HarnessId = string;
 
 /** Agent node status (mirrors protocol AgentStatus) */
 export type NodeStatus = AgentStatusType;
@@ -22,7 +22,7 @@ export interface AgentNode {
   sessionId: string;
   parentId: string | null;
   name: string;
-  agentType: AgentType;
+  harnessId: HarnessId;
   model: string;
   status: NodeStatus;
   config: AgentNodeConfig;
@@ -49,7 +49,7 @@ export interface AgentSession {
 
 /** Spawnable harness entry */
 export interface AgentHarness {
-  id: AgentType;
+  id: HarnessId;
   name: string;
   description: string;
   adapter: string;
@@ -63,7 +63,7 @@ export interface AgentHarness {
 /** Spawn request (from spawn modal) */
 export interface SpawnRequest {
   name: string;
-  agentType: AgentType;
+  harnessId: HarnessId;
   model: string;
   parentId?: string;
   /** Per-session API key override (plaintext, will be encrypted server-side) */
@@ -74,45 +74,4 @@ export interface ThreadMovePayload {
   nodeId: string;
   parentId: string | null;
   sortOrder: number;
-}
-
-// ============================================================
-// Legacy compat types -- needed until wizard + sidebar are rewritten for tree architecture
-// ============================================================
-
-export type ModelId = string;
-export type RouterId = string;
-export type AgentRole = 'orchestrator' | 'worker';
-
-export interface AgentConfig {
-  model: string;
-  router: string;
-  systemPrompt?: string;
-  envVars?: Record<string, string>;
-}
-
-/** @deprecated Use AgentNode */
-export interface AgentSlot {
-  id: string;
-  sessionId: string;
-  role: AgentRole;
-  agentType: AgentType;
-  name: string;
-  config: AgentConfig;
-  status: 'pending' | 'starting' | 'running' | 'stopped' | 'error';
-  containerId?: string;
-}
-
-/** @deprecated Use AgentSession */
-export interface MultiAgentSession {
-  id: string;
-  userId: string;
-  name: string;
-  description?: string;
-  gitRepoUrl?: string;
-  status: 'draft' | 'starting' | 'running' | 'paused' | 'stopped' | 'error';
-  orchestratorSlotId?: string;
-  startedAt?: number;
-  createdAt: number;
-  updatedAt: number;
 }

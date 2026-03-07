@@ -31,7 +31,7 @@
       </div>
       <div class="panel-right">
         <span class="panel-tag">agent</span>
-        <span class="panel-tag">{agent.agentType}</span>
+        <span class="panel-tag">{agent.harnessId}</span>
         <span class="panel-tag">{agent.model}</span>
         {#if agent.tokens > 0}
           <span class="panel-tokens">{agent.tokens.toLocaleString()}t</span>

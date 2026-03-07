@@ -97,7 +97,7 @@
   -H "Cookie: session=your-session-cookie" \\
   -d '{
     "name": "Pi Researcher",
-    "agentType": "pi",
+    "harnessId": "pi",
     "model": "${DEFAULT_MODEL_FULL}"
   }'`}
         />
@@ -172,7 +172,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Pi</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">Research and analysis specialist. Deep dives into docs, APIs, codebases.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "pi"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "pi"</code>
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4 flex items-center gap-4">
@@ -181,7 +181,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Shelley</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">Full-stack engineering. filepath-native reference implementation.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "shelley"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "shelley"</code>
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4 flex items-center gap-4">
@@ -190,7 +190,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Claude Code</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">Anthropic's agentic coding tool. Complex multi-file changes.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "claude-code"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "claude-code"</code>
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4 flex items-center gap-4">
@@ -199,7 +199,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Codex</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">OpenAI's coding agent. Strong at Python, scripting, data.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "codex"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "codex"</code>
       </div>
     </div>
 
@@ -244,7 +244,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           language="json"
           className="text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto"
           code={`POST /api/sessions/{id}/nodes
-{"name": "Agent", "agentType": "pi", "model": "...", "apiKey": "sk-or-v1-..."}`}
+{"name": "Agent", "harnessId": "pi", "model": "...", "apiKey": "sk-or-v1-..."}`}
         />
       </div>
     </div>
@@ -339,7 +339,7 @@ node_resp = requests.post(f"{BASE_URL}/api/sessions/{session_id}/nodes",
     headers=headers,
     json={
         "name": "Pi",
-        "agentType": "pi",
+        "harnessId": "pi",
         "model": "${DEFAULT_MODEL_FULL}"
     }
 )

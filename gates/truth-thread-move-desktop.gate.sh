@@ -78,7 +78,7 @@ create_node() {
     -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
     -H "Content-Type: application/json" \
     -b "$COOKIE_JAR" \
-    -d "{\"agentType\":\"custom\",\"name\":\"$name\",\"model\":\"openai/gpt-5\"}"
+    -d "{\"harnessId\":\"custom\",\"name\":\"$name\",\"model\":\"openai/gpt-5\"}"
 }
 
 ROOT_A="$(create_node "Root A" | json_field "id")"
@@ -86,7 +86,7 @@ ROOT_B="$(create_node "Root B" | json_field "id")"
 ROOT_C="$(create_node "Root C" | json_field "id")"
 
 if [ -z "$SESSION_ID" ] || [ -z "$ROOT_A" ] || [ -z "$ROOT_B" ] || [ -z "$ROOT_C" ]; then
-  echo "FAIL (session or thread creation failed)"
+  echo "FAIL (session or agent creation failed)"
   exit 1
 fi
 
