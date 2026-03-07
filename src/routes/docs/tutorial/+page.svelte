@@ -103,7 +103,7 @@
     <div class="space-y-4">
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium">"No API key set"</h3>
-    <p class="text-gray-500 dark:text-neutral-500 text-sm">Add your OpenRouter or OpenCode Zen key in Settings / Account. Or provide a per-session key when spawning.</p>
+    <p class="text-gray-500 dark:text-neutral-500 text-sm">Add your OpenRouter or OpenCode Zen key in Settings / Account before spawning an agent.</p>
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">

@@ -1,15 +1,7 @@
 import type { AgentStatus as AgentStatusType } from "$lib/protocol";
 
-/** Supported agent types (harnesses) */
-export type AgentType =
-  | "shelley"
-  | "pi"
-  | "claude-code"
-  | "codex"
-  | "cursor"
-  | "amp"
-  | "opencode"
-  | "custom";
+/** Dynamic harness identifier */
+export type HarnessId = string;
 
 /** Agent node status (mirrors protocol AgentStatus) */
 export type NodeStatus = AgentStatusType;
@@ -30,7 +22,7 @@ export interface AgentNode {
   sessionId: string;
   parentId: string | null;
   name: string;
-  agentType: AgentType;
+  harnessId: HarnessId;
   model: string;
   status: NodeStatus;
   config: AgentNodeConfig;
@@ -55,89 +47,29 @@ export interface AgentSession {
   updatedAt: number;
 }
 
-/** Agent catalog entry */
-export interface AgentCatalogEntry {
-  id: AgentType;
+/** Spawnable harness entry */
+export interface AgentHarness {
+  id: HarnessId;
   name: string;
   description: string;
+  adapter: string;
+  entryCommand: string;
   defaultModel: string;
   icon: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
 }
 
 /** Spawn request (from spawn modal) */
 export interface SpawnRequest {
   name: string;
-  agentType: AgentType;
+  harnessId: HarnessId;
   model: string;
   parentId?: string;
-  /** Per-session API key override (plaintext, will be encrypted server-side) */
-  apiKey?: string;
-}
-
-export interface ProcessEntry {
-  id: string;
-  name: string;
-  kind: "agent" | "shell" | "terminal" | "helper" | "unknown";
-  status: "running" | "exited" | "starting";
-}
-
-export interface ArtifactEntry {
-  id: string;
-  sessionId: string;
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourcePath: string;
-  targetPath: string;
-  bucketKey: string;
-  status: "staged" | "delivered" | "failed";
-  errorMessage?: string | null;
-  createdAt: number;
-  updatedAt: number;
 }
 
 export interface ThreadMovePayload {
   nodeId: string;
   parentId: string | null;
   sortOrder: number;
-}
-
-// ============================================================
-// Legacy compat types -- needed until wizard + sidebar are rewritten for tree architecture
-// ============================================================
-
-export type ModelId = string;
-export type RouterId = string;
-export type AgentRole = 'orchestrator' | 'worker';
-
-export interface AgentConfig {
-  model: string;
-  router: string;
-  systemPrompt?: string;
-  envVars?: Record<string, string>;
-}
-
-/** @deprecated Use AgentNode */
-export interface AgentSlot {
-  id: string;
-  sessionId: string;
-  role: AgentRole;
-  agentType: AgentType;
-  name: string;
-  config: AgentConfig;
-  status: 'pending' | 'starting' | 'running' | 'stopped' | 'error';
-  containerId?: string;
-}
-
-/** @deprecated Use AgentSession */
-export interface MultiAgentSession {
-  id: string;
-  userId: string;
-  name: string;
-  description?: string;
-  gitRepoUrl?: string;
-  status: 'draft' | 'starting' | 'running' | 'paused' | 'stopped' | 'error';
-  orchestratorSlotId?: string;
-  startedAt?: number;
-  createdAt: number;
-  updatedAt: number;
 }

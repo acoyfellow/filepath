@@ -50,9 +50,7 @@ run_gate() {
   echo ""
 }
 
-run_gate "thread-move" "$ROOT_GATES_DIR/truth-thread-move-desktop.gate.sh"
-run_gate "file-handoff-failure" "$ROOT_GATES_DIR/truth-file-handoff-failure.gate.sh"
-run_gate "cross-thread-file-handoff" "$ROOT_GATES_DIR/truth-cross-thread-file-handoff.gate.sh"
+run_gate "agent-move" "$ROOT_GATES_DIR/truth-thread-move-desktop.gate.sh"
 
 echo "════════════════════════════════════════"
 echo "ROADMAP TRUTH RESULTS"

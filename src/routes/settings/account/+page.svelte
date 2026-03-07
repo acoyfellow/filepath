@@ -1,6 +1,7 @@
 <script lang="ts">
   import { authClient } from '$lib/auth-client';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { PROVIDER_IDS, PROVIDERS, type ProviderId } from '$lib/provider-keys';
   // ─── Delete account state ───
@@ -184,6 +185,16 @@
       <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Account information</h2>
       <div class="border rounded p-5 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
         <p class="text-sm text-gray-600 dark:text-neutral-400">Your account details are managed through your profile settings.</p>
+        {#if page.data.user?.role === 'admin'}
+          <div class="mt-4">
+            <a
+              href="/settings/harnesses"
+              class="inline-flex rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-gray-400 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-500"
+            >
+              manage harness registry
+            </a>
+          </div>
+        {/if}
       </div>
     </section>
 
@@ -325,7 +336,7 @@
       <h2 class="text-red-400 text-lg font-medium mb-2" id="delete-account-title">Delete account</h2>
       <p class="text-sm mb-2 text-gray-600 dark:text-neutral-400">This will permanently delete:</p>
       <ul class="text-sm space-y-1 mb-6 ml-4 text-gray-500 dark:text-neutral-500">
-        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All sessions and terminals</li>
+        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All sessions and agent history</li>
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All API keys</li>
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> Credit balance (non-refundable)</li>
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> Usage history</li>

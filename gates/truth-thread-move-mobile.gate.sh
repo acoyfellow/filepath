@@ -61,15 +61,15 @@ NODE_A="$(curl -s \
   -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
   -H "Content-Type: application/json" \
   -b "$COOKIE_JAR" \
-  -d '{"agentType":"custom","name":"Node A","model":"openai/gpt-5"}' | json_field "id")"
+  -d '{"harnessId":"custom","name":"Node A","model":"openai/gpt-5"}' | json_field "id")"
 NODE_B="$(curl -s \
   -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
   -H "Content-Type: application/json" \
   -b "$COOKIE_JAR" \
-  -d '{"agentType":"custom","name":"Node B","model":"openai/gpt-5"}' | json_field "id")"
+  -d '{"harnessId":"custom","name":"Node B","model":"openai/gpt-5"}' | json_field "id")"
 
 if [ -z "$SESSION_ID" ] || [ -z "$NODE_A" ] || [ -z "$NODE_B" ]; then
-  echo "FAIL (session or thread creation failed)"
+  echo "FAIL (session or agent creation failed)"
   exit 1
 fi
 

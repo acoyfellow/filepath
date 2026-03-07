@@ -1,12 +1,13 @@
 import { betterAuth, type Auth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
-import { mcp, multiSession, organization, admin, openAPI } from 'better-auth/plugins';
+import { multiSession, organization, admin, openAPI } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
 import { passkey as passkeyPlugin } from '@better-auth/passkey';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey, passkey as passkeyTable } from './schema';
+import { eq } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
 // Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
@@ -28,6 +29,41 @@ interface AuthEnv {
   MAILGUN_API_KEY?: string;
   MAILGUN_DOMAIN?: string;
   [key: string]: unknown;
+}
+
+export interface ResolvedAuthUser {
+  id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  email: string;
+  emailVerified: boolean;
+  name: string;
+  image?: string | null;
+  role?: string | null;
+}
+
+export interface ResolvedRequestAuth {
+  user: ResolvedAuthUser | null;
+  session: unknown | null;
+}
+
+function getApiKeyFromHeaders(headers: Headers): string | null {
+  const direct = headers.get('x-api-key');
+  if (direct?.trim()) {
+    return direct.trim();
+  }
+
+  const authorization = headers.get('authorization');
+  if (!authorization) {
+    return null;
+  }
+
+  if (authorization.startsWith('Bearer ')) {
+    const token = authorization.slice('Bearer '.length).trim();
+    return token || null;
+  }
+
+  return authorization.trim() || null;
 }
 
 export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: string): Auth {
@@ -159,10 +195,6 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
         expiresIn: 60 * 10, // 10 minutes
         sendVerificationOnSignUp: true, // Send welcome email on sign-up
       }),
-      mcp({
-        loginPage: '/login',
-        resource: 'myfilepath-mcp',
-      }),
       multiSession({
         maximumSessions: 5,
       }),
@@ -184,6 +216,79 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
   }) as unknown as Auth;
 
   return authInstance;
+}
+
+export async function resolveRequestAuth(options: {
+  db: D1Database;
+  env: AuthEnv | undefined;
+  baseURL: string;
+  headers: Headers;
+  apiKeyOverride?: string | null;
+}): Promise<ResolvedRequestAuth> {
+  const auth = initAuth(options.db, options.env, options.baseURL);
+
+  const session = await auth.api.getSession({
+    headers: options.headers,
+  });
+  if (session?.user) {
+    return {
+      user: {
+        id: session.user.id,
+        createdAt: session.user.createdAt,
+        updatedAt: session.user.updatedAt,
+        email: session.user.email,
+        emailVerified: session.user.emailVerified,
+        name: session.user.name,
+        image: session.user.image,
+        role: (session.user as { role?: string | null }).role ?? null,
+      },
+      session: session.session,
+    };
+  }
+
+  const apiKey = options.apiKeyOverride ?? getApiKeyFromHeaders(options.headers);
+  if (!apiKey) {
+    return { user: null, session: null };
+  }
+
+  const verification = await (auth.api as unknown as {
+    verifyApiKey(input: { body: { key: string } }): Promise<{
+      valid: boolean;
+      key: { referenceId?: string | null } | null;
+    }>;
+  }).verifyApiKey({
+    body: { key: apiKey },
+  });
+
+  if (!verification.valid || !verification.key?.referenceId) {
+    return { user: null, session: null };
+  }
+
+  const dbHandle = getDrizzle();
+  const rows = await dbHandle
+    .select()
+    .from(user)
+    .where(eq(user.id, verification.key.referenceId))
+    .limit(1);
+
+  const apiUser = rows[0];
+  if (!apiUser) {
+    return { user: null, session: null };
+  }
+
+  return {
+    user: {
+      id: apiUser.id,
+      createdAt: apiUser.createdAt,
+      updatedAt: apiUser.updatedAt,
+      email: apiUser.email,
+      emailVerified: apiUser.emailVerified,
+      name: apiUser.name ?? apiUser.email,
+      image: apiUser.image ?? undefined,
+      role: apiUser.role,
+    },
+    session: null,
+  };
 }
 
 // Export for CLI schema generation

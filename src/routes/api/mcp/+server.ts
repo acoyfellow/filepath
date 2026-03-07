@@ -1,6 +1,18 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { initAuth } from '$lib/auth';
+import { createUserContextFromParts, runOrThrow } from '../../../core/http';
+import {
+  createSession,
+  decodeInput,
+  deleteNode,
+  deleteSession,
+  getSession,
+  listNodes,
+  listSessions,
+  NodeSpawnInputSchema,
+  spawnNode,
+  SessionCreateInputSchema,
+} from '../../../core/app';
 import { DEFAULT_MODEL_FULL } from '$lib/config';
 
 /**
@@ -97,16 +109,15 @@ const TOOLS = [
       properties: {
         sessionId: { type: 'string', description: 'Session ID' },
         name: { type: 'string', description: 'Agent name' },
-        agentType: { 
-          type: 'string', 
-          enum: ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'],
-          description: 'Type of agent to spawn'
+        harnessId: {
+          type: 'string',
+          description: 'Harness ID from /api/harnesses'
         },
         model: { type: 'string', description: `LLM model (e.g., ${DEFAULT_MODEL_FULL})` },
         parentId: { type: 'string', description: 'Parent node ID for nested agents' },
         task: { type: 'string', description: 'Initial task/message for the agent' }
       },
-      required: ['sessionId', 'name', 'agentType', 'model']
+      required: ['sessionId', 'name', 'harnessId', 'model']
     }
   },
   {
@@ -185,6 +196,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 
   const { id, method, params = {} } = rpcRequest;
   const baseURL = url.origin;
+  const ctx = createUserContextFromParts(locals.user, platform);
 
   // Handle initialization
   if (method === 'initialize') {
@@ -262,74 +274,51 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 
       switch (name) {
         case 'sessions_list': {
-          const res = await fetch(`${baseURL}/api/sessions`, {
-            credentials: 'include'
-          });
-          result = await res.json();
+          result = await runOrThrow(listSessions(ctx));
           break;
         }
 
         case 'session_create': {
-          const res = await fetch(`${baseURL}/api/sessions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
+          const input = await runOrThrow(
+            decodeInput(SessionCreateInputSchema, {
               name: args.name,
               gitRepoUrl: args.gitRepoUrl
             })
-          });
-          result = await res.json();
+          );
+          result = await runOrThrow(createSession(ctx, input));
           break;
         }
 
         case 'session_get': {
-          const res = await fetch(`${baseURL}/api/sessions/${args.sessionId}`, {
-            credentials: 'include'
-          });
-          result = await res.json();
+          result = await runOrThrow(getSession(ctx, args.sessionId));
           break;
         }
 
         case 'session_delete': {
-          const res = await fetch(`${baseURL}/api/sessions/${args.sessionId}`, {
-            method: 'DELETE',
-            credentials: 'include'
-          });
-          result = res.ok ? { success: true } : { error: 'Failed to delete' };
+          result = await runOrThrow(deleteSession(ctx, args.sessionId));
           break;
         }
 
         case 'nodes_list': {
-          const res = await fetch(`${baseURL}/api/sessions/${args.sessionId}/nodes`, {
-            credentials: 'include'
-          });
-          result = await res.json();
+          result = await runOrThrow(listNodes(ctx, args.sessionId));
           break;
         }
 
         case 'node_spawn': {
-          const res = await fetch(`${baseURL}/api/sessions/${args.sessionId}/nodes`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
+          const input = await runOrThrow(
+            decodeInput(NodeSpawnInputSchema, {
               name: args.name,
-              agentType: args.agentType,
+              harnessId: args.harnessId,
               model: args.model,
               parentId: args.parentId
             })
-          });
-          result = await res.json();
+          );
+          result = await runOrThrow(spawnNode(ctx, args.sessionId, input));
           break;
         }
 
         case 'node_delete': {
-          const res = await fetch(`${baseURL}/api/sessions/${args.sessionId}/nodes/${args.nodeId}`, {
-            method: 'DELETE',
-            credentials: 'include'
-          });
-          result = res.ok ? { success: true } : { error: 'Failed to delete' };
+          result = await runOrThrow(deleteNode(ctx, args.sessionId, args.nodeId));
           break;
         }
 

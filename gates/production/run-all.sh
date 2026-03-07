@@ -36,8 +36,8 @@ echo ""
 GATES=(
   "roadmap-truth"
   "visual-regression"
-  "terminal-start"
   "agent-chat"
+  "api-key-auth"
 )
 
 for gate in "${GATES[@]}"; do

@@ -4,7 +4,7 @@
 
 ## What filepath is
 
-filepath is an **orchestration layer** for AI agents. The core insight: agents and models should be **liquid** (interchangeable), and the infrastructure should provide **multiple interfaces** for coordination.
+filepath is a **Cloudflare-native orchestration layer** for AI agents. The core insight: agents and models should be **liquid** (interchangeable), and the infrastructure should provide **multiple interfaces** for coordination.
 
 **Liquid Agents** — Any agent that speaks the filepath protocol (FAP) runs on our infrastructure. Swap Claude Code for Codex for your custom container. Same interface, seamless handoff.
 
@@ -16,21 +16,21 @@ filepath is an **orchestration layer** for AI agents. The core insight: agents a
 - **WebSocket** — Real-time streaming for live applications.
 - **MCP + TypeScript SDK** — Agents calling agents. Build autonomous workflows.
 
-You open filepath. You create a session. You spawn an agent — pick its type (claude-code, cursor, codex, whatever), pick its model, give it a name. You send it a message. It starts working in an isolated container with your repo cloned. You watch it work through rich chat — tool calls, file writes, commits, all inline. It spawns child agents. The tree grows. You click any node, see its conversation. You steer with messages. You close your laptop, open your phone, same state. That's it.
+You open filepath. You create a session. You spawn an agent — pick its harness, pick its model, give it a name. You send it a message. It starts working in an isolated container with your repo cloned. You watch it work through rich chat — tool calls, file writes, commits, all inline. It can spawn child agents through the same platform surfaces. The tree grows. You click any node, see its conversation. You steer with messages. You close your laptop, open your phone, same state. That's it.
 
 > The definitive plan for filepath. Everything an agent needs to build this.
 
 ## What filepath is
 
-filepath is a web UI for orchestrating trees of AI coding agents running in containers on Cloudflare.
+filepath is a Cloudflare-native control plane for orchestrating trees of AI coding agents running in containers on your infrastructure.
 
-You open filepath. You create a session. You spawn an agent -- pick its type (claude-code, cursor, codex, whatever), pick its model, give it a name. You send it a message. It starts working in an isolated container with your repo cloned. You watch it work through rich chat -- tool calls, file writes, commits, all inline. It spawns child agents. The tree grows. You click any node, see its conversation. You steer with messages. You close your laptop, open your phone, same state. That's it.
+You open filepath. You create a session. You spawn an agent -- pick its harness, pick its model, give it a name. You send it a message. It starts working in an isolated container with your repo cloned. You watch it work through rich chat -- tool calls, file writes, commits, all inline. It spawns child agents through the same platform surfaces. The tree grows. You click any node, see its conversation. You steer with messages. You close your laptop, open your phone, same state. That's it.
 
-**The tree is the product.** It visualizes hierarchy, communication topology, and status at a glance. Every node is the same primitive. There is no orchestrator/worker distinction in the UI -- an orchestrator is just an agent that has children.
+**The tree is the product.** It visualizes hierarchy, communication topology, and status at a glance. Every node is the same primitive.
 
-**Chat is the only view.** No terminal. No embedded agent UI. Rich inline message blocks (tool calls, diffs, commits, worker status pills) make a headless agent feel headed.
+**Chat is the only view.** No terminal. No embedded agent UI. Rich inline message blocks (tool calls, diffs, commits, child-agent status pills) make a headless agent feel headed.
 
-**Agents are CLI tools in containers.** If your agent has a CLI, it runs on filepath. The built-in agents (shelley, claude-code, cursor, codex, etc.) are reference implementations of a simple protocol. BYO = bring your Dockerfile.
+**Agents are CLI harnesses in containers.** If your agent has a CLI harness, it runs on filepath. The built-in harnesses (shelley, claude-code, cursor, codex, etc.) are reference implementations of a simple protocol. BYO = bring your Dockerfile.
 
 **This repo is open source.** The infrastructure for running CLI agents on Cloudflare in containers, orchestrating them as trees, and visualizing their work -- that's the open-source value. The hosted version at myfilepath.com is the product with a price tag.
 
@@ -123,7 +123,7 @@ export const CommitEvent = z.object({
 export const SpawnEvent = z.object({
   type: z.literal("spawn"),
   name: z.string(),
-  agent: z.string(),
+  harnessId: z.string(),
   model: z.string(),
   task: z.string().optional(),
 });
@@ -198,9 +198,9 @@ export type AgentInput = z.infer<typeof AgentInput>;
 | `command` | Collapsible command block (cmd, exit code, stdout/stderr) |
 | `commit` | Commit log entry (accent hash + message) |
 | `spawn` | Creates child node in tree + spawn message in chat |
-| `workers` | Clickable worker pill strip (status dots, navigate on click) |
+| `workers` | Clickable child-agent pill strip (status dots, navigate on click) |
 | `status` | Updates status dot in tree (pulse animation if active) |
-| `handoff` | Handoff message block, triggers next session |
+| `handoff` | Exhaustion message block, marks the agent read-only |
 | `done` | Marks node green in tree, static dot |
 
 ### Architecture: DO as relay
@@ -294,7 +294,7 @@ export const agentNode = sqliteTable(
     parentId: text("parent_id"),
     // Self-referential. NULL = root node. FK enforced at app level.
     name: text("name").notNull(),
-    agentType: text("agent_type").notNull(),
+    harnessId: text("harness_id").notNull(),
     // 'shelley' | 'pi' | 'claude-code' | 'codex' | 'cursor' | 'amp' | 'custom'
     model: text("model").notNull(),
     status: text("status").notNull().default("idle"),
@@ -324,7 +324,7 @@ export const agentNode = sqliteTable(
 
 | Old (`agent_slot`) | New (`agent_node`) | Why |
 |---|---|---|
-| `role: 'orchestrator' \| 'worker'` | `parentId: text \| null` | Tree structure via self-reference. No role distinction. |
+| `role distinctions` | `parentId: text \| null` | Tree structure via self-reference. No role distinction. |
 | Flat list under session | Nested tree under session | Workflowy-inspired hierarchy |
 | `orchestratorSlotId` on session | `rootNodeId` on session | Root node = the first agent spawned |
 | No ordering | `sortOrder` | Siblings have deterministic order in tree |
@@ -715,7 +715,7 @@ When execution begins, these existing files/directories are replaced or removed:
 |------|--------|--------|
 | `migrations/` | Delete | Fresh schema from zero |
 | `src/lib/components/session/SessionSidebar.svelte` | Replace | New: AgentTree.svelte |
-| `src/lib/components/session/WorkerTabs.svelte` | Delete | No more worker tabs. Chat is the only view. |
+| `src/lib/components/session/WorkerTabs.svelte` | Delete | No more child-agent tabs. Chat is the only view. |
 | `src/lib/components/session/ChatPanel.svelte` | Replace | New: ChatView.svelte + ChatInput.svelte |
 | `src/lib/components/wizard/` | Delete | No more wizard. Spawn modal replaces it. |
 | `src/routes/session/new/` | Replace | Simplified session creation |

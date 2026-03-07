@@ -1,4 +1,4 @@
-import { initAuth } from "$lib/auth";
+import { initAuth, resolveRequestAuth } from "$lib/auth";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
 
@@ -39,11 +39,14 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
 
     try {
-      const session = await auth.api.getSession({
+      const resolved = await resolveRequestAuth({
+        db,
+        env: event.platform?.env,
+        baseURL: event.url.origin,
         headers: event.request.headers,
       });
-      event.locals.user = session?.user || null;
-      event.locals.session = session?.session || null;
+      event.locals.user = resolved.user;
+      event.locals.session = resolved.session as typeof event.locals.session;
     } catch (sessionError) {
       console.error('Session loading error:', sessionError);
       event.locals.user = null;

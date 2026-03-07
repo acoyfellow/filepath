@@ -25,7 +25,7 @@ else
   FAILED=1
 fi
 
-echo -n "3. Session page reconnects the selected thread websocket... "
+echo -n "3. Session page reconnects the selected agent websocket... "
 if rg -n "ensureConnection\\(selectedId\\)" 'src/routes/session/[id]/+page.svelte' >/dev/null 2>&1; then
   echo "PASS"
 else

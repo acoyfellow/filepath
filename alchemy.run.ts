@@ -6,12 +6,10 @@ import {
   DurableObjectNamespace,
   Container,
   D1Database,
-  R2Bucket,
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
 
-import type { TaskAgent } from "./src/agent/index.ts";
 import type { ChatAgent } from "./src/agent/chat-agent.ts";
 
 const password = process.env.ALCHEMY_PASSWORD;
@@ -37,13 +35,6 @@ const dbName = isProd ? `${projectName}-db` : `${prefix}-db`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
 
-// Task Agent Durable Object (Agents SDK)
-const TASK_AGENT_DO = DurableObjectNamespace<TaskAgent>(`${projectName}-task-agent`, {
-  className: "TaskAgent",
-  scriptName: `${prefix}-worker`,
-  sqlite: true
-});
-
 // Chat Agent Durable Object (relay between frontend and container)
 const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent`, {
   className: "ChatAgent",
@@ -51,7 +42,7 @@ const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-age
   sqlite: true
 });
 
-// Session DO (terminal tab state management)
+// Session DO (session event fan-out)
 const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
   className: "SessionEventBusV2",
   scriptName: `${prefix}-worker`,
@@ -67,13 +58,6 @@ const DB = await D1Database(dbName, {
   dev: { remote: false },
 });
 
-const artifactBucketName = isProd ? `${projectName}-artifacts` : `${prefix}-artifacts`;
-const ARTIFACTS = await R2Bucket(`${projectName}-artifacts`, {
-  name: artifactBucketName,
-  empty: true,
-});
-
-// Container for terminal sandboxes
 // Platform set to linux/amd64 because Cloudflare sandbox image only supports AMD64
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
@@ -95,15 +79,12 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   bundle: {
-    // AI SDK is now used directly by ChatAgent — must be bundled
   },
   bindings: {
-    TaskAgent: TASK_AGENT_DO,
     ChatAgent: CHAT_AGENT_DO,
     SESSION_DO,
     Sandbox,
     DB,
-    ARTIFACTS,
 
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
@@ -122,7 +103,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
 });
 
-// SvelteKit app with custom routing for terminal WebSocket
+// SvelteKit app with custom routing for agent and session websockets
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${prefix}-app`,
   domains: isProd ? ["myfilepath.com"] : [],
@@ -130,7 +111,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     WORKER,
     DB,
     SESSION_DO,
-    ARTIFACTS,
   },
   url: true,
   adopt: true,
@@ -145,32 +125,13 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
     MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },
-  // Custom routing: terminal and session endpoints go to worker
-  // This matches the working React version's architecture
   script: `
     import svelteKitHandler from './.svelte-kit/cloudflare/_worker.js';
     
     export default {
       async fetch(request, env, ctx) {
         const url = new URL(request.url);
-        
-        // SvelteKit handles:
-        //   /session/new (wizard page)
-        //   /session/{id} (3-panel session view page)
-        //   /api/session/multi/* (multi-agent CRUD, start, stop, chat, list)
-        //   Everything else not explicitly routed to worker
-        if (url.pathname.startsWith('/api/session/multi')) {
-          return svelteKitHandler.fetch(request, env, ctx);
-        }
-        if (url.pathname.startsWith('/session/')) {
-          // Check if this is a SvelteKit page route (not a worker API)
-          // SvelteKit pages: /session/new, /session/{uuid}
-          // Worker routes: none under /session/ (legacy SessionDO was /session/{id}/state etc)
-          // Since we use multi-agent API now, let SvelteKit handle all /session/* page routes
-          return svelteKitHandler.fetch(request, env, ctx);
-        }
-        
-        // Route /agents/* to worker for Agent SDK WebSocket connections
+
         if (url.pathname.startsWith('/agents/')) {
           return env.WORKER.fetch(request);
         }
@@ -178,23 +139,7 @@ export const APP = await SvelteKit(`${projectName}-app`, {
         if (url.pathname.startsWith('/session-events/')) {
           return env.WORKER.fetch(request);
         }
-        
-        // Route terminal/* and legacy /api/session/* to worker
-        // Worker handles: terminal HTML pages, WebSocket, start/close, task execution
-        if (
-          url.pathname.startsWith('/terminal/') ||
-          url.pathname.startsWith('/api/session/')
-        ) {
-          // Rewrite /api/session/* to /session/* for worker
-          if (url.pathname.startsWith('/api/session/')) {
-            const newUrl = new URL(request.url);
-            newUrl.pathname = url.pathname.replace('/api/session/', '/session/');
-            return env.WORKER.fetch(new Request(newUrl, request));
-          }
-          return env.WORKER.fetch(request);
-        }
-        
-        // Everything else goes to SvelteKit
+
         return svelteKitHandler.fetch(request, env, ctx);
       }
     };

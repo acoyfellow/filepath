@@ -224,8 +224,6 @@ export const agentSession = sqliteTable(
     status: text("status").notNull().default("draft"),
     // 'draft' | 'running' | 'paused' | 'stopped' | 'error'
     rootNodeId: text("root_node_id"),
-    apiKey: text("api_key"),
-    // Per-session OpenRouter key override (encrypted). Null = use account key.
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
     lastBilledAt: integer("last_billed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -242,6 +240,31 @@ export const agentSession = sqliteTable(
   ],
 );
 
+export const agentHarness = sqliteTable(
+  "agent_harness",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    adapter: text("adapter").notNull(),
+    entryCommand: text("entry_command").notNull(),
+    defaultModel: text("default_model").notNull(),
+    icon: text("icon").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    config: text("config").notNull().default("{}"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("agent_harness_enabled_idx").on(table.enabled),
+  ],
+);
+
 export const agentNode = sqliteTable(
   "agent_node",
   {
@@ -252,8 +275,9 @@ export const agentNode = sqliteTable(
     parentId: text("parent_id"),
     // Self-referential. NULL = root node. FK enforced at app level.
     name: text("name").notNull(),
-    agentType: text("agent_type").notNull(),
-    // 'shelley' | 'pi' | 'claude-code' | 'codex' | 'cursor' | 'amp' | 'custom'
+    harnessId: text("harness_id")
+      .notNull()
+      .references(() => agentHarness.id),
     model: text("model").notNull(),
     status: text("status").notNull().default("idle"),
     // 'idle' | 'thinking' | 'running' | 'done' | 'error'
@@ -277,40 +301,6 @@ export const agentNode = sqliteTable(
   ],
 );
 
-export const agentArtifact = sqliteTable(
-  "agent_artifact",
-  {
-    id: text("id").primaryKey(),
-    sessionId: text("session_id")
-      .notNull()
-      .references(() => agentSession.id, { onDelete: "cascade" }),
-    sourceNodeId: text("source_node_id")
-      .notNull()
-      .references(() => agentNode.id, { onDelete: "cascade" }),
-    targetNodeId: text("target_node_id")
-      .notNull()
-      .references(() => agentNode.id, { onDelete: "cascade" }),
-    sourcePath: text("source_path").notNull(),
-    targetPath: text("target_path").notNull(),
-    bucketKey: text("bucket_key").notNull(),
-    status: text("status").notNull(),
-    errorMessage: text("error_message"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("agent_artifact_session_id_idx").on(table.sessionId),
-    index("agent_artifact_source_node_id_idx").on(table.sourceNodeId),
-    index("agent_artifact_target_node_id_idx").on(table.targetNodeId),
-    index("agent_artifact_status_idx").on(table.status),
-  ],
-);
-
 // ============================================
 // Agent Session Relations
 // ============================================
@@ -321,7 +311,10 @@ export const agentSessionRelations = relations(agentSession, ({ one, many }) => 
     references: [user.id],
   }),
   nodes: many(agentNode),
-  artifacts: many(agentArtifact),
+}));
+
+export const agentHarnessRelations = relations(agentHarness, ({ many }) => ({
+  nodes: many(agentNode),
 }));
 
 export const agentNodeRelations = relations(agentNode, ({ one, many }) => ({
@@ -329,29 +322,14 @@ export const agentNodeRelations = relations(agentNode, ({ one, many }) => ({
     fields: [agentNode.sessionId],
     references: [agentSession.id],
   }),
+  harness: one(agentHarness, {
+    fields: [agentNode.harnessId],
+    references: [agentHarness.id],
+  }),
   parent: one(agentNode, {
     fields: [agentNode.parentId],
     references: [agentNode.id],
     relationName: "parentChild",
   }),
   children: many(agentNode, { relationName: "parentChild" }),
-  outboundArtifacts: many(agentArtifact, { relationName: "artifactSource" }),
-  inboundArtifacts: many(agentArtifact, { relationName: "artifactTarget" }),
-}));
-
-export const agentArtifactRelations = relations(agentArtifact, ({ one }) => ({
-  session: one(agentSession, {
-    fields: [agentArtifact.sessionId],
-    references: [agentSession.id],
-  }),
-  sourceNode: one(agentNode, {
-    fields: [agentArtifact.sourceNodeId],
-    references: [agentNode.id],
-    relationName: "artifactSource",
-  }),
-  targetNode: one(agentNode, {
-    fields: [agentArtifact.targetNodeId],
-    references: [agentNode.id],
-    relationName: "artifactTarget",
-  }),
 }));

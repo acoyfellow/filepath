@@ -1,6 +1,79 @@
 <script lang="ts">
   import CodeBlock from '$lib/components/CodeBlock.svelte';
-  import { DEFAULT_MODEL_FULL } from '$lib/config';</script>
+  import { DEFAULT_MODEL_FULL } from '$lib/config';
+  const websocketMessageExample = "# Send message\n{\n  \"type\": \"message\",\n  \"nodeId\": \"{nodeId}\",\n  \"content\": \"Hello!\"\n}";
+
+  const pythonExample = `import requests
+import json
+import websocket
+
+BASE_URL = "https://myfilepath.com"
+EMAIL = "agent@example.com"
+PASSWORD = "secure-password"
+OPENROUTER_KEY = "sk-or-v1-..."
+
+# 1. Sign up
+signup_resp = requests.post(f"{BASE_URL}/api/auth/sign-up/email", json={
+    "email": EMAIL,
+    "password": PASSWORD,
+    "name": "My Agent"
+})
+print(f"Signed up: {signup_resp.status_code}")
+
+# 2. Sign in
+login_resp = requests.post(f"{BASE_URL}/api/auth/sign-in/email", json={
+    "email": EMAIL,
+    "password": PASSWORD
+})
+session_cookie = login_resp.cookies.get('session')
+headers = {"Cookie": f"session={session_cookie}"}
+
+# 3. Store API key
+requests.post(f"{BASE_URL}/api/user/keys", 
+    headers=headers,
+    json={"provider": "openrouter", "key": OPENROUTER_KEY}
+)
+
+# 4. Create session
+session_resp = requests.post(f"{BASE_URL}/api/sessions",
+    headers=headers,
+    json={"name": "Research Task"}
+)
+session_id = session_resp.json()['id']
+
+# 5. Spawn agent
+node_resp = requests.post(f"{BASE_URL}/api/sessions/{session_id}/nodes",
+    headers=headers,
+    json={
+        "name": "Pi",
+        "harnessId": "pi",
+        "model": "${DEFAULT_MODEL_FULL}"
+    }
+)
+node_id = node_resp.json()['id']
+
+# 6. Chat via WebSocket
+def on_message(ws, message):
+    data = json.loads(message)
+    if data['type'] == 'event':
+        event = data.get('event', {})
+        if event.get('type') == 'text':
+            print(event.get('content', ''), end='')
+
+ws = websocket.WebSocketApp(
+    f"wss://api.myfilepath.com/agents/chat-agent/{node_id}",
+    on_message=on_message
+)
+
+# Send a message
+ws.send(json.dumps({
+    "type": "message",
+    "nodeId": node_id,
+    "content": "Explain quantum computing"
+}))
+
+ws.run_forever()`;
+</script>
 
 <svelte:head>
   <title>Agent API | filepath - Programmatic Access for AI Agents</title>
@@ -97,7 +170,7 @@
   -H "Cookie: session=your-session-cookie" \\
   -d '{
     "name": "Pi Researcher",
-    "agentType": "pi",
+    "harnessId": "pi",
     "model": "${DEFAULT_MODEL_FULL}"
   }'`}
         />
@@ -172,7 +245,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Pi</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">Research and analysis specialist. Deep dives into docs, APIs, codebases.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "pi"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "pi"</code>
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4 flex items-center gap-4">
@@ -181,7 +254,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Shelley</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">Full-stack engineering. filepath-native reference implementation.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "shelley"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "shelley"</code>
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4 flex items-center gap-4">
@@ -190,7 +263,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Claude Code</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">Anthropic's agentic coding tool. Complex multi-file changes.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "claude-code"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "claude-code"</code>
       </div>
 
       <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4 flex items-center gap-4">
@@ -199,12 +272,12 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
           <h3 class="font-medium text-gray-800 dark:text-neutral-200">Codex</h3>
           <p class="text-gray-600 dark:text-neutral-400 text-sm">OpenAI's coding agent. Strong at Python, scripting, data.</p>
         </div>
-        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">agentType: "codex"</code>
+        <code class="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 px-2 py-1 rounded">harnessId: "codex"</code>
       </div>
     </div>
 
     <p class="text-gray-500 dark:text-neutral-500 text-sm mt-4">
-      Also available: cursor, amp, opencode, custom. 
+      Also available: cursor, amp, custom.
       <a href="/docs/agents" class="text-gray-700 dark:text-neutral-300 hover:underline">View full catalog</a>
     </p>
   </section>
@@ -231,21 +304,9 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
         <CodeBlock
           language="json"
           className="text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto"
-          code={`POST /api/user/keys
-{"provider": "openrouter", "key": "sk-or-v1-..."}`}
+          code={"POST /api/user/keys\n{\"provider\": \"openrouter\", \"key\": \"sk-or-v1-...\"}"}
         />
         <p class="text-gray-500 dark:text-neutral-500 text-xs mt-2">To route a model through Zen, prefix it with <code class="text-gray-700 dark:text-neutral-300">zen/</code>, for example <code class="text-gray-700 dark:text-neutral-300">zen/gpt-5</code>.</p>
-      </div>
-
-      <div class="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 mt-4">
-        <p class="text-gray-700 dark:text-neutral-300 font-medium mb-2">Per-Session API Key</p>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm mb-3">Override the account key for a specific session:</p>
-        <CodeBlock
-          language="json"
-          className="text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto"
-          code={`POST /api/sessions/{id}/nodes
-{"name": "Agent", "agentType": "pi", "model": "...", "apiKey": "sk-or-v1-..."}`}
-        />
       </div>
     </div>
   </section>
@@ -256,44 +317,28 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
     
     <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-6">
       <p class="text-gray-600 dark:text-neutral-400 mb-4">
-        Agents communicate via WebSocket using the Cloudflare AIChatAgent protocol. Connect to your agent node and start chatting.
+        Agents communicate via filepath's native ChatAgent WebSocket protocol. Connect to your agent node and send plain message envelopes.
       </p>
 
       <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Connection</h3>
       <CodeBlock
         language="bash"
         className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-4"
-        code={`wss://api.myfilepath.com/agents/chat-agent/{nodeId}`}
+        code={"wss://api.myfilepath.com/agents/chat-agent/{nodeId}"}
       />
 
       <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Message Format</h3>
       <CodeBlock
         language="json"
         className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-4"
-        code={`# Send message
-{
-  "type": "cf_agent_use_chat_request",
-  "id": "req-123",
-  "init": {
-    "method": "POST",
-    "headers": {"Content-Type": "application/json"},
-    "body": JSON.stringify({
-      "messages": [{
-        "id": "1",
-        "role": "user",
-        "parts": [{"type": "text", "text": "Hello!"}]
-      }]
-    })
-  }
-}`}
+        code={websocketMessageExample}
       />
 
       <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Response Events</h3>
       <ul class="space-y-2 text-gray-600 dark:text-neutral-400 text-sm">
-        <li>• <code>cf_agent_chat_messages</code> — Full message list sync</li>
-        <li>• <code>cf_agent_use_chat_response</code> — Streaming response chunks</li>
-        <li>• <code>cf_agent_stream_resuming</code> — Resume interrupted streams</li>
-        <li>• <code>cf_agent_chat_request_cancel</code> — Cancel current request</li>
+        <li>• <code>history</code> — Full durable message list on connect</li>
+        <li>• <code>event</code> — Protocol event from the runtime</li>
+        <li>• <code>error</code> — Explicit runtime or lifecycle failure</li>
       </ul>
     </div>
   </section>
@@ -307,84 +352,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
       <CodeBlock
         language="python"
         className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto"
-        code={`import requests
-import json
-import websocket
-
-BASE_URL = "https://myfilepath.com"
-EMAIL = "agent@example.com"
-PASSWORD = "secure-password"
-OPENROUTER_KEY = "sk-or-v1-..."
-
-# 1. Sign up
-signup_resp = requests.post(f"{BASE_URL}/api/auth/sign-up/email", json={
-    "email": EMAIL,
-    "password": PASSWORD,
-    "name": "My Agent"
-})
-print(f"Signed up: {signup_resp.status_code}")
-
-# 2. Sign in
-login_resp = requests.post(f"{BASE_URL}/api/auth/sign-in/email", json={
-    "email": EMAIL,
-    "password": PASSWORD
-})
-session_cookie = login_resp.cookies.get('session')
-headers = {"Cookie": f"session={session_cookie}"}
-
-# 3. Store API key
-requests.post(f"{BASE_URL}/api/user/keys", 
-    headers=headers,
-    json={"provider": "openrouter", "key": OPENROUTER_KEY}
-)
-
-# 4. Create session
-session_resp = requests.post(f"{BASE_URL}/api/sessions",
-    headers=headers,
-    json={"name": "Research Task"}
-)
-session_id = session_resp.json()['id']
-
-# 5. Spawn agent
-node_resp = requests.post(f"{BASE_URL}/api/sessions/{session_id}/nodes",
-    headers=headers,
-    json={
-        "name": "Pi",
-        "agentType": "pi",
-        "model": "${DEFAULT_MODEL_FULL}"
-    }
-)
-node_id = node_resp.json()['id']
-
-# 6. Chat via WebSocket
-def on_message(ws, message):
-    data = json.loads(message)
-    if data['type'] == 'cf_agent_use_chat_response':
-        print(data.get('body', ''), end='')
-
-ws = websocket.WebSocketApp(
-    f"wss://api.myfilepath.com/agents/chat-agent/{node_id}",
-    on_message=on_message
-)
-
-# Send a message
-ws.send(json.dumps({
-    "type": "cf_agent_use_chat_request",
-    "id": "msg-1",
-    "init": {
-        "method": "POST",
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps({
-            "messages": [{
-                "id": "1",
-                "role": "user",
-                "parts": [{"type": "text", "text": "Explain quantum computing"}]
-            }]
-        })
-    }
-}))
-
-ws.run_forever()`}
+        code={pythonExample}
       />
     </div>
   </section>

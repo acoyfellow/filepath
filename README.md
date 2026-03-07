@@ -1,22 +1,19 @@
 # filepath
 
-> Long-running sessions made of durable agent threads, backed by Cloudflare sandboxes.
+> Long-running sessions made of durable agents, backed by Cloudflare sandboxes.
 
 filepath is the orchestration layer that stays thin around the real primitives: Cloudflare sandboxes, your chosen harness, your chosen model, and your own router keys. The product surface is:
 - a durable session
-- a thread tree that organizes work like a filesystem
+- a tree of agents that organizes work like a filesystem
 - a chat-first control surface
-- real process visibility and a workspace terminal when the runtime supports it
+- explicit agent state and event history
 
 ## What Is True Today
 
-- Each thread runs inside its own Cloudflare sandbox with its own filesystem and process space.
-- The selected thread exposes real runtime processes in the UI.
-- You can open a workspace terminal for a thread when the runtime supports it.
+- Each agent runs inside its own Cloudflare sandbox with its own filesystem and process space.
 - Sessions reconnect cleanly to the same tree and history.
 - Session state streams live across your own devices on the same account.
-- Threads can hand files to each other explicitly.
-- Threads can be moved and regrouped like files and folders.
+- Agents can be moved and regrouped inside the tree.
 
 ## Quick Start
 
@@ -25,18 +22,17 @@ filepath is the orchestration layer that stays thin around the real primitives: 
    - Get an OpenRouter key at https://openrouter.ai/keys
    - Or get an OpenCode Zen key at https://opencode.ai/zen
 3. **Create a session** from the dashboard
-4. **Spawn a thread** — choose from the supported harnesses and use the exact model string from your router
-5. **Send a message** — chat is the thread's control surface
-6. **Watch it work** — process updates, tool calls, file writes, and explicit handoffs show up in the session
+4. **Spawn an agent** — choose from the supported harnesses and use the exact model string from your router
+5. **Send a message** — chat is the agent's control surface
+6. **Watch it work** — tool calls, file writes, commits, and explicit handoffs show up in the session
 
 ## How It Works
 
 1. Create a session (like a project folder). Optional git repo to clone.
-2. Spawn a thread — choose a supported harness and the exact model string your router exposes
-3. The thread runs in its own sandboxed runtime. Send it work through chat.
-4. The selected thread can show real runtime processes, and you can open a workspace terminal when available.
-5. Threads can spawn child threads, hand files across the tree, and be reorganized while the work stays live.
-6. Reopen the session on another device on the same account and keep going.
+2. Spawn an agent — choose a supported harness and the exact model string your router exposes
+3. The agent runs in its own sandboxed runtime. Send it work through chat.
+4. Agents can spawn child agents and be reorganized while the work stays live.
+5. Reopen the session on another device on the same account and keep going.
 
 **BYOK Model:** You bring your own router key. We don't charge for usage — your keys, your spend.
 
@@ -44,13 +40,13 @@ filepath is the orchestration layer that stays thin around the real primitives: 
 
 SvelteKit (Svelte 5) + Cloudflare Workers + Agents SDK + D1 + CF Sandbox + Alchemy
 
-## Thread Model
+## Core Model
 
 - **Session**: the durable workspace
-- **Thread**: one agent lane inside the tree
-- **Process**: a live runtime process inside a thread's sandbox
+- **Agent**: one harness + model lane inside the tree
+- **Event stream**: the durable chat and runtime history for an agent
 
-Chat is always primary. Terminal attach is additive. filepath does not promise a universal "headful mode" for every harness.
+Chat is the only built-in surface. The runtime stays headless.
 
 ## The filepath Agent Protocol (FAP)
 
