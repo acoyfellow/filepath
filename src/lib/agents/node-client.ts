@@ -105,7 +105,7 @@ export function createNodeClient(
   return {
     send(content: string, opts?: { nodeId?: string; sessionId?: string }) {
       if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'message', content, ...opts }));
+        ws.send(JSON.stringify({ type: 'message', content, nodeId, ...opts }));
       }
     },
     close() {

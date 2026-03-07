@@ -71,6 +71,12 @@
         <p class="text-gray-500 dark:text-neutral-500 text-sm mb-2">Agent status update</p>
         <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto" code={`{"type":"status","state":"running"}`} />
       </div>
+
+      <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4">
+        <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">handoff</h3>
+        <p class="text-gray-500 dark:text-neutral-500 text-sm mb-2">Agent hit the end of its useful context and becomes exhausted</p>
+        <CodeBlock language="json" className="bg-neutral-950 rounded p-3 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto" code={`{"type":"handoff","summary":"Context exhausted after finishing code review pass"}`} />
+      </div>
     </div>
   </section>
 
@@ -100,13 +106,12 @@
 
   <section class="mb-12">
     <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mb-4">WebSocket Protocol</h2>
-    <p class="text-gray-600 dark:text-neutral-400 mb-4">For browser-to-agent communication, filepath uses Cloudflare's AIChatAgent protocol:</p>
+    <p class="text-gray-600 dark:text-neutral-400 mb-4">For browser-to-agent communication, filepath uses a thin native WebSocket protocol around the ChatAgent durable object:</p>
     <ul class="space-y-2 text-gray-600 dark:text-neutral-400 list-disc list-inside">
-      <li><code>cf_agent_chat_messages</code> — Full message list sync</li>
-      <li><code>cf_agent_use_chat_request</code> — Send a message</li>
-      <li><code>cf_agent_use_chat_response</code> — Streaming response chunks</li>
-      <li><code>cf_agent_stream_resuming</code> — Resume interrupted streams</li>
-      <li><code>cf_agent_chat_request_cancel</code> — Cancel current request</li>
+      <li><code>{`{"type":"message","content":"..."}`}</code> — send a user message</li>
+      <li><code>{`{"type":"history", ...}`}</code> — full durable message history on connect</li>
+      <li><code>{`{"type":"event","event":{...}}`}</code> — protocol events from the runtime</li>
+      <li><code>{`{"type":"error","message":"..."}`}</code> — explicit runtime or lifecycle failure</li>
     </ul>
     <p class="text-gray-500 dark:text-neutral-500 text-sm mt-4">Connect to: <code>wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}</code></p>
   </section>

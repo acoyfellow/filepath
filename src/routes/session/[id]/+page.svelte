@@ -329,6 +329,10 @@
         setNodeStatus(nodeId, "done");
       }
 
+      if (msg.event.type === "handoff") {
+        setNodeStatus(nodeId, "exhausted");
+      }
+
       return;
     }
 
@@ -459,6 +463,9 @@
 
   function handleSend(message: string) {
     if (!selectedAgent) return;
+    if (selectedAgent.status === "exhausted") {
+      return;
+    }
 
     const nodeId = selectedAgent.id;
     const connectionState = connectionStates[nodeId];

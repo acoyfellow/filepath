@@ -429,7 +429,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
           schema: {
             type: 'object',
             properties: {
-              type: { type: 'string', enum: ['text', 'tool', 'status', 'done'] },
+              type: { type: 'string', enum: ['text', 'tool', 'status', 'done', 'handoff'] },
               content: { type: 'string' }
             }
           }
@@ -477,7 +477,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
             properties: {
               id: { type: 'string' },
               name: { type: 'string' },
-              status: { type: 'string', enum: ['draft', 'active', 'completed'] },
+              status: { type: 'string', enum: ['draft', 'running', 'paused', 'stopped', 'error'] },
               createdAt: { type: 'number' },
               updatedAt: { type: 'number' },
               nodeCount: { type: 'number' }
@@ -490,7 +490,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
               name: { type: 'string' },
               agentType: { type: 'string' },
               model: { type: 'string' },
-              status: { type: 'string', enum: ['idle', 'running', 'error', 'done'] },
+              status: { type: 'string', enum: ['idle', 'thinking', 'running', 'done', 'exhausted', 'error'] },
               parentId: { type: 'string', nullable: true }
             }
           },

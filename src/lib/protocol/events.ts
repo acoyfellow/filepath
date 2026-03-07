@@ -18,6 +18,7 @@ export const AgentStatus = z.enum([
   "thinking",
   "running",
   "done",
+  "exhausted",
   "error",
 ]);
 export type AgentStatus = z.infer<typeof AgentStatus>;
@@ -27,6 +28,7 @@ export const STATUS_COLORS: Record<AgentStatus, string> = {
   thinking: "#f59e0b",
   running: "#818cf8",
   done: "#22c55e",
+  exhausted: "#f97316",
   error: "#ef4444",
 };
 
@@ -35,6 +37,7 @@ export const STATUS_LABELS: Record<AgentStatus, string> = {
   thinking: "Thinking",
   running: "Running",
   done: "Done",
+  exhausted: "Exhausted",
   error: "Error",
 };
 
@@ -106,7 +109,7 @@ export const StatusEvent = z.object({
 });
 export type StatusEvent = z.infer<typeof StatusEvent>;
 
-/** Agent hands off to next session (context limit reached) */
+/** Agent reports context exhaustion with a terminal summary */
 export const HandoffEvent = z.object({
   type: z.literal("handoff"),
   summary: z.string(),

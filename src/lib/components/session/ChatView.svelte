@@ -86,6 +86,10 @@
         <div class="msg msg-a">
           <CommitLog commits={[msg.event]} />
         </div>
+      {:else if msg.event.type === "handoff"}
+        <TextMessage from="a" text={`Exhausted: ${msg.event.summary}`} />
+      {:else if msg.event.type === "done" && msg.event.summary}
+        <TextMessage from="a" text={msg.event.summary} />
       {/if}
     {/each}
   {/if}

@@ -256,7 +256,7 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
     
     <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-6">
       <p class="text-gray-600 dark:text-neutral-400 mb-4">
-        Agents communicate via WebSocket using the Cloudflare AIChatAgent protocol. Connect to your agent node and start chatting.
+        Agents communicate via filepath's native ChatAgent WebSocket protocol. Connect to your agent node and send plain message envelopes.
       </p>
 
       <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Connection</h3>
@@ -272,28 +272,17 @@ wscat -c "wss://api.myfilepath.com/agents/chat-agent/{nodeId}"
         className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded p-4 text-sm text-gray-700 dark:text-neutral-300 overflow-x-auto mb-4"
         code={`# Send message
 {
-  "type": "cf_agent_use_chat_request",
-  "id": "req-123",
-  "init": {
-    "method": "POST",
-    "headers": {"Content-Type": "application/json"},
-    "body": JSON.stringify({
-      "messages": [{
-        "id": "1",
-        "role": "user",
-        "parts": [{"type": "text", "text": "Hello!"}]
-      }]
-    })
-  }
+  "type": "message",
+  "nodeId": "{nodeId}",
+  "content": "Hello!"
 }`}
       />
 
       <h3 class="text-lg font-medium text-gray-800 dark:text-neutral-200 mb-3">Response Events</h3>
       <ul class="space-y-2 text-gray-600 dark:text-neutral-400 text-sm">
-        <li>• <code>cf_agent_chat_messages</code> — Full message list sync</li>
-        <li>• <code>cf_agent_use_chat_response</code> — Streaming response chunks</li>
-        <li>• <code>cf_agent_stream_resuming</code> — Resume interrupted streams</li>
-        <li>• <code>cf_agent_chat_request_cancel</code> — Cancel current request</li>
+        <li>• <code>history</code> — Full durable message list on connect</li>
+        <li>• <code>event</code> — Protocol event from the runtime</li>
+        <li>• <code>error</code> — Explicit runtime or lifecycle failure</li>
       </ul>
     </div>
   </section>
@@ -359,8 +348,10 @@ node_id = node_resp.json()['id']
 # 6. Chat via WebSocket
 def on_message(ws, message):
     data = json.loads(message)
-    if data['type'] == 'cf_agent_use_chat_response':
-        print(data.get('body', ''), end='')
+    if data['type'] == 'event':
+        event = data.get('event', {})
+        if event.get('type') == 'text':
+            print(event.get('content', ''), end='')
 
 ws = websocket.WebSocketApp(
     f"wss://api.myfilepath.com/agents/chat-agent/{node_id}",
@@ -369,19 +360,9 @@ ws = websocket.WebSocketApp(
 
 # Send a message
 ws.send(json.dumps({
-    "type": "cf_agent_use_chat_request",
-    "id": "msg-1",
-    "init": {
-        "method": "POST",
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps({
-            "messages": [{
-                "id": "1",
-                "role": "user",
-                "parts": [{"type": "text", "text": "Explain quantum computing"}]
-            }]
-        })
-    }
+    "type": "message",
+    "nodeId": node_id,
+    "content": "Explain quantum computing"
 }))
 
 ws.run_forever()`}

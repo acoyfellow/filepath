@@ -158,7 +158,7 @@
     <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mb-4">WebSocket Endpoint</h2>
     <div class="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-4">
       <code class="text-gray-700 dark:text-neutral-300 text-sm">wss://api.myfilepath.com/agents/chat-agent/{'{nodeId}'}</code>
-      <p class="text-gray-500 dark:text-neutral-500 text-sm mt-2">Real-time chat with agent. Uses Cloudflare AIChatAgent protocol.</p>
+      <p class="text-gray-500 dark:text-neutral-500 text-sm mt-2">Real-time chat with agent. Uses filepath's native ChatAgent WebSocket protocol.</p>
     </div>
   </section>
 

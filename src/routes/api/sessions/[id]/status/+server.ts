@@ -48,6 +48,7 @@ export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
   const runningNodes = nodes.filter(
     (n) => n.status === "running" || n.status === "thinking",
   ).length;
+  const exhaustedNodes = nodes.filter((n) => n.status === "exhausted").length;
   const errorNodes = nodes.filter((n) => n.status === "error").length;
 
   return json({
@@ -57,6 +58,7 @@ export const GET: RequestHandler = async ({ params, locals }: RequestEvent) => {
       total: totalNodes,
       done: doneNodes,
       running: runningNodes,
+      exhausted: exhaustedNodes,
       error: errorNodes,
     },
   });

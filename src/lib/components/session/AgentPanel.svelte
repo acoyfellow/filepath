@@ -31,6 +31,13 @@
     onsendartifact,
   }: Props = $props();
 
+  let isReadOnly = $derived(agent?.status === "exhausted");
+  let composerPlaceholder = $derived(
+    isReadOnly
+      ? "Agent exhausted"
+      : "Message...",
+  );
+
   let showArtifactModal = $state(false);
   let sourcePath = $state("");
   let targetThreadId = $state("");
@@ -39,7 +46,7 @@
   let sendingArtifact = $state(false);
 
   function openArtifactModal() {
-    if (!agent) return;
+    if (!agent || isReadOnly) return;
 
     showArtifactModal = true;
     sourcePath = "";
@@ -99,6 +106,11 @@
     </div>
 
     <div class="panel-body">
+      {#if isReadOnly}
+        <div class="readonly-banner">
+          This agent is exhausted. Its history remains visible, but it is read-only for now.
+        </div>
+      {/if}
       <ChatView
         {messages}
         status={agent.status}
@@ -109,7 +121,7 @@
     <div class="artifact-section">
       <div class="artifact-row">
         <div class="artifact-label">Artifacts</div>
-        <button class="artifact-action" onclick={openArtifactModal}>Send file</button>
+        <button class="artifact-action" onclick={openArtifactModal} disabled={isReadOnly}>Send file</button>
       </div>
 
       {#if artifacts.length > 0}
@@ -133,7 +145,7 @@
       {/if}
     </div>
 
-    <ChatInput {onsend} />
+    <ChatInput {onsend} disabled={isReadOnly} placeholder={composerPlaceholder} />
   </div>
 {:else}
   <div class="panel-empty">
@@ -279,6 +291,11 @@
     color: var(--t2);
   }
 
+  .artifact-action:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
   .artifact-list {
     display: flex;
     flex-direction: column;
@@ -345,6 +362,15 @@
     color: var(--t6);
     font-family: var(--m);
     font-size: 12px;
+  }
+
+  .readonly-banner {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--b1);
+    font-family: var(--m);
+    font-size: 11px;
+    color: #fb923c;
+    background: color-mix(in srgb, #fb923c 10%, transparent);
   }
 
   .artifact-modal-overlay {

@@ -2,7 +2,7 @@ import { Agent } from "agents";
 import type { Connection, ConnectionContext, WSMessage } from "agents";
 import type { Env } from "../types";
 import { parseAgentEvent } from "../lib/protocol";
-import type { AgentEventType } from "../lib/protocol";
+import type { AgentEventType, AgentStatusType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
 import { buildAgentEnv } from '$lib/agents/adapters';
 import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
@@ -33,6 +33,7 @@ export interface ChatAgentState {
   sessionId: string;
   agentType: string;
   model: string;
+  status: AgentStatusType;
   initialized: boolean;
   /** Resolved API key source for logging (not the key itself) */
   keySource?: 'session' | 'user';
@@ -115,12 +116,13 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       })),
     }));
 
-    // Send current status
-    connection.send(JSON.stringify({
-      type: "event",
-      event: { type: "status", state: "idle" },
-      timestamp: Date.now(),
-    }));
+    if (this.state?.initialized) {
+      connection.send(JSON.stringify({
+        type: "event",
+        event: { type: "status", state: this.state.status },
+        timestamp: Date.now(),
+      }));
+    }
   }
 
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {
@@ -141,6 +143,14 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     // Initialize state from first message if needed
     if (!this.state?.initialized && parsed.nodeId) {
       await this.initFromNode(parsed.nodeId, parsed.sessionId);
+    }
+
+    if (this.state?.status === "exhausted") {
+      connection.send(JSON.stringify({
+        type: "error",
+        message: "This agent is exhausted and read-only.",
+      }));
+      return;
     }
 
     // Persist user message
@@ -174,7 +184,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   private async initFromNode(nodeId: string, sessionId?: string): Promise<void> {
     try {
       const row = await this.env.DB.prepare(
-        `SELECT n.agent_type, n.model, s.id as session_id, s.api_key as session_api_key,
+        `SELECT n.agent_type, n.model, n.status, s.id as session_id, s.api_key as session_api_key,
                 s.user_id, u.openrouter_api_key as user_api_key
          FROM agent_node n JOIN agent_session s ON n.session_id = s.id
          JOIN user u ON s.user_id = u.id
@@ -182,6 +192,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       ).bind(nodeId).first<{
         agent_type: string;
         model: string;
+        status: AgentStatusType;
         session_id: string;
         session_api_key: string | null;
         user_id: string;
@@ -194,6 +205,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
           sessionId: sessionId || row.session_id,
           agentType: row.agent_type,
           model: row.model,
+          status: row.status,
           initialized: true,
         });
       }
@@ -320,7 +332,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     // Set up stdout relay in the background
     this.setupContainerRelay(nodeId, proc);
 
-    this.broadcastStatus('running');
+    void this.persistStatus('running');
     console.log(`[ChatAgent] Container spawned for node ${nodeId}`);
   }
 
@@ -356,7 +368,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       return;
     }
 
-    this.broadcastStatus('thinking');
+    await this.persistStatus('thinking');
 
     const inputMsg = JSON.stringify({ type: 'message', from: 'user', content }) + '\n';
     const encoded = new TextEncoder().encode(inputMsg);
@@ -404,23 +416,37 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     const message =
       `${reason}. filepath will not bypass the sandbox with a direct model call. ` +
       "Restart the branch or inspect the container runtime.";
-    const messageId = this.saveMessage("assistant", `⚠️ ${message}`);
+    const messageId = this.saveMessage("assistant", `Warning: ${message}`);
 
     this.broadcast(JSON.stringify({
       type: "event",
-      event: { type: "text", content: `⚠️ ${message}` },
+      event: { type: "text", content: `Warning: ${message}` },
       role: "assistant",
       messageId,
       timestamp: Date.now(),
     }));
 
-    this.broadcastStatus("error");
+    void this.persistStatus("error");
     connection.send(JSON.stringify({ type: "error", message }));
   }
 
   // ─── Helpers ───────────────────────────────────────────
 
-  private broadcastStatus(state: string): void {
+  private async persistStatus(state: AgentStatusType): Promise<void> {
+    if (this.state) {
+      this.state.status = state;
+    }
+
+    if (this.state?.nodeId) {
+      await this.env.DB.prepare(
+        `UPDATE agent_node SET status = ?, updated_at = unixepoch('subsecond') * 1000 WHERE id = ?`,
+      ).bind(state, this.state.nodeId).run();
+    }
+
+    this.broadcastStatus(state);
+  }
+
+  private broadcastStatus(state: AgentStatusType): void {
     this.broadcast(JSON.stringify({
       type: "event",
       event: { type: "status", state },
@@ -452,7 +478,12 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
               this.processNDJSONLine(nodeId, buffer.trim());
             }
             console.log(`[ChatAgent] Container stdout closed for node ${nodeId}`);
-            this.broadcastStatus("done");
+            const finalState = this.state?.status;
+            if (finalState === "error" || finalState === "done" || finalState === "exhausted") {
+              this.broadcastStatus(finalState);
+            } else {
+              await this.persistStatus("done");
+            }
             break;
           }
 
@@ -473,7 +504,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[ChatAgent] Container relay error for node ${nodeId}: ${msg}`);
-        this.broadcastStatus("error");
+        await this.persistStatus("error");
       }
     };
 
@@ -542,6 +573,27 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
         `[ChatAgent] Spawn request from node ${nodeId}: ` +
         `agent=${event.agent} name=${event.name} task=${event.task ?? "(none)"}`,
       );
+    }
+
+    if (event.type === "status") {
+      void this.persistStatus(event.state);
+      if (event.state === "exhausted") {
+        void this.stopContainer(nodeId);
+      }
+      return;
+    }
+
+    if (event.type === "done") {
+      if (event.summary) {
+        this.saveMessage("assistant", event.summary);
+      }
+      void this.persistStatus("done");
+    }
+
+    if (event.type === "handoff") {
+      this.saveMessage("assistant", `Exhausted: ${event.summary}`);
+      void this.persistStatus("exhausted");
+      void this.stopContainer(nodeId);
     }
 
     // Broadcast all valid events to connected WS clients
