@@ -145,3 +145,30 @@ src/routes/api/session/              # Session + node CRUD
 worker/                              # CF Worker entry, agent exports
 gates/                               # Health + production gates
 ```
+
+## Cursor Cloud specific instructions
+
+### Services
+
+One service: the SvelteKit + Cloudflare Workers app, started via `bun run dev` (runs `alchemy dev`). This spins up a local Vite dev server on **port 5173** and a Worker on **port 1337**, with local D1 (SQLite), Durable Objects, and R2 emulated by Alchemy/miniflare.
+
+### Prerequisites
+
+- **Bun** (`~/.bun/bin/bun`) -- installed via `curl -fsSL https://bun.sh/install | bash`. Add to PATH: `export PATH="$HOME/.bun/bin:$PATH"`.
+- **Docker** -- required because `alchemy dev` builds a Container resource from the repo's `Dockerfile`. Without Docker the dev server fails at the sandbox provisioning step. See the environment setup hints for Docker-in-Docker installation in cloud VMs (fuse-overlayfs + iptables-legacy workaround). After installing, start `dockerd` and ensure socket is accessible (`sudo chmod 666 /var/run/docker.sock`).
+- **`.env` file** -- create from injected secrets. Required keys: `ALCHEMY_PASSWORD`, `ALCHEMY_STATE_TOKEN`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`. Optional: `OPENROUTER_API_KEY`, `STRIPE_*`.
+
+### Common commands
+
+See `package.json` scripts and the Development section above. Key ones:
+- `bun run dev` -- start dev server (port 5173)
+- `bun run check` -- type-check (svelte-check)
+- `bun run build` -- production build (vite build)
+- `bash gates/health.sh` -- quick health gate
+
+### Gotchas
+
+- First `bun run dev` after install takes ~60s because Alchemy provisions D1, R2, Container, and DOs via Cloudflare API.
+- The local D1 database lives at `.alchemy/miniflare/v3/d1/.../*.sqlite`. To seed a test user, run `sqlite3 <path> < scripts/seed.sql` (credentials: `jordan@sendgrowth.com` / `test123`).
+- The pre-push hook (`hooks/pre-push`) runs type-check + build + gate syntax checks. Do NOT use `--no-verify`.
+- Always use `bun`/`bunx`, never `npm`/`npx`.
