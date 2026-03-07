@@ -55,7 +55,7 @@ fi
 echo -n "2. Spawn PI agent... "
 AGENT_PAYLOAD="{
   \"name\": \"Research Assistant\",
-  \"agentType\": \"pi\",
+  \"harnessId\": \"pi\",
   \"model\": \"anthropic/claude-sonnet-4\",
   \"config\": {
     \"systemPrompt\": \"You are Pi, a research specialist. Provide concise, accurate answers.\"

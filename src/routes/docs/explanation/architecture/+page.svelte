@@ -74,7 +74,7 @@
       <li>Users provide their own LLM API keys</li>
       <li>Keys stored encrypted in D1 (AES-256-GCM)</li>
       <li>Account-level keys: stored on user table</li>
-      <li>Per-session keys: stored on agent_session table</li>
+      <li>Account-level router keys determine which model catalogs and runtimes are available</li>
       <li>Per-node override: passed when spawning</li>
     </ul>
   </section>

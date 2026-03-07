@@ -148,8 +148,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
                     },
                     model: { type: 'string', description: `LLM model (e.g., ${DEFAULT_MODEL_FULL})` },
                     parentId: { type: 'string', description: 'Parent node ID for nested agents' },
-                    config: { type: 'object', description: 'Agent configuration' },
-                    apiKey: { type: 'string', description: 'Optional per-session API key' }
+                    config: { type: 'object', description: 'Agent configuration' }
                   }
                 }
               }

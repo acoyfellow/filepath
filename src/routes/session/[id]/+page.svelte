@@ -435,7 +435,6 @@
         harnessId: request.harnessId,
         model: request.model,
         parentId,
-        apiKey: request.apiKey,
       }),
     });
 

@@ -203,7 +203,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   private async initFromNode(nodeId: string, sessionId?: string): Promise<void> {
     try {
       const row = await this.env.DB.prepare(
-        `SELECT n.harness_id, n.model, n.status, s.id as session_id, s.api_key as session_api_key,
+      `SELECT n.harness_id, n.model, n.status, s.id as session_id,
                 s.user_id, u.openrouter_api_key as user_api_key
          FROM agent_node n JOIN agent_session s ON n.session_id = s.id
          JOIN user u ON s.user_id = u.id
@@ -213,7 +213,6 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
         model: string;
         status: AgentStatusType;
         session_id: string;
-        session_api_key: string | null;
         user_id: string;
         user_api_key: string | null;
       }>();
@@ -239,7 +238,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     // Get node config from D1
     const row = await this.env.DB.prepare(
       `SELECT n.harness_id, n.model, n.name, s.id as session_id, s.git_repo_url,
-              s.api_key as session_key, u.openrouter_api_key as user_key,
+              u.openrouter_api_key as user_key,
               h.entry_command as entry_command
          FROM agent_node n
          JOIN agent_session s ON n.session_id = s.id
@@ -252,7 +251,6 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       name: string;
       session_id: string;
       git_repo_url: string | null;
-      session_key: string | null;
       user_key: string | null;
       entry_command: string;
     }>();
@@ -267,15 +265,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     let containerApiKey = '';
     const secret = this.env.BETTER_AUTH_SECRET;
     let keySource: ChatAgentState["keySource"];
-    if (row.session_key && secret) {
-      try {
-        containerApiKey = await decryptApiKey(row.session_key, secret);
-        keySource = 'session';
-      } catch {
-        throw new Error('Session API key is unreadable. Rotate this session key and try again.');
-      }
-    }
-    if (!containerApiKey && row.user_key && secret) {
+    if (row.user_key && secret) {
       try {
         const decrypted = await decryptApiKey(row.user_key, secret);
         containerApiKey = deserializeStoredProviderKeys(decrypted)[provider] || '';

@@ -1,4 +1,3 @@
-import { encryptApiKey } from "$lib/crypto";
 import { getDrizzle } from "$lib/auth";
 import { agentHarness, agentNode, agentSession } from "$lib/schema";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
@@ -10,7 +9,6 @@ export interface AppContext {
   db: Db;
   userId: string;
   role?: string | null;
-  authSecret?: string;
   publishSessionEvent?: (sessionId: string, payload: Record<string, unknown>) => Promise<void>;
 }
 
@@ -96,7 +94,6 @@ export const NodeSpawnInputSchema = Schema.Struct({
   model: Schema.String,
   parentId: Schema.optional(Schema.String),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-  apiKey: Schema.optional(Schema.String),
 });
 export type NodeSpawnInput = Schema.Schema.Type<typeof NodeSpawnInputSchema>;
 
@@ -530,17 +527,6 @@ export function spawnNode(ctx: AppContext, sessionId: string, input: NodeSpawnIn
           }),
         "Failed to create agent",
       ).pipe(
-        Effect.flatMap(() =>
-          input.apiKey && ctx.authSecret
-            ? fromPromise(
-                async () => {
-                  const encrypted = await encryptApiKey(input.apiKey!.trim(), ctx.authSecret!);
-                  await ctx.db.update(agentSession).set({ apiKey: encrypted }).where(eq(agentSession.id, sessionId));
-                },
-                "Failed to store session API key",
-              )
-            : Effect.void,
-        ),
         Effect.flatMap(() =>
           !input.parentId
             ? fromPromise(

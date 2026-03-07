@@ -70,9 +70,6 @@
   let availableHarnesses = $state<AgentHarness[]>([]);
 
   let hasAccountKey = $derived(Object.values(accountKeysMasked).some(Boolean));
-  let keyMode = $state<'account' | 'session'>(initialSpawnState.hasAccountKey ? 'account' : 'session');
-  let sessionKey = $state('');
-  let keyLoading = $state(false); // Already have the data from server
   let availableRouters = $derived(
     Object.entries(accountKeysMasked)
       .filter(([, value]) => Boolean(value))
@@ -151,9 +148,6 @@
   function handleSpawn() {
     if (!name.trim()) return;
     const req: SpawnRequest = { name: name.trim(), harnessId: agent, model };
-    if (keyMode === 'session' && sessionKey.trim()) {
-      req.apiKey = sessionKey.trim();
-    }
     onspawn(req);
   }
 
@@ -240,40 +234,21 @@
         {/each}
       </div>
 
-      <div class="modal-label">api key</div>
+      <div class="modal-label">router access</div>
       {#if accountKeysError}
         <div class="modal-key-info modal-key-error">
-          Saved account router keys are unreadable. Use a session key or re-save your keys in Settings.
+          Saved account router keys are unreadable. Re-save them in Settings.
         </div>
       {/if}
-      {#if keyLoading}
-        <div class="modal-key-info">loading...</div>
-      {:else if hasAccountKey}
+      {#if hasAccountKey}
         <div class="modal-options">
-          <button class="modal-option" class:on={keyMode === 'account'} onclick={() => { keyMode = 'account'; }}>
-            saved account key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
-          </button>
-          <button class="modal-option" class:on={keyMode === 'session'} onclick={() => { keyMode = 'session'; }}>
-            different key
+          <button class="modal-option on" disabled>
+            account router key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
           </button>
         </div>
-        {#if keyMode === 'session'}
-          <input
-            class="modal-input modal-key-input"
-            type="password"
-            placeholder="Paste the key for the router this model uses"
-            bind:value={sessionKey}
-          />
-        {/if}
       {:else}
-        <input
-          class="modal-input modal-key-input"
-          type="password"
-          placeholder="Paste an OpenRouter or Zen key"
-          bind:value={sessionKey}
-        />
         <div class="modal-key-info">
-          No account key set. <a href="/settings/account" class="modal-key-link">Add one in Settings</a> or enter one for this session.
+          No account key set. <a href="/settings/account" class="modal-key-link">Add one in Settings</a> before spawning an agent.
         </div>
       {/if}
     </div>
@@ -414,11 +389,6 @@
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-  }
-  .modal-key-input {
-    margin-top: 6px;
-    font-family: monospace;
-    font-size: 11px;
   }
   .modal-key-info {
     font-family: var(--m);

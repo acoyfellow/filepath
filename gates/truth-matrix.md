@@ -16,6 +16,7 @@ This is the internal audit source for user-facing product claims.
 | Durable session state that reconnects cleanly | `src/routes/+page.svelte` | True with bounded wording | `gates/truth-session-reconnect.gate.sh`, `gates/truth-homepage-sync.gate.sh` | Reconnect to the same session tree/history is the current promise. |
 | Realtime session state across your devices | `src/routes/+page.svelte` | True with bounded wording | `gates/truth-realtime-multi-client.gate.sh`, `gates/truth-homepage-sync.gate.sh` | Same-account multi-client only. Not public sharing. |
 | Chat-first runtime visibility | `src/routes/+page.svelte` | True | `gates/production/agent-chat.gate.sh`, `gates/truth-homepage-sync.gate.sh` | Agent state, messages, tool calls, and exhaustion markers render in chat. |
+| Exhausted agents become read-only | `src/routes/session/[id]/+page.svelte` | True | `gates/truth-exhausted-readonly.gate.sh` | Exhaustion is a terminal state that preserves history and disables new input. |
 | Move agents like files and folders | `src/routes/+page.svelte` | True | `gates/truth-thread-move-desktop.gate.sh`, `gates/truth-thread-move-mobile.gate.sh`, `gates/truth-homepage-sync.gate.sh`, `gates/production/roadmap-truth.gate.sh` | Desktop drag/drop, mobile move sheet, realtime updates, and production runtime proof are in place. |
 | More routers, same contract | `src/routes/+page.svelte` | Roadmap | none yet | Intentionally deferred. |
 

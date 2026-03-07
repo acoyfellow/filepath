@@ -224,8 +224,6 @@ export const agentSession = sqliteTable(
     status: text("status").notNull().default("draft"),
     // 'draft' | 'running' | 'paused' | 'stopped' | 'error'
     rootNodeId: text("root_node_id"),
-    apiKey: text("api_key"),
-    // Per-session OpenRouter key override (encrypted). Null = use account key.
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
     lastBilledAt: integer("last_billed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })

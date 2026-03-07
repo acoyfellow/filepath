@@ -64,8 +64,8 @@
       <a href="/docs/how-to/debug-containers" class="text-gray-600 dark:text-neutral-400 hover:text-neutral-200 text-sm">
         Debug Failures
       </a>
-      <a href="/docs/how-to/per-session-keys" class="text-gray-600 dark:text-neutral-400 hover:text-neutral-200 text-sm">
-        Per-Session Keys
+      <a href="/settings/account" class="text-gray-600 dark:text-neutral-400 hover:text-neutral-200 text-sm">
+        Provider Keys
       </a>
       <a href="/docs/explanation/protocol" class="text-gray-600 dark:text-neutral-400 hover:text-neutral-200 text-sm">
         FAP Protocol

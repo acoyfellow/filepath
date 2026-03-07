@@ -66,8 +66,6 @@ export interface SpawnRequest {
   harnessId: HarnessId;
   model: string;
   parentId?: string;
-  /** Per-session API key override (plaintext, will be encrypted server-side) */
-  apiKey?: string;
 }
 
 export interface ThreadMovePayload {

@@ -33,10 +33,6 @@ export function createUserContextFromParts(user: User | null, platform?: Request
     db: getDrizzle(),
     userId: user.id,
     role: (user as { role?: string }).role ?? null,
-    authSecret:
-      platform?.env && "BETTER_AUTH_SECRET" in platform.env && typeof platform.env.BETTER_AUTH_SECRET === "string"
-        ? platform.env.BETTER_AUTH_SECRET
-        : undefined,
     publishSessionEvent: sessionEventPublisher(platform),
   };
 }
