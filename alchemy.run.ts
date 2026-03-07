@@ -6,7 +6,6 @@ import {
   DurableObjectNamespace,
   Container,
   D1Database,
-  R2Bucket,
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
@@ -59,12 +58,6 @@ const DB = await D1Database(dbName, {
   dev: { remote: false },
 });
 
-const artifactBucketName = isProd ? `${projectName}-artifacts` : `${prefix}-artifacts`;
-const ARTIFACTS = await R2Bucket(`${projectName}-artifacts`, {
-  name: artifactBucketName,
-  empty: true,
-});
-
 // Platform set to linux/amd64 because Cloudflare sandbox image only supports AMD64
 const Sandbox = await Container(`${projectName}-sandbox`, {
   className: "Sandbox",
@@ -92,7 +85,6 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     SESSION_DO,
     Sandbox,
     DB,
-    ARTIFACTS,
 
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
@@ -119,7 +111,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     WORKER,
     DB,
     SESSION_DO,
-    ARTIFACTS,
   },
   url: true,
   adopt: true,

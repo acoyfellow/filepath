@@ -70,20 +70,6 @@ export interface SpawnRequest {
   apiKey?: string;
 }
 
-export interface ArtifactEntry {
-  id: string;
-  sessionId: string;
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourcePath: string;
-  targetPath: string;
-  bucketKey: string;
-  status: "staged" | "delivered" | "failed";
-  errorMessage?: string | null;
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface ThreadMovePayload {
   nodeId: string;
   parentId: string | null;

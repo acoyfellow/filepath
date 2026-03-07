@@ -50,13 +50,7 @@ console.log(status.summary.running > 0); // true`;
       eyebrow: 'True Today',
       title: 'Chat-first runtime visibility',
       body:
-        'The selected thread shows durable status, event history, tool calls, commits, and explicit handoffs in chat. The runtime stays headless instead of splitting the product into chat plus a terminal viewer.',
-    },
-    {
-      eyebrow: 'True Today',
-      title: 'Cross-thread file handoff',
-      body:
-        'Threads can hand files to each other explicitly. The transfer is visible, persisted, and scoped to the session instead of relying on invisible shared state.',
+        'The selected thread shows durable status, event history, tool calls, commits, and exhaustion markers in chat. The runtime stays headless instead of splitting the product into chat plus a terminal viewer.',
     },
     {
       eyebrow: 'True Today',
@@ -209,7 +203,7 @@ console.log(status.summary.running > 0); // true`;
           This is the actual session UI, not a separate landing-page toy.
         </h2>
         <p class="mt-4 max-w-3xl text-sm md:text-base leading-8 text-gray-600 dark:text-neutral-400">
-          The homepage uses the same tree and panel components as the app. This seed now shows explicit file handoff and a moved nested thread inside the actual interface, so the landing page stays grounded in the literal product surface instead of a fake parallel demo.
+          The homepage uses the same tree and panel components as the app. This seed shows a moved nested agent inside the actual interface, so the landing page stays grounded in the literal product surface instead of a fake parallel demo.
         </p>
       </div>
 

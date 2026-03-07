@@ -1,6 +1,6 @@
 import { betterAuth, type Auth } from 'better-auth';
 import { sveltekitCookies } from "better-auth/svelte-kit";
-import { mcp, multiSession, organization, admin, openAPI } from 'better-auth/plugins';
+import { multiSession, organization, admin, openAPI } from 'better-auth/plugins';
 import { apiKey } from '@better-auth/api-key';
 import { passkey as passkeyPlugin } from '@better-auth/passkey';
 import { emailOTP } from 'better-auth/plugins/email-otp';
@@ -158,10 +158,6 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
         otpLength: 6,
         expiresIn: 60 * 10, // 10 minutes
         sendVerificationOnSignUp: true, // Send welcome email on sign-up
-      }),
-      mcp({
-        loginPage: '/login',
-        resource: 'myfilepath-mcp',
       }),
       multiSession({
         maximumSessions: 5,

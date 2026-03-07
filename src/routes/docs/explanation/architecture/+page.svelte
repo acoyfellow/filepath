@@ -52,7 +52,7 @@
       
       <div class="border-l-2 border-neutral-700 pl-4">
         <h3 class="text-gray-700 dark:text-neutral-300 font-medium mb-2">D1 Database</h3>
-        <p class="text-gray-600 dark:text-neutral-400 text-sm">SQLite on the edge. Stores sessions, thread nodes, user data, conversation history, and explicit artifact transfers. The self-referential tree lives in agentNode.parentId.</p>
+        <p class="text-gray-600 dark:text-neutral-400 text-sm">SQLite on the edge. Stores sessions, agent nodes, user data, and conversation history. The self-referential tree lives in agentNode.parentId.</p>
       </div>
       
       <div class="border-l-2 border-neutral-700 pl-4">
@@ -85,7 +85,7 @@
       <li>Workers scale automatically (edge-deployed)</li>
       <li>Each DO is single-threaded but durable (state persists)</li>
       <li>D1 scales reads well; writes are serialized per-region</li>
-      <li>Threads are isolated by default; file handoff is explicit instead of invisible shared state</li>
+      <li>Agents are isolated by default; coordination happens through the platform instead of invisible shared state</li>
     </ul>
   </section>
 

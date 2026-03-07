@@ -1,4 +1,4 @@
-import type { D1Database, DurableObjectNamespace, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
 
 /**
  * Cloudflare Worker environment bindings.
@@ -11,7 +11,6 @@ export interface Env {
   ChatAgent: DurableObjectNamespace;
   SESSION_DO: DurableObjectNamespace;
   Sandbox: DurableObjectNamespace;
-  ARTIFACTS: R2Bucket;
 
   // Environment variables
   BETTER_AUTH_SECRET: string;

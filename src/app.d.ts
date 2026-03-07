@@ -1,4 +1,4 @@
-import type { D1Database, DurableObjectNamespace, R2Bucket } from "@cloudflare/workers-types";
+import type { D1Database, DurableObjectNamespace } from "@cloudflare/workers-types";
 import type { User as BetterAuthUser, Session as BetterAuthSession } from "better-auth";
 
 declare global {
@@ -18,7 +18,6 @@ declare global {
         SESSION_DO: DurableObjectNamespace;
         WORKER: Fetcher;
         DB: D1Database;
-        ARTIFACTS: R2Bucket;
         API_WS_HOST?: string;
         API_WS_ORIGIN?: string;
 				};

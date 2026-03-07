@@ -12,7 +12,6 @@
     AgentNode,
     AgentNodeConfig,
     AgentType,
-    ArtifactEntry,
     SpawnRequest,
     ThreadMovePayload,
   } from "$lib/types/session";
@@ -34,16 +33,7 @@
   }
 
   type SessionEventMessage =
-    | ({ type: "tree_update"; action?: string } & ThreadMovePayload)
-    | {
-        type: "artifact_event";
-        action: "artifact_staged" | "artifact_delivered" | "artifact_failed";
-        sourceNodeId?: string;
-        targetNodeId?: string;
-        sourcePath?: string;
-        targetPath?: string;
-        errorMessage?: string;
-      };
+    ({ type: "tree_update"; action?: string } & ThreadMovePayload);
 
   let { data } = $props();
 
@@ -160,7 +150,6 @@
   let rootNode = $state<AgentNode | null>(initialState.rootNode);
   let selectedId = $state<string | null>(initialState.selectedId);
   let messagesByNode = $state<Record<string, ChatMsg[]>>({});
-  let artifactsBySession = $state<ArtifactEntry[]>([]);
 
   function findNode(node: AgentNode, id: string): AgentNode | null {
     if (node.id === id) return node;
@@ -190,29 +179,6 @@
 
   let currentMessages = $derived<ChatMsg[]>(
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
-  );
-
-  let currentArtifacts = $derived<ArtifactEntry[]>(
-    selectedAgent
-      ? artifactsBySession.filter(
-          (artifact) =>
-            artifact.sourceNodeId === selectedAgent.id || artifact.targetNodeId === selectedAgent.id,
-        )
-      : [],
-  );
-
-  let threadChoices = $derived<Array<{ id: string; name: string }>>(
-    rootNode
-      ? (() => {
-          const collected: Array<{ id: string; name: string }> = [];
-          const collect = (node: AgentNode) => {
-            collected.push({ id: node.id, name: node.name });
-            for (const child of node.children) collect(child);
-          };
-          collect(rootNode);
-          return collected;
-        })()
-      : [],
   );
 
   function ensureConnection(nodeId: string) {
@@ -245,25 +211,6 @@
         void refreshSessionSnapshot();
         return;
       }
-
-      if (data.type !== "artifact_event") return;
-
-      void loadArtifacts();
-
-      if (!data.sourceNodeId) return;
-
-      const existing = messagesByNode[data.sourceNodeId] ?? [];
-      const content =
-        data.action === "artifact_failed"
-          ? `Artifact transfer failed: ${data.errorMessage ?? "unknown error"}`
-          : data.action === "artifact_delivered"
-            ? `Artifact delivered: ${data.sourcePath} -> ${data.targetPath}`
-            : `Artifact staged: ${data.sourcePath} -> ${data.targetPath}`;
-
-      messagesByNode = {
-        ...messagesByNode,
-        [data.sourceNodeId]: [...existing, { from: "a", event: { type: "text", content } }],
-      };
     };
 
     socket.onclose = () => {
@@ -393,16 +340,6 @@
     }
   }
 
-  async function loadArtifacts() {
-    if (!sessionId) return;
-
-    const response = await fetch(`/api/sessions/${sessionId}/artifacts`);
-    if (!response.ok) return;
-
-    const payload = await response.json() as { artifacts: ArtifactEntry[] };
-    artifactsBySession = payload.artifacts;
-  }
-
   function handleSelect(id: string) {
     if (selectedId === id) return;
     selectedId = id;
@@ -417,28 +354,6 @@
 
     selectedId = node.id;
     ensureConnection(node.id);
-  }
-
-  async function handleSendArtifact(payload: {
-    sourceNodeId: string;
-    sourcePath: string;
-    targetNodeId: string;
-    targetPath: string;
-  }) {
-    if (!sessionId) return;
-
-    const response = await fetch(`/api/sessions/${sessionId}/artifacts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const data = await response.json() as { error?: string };
-      throw new Error(data.error || "Artifact transfer failed");
-    }
-
-    await loadArtifacts();
   }
 
   async function handleMoveThread(payload: ThreadMovePayload) {
@@ -537,8 +452,6 @@
   }
 
   onMount(async () => {
-    void loadArtifacts();
-
     const response = await fetch("/api/config");
     const config = await response.json() as { workerUrl: string };
 
@@ -583,9 +496,6 @@
           messages={currentMessages}
           onsend={handleSend}
           onnavigate={handleNavigate}
-          artifacts={currentArtifacts}
-          threads={threadChoices}
-          onsendartifact={handleSendArtifact}
         />
       </div>
     {:else}

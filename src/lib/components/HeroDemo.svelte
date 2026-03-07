@@ -2,7 +2,7 @@
   import "$lib/styles/theme.css";
   import AgentTree from "$lib/components/session/AgentTree.svelte";
   import AgentPanel from "$lib/components/session/AgentPanel.svelte";
-  import type { AgentNode, ArtifactEntry } from "$lib/types/session";
+  import type { AgentNode } from "$lib/types/session";
   import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
 
   const rootSeed: AgentNode = {
@@ -74,13 +74,7 @@
 
   const seededMessages: Record<string, ChatMsg[]> = {
     root: [
-      {
-        from: "u",
-        event: {
-          type: "text",
-          content: "Keep this launch loop running while I step away.",
-        },
-      },
+      { from: "u", event: { type: "text", content: "Keep this launch loop running while I step away." } },
       {
         from: "a",
         event: {
@@ -96,78 +90,41 @@
         from: "a",
         event: {
           type: "text",
-          content:
-            "Done. The same session stays live on your Cloudflare infra, and each thread keeps its own context.",
+          content: "Done. The same session stays live on your Cloudflare infra, and each agent keeps its own context.",
         },
       },
     ],
     "app-shell": [
-      {
-        from: "u",
-        event: {
-          type: "text",
-          content: "Rewrite the hero and tighten the product copy.",
-        },
-      },
+      { from: "u", event: { type: "text", content: "Rewrite the hero and tighten the product copy." } },
       {
         from: "a",
         event: {
           type: "text",
-          content:
-            "Working on the app shell now. You can swap models later without losing this thread.",
+          content: "Working on the app shell now. You can swap models later without losing this agent.",
         },
       },
     ],
     "api-pass": [
-      {
-        from: "u",
-        event: {
-          type: "text",
-          content: "Validate the account key flow and router handling.",
-        },
-      },
+      { from: "u", event: { type: "text", content: "Validate the account key flow and router handling." } },
       {
         from: "a",
         event: {
           type: "text",
-          content:
-            "Queued here. This thread is idle until you send more work, but it stays in the same session tree.",
+          content: "Queued here. This agent is idle until you send more work, but it stays in the same session tree.",
         },
       },
     ],
     "release-check": [
-      {
-        from: "u",
-        event: {
-          type: "text",
-          content: "Do a final release check before I share it.",
-        },
-      },
+      { from: "u", event: { type: "text", content: "Do a final release check before I share it." } },
       {
         from: "a",
         event: {
           type: "text",
-          content:
-            "Release check is done. This thread is preserved in the same session.",
+          content: "Release check is done. This agent is preserved in the same session.",
         },
       },
     ],
   };
-
-  const seededArtifacts: ArtifactEntry[] = [
-    {
-      id: "artifact-1",
-      sessionId: "demo-session",
-      sourceNodeId: "app-shell",
-      targetNodeId: "release-check",
-      sourcePath: "dist/hero-copy.txt",
-      targetPath: "handoffs/release/hero-copy.txt",
-      bucketKey: "sessions/demo-session/artifacts/app-shell/artifact-1",
-      status: "delivered",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-  ];
 
   let rootNode = $state<AgentNode>(structuredClone(rootSeed));
   let selectedId = $state<string | null>("app-shell");
@@ -182,29 +139,8 @@
     return null;
   }
 
-  let selectedAgent = $derived(
-    selectedId ? findNode(rootNode, selectedId) : null,
-  );
-
-  let currentMessages = $derived<ChatMsg[]>(
-    selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
-  );
-  let currentArtifacts = $derived<ArtifactEntry[]>(
-    selectedAgent
-      ? seededArtifacts.filter(
-          (artifact) =>
-            artifact.sourceNodeId === selectedAgent.id || artifact.targetNodeId === selectedAgent.id,
-        )
-      : [],
-  );
-  let threadChoices = $derived<Array<{ id: string; name: string }>>(
-    [
-      { id: "root", name: "Launch Loop" },
-      { id: "app-shell", name: "codex / app shell" },
-      { id: "release-check", name: "custom / release check" },
-      { id: "api-pass", name: "shelley / API pass" },
-    ],
-  );
+  let selectedAgent = $derived(selectedId ? findNode(rootNode, selectedId) : null);
+  let currentMessages = $derived<ChatMsg[]>(selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : []);
 
   function handleSelect(id: string) {
     selectedId = id;
@@ -229,25 +165,15 @@
           from: "a",
           event: {
             type: "text",
-            content:
-              "Still live. This exact thread will be here when you reopen the session from another device.",
+            content: "Still live. This exact agent will be here when you reopen the session from another device.",
           },
         },
       ],
     };
   }
 
-  function handleSpawn() {
-    // Homepage demo stays deterministic. Keep the same seeded structure.
-  }
-
-  async function handleMove() {
-    // Homepage demo stays deterministic. Keep the same seeded structure.
-  }
-
-  async function handleSendArtifact() {
-    // Homepage demo stays deterministic. Keep the same seeded structure.
-  }
+  function handleSpawn() {}
+  async function handleMove() {}
 </script>
 
 <div class="demo-shell">
@@ -258,7 +184,7 @@
     </div>
     <div class="demo-actions">
       <span class="demo-pill">running</span>
-      <span class="demo-pill">4 threads</span>
+      <span class="demo-pill">4 agents</span>
       <button type="button" class="demo-btn">Reopen</button>
     </div>
   </div>
@@ -278,9 +204,6 @@
         messages={currentMessages}
         onsend={handleSend}
         onnavigate={handleNavigate}
-        artifacts={currentArtifacts}
-        threads={threadChoices}
-        onsendartifact={handleSendArtifact}
       />
     </div>
   </div>
@@ -332,25 +255,25 @@
     justify-content: flex-end;
   }
 
-  .demo-pill,
-  .demo-btn {
+  .demo-pill {
     font-family: var(--m);
     font-size: 10px;
-    color: var(--t4);
+    color: var(--t3);
     border: 1px solid var(--b1);
+    background: var(--bg2);
     border-radius: 999px;
-    padding: 4px 10px;
-    background: color-mix(in srgb, var(--bg2) 88%, transparent);
+    padding: 4px 8px;
   }
 
   .demo-btn {
-    cursor: pointer;
-    transition: border-color 0.1s, color 0.1s;
-  }
-
-  .demo-btn:hover {
-    border-color: var(--t5);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
     color: var(--t2);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-family: var(--m);
+    font-size: 11px;
+    cursor: pointer;
   }
 
   .demo-main {
@@ -362,50 +285,5 @@
   .demo-panel {
     min-width: 0;
     flex: 1;
-  }
-
-  :global(.demo-panel .panel-header) {
-    padding: 10px 16px;
-  }
-
-  :global(.demo-panel .panel-body) {
-    min-height: 0;
-  }
-
-  @media (max-width: 900px) {
-    .demo-shell {
-      min-height: 720px;
-    }
-
-    .demo-topbar {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
-    .demo-actions {
-      justify-content: flex-start;
-    }
-
-    .demo-main {
-      flex-direction: column;
-    }
-
-    :global(.demo-main .tree-container) {
-      width: 100%;
-    }
-
-    :global(.demo-main .tree) {
-      width: 100% !important;
-      border-right: none;
-      border-bottom: 1px solid var(--b1);
-    }
-
-    :global(.demo-main .resize-handle) {
-      display: none;
-    }
-
-    .demo-panel {
-      min-height: 360px;
-    }
   }
 </style>
