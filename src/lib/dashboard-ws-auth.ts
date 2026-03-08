@@ -74,10 +74,7 @@ export async function verifyDashboardWsToken(
 
   const key = await importSecret(secret);
   const signatureBytes = fromBase64Url(signature);
-  const signatureBuffer = signatureBytes.buffer.slice(
-    signatureBytes.byteOffset,
-    signatureBytes.byteOffset + signatureBytes.byteLength,
-  );
+  const signatureBuffer = Uint8Array.from(signatureBytes);
   const valid = await crypto.subtle.verify(
     "HMAC",
     key,
