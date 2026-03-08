@@ -119,7 +119,7 @@ bun run prd          # Run production gates
 Key tables:
 
 - `user` - accounts, encrypted API keys
-- `agent_session` - sessions, per-session API key override
+- `agent_session` - durable sessions
 - `agent_node` - agent instances in tree
 - `apikey` - Better Auth API keys (not LLM keys)
 

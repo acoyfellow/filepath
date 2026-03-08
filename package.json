@@ -51,14 +51,14 @@
     "wrangler": "^4.69.0",
     "ws": "^8.19.0"
   },
-  "description": "The platform for agents - terminal sessions with AI coding agents",
+  "description": "Chat-first durable agent sessions backed by Cloudflare sandboxes",
   "keywords": [
     "agents",
-    "terminal",
     "sveltekit",
     "better-auth",
     "cloudflare",
-    "durable-objects"
+    "durable-objects",
+    "sandboxes"
   ],
   "scripts": {
     "dev": "alchemy dev",

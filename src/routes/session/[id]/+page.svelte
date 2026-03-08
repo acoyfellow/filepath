@@ -185,6 +185,7 @@
     if (!workerUrl || activeClients[nodeId]) return;
 
     const client = createNodeClient(workerUrl, nodeId, {
+      authToken: data.dashboardWsToken,
       onMessage: (msg: DOMessage) => handleDOMessage(nodeId, msg),
       onStateChange: (state: ConnectionState) => {
         connectionStates = { ...connectionStates, [nodeId]: state };

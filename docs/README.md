@@ -1,45 +1,34 @@
-# Documentation - myfilepath.com
+# docs/
 
-Last updated: Feb 5, 2026
+Markdown in this folder is now for repository and operational notes only.
 
-## Quick Links
+User-facing product docs increasingly live in the app routes under `src/routes/docs/`. This folder should keep only markdown that is still useful to maintainers and does not contradict shipped behavior.
+
+## Keepers
 
 | Document | Purpose |
-|----------|--------|
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Deploy checklist, environment setup, rollback |
-| [INTEGRATION-STATUS.md](./INTEGRATION-STATUS.md) | Component integration status |
-| [API-REFERENCE.md](./API-REFERENCE.md) | API endpoints, auth, examples |
-| [KNOWN-ISSUES.md](./KNOWN-ISSUES.md) | Active blockers and resolved issues |
-| [passkey-implementation-guide.md](./passkey-implementation-guide.md) | Future passkey auth notes |
+|----------|---------|
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Deploy checklist and environment notes |
+| [ALCHEMY_FIX_CLOUDFLARE_STATE_STORE.md](./ALCHEMY_FIX_CLOUDFLARE_STATE_STORE.md) | Infra-specific Alchemy note |
+| [ALCHEMY_PR_CHECKLIST.md](./ALCHEMY_PR_CHECKLIST.md) | PR/deploy checklist |
+| [HOWTO-Custom-Agent.md](./HOWTO-Custom-Agent.md) | BYO harness guidance |
+| [HOWTO-Debug-Containers.md](./HOWTO-Debug-Containers.md) | Container debugging workflow |
+| [passkey-implementation-guide.md](./passkey-implementation-guide.md) | Passkey implementation notes |
 
-## Project Files
+## Root Docs
 
 | File | Purpose |
-|------|--------|
-| [/AGENTS.md](../AGENTS.md) | Agent instructions for this codebase |
-| [/README.md](../README.md) | Project overview and architecture |
-| [/PLAN.md](../PLAN.md) | Implementation plan and roadmap |
+|------|---------|
+| [../README.md](../README.md) | Project overview |
+| [../NORTHSTAR.md](../NORTHSTAR.md) | Current product truth and direction |
+| [../AGENTS.md](../AGENTS.md) | Repo rules for coding agents |
 
-## Architecture
+## Cleanup Rule
 
-```
-Agent/Human → TaskAgent (DO) → Workflows → Containers
-              ↓                    ↓          ↓
-           API Keys          Long-running  Execution
-           Streaming         Orchestration Environment
-```
+Delete markdown docs when they describe:
 
-## Current Sprint (Feb 2026)
-
-**Focus:** Production readiness for agent API
-
-1. 🔄 Container integration in ExecuteTaskWorkflow
-2. 🔄 Real API key validation in TaskAgent
-3. 🔄 Progress streaming to WebSocket clients
-4. ❌ E2E agent test automation
-
-## Getting Help
-
-- Check [KNOWN-ISSUES.md](./KNOWN-ISSUES.md) first
-- Run `bash gates/health.sh` for build status
-- Check GitHub Actions for deploy status: `gh run list --limit 5`
+- removed product surfaces
+- old auth or key models
+- dead APIs
+- architecture that no longer exists
+- plans that conflict with the current gates

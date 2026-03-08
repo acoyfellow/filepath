@@ -80,3 +80,17 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     config: {},
   },
 ];
+
+export function getBuiltinHarnessRows() {
+  return BUILTIN_HARNESSES.map((harness) => ({
+    id: harness.id,
+    name: harness.name,
+    description: harness.description,
+    adapter: harness.adapter,
+    entryCommand: harness.entryCommand,
+    defaultModel: harness.defaultModel,
+    icon: harness.icon,
+    enabled: harness.enabled,
+    config: JSON.stringify(harness.config),
+  }));
+}

@@ -4,8 +4,10 @@ import type { Env } from "../types";
 import { parseAgentEvent } from "../lib/protocol";
 import type { AgentEventType, AgentStatusType } from "../lib/protocol";
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
-import { initAuth, resolveRequestAuth } from '$lib/auth';
+import { resolveRequestAuth } from '$lib/auth';
 import { buildAgentEnv } from '$lib/agents/adapters';
+import { verifyDashboardWsToken } from '$lib/dashboard-ws-auth';
+import { BUILTIN_HARNESSES, getBuiltinHarnessRows } from '$lib/agents/harnesses';
 import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
 import type { HarnessId } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
@@ -102,11 +104,81 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     `;
   }
 
+  private async ensureBuiltinHarnesses(): Promise<void> {
+    const statements = getBuiltinHarnessRows().map((harness) =>
+      this.env.DB.prepare(
+        `INSERT OR IGNORE INTO agent_harness
+          (id, name, description, adapter, entry_command, default_model, icon, enabled, config)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        harness.id,
+        harness.name,
+        harness.description,
+        harness.adapter,
+        harness.entryCommand,
+        harness.defaultModel,
+        harness.icon,
+        harness.enabled ? 1 : 0,
+        harness.config,
+      ),
+    );
+
+    await this.env.DB.batch(statements);
+  }
+
+  private async canConnectWithDashboardToken(nodeId: string, token: string): Promise<boolean> {
+    if (!this.env.BETTER_AUTH_SECRET) {
+      return false;
+    }
+
+    const claims = await verifyDashboardWsToken(token, this.env.BETTER_AUTH_SECRET);
+    if (!claims) {
+      return false;
+    }
+
+    const row = await this.env.DB.prepare(
+      `SELECT n.id
+         FROM agent_node n
+         JOIN agent_session s ON n.session_id = s.id
+        WHERE n.id = ? AND n.session_id = ? AND s.user_id = ?
+        LIMIT 1`,
+    ).bind(nodeId, claims.sessionId, claims.userId).first<{ id: string }>();
+
+    return !!row;
+  }
+
+  private sendInitialState(connection: Connection): void {
+    const messages = this.loadMessages();
+    connection.send(JSON.stringify({
+      type: "history",
+      messages: messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        createdAt: message.created_at,
+      })),
+    }));
+
+    if (this.state?.initialized) {
+      connection.send(JSON.stringify({
+        type: "event",
+        event: { type: "status", state: this.state.status },
+        timestamp: Date.now(),
+      }));
+    }
+  }
+
   // ─── WebSocket lifecycle ──────────────────────────────
 
   async onConnect(connection: Connection, ctx: ConnectionContext): Promise<void> {
     const url = new URL(ctx.request.url);
     const token = url.searchParams.get("token");
+    const nodeId = url.pathname.split("/").pop();
+
+    if (token && nodeId && await this.canConnectWithDashboardToken(nodeId, token)) {
+      this.sendInitialState(connection);
+      return;
+    }
 
     const auth = await resolveRequestAuth({
       db: this.env.DB,
@@ -123,25 +195,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       return;
     }
 
-    // Send full message history to newly connected client
-    const messages = this.loadMessages();
-    connection.send(JSON.stringify({
-      type: "history",
-      messages: messages.map(m => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        createdAt: m.created_at,
-      })),
-    }));
-
-    if (this.state?.initialized) {
-      connection.send(JSON.stringify({
-        type: "event",
-        event: { type: "status", state: this.state.status },
-        timestamp: Date.now(),
-      }));
-    }
+    this.sendInitialState(connection);
   }
 
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {
@@ -235,6 +289,8 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   // ─── Container Lifecycle ──────────────────────────────
 
   private async spawnContainer(nodeId: string): Promise<void> {
+    await this.ensureBuiltinHarnesses();
+
     // Get node config from D1
     const row = await this.env.DB.prepare(
       `SELECT n.harness_id, n.model, n.name, s.id as session_id, s.git_repo_url,
@@ -308,11 +364,13 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       FILEPATH_SESSION_ID: row.session_id,
     };
 
-    if (!row.entry_command) {
+    const builtinHarness = BUILTIN_HARNESSES.find((harness) => harness.id === row.harness_id);
+    const entryCommand = row.entry_command || builtinHarness?.entryCommand || "";
+    if (!entryCommand) {
       throw new Error(`Harness ${row.harness_id} has no entry command.`);
     }
 
-    const proc = await sandbox.startProcess(row.entry_command, {
+    const proc = await sandbox.startProcess(entryCommand, {
       env: envVars,
       cwd: workspaceRoot,
     }) as unknown as ContainerProcess;

@@ -1,7 +1,7 @@
 /**
  * Worker support classes.
  * The Sandbox re-export is required by alchemy.run.ts Container binding.
- * SessionEventBusV2 now acts as a thin session-scoped event bus for tree/artifact updates.
+ * SessionEventBusV2 acts as a thin session-scoped event bus for tree updates.
  */
 
 import { Sandbox } from '@cloudflare/sandbox';

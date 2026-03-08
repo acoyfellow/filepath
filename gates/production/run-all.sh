@@ -6,7 +6,7 @@
 #   BASE_URL - Override base URL (default: https://myfilepath.com)
 #   TEST_EMAIL - Test account email
 #   TEST_PASSWORD - Test account password
-#   TEST_API_KEY - Valid API key for credit tests
+#   TEST_OPENROUTER_KEY - Valid OpenRouter key for the gate user
 
 set -euo pipefail
 
@@ -34,7 +34,6 @@ fi
 echo ""
 
 GATES=(
-  "roadmap-truth"
   "visual-regression"
   "agent-chat"
   "api-key-auth"

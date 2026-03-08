@@ -1,4 +1,5 @@
 import { getDrizzle } from "$lib/auth";
+import { getBuiltinHarnessRows } from "$lib/agents/harnesses";
 import { agentHarness, agentNode, agentSession } from "$lib/schema";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { Data, Effect, Schema } from "effect";
@@ -163,6 +164,17 @@ function ensureSessionAccess(ctx: AppContext, sessionId: string) {
   );
 }
 
+function ensureBuiltinHarnesses(ctx: AppContext) {
+  return fromPromise(
+    () =>
+      ctx.db
+        .insert(agentHarness)
+        .values(getBuiltinHarnessRows())
+        .onConflictDoNothing(),
+    "Failed to bootstrap builtin harnesses",
+  ).pipe(Effect.asVoid);
+}
+
 function buildTree<T extends { id: string; parentId: string | null }>(nodes: T[]): Array<T & { children: Array<T & { children: unknown[] }> }> {
   const nodeMap = new Map<string, T & { children: Array<T & { children: unknown[] }> }>();
   for (const node of nodes) {
@@ -198,10 +210,13 @@ function collectDescendants(nodes: Array<{ id: string; parentId: string | null }
 }
 
 export function listHarnesses(ctx: AppContext) {
-  return fromPromise(
-    () => ctx.db.select().from(agentHarness).orderBy(asc(agentHarness.name)),
-    "Failed to list harnesses",
-  ).pipe(
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() =>
+      fromPromise(
+        () => ctx.db.select().from(agentHarness).orderBy(asc(agentHarness.name)),
+        "Failed to list harnesses",
+      ),
+    ),
     Effect.map((rows) => ({
       harnesses: rows.map((row) => ({
         id: row.id,
@@ -219,7 +234,8 @@ export function listHarnesses(ctx: AppContext) {
 }
 
 export function createHarness(ctx: AppContext, input: HarnessCreateInput) {
-  return requireAdmin(ctx).pipe(
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() => requireAdmin(ctx)),
     Effect.flatMap(() =>
       fromPromise(
         () => ctx.db.select({ id: agentHarness.id }).from(agentHarness).where(eq(agentHarness.id, input.id.trim())),
@@ -253,7 +269,8 @@ export function createHarness(ctx: AppContext, input: HarnessCreateInput) {
 }
 
 export function updateHarness(ctx: AppContext, id: string, input: HarnessUpdateInput) {
-  return requireAdmin(ctx).pipe(
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() => requireAdmin(ctx)),
     Effect.flatMap(() =>
       fromPromise(
         () => ctx.db.select({ id: agentHarness.id }).from(agentHarness).where(eq(agentHarness.id, id)),
@@ -289,7 +306,8 @@ export function updateHarness(ctx: AppContext, id: string, input: HarnessUpdateI
 }
 
 export function deleteHarness(ctx: AppContext, id: string) {
-  return requireAdmin(ctx).pipe(
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() => requireAdmin(ctx)),
     Effect.flatMap(() =>
       fromPromise(
         () => ctx.db.select({ id: agentHarness.id }).from(agentHarness).where(eq(agentHarness.id, id)),
@@ -456,7 +474,8 @@ export function listNodes(ctx: AppContext, sessionId: string) {
 }
 
 export function spawnNode(ctx: AppContext, sessionId: string, input: NodeSpawnInput) {
-  return ensureSessionAccess(ctx, sessionId).pipe(
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() => ensureSessionAccess(ctx, sessionId)),
     Effect.flatMap(() =>
       fromPromise(
         () =>

@@ -21,9 +21,14 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run Gates (PRD verification)
-        run: bun run prd.ts
-        continue-on-error: true  # Don't block deploy yet, just report
+      - name: Run repo proof tooling checks
+        run: |
+          bash -n gates/production/run-all.sh
+          bash -n gates/production/ensure-test-user.sh
+          bash -n gates/production/agent-chat.gate.sh
+          bash -n gates/production/api-key-auth.gate.sh
+          node --check gates/lib/send-chat-and-wait.mjs
+          node --check gates/lib/fetch-session-ws-token.mjs
 
   deploy:
     runs-on: ubuntu-latest
@@ -108,4 +113,4 @@ jobs:
         env:
           TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}

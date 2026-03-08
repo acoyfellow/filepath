@@ -155,3 +155,12 @@ CREATE TABLE `verification` (
 );
 --> statement-breakpoint
 CREATE INDEX `verification_identifier_idx` ON `verification` (`identifier`);
+--> statement-breakpoint
+INSERT OR IGNORE INTO `agent_harness` (`id`, `name`, `description`, `adapter`, `entry_command`, `default_model`, `icon`, `enabled`, `config`) VALUES
+	('shelley', 'Shelley', 'Full-stack engineering agent. filepath-native reference implementation.', 'shelley', 'node /opt/filepath/adapters/shelley/index.mjs', 'anthropic/claude-sonnet-4', 'shell', 1, '{}'),
+	('pi', 'Pi', 'Research and analysis. Deep dives into docs, APIs, codebases.', 'pi', 'node /opt/filepath/adapters/pi/index.mjs', 'anthropic/claude-sonnet-4', 'search', 1, '{}'),
+	('claude-code', 'Claude Code', 'Anthropic''s agentic coding tool. Complex multi-file changes.', 'claude-code', 'node /opt/filepath/adapters/claude-code/index.mjs', 'anthropic/claude-sonnet-4', 'bot', 1, '{}'),
+	('codex', 'Codex', 'OpenAI''s coding agent. Strong at Python, scripting, data.', 'codex', 'node /opt/filepath/adapters/codex/index.mjs', 'openai/gpt-5', 'scroll', 1, '{}'),
+	('cursor', 'Cursor', 'Cursor''s agent mode via CLI. IDE-grade code intelligence.', 'cursor', 'node /opt/filepath/adapters/cursor/index.mjs', 'anthropic/claude-sonnet-4', 'mouse-pointer', 1, '{}'),
+	('amp', 'Amp', 'Sourcegraph''s agent. Large codebase navigation, cross-repo changes.', 'amp', 'node /opt/filepath/adapters/amp/index.mjs', 'anthropic/claude-sonnet-4', 'zap', 1, '{}'),
+	('custom', 'Custom', 'Bring your own agent. Register a harness that speaks the filepath protocol.', 'custom', '', 'anthropic/claude-sonnet-4', 'box', 1, '{}');

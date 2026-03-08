@@ -36,6 +36,7 @@ export type ConnectionState = 'connecting' | 'open' | 'closed' | 'error';
 export interface NodeClientCallbacks {
   onMessage: (msg: DOMessage) => void;
   onStateChange: (state: ConnectionState) => void;
+  authToken?: string | null;
 }
 
 /**
@@ -66,10 +67,13 @@ export function createNodeClient(
   function connect() {
     // Build WS URL: wss://api.myfilepath.com/agents/chat-agent/{nodeId}
     const wsBase = workerUrl.replace(/^http/, 'ws');
-    const url = `${wsBase}/agents/chat-agent/${nodeId}`;
+    const url = new URL(`${wsBase}/agents/chat-agent/${nodeId}`);
+    if (callbacks.authToken) {
+      url.searchParams.set('token', callbacks.authToken);
+    }
 
     setState('connecting');
-    ws = new WebSocket(url);
+    ws = new WebSocket(url.toString());
 
     ws.onopen = () => {
       reconnectAttempts = 0;

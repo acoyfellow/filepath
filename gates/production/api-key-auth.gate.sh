@@ -10,6 +10,7 @@ COOKIE_JAR=$(mktemp)
 
 TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
+TEST_OPENROUTER_KEY="${TEST_OPENROUTER_KEY:-}"
 
 cleanup() {
   rm -f "$COOKIE_JAR"
@@ -19,6 +20,14 @@ trap cleanup EXIT
 echo "=== PRODUCTION GATE: API KEY AUTH ==="
 echo "Target: $BASE_URL"
 echo ""
+
+echo -n "0. Ensure test user + router key... "
+if bash "$SCRIPT_DIR/ensure-test-user.sh" "$BASE_URL" >/dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  exit 1
+fi
 
 echo -n "1. Login... "
 LOGIN_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/sign-in/email" \
@@ -36,6 +45,7 @@ fi
 echo -n "2. Create Better Auth API key... "
 KEY_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/api-key/create" \
   -H "Content-Type: application/json" \
+  -H "Origin: $BASE_URL" \
   -b "$COOKIE_JAR" \
   -d '{"name":"gate-agent-key","prefix":"mfp_","metadata":{"createdVia":"gate"}}' --max-time 15 2>&1)
 KEY_HTTP=$(echo "$KEY_RESP" | tail -1)
@@ -80,7 +90,7 @@ echo -n "5. Spawn agent with API key... "
 NODE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
-  -d '{"name":"gate-api-agent","harnessId":"shelley","model":"claude-sonnet-4"}' --max-time 15 2>&1)
+  -d '{"name":"gate-api-agent","harnessId":"shelley","model":"anthropic/claude-sonnet-4"}' --max-time 15 2>&1)
 NODE_HTTP=$(echo "$NODE_RESP" | tail -1)
 NODE_BODY=$(echo "$NODE_RESP" | sed '$d')
 NODE_ID=$(echo "$NODE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
@@ -92,7 +102,7 @@ else
 fi
 
 echo -n "6. WebSocket chat with API key token... "
-CHAT_RESULT=$(timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
+CHAT_RESULT=$(EXPECTED_REPLY="API_KEY_PASS" timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
   "wss://$(echo "$API_URL" | sed 's|https://||')/agents/chat-agent/$NODE_ID?token=$API_KEY" \
   "$NODE_ID" \
   "$SESSION_ID" \
@@ -100,7 +110,12 @@ CHAT_RESULT=$(timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
   "25000" 2>&1 || echo "TIMEOUT")
 if echo "$CHAT_RESULT" | grep -q 'RESPONSE:'; then
   REPLY=$(echo "$CHAT_RESULT" | grep 'RESPONSE:' | sed 's/RESPONSE://')
-  echo "PASS (reply: $REPLY)"
+  if [ "$REPLY" = "API_KEY_PASS" ]; then
+    echo "PASS (reply: $REPLY)"
+  else
+    echo "FAIL (unexpected reply: $REPLY)"
+    exit 1
+  fi
 else
   echo "FAIL ($CHAT_RESULT)"
   exit 1
