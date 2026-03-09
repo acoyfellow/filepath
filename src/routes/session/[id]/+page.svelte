@@ -440,8 +440,8 @@
     });
 
     if (!response.ok) {
-      const data = await response.json() as { error?: string };
-      throw new Error(data.error || "Failed to spawn agent");
+      const data = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      throw new Error(data.error || data.message || "Failed to spawn agent");
     }
 
     const data = await response.json() as { id: string };
@@ -523,6 +523,8 @@
       showSpawn = false;
     }}
     onspawn={handleSpawn}
+    lastAgent={selectedAgent?.harnessId}
+    lastModel={selectedAgent?.model}
     accountKeysMasked={data.accountKeysMasked}
     accountKeysError={data.accountKeysError}
   />
