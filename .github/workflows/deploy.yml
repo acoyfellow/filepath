@@ -68,7 +68,10 @@ jobs:
       - name: Deploy Preview
         if: github.ref != 'refs/heads/main'
         run: |
-          STAGE_KEY=$(echo "${BRANCH_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/_' '-' | sed 's/[^a-z0-9-]//g')
+          BRANCH_SLUG=$(echo "${BRANCH_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/_' '-' | sed 's/[^a-z0-9-]//g')
+          BRANCH_PREFIX=$(printf "%.20s" "${BRANCH_SLUG}")
+          BRANCH_HASH=$(printf "%s" "${BRANCH_NAME}" | sha256sum | cut -c1-8)
+          STAGE_KEY="${BRANCH_PREFIX}-${BRANCH_HASH}"
           STAGE="preview-${STAGE_KEY}"
           echo "Deploying preview stage: ${STAGE}"
           echo "Destroying existing preview stage first to force a clean disposable D1 database"
