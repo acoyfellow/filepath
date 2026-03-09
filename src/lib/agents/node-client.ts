@@ -59,6 +59,7 @@ const INTERNAL_PROTOCOL_TYPES = new Set([
  */
 export function createNodeClient(
   workerUrl: string,
+  sessionId: string,
   nodeId: string,
   callbacks: NodeClientCallbacks,
 ): {
@@ -95,7 +96,7 @@ export function createNodeClient(
 
     ws = new AgentClient({
       agent: 'chat-agent',
-      name: nodeId,
+      name: sessionId,
       host: base.host,
       protocol: base.protocol === "https:" ? "wss" : "ws",
       query: callbacks.authToken ? { token: callbacks.authToken } : undefined,
@@ -106,6 +107,7 @@ export function createNodeClient(
     });
 
     ws.addEventListener('open', () => {
+      ws?.send(JSON.stringify({ type: "init", nodeId, sessionId }));
       setState('open');
     });
 

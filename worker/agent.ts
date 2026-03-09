@@ -13,9 +13,9 @@
  * - Everything else → 404
  */
 
-import { routeAgentRequest } from 'agents';
+import { getAgentByName, routeAgentRequest } from 'agents';
 import { proxyToSandbox } from '@cloudflare/sandbox';
-import { ChatAgent } from '../src/agent/chat-agent';
+import { ChatAgent, ChatNodeAgent } from '../src/agent/chat-agent';
 import {
 } from '../src/lib/agents/container';
 import { SessionEventBusV2, Sandbox } from './index';
@@ -23,6 +23,7 @@ import type { Env } from '../src/types';
 
 // Export DO classes (Alchemy needs these)
 export { ChatAgent };
+export { ChatNodeAgent };
 export { SessionEventBusV2 };
 export { Sandbox };
 
@@ -43,6 +44,13 @@ export default {
     }
 
     // /agents/* → Agent SDK handles WebSocket upgrade + routing
+    const chatAgentMatch = url.pathname.match(/^\/agents\/chat-agent\/([^/]+)(?:\/health)?$/);
+    if (chatAgentMatch) {
+      const [, sessionId] = chatAgentMatch;
+      const runtime = await getAgentByName(env.ChatAgent as never, sessionId);
+      return runtime.fetch(request);
+    }
+
     if (url.pathname.startsWith('/agents/')) {
       const response = await routeAgentRequest(request, env, {
         cors: true,
@@ -75,6 +83,26 @@ export default {
         },
         body: request.body,
       }));
+    }
+
+    const runtimeBootstrapMatch = url.pathname.match(/^\/internal\/runtime\/sessions\/([^/]+)\/nodes\/([^/]+)\/bootstrap$/);
+    if (runtimeBootstrapMatch && request.method === "POST") {
+      const [, sessionId, nodeId] = runtimeBootstrapMatch;
+      const runtime = await getAgentByName(env.ChatAgent as never, sessionId);
+      await (runtime as unknown as { ensureNodeRuntime: (id: string) => Promise<unknown> }).ensureNodeRuntime(nodeId);
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const runtimeDeleteMatch = url.pathname.match(/^\/internal\/runtime\/sessions\/([^/]+)\/nodes\/([^/]+)$/);
+    if (runtimeDeleteMatch && request.method === "DELETE") {
+      const [, sessionId, nodeId] = runtimeDeleteMatch;
+      const runtime = await getAgentByName(env.ChatAgent as never, sessionId);
+      await (runtime as unknown as { deleteNodeRuntime: (id: string) => Promise<unknown> }).deleteNodeRuntime(nodeId);
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const proxiedSandboxResponse = await proxyToSandbox(request as never, env as never);

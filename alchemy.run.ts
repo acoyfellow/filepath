@@ -84,7 +84,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
   entrypoint: "./worker/agent.ts",
   compatibilityDate: "2025-11-15",
-  compatibilityFlags: ["nodejs_compat"],
+  compatibilityFlags: ["nodejs_compat", "experimental"],
   adopt: true,
   bundle: {
   },
@@ -119,6 +119,7 @@ export const APP = await SvelteKit(`${projectName}-app`, {
   domains: isProd ? ["myfilepath.com"] : [],
   bindings: {
     WORKER,
+    ChatAgent: CHAT_AGENT_DO,
     DB,
     SESSION_DO,
   },

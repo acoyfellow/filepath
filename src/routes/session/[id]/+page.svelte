@@ -203,7 +203,7 @@
   function ensureConnection(nodeId: string) {
     if (!workerUrl || activeClients[nodeId]) return;
 
-    const client = createNodeClient(workerUrl, nodeId, {
+    const client = createNodeClient(workerUrl, sessionId, nodeId, {
       authToken: data.dashboardWsToken,
       onMessage: (msg: DOMessage) => handleDOMessage(nodeId, msg),
       onStateChange: (state: ConnectionState) => {

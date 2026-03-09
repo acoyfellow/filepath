@@ -129,7 +129,7 @@ esac
 
 echo -n "7. WebSocket chat with API key token... "
 CHAT_RESULT=$(EXPECTED_REPLY="API_KEY_PASS" timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
-  "${WORKER_WS_URL%/}/agents/chat-agent/$NODE_ID?token=$API_KEY" \
+  "${WORKER_WS_URL%/}/agents/chat-agent/$SESSION_ID?token=$API_KEY" \
   "$NODE_ID" \
   "$SESSION_ID" \
   "Reply with exactly: API_KEY_PASS" \

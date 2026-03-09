@@ -157,7 +157,7 @@ fi
 if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ] && [ -n "$WORKER_WS_URL" ] && [ -n "$DASHBOARD_WS_TOKEN" ]; then
   echo -n "6. Chat through browser websocket path... "
   CHAT_RESULT=$(EXPECTED_REPLY="GATE_PASS" timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
-    "$WORKER_WS_URL/agents/chat-agent/$NODE_ID?token=$DASHBOARD_WS_TOKEN" \
+    "$WORKER_WS_URL/agents/chat-agent/$SESSION_ID?token=$DASHBOARD_WS_TOKEN" \
     "$NODE_ID" \
     "$SESSION_ID" \
     "Reply with exactly: GATE_PASS" \

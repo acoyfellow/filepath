@@ -12,7 +12,7 @@ BASE_URL="${1:-${BASE_URL:-https://myfilepath.com}}"
 TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
 TEST_NAME="${TEST_NAME:-Gate Test User}"
-TEST_OPENROUTER_KEY="${TEST_OPENROUTER_KEY:-}"
+TEST_OPENROUTER_KEY="${TEST_OPENROUTER_KEY:-${OPENROUTER_API_KEY:-}}"
 COOKIE_JAR=$(mktemp)
 
 cleanup() {
@@ -26,7 +26,7 @@ echo "Email:  $TEST_EMAIL"
 echo ""
 
 if [ -z "$TEST_OPENROUTER_KEY" ]; then
-  echo "❌ TEST_OPENROUTER_KEY not set"
+  echo "❌ TEST_OPENROUTER_KEY or OPENROUTER_API_KEY not set"
   exit 1
 fi
 
