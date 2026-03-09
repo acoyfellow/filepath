@@ -121,7 +121,9 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_URL: isProd 
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
-    API_WS_ORIGIN: isProd ? "https://api.myfilepath.com" : "http://localhost:1340",
+    // Previews and local dev should use the app origin so websocket paths route
+    // through the SvelteKit proxy instead of a hard-coded localhost worker URL.
+    API_WS_ORIGIN: isProd ? "https://api.myfilepath.com" : "",
     MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
     MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },

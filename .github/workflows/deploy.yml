@@ -27,8 +27,10 @@ jobs:
           bash -n gates/production/ensure-test-user.sh
           bash -n gates/production/agent-chat.gate.sh
           bash -n gates/production/api-key-auth.gate.sh
+          bash -n gates/production/browser-chat-send.gate.sh
           node --check gates/lib/send-chat-and-wait.mjs
           node --check gates/lib/fetch-session-ws-token.mjs
+          node --check gates/lib/repro-session-chat-send.mjs
 
   deploy:
     runs-on: ubuntu-latest

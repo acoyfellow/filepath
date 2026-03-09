@@ -75,6 +75,7 @@
     "db:studio": "drizzle-kit studio",
     "test": "bun run prd.ts",
     "prd": "bun run prd.ts",
+    "prd:browser-chat": "bash gates/production/browser-chat-send.gate.sh",
     "prd:loop": "bun run prd.ts --loop",
     "postinstall": "bun ./scripts/patch-alchemy-cli.js"
   },
