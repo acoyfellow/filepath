@@ -103,6 +103,8 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
 });
 
+const workerUrl = isProd ? "https://api.myfilepath.com" : WORKER.url;
+
 // SvelteKit app with custom routing for agent and session websockets
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${prefix}-app`,
@@ -121,9 +123,7 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_URL: isProd 
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
-    // Previews and local dev should use the app origin so websocket paths route
-    // through the SvelteKit proxy instead of a hard-coded localhost worker URL.
-    API_WS_ORIGIN: isProd ? "https://api.myfilepath.com" : "",
+    API_WS_ORIGIN: workerUrl,
     MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
     MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },
