@@ -8,6 +8,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey, passkey as passkeyTable } from './schema';
 import { eq } from 'drizzle-orm';
+import { resolveBetterAuthSecret } from './better-auth-secret';
 // Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
 import type { D1Database } from '@cloudflare/workers-types';
@@ -215,7 +216,10 @@ export function initAuth(
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // 1 day
     },
-    secret: env?.BETTER_AUTH_SECRET || (() => {
+    secret: resolveBetterAuthSecret({
+      envSecret: env?.BETTER_AUTH_SECRET,
+      baseURL,
+    }) || (() => {
       throw new Error('BETTER_AUTH_SECRET environment variable is required');
     })(),
     baseURL,

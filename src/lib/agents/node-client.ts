@@ -65,9 +65,9 @@ export function createNodeClient(
   }
 
   function connect() {
-    // Build WS URL: wss://api.myfilepath.com/agents/chat-agent/{nodeId}
-    const wsBase = workerUrl.replace(/^http/, 'ws');
-    const url = new URL(`${wsBase}/agents/chat-agent/${nodeId}`);
+    const base = new URL(workerUrl);
+    base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+    const url = new URL(`/agents/chat-agent/${nodeId}`, base);
     if (callbacks.authToken) {
       url.searchParams.set('token', callbacks.authToken);
     }

@@ -9,6 +9,7 @@ const [
   message = "hi",
   harnessId = "shelley",
   model = "anthropic/claude-sonnet-4",
+  expectedReplyArg = "",
 ] = process.argv.slice(2);
 
 if (!baseUrl || !email || !password) {
@@ -26,12 +27,15 @@ const logPath = path.join(outputDir, `repro-session-chat-send-${runId}.json`);
 
 await mkdir(outputDir, { recursive: true });
 
+const expectedReply = (expectedReplyArg || process.env.EXPECTED_REPLY || "").trim() || null;
+
 const diagnostics = {
   baseUrl,
   email,
   message,
   harnessId,
   model,
+  expectedReply,
   console: [],
   pageErrors: [],
   webSockets: [],
@@ -283,6 +287,16 @@ try {
     throw new Error("Browser UI closed the websocket immediately after rendering the user message");
   } catch {
     // no-op: this is the healthy path
+  }
+
+  if (expectedReply) {
+    const assistantReply = page.getByText(expectedReply, { exact: true }).last();
+    try {
+      await assistantReply.waitFor({ timeout: 25000 });
+    } catch {
+      diagnostics.outcome = "assistant-reply-not-rendered";
+      throw new Error(`Browser UI never rendered the expected assistant reply: ${expectedReply}`);
+    }
   }
 
   diagnostics.outcome = "passed";

@@ -11,6 +11,7 @@ import { BUILTIN_HARNESSES, getBuiltinHarnessRows } from '$lib/agents/harnesses'
 import { cloneRepo, resolveWorkspaceRoot, type ContainerEnv } from '$lib/agents/container';
 import type { HarnessId } from '$lib/types/session';
 import { decryptApiKey } from '$lib/crypto';
+import { resolveBetterAuthSecret } from '$lib/better-auth-secret';
 import {
   canonicalizeStoredModel,
   PROVIDERS,
@@ -49,24 +50,33 @@ interface MessageRow {
   created_at: number;
 }
 
-/** Minimal interface for a container process with stdout/stdin streams */
-interface ContainerProcess {
-  stdout: ReadableStream<Uint8Array>;
-  stdin?: WritableStream<Uint8Array>;
-  pid?: number;
+interface NodeExecutionConfig {
+  harnessId: string;
+  model: string;
+  sessionId: string;
+  gitRepoUrl: string | null;
+  entryCommand: string;
+  envVars: Record<string, string>;
+  keySource?: ChatAgentState["keySource"];
 }
 
-/** Handle for a spawned container with lifecycle management */
 interface ContainerHandle {
   sandbox: Sandbox;
   nodeId: string;
-  stdinWriter: WritableStreamDefaultWriter<Uint8Array> | null;
-  abortController: AbortController;
+  workspaceRoot: string;
+  activeExecution: boolean;
 }
 
 export class ChatAgent extends Agent<Env, ChatAgentState> {
   private schemaReady = false;
   private containers: Map<string, ContainerHandle> = new Map();
+
+  private getBetterAuthSecret(): string | undefined {
+    return resolveBetterAuthSecret({
+      envSecret: this.env.BETTER_AUTH_SECRET,
+      baseURL: this.env.BETTER_AUTH_URL,
+    });
+  }
 
   // ─── Schema ───────────────────────────────────────────
 
@@ -127,12 +137,15 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
   }
 
   private async canConnectWithDashboardToken(nodeId: string, token: string): Promise<boolean> {
-    if (!this.env.BETTER_AUTH_SECRET) {
+    const secret = this.getBetterAuthSecret();
+    if (!secret) {
+      console.warn(`[ChatAgent] Missing BETTER_AUTH_SECRET for dashboard websocket auth (${nodeId})`);
       return false;
     }
 
-    const claims = await verifyDashboardWsToken(token, this.env.BETTER_AUTH_SECRET);
+    const claims = await verifyDashboardWsToken(token, secret);
     if (!claims) {
+      console.warn(`[ChatAgent] Dashboard websocket token verification failed for node ${nodeId}`);
       return false;
     }
 
@@ -143,6 +156,13 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
         WHERE n.id = ? AND n.session_id = ? AND s.user_id = ?
         LIMIT 1`,
     ).bind(nodeId, claims.sessionId, claims.userId).first<{ id: string }>();
+
+    if (!row) {
+      console.warn(
+        `[ChatAgent] Dashboard websocket token session mismatch for node ${nodeId} ` +
+        `(session=${claims.sessionId}, user=${claims.userId})`,
+      );
+    }
 
     return !!row;
   }
@@ -183,7 +203,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     const auth = await resolveRequestAuth({
       db: this.env.DB,
       env: {
-        BETTER_AUTH_SECRET: this.env.BETTER_AUTH_SECRET,
+        BETTER_AUTH_SECRET: this.getBetterAuthSecret(),
       },
       baseURL: url.origin,
       headers: ctx.request.headers,
@@ -191,6 +211,10 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     });
 
     if (!auth.user) {
+      console.warn(
+        `[ChatAgent] Websocket auth failed for ${nodeId ?? "unknown-node"} ` +
+        `(hasToken=${Boolean(token)})`,
+      );
       connection.close(4001, "Unauthorized");
       return;
     }
@@ -288,10 +312,12 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
 
   // ─── Container Lifecycle ──────────────────────────────
 
-  private async spawnContainer(nodeId: string): Promise<void> {
+  private async loadNodeExecutionConfig(
+    nodeId: string,
+    task: string,
+  ): Promise<NodeExecutionConfig> {
     await this.ensureBuiltinHarnesses();
 
-    // Get node config from D1
     const row = await this.env.DB.prepare(
       `SELECT n.harness_id, n.model, n.name, s.id as session_id, s.git_repo_url,
               u.openrouter_api_key as user_key,
@@ -311,15 +337,14 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       entry_command: string;
     }>();
 
-    if (!row) throw new Error(`Node ${nodeId} not found in D1`);
+    if (!row) {
+      throw new Error(`Node ${nodeId} not found in D1`);
+    }
 
-    console.log(`[ChatAgent] Spawning container for node ${nodeId} (${row.harness_id})`);
-
-    // Resolve API key for the container
     const provider = getProviderForModel(row.model);
     const providerDefinition = PROVIDERS[provider];
-    let containerApiKey = '';
-    const secret = this.env.BETTER_AUTH_SECRET;
+    let containerApiKey = "";
+    const secret = this.getBetterAuthSecret();
     let keySource: ChatAgentState["keySource"];
     if (row.user_key && secret) {
       try {
@@ -337,27 +362,14 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     if (!containerApiKey) {
       throw new Error(`No valid API key available for the ${providerDefinition.label} router.`);
     }
-    const sandbox = getSandbox(this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0], nodeId);
 
     const workspaceRoot = resolveWorkspaceRoot(row.git_repo_url);
-
-    // Clone git repo if specified (before starting agent process)
-    if (row.git_repo_url) {
-      console.log(`[ChatAgent] Cloning repo: ${row.git_repo_url}`);
-      await cloneRepo(
-        { Sandbox: this.env.Sandbox } as unknown as ContainerEnv,
-        nodeId,
-        row.git_repo_url,
-        workspaceRoot
-      );
-    }
-
     const envVars: Record<string, string> = {
       ...buildAgentEnv({
         harnessId: row.harness_id as HarnessId,
         model: canonicalizeStoredModel(row.model),
         apiKey: containerApiKey,
-        task: row.name || '',
+        task,
         workspacePath: workspaceRoot,
       }),
       FILEPATH_AGENT_ID: nodeId,
@@ -370,10 +382,133 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       throw new Error(`Harness ${row.harness_id} has no entry command.`);
     }
 
-    const proc = await sandbox.startProcess(entryCommand, {
-      env: envVars,
-      cwd: workspaceRoot,
-    }) as unknown as ContainerProcess;
+    return {
+      harnessId: row.harness_id,
+      model: row.model,
+      sessionId: row.session_id,
+      gitRepoUrl: row.git_repo_url,
+      entryCommand,
+      envVars,
+      keySource,
+    };
+  }
+
+  private buildTurnTask(latestUserMessage: string): string {
+    const transcript = this.loadMessages()
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .slice(-12)
+      .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.content}`)
+      .join("\n\n");
+
+    if (!transcript) {
+      return latestUserMessage;
+    }
+
+    return [
+      "Continue this filepath chat session from the transcript below.",
+      "Reply only as the selected harness running in the sandbox.",
+      "",
+      transcript,
+      "",
+      "Respond to the latest user message in context.",
+    ].join("\n");
+  }
+
+  private emitAssistantText(nodeId: string, content: string): void {
+    const messageId = this.saveMessage("assistant", content);
+    this.broadcast(JSON.stringify({
+      type: "event",
+      event: { type: "text", content },
+      role: "assistant",
+      messageId,
+      nodeId,
+      timestamp: Date.now(),
+    }));
+  }
+
+  private createExecRelay(nodeId: string): {
+    onOutput: (stream: "stdout" | "stderr", data: string) => void;
+    flush: () => void;
+    emitFallbackText: () => void;
+    sawStructuredEvent: () => boolean;
+    stderrSummary: () => string;
+  } {
+    let stdoutBuffer = "";
+    const rawStdoutLines: string[] = [];
+    const stderrChunks: string[] = [];
+    let sawStructuredEvent = false;
+
+    return {
+      onOutput: (stream, data) => {
+        if (stream === "stderr") {
+          stderrChunks.push(data);
+          console.warn(`[ChatAgent] Container stderr (${nodeId}): ${data.slice(0, 500)}`);
+          return;
+        }
+
+        stdoutBuffer += data;
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const handled = this.processNDJSONLine(nodeId, trimmed);
+          sawStructuredEvent = sawStructuredEvent || handled;
+          if (!handled) {
+            rawStdoutLines.push(trimmed);
+          }
+        }
+      },
+      flush: () => {
+        const trimmed = stdoutBuffer.trim();
+        stdoutBuffer = "";
+        if (!trimmed) return;
+        const handled = this.processNDJSONLine(nodeId, trimmed);
+        sawStructuredEvent = sawStructuredEvent || handled;
+        if (!handled) {
+          rawStdoutLines.push(trimmed);
+        }
+      },
+      emitFallbackText: () => {
+        if (sawStructuredEvent) return;
+        const fallback = rawStdoutLines.join("\n").trim();
+        if (fallback) {
+          this.emitAssistantText(nodeId, fallback);
+        }
+      },
+      sawStructuredEvent: () => sawStructuredEvent,
+      stderrSummary: () => stderrChunks.join("\n").trim(),
+    };
+  }
+
+  private async ensureContainer(nodeId: string, gitRepoUrl: string | null): Promise<ContainerHandle> {
+    const existing = this.containers.get(nodeId);
+    if (existing) {
+      return existing;
+    }
+
+    const sandbox = getSandbox(
+      this.env.Sandbox as unknown as Parameters<typeof getSandbox>[0],
+      nodeId,
+    );
+    const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
+
+    console.log(`[ChatAgent] Preparing sandbox for node ${nodeId}`);
+    if (gitRepoUrl) {
+      const workspaceExists = await sandbox.exists(workspaceRoot);
+      if (!workspaceExists.exists) {
+        console.log(`[ChatAgent] Cloning repo for node ${nodeId}: ${gitRepoUrl}`);
+        await cloneRepo(
+          { Sandbox: this.env.Sandbox } as unknown as ContainerEnv,
+          nodeId,
+          gitRepoUrl,
+          workspaceRoot,
+        );
+      }
+    } else {
+      await sandbox.mkdir(workspaceRoot, { recursive: true });
+    }
 
     try {
       await this.env.DB.prepare(
@@ -383,24 +518,16 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       console.error(`[ChatAgent] Failed to persist container id for ${nodeId}:`, err);
     }
 
-    const abortController = new AbortController();
     const handle: ContainerHandle = {
       sandbox,
       nodeId,
-      stdinWriter: proc.stdin ? proc.stdin.getWriter() : null,
-      abortController,
+      workspaceRoot,
+      activeExecution: false,
     };
 
     this.containers.set(nodeId, handle);
-    if (this.state) {
-      this.state.keySource = keySource;
-    }
-
-    // Set up stdout relay in the background
-    this.setupContainerRelay(nodeId, proc);
-
-    void this.persistStatus('running');
-    console.log(`[ChatAgent] Container spawned for node ${nodeId}`);
+    console.log(`[ChatAgent] Sandbox ready for node ${nodeId}`);
+    return handle;
   }
 
   private async forwardToContainer(content: string, connection: Connection): Promise<void> {
@@ -410,47 +537,74 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
       return;
     }
 
-    // Spawn container if not already running
-    if (!this.containers.has(nodeId)) {
-      try {
-        await this.spawnContainer(nodeId);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[ChatAgent] Container spawn failed: ${msg}`);
-        this.handleSandboxFailure(
-          connection,
-          `Could not start the sandbox for this branch: ${msg}`,
-        );
-        return;
+    const task = this.buildTurnTask(content);
+    let config: NodeExecutionConfig;
+    let handle: ContainerHandle;
+    try {
+      config = await this.loadNodeExecutionConfig(nodeId, task);
+      handle = await this.ensureContainer(nodeId, config.gitRepoUrl);
+      if (this.state) {
+        this.state.keySource = config.keySource;
       }
-    }
-
-    const handle = this.containers.get(nodeId);
-    if (!handle?.stdinWriter) {
-      console.warn(`[ChatAgent] No stdin writer for container ${nodeId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ChatAgent] Container preparation failed: ${msg}`);
       this.handleSandboxFailure(
         connection,
-        "This branch has no live stdin pipe to its sandbox process",
+        `Could not start the sandbox for this branch: ${msg}`,
       );
       return;
     }
 
-    await this.persistStatus('thinking');
+    if (handle.activeExecution) {
+      connection.send(JSON.stringify({
+        type: "error",
+        message: "This agent is already processing a message. Wait for it to finish.",
+      }));
+      return;
+    }
 
-    const inputMsg = JSON.stringify({ type: 'message', from: 'user', content }) + '\n';
-    const encoded = new TextEncoder().encode(inputMsg);
+    await this.persistStatus('thinking');
+    handle.activeExecution = true;
+    const relay = this.createExecRelay(nodeId);
 
     try {
-      await handle.stdinWriter.write(encoded);
+      const result = await handle.sandbox.exec(config.entryCommand, {
+        cwd: handle.workspaceRoot,
+        env: config.envVars,
+        stream: true,
+        onOutput: relay.onOutput,
+      });
+
+      relay.flush();
+      relay.emitFallbackText();
+
+      if (!result.success) {
+        const stderrSummary = relay.stderrSummary() || result.stderr.trim();
+        throw new Error(
+          stderrSummary
+            ? `Sandbox command failed (${result.exitCode}): ${stderrSummary}`
+            : `Sandbox command failed (${result.exitCode}).`,
+        );
+      }
+
+      if (!relay.sawStructuredEvent() && !result.stdout.trim()) {
+        throw new Error("Sandbox command completed without producing any agent output.");
+      }
+
+      const finalState = this.state?.status;
+      if (finalState !== "done" && finalState !== "error" && finalState !== "exhausted") {
+        await this.persistStatus("done");
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[ChatAgent] Failed to write to container stdin: ${msg}`);
-      // Container may have crashed — clean up and fail explicitly.
-      await this.stopContainer(nodeId);
+      console.error(`[ChatAgent] Sandbox execution failed for ${nodeId}: ${msg}`);
       this.handleSandboxFailure(
         connection,
-        `The sandbox process stopped accepting input: ${msg}`,
+        `The sandbox runtime failed while handling this message: ${msg}`,
       );
+    } finally {
+      handle.activeExecution = false;
     }
   }
 
@@ -459,15 +613,7 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     if (!handle) return;
 
     console.log(`[ChatAgent] Stopping container for node ${nodeId}`);
-    handle.abortController.abort();
-
-    if (handle.stdinWriter) {
-      try {
-        await handle.stdinWriter.close();
-      } catch {
-        // Writer may already be closed
-      }
-    }
+    handle.activeExecution = false;
 
     this.containers.delete(nodeId);
   }
@@ -521,78 +667,19 @@ export class ChatAgent extends Agent<Env, ChatAgentState> {
     }));
   }
 
-  // ─── Container Relay (NDJSON stdout → WS clients) ─────
-
-  /**
-   * Read NDJSON from container stdout, validate as FAP events,
-   * and broadcast to WebSocket clients.
-   *
-   * Handles partial lines across chunk boundaries.
-   * Invalid lines are logged but never crash the relay.
-   */
-  setupContainerRelay(nodeId: string, container: ContainerProcess): void {
-    const reader = container.stdout.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const processStream = async (): Promise<void> => {
-      try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) {
-            // Flush remaining buffer on stream close
-            if (buffer.trim()) {
-              this.processNDJSONLine(nodeId, buffer.trim());
-            }
-            console.log(`[ChatAgent] Container stdout closed for node ${nodeId}`);
-            const finalState = this.state?.status;
-            if (finalState === "error" || finalState === "done" || finalState === "exhausted") {
-              this.broadcastStatus(finalState);
-            } else {
-              await this.persistStatus("done");
-            }
-            break;
-          }
-
-          // Decode chunk, preserving partial multi-byte chars across reads
-          buffer += decoder.decode(value, { stream: true });
-
-          // Split by newlines — NDJSON is one JSON object per line
-          const lines = buffer.split("\n");
-          // Last element is either "" (line ended with \n) or a partial line
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            this.processNDJSONLine(nodeId, trimmed);
-          }
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[ChatAgent] Container relay error for node ${nodeId}: ${msg}`);
-        await this.persistStatus("error");
-      }
-    };
-
-    // Fire-and-forget: stream processing runs in background
-    processStream().catch((err) => {
-      console.error(`[ChatAgent] Unhandled relay error:`, err);
-    });
-  }
-
   /**
    * Parse a single NDJSON line and route it as a FAP event.
    * Invalid lines are logged as raw container output.
    */
-  private processNDJSONLine(nodeId: string, line: string): void {
+  private processNDJSONLine(nodeId: string, line: string): boolean {
     const event = parseAgentEvent(line);
 
     if (event) {
       this.handleAgentEvent(nodeId, event);
+      return true;
     } else {
-      // Not a valid FAP event — log as raw container output
       console.log(`[ChatAgent] Container output (node ${nodeId}): ${line.slice(0, 500)}`);
+      return false;
     }
   }
 

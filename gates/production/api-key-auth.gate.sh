@@ -4,7 +4,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-${BASE_URL:-https://myfilepath.com}}"
-API_URL="${API_URL:-https://api.myfilepath.com}"
+API_URL="${API_URL:-}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COOKIE_JAR=$(mktemp)
 
@@ -101,9 +101,35 @@ else
   exit 1
 fi
 
-echo -n "6. WebSocket chat with API key token... "
+echo -n "6. Resolve websocket worker URL... "
+CONFIG_RESP=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/config" --max-time 15 2>&1)
+CONFIG_HTTP=$(echo "$CONFIG_RESP" | tail -1)
+CONFIG_BODY=$(echo "$CONFIG_RESP" | sed '$d')
+CONFIG_WORKER_URL=$(echo "$CONFIG_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('workerUrl',''))" 2>/dev/null || echo "")
+if [ "$CONFIG_HTTP" = "200" ] && [ -n "$CONFIG_WORKER_URL" ]; then
+  WORKER_URL="${API_URL:-$CONFIG_WORKER_URL}"
+  echo "PASS ($WORKER_URL)"
+else
+  echo "FAIL (HTTP $CONFIG_HTTP, body: $(echo "$CONFIG_BODY" | head -c 200))"
+  exit 1
+fi
+
+WORKER_WS_URL=""
+case "$WORKER_URL" in
+  https://*)
+    WORKER_WS_URL="wss://${WORKER_URL#https://}"
+    ;;
+  http://*)
+    WORKER_WS_URL="ws://${WORKER_URL#http://}"
+    ;;
+  *)
+    WORKER_WS_URL="$WORKER_URL"
+    ;;
+esac
+
+echo -n "7. WebSocket chat with API key token... "
 CHAT_RESULT=$(EXPECTED_REPLY="API_KEY_PASS" timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
-  "wss://$(echo "$API_URL" | sed 's|https://||')/agents/chat-agent/$NODE_ID?token=$API_KEY" \
+  "${WORKER_WS_URL%/}/agents/chat-agent/$NODE_ID?token=$API_KEY" \
   "$NODE_ID" \
   "$SESSION_ID" \
   "Reply with exactly: API_KEY_PASS" \

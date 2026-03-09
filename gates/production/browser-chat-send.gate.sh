@@ -11,9 +11,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
 TEST_OPENROUTER_KEY="${TEST_OPENROUTER_KEY:-${OPENROUTER_API_KEY:-}}"
-TEST_MESSAGE="${TEST_MESSAGE:-hi}"
+TEST_MESSAGE="${TEST_MESSAGE:-Reply with exactly: GATE_PASS}"
 TEST_HARNESS_ID="${TEST_HARNESS_ID:-shelley}"
 TEST_MODEL="${TEST_MODEL:-anthropic/claude-sonnet-4}"
+TEST_EXPECTED_REPLY="${TEST_EXPECTED_REPLY:-GATE_PASS}"
 
 echo "=== BROWSER CHAT SEND REPRO ==="
 echo "Target: $BASE_URL"
@@ -39,13 +40,14 @@ else
 fi
 
 echo -n "1. Drive browser send flow... "
-if node "$SCRIPT_DIR/../lib/repro-session-chat-send.mjs" \
+if EXPECTED_REPLY="$TEST_EXPECTED_REPLY" node "$SCRIPT_DIR/../lib/repro-session-chat-send.mjs" \
   "$BASE_URL" \
   "$TEST_EMAIL" \
   "$TEST_PASSWORD" \
   "$TEST_MESSAGE" \
   "$TEST_HARNESS_ID" \
-  "$TEST_MODEL"; then
+  "$TEST_MODEL" \
+  "$TEST_EXPECTED_REPLY"; then
   echo "PASS"
   exit 0
 fi

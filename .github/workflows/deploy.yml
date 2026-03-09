@@ -31,10 +31,102 @@ jobs:
           node --check gates/lib/send-chat-and-wait.mjs
           node --check gates/lib/fetch-session-ws-token.mjs
           node --check gates/lib/repro-session-chat-send.mjs
+          node --check scripts/dev-preflight.mjs
+          node --check scripts/dev-stop.mjs
+          node --check scripts/wait-for-local-dev.mjs
+          node --check scripts/dev-proof.mjs
+          node --check scripts/dev-repro.mjs
+          node --check adapters/_shared/run-adapter.mjs
+          node --check adapters/shelley/index.mjs
+          node --check adapters/pi/index.mjs
+          node --check adapters/claude-code/index.mjs
+          node --check adapters/codex/index.mjs
+          node --check adapters/cursor/index.mjs
+          node --check adapters/amp/index.mjs
+
+  local-parity:
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Start local dev stack
+        run: |
+          mkdir -p output
+          nohup bun run dev > output/local-dev.log 2>&1 &
+          echo $! > output/local-dev.pid
+        env:
+          NODE_ENV: development
+          CI: "true"
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: http://localhost:5173
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
+
+      - name: Wait for local dev
+        run: bun run dev:wait
+        env:
+          NODE_ENV: development
+          CI: "true"
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: http://localhost:5173
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
+
+      - name: Run local parity proof
+        run: bun run dev:proof
+        env:
+          NODE_ENV: development
+          CI: "true"
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: http://localhost:5173
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
+
+      - name: Stop local dev stack
+        if: always()
+        run: bun run dev:stop || true
+
+      - name: Upload local parity artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-parity-artifacts
+          if-no-files-found: warn
+          path: |
+            output/local-dev.log
+            output/playwright/**
 
   deploy:
     runs-on: ubuntu-latest
-    needs: test  # Wait for gates to run first
+    needs:
+      - test
+      - local-parity
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,8 +208,21 @@ jobs:
         run: sleep 10
 
       - name: Run Production Gates
-        run: bash gates/production/run-all.sh https://myfilepath.com
+        run: |
+          mkdir -p output
+          set -o pipefail
+          bash gates/production/run-all.sh https://myfilepath.com | tee output/production-gates.log
         env:
           TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
+
+      - name: Upload production gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gates-artifacts
+          if-no-files-found: warn
+          path: |
+            output/production-gates.log
+            output/playwright/**

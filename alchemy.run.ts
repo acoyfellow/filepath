@@ -12,6 +12,14 @@ import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
 
 import type { ChatAgent } from "./src/agent/chat-agent.ts";
 
+for (const envFile of [".env", ".env.local"]) {
+  try {
+    process.loadEnvFile?.(envFile);
+  } catch {
+    // Local env files are optional.
+  }
+}
+
 const password = process.env.ALCHEMY_PASSWORD;
 if (!password) {
   throw new Error("Missing ALCHEMY_PASSWORD for Alchemy secrets.");

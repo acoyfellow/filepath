@@ -15,8 +15,8 @@ export const GET: RequestHandler = ({ url, platform }) => {
     workerUrl = apiWsOrigin;
   } else if (apiWsHost) {
     workerUrl = `https://${apiWsHost}`;
-  } else if (hostname === 'myfilepath.com') {
-    workerUrl = 'https://api.myfilepath.com';
+  } else if (hostname === "myfilepath.com") {
+    workerUrl = "https://api.myfilepath.com";
   } else {
     // Local dev / preview: same origin
     workerUrl = url.origin;

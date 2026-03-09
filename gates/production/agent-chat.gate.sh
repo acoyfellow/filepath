@@ -8,7 +8,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-${BASE_URL:-https://myfilepath.com}}"
-API_URL="${API_URL:-https://api.myfilepath.com}"
+API_URL="${API_URL:-}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COOKIE_JAR=$(mktemp)
 FAILED=0

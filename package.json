@@ -61,7 +61,11 @@
     "sandboxes"
   ],
   "scripts": {
-    "dev": "alchemy dev",
+    "dev": "node ./scripts/dev-preflight.mjs && alchemy dev",
+    "dev:stop": "node ./scripts/dev-stop.mjs",
+    "dev:wait": "node ./scripts/wait-for-local-dev.mjs",
+    "dev:proof": "node ./scripts/dev-proof.mjs",
+    "dev:repro": "node ./scripts/dev-repro.mjs",
     "deploy": "NODE_ENV=production alchemy deploy --stage prod",
     "deploy:preview": "alchemy deploy",
     "destroy": "alchemy destroy",

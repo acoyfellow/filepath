@@ -27,6 +27,8 @@ export class SessionEventBusV2 extends DurableObject {
       server.addEventListener("close", cleanup);
       server.addEventListener("error", cleanup);
 
+      console.log(`[SessionEventBusV2] Websocket connected (${this.sockets.size} open)`);
+
       return new Response(null, {
         status: 101,
         webSocket: client,
@@ -42,6 +44,7 @@ export class SessionEventBusV2 extends DurableObject {
           this.sockets.delete(socket);
         }
       }
+      console.log(`[SessionEventBusV2] Broadcasted event to ${this.sockets.size} sockets`);
       return new Response(JSON.stringify({ ok: true }), {
         headers: { "Content-Type": "application/json" },
       });

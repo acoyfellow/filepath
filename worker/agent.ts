@@ -29,10 +29,7 @@ export { Sandbox };
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const proxiedSandboxResponse = await proxyToSandbox(request as never, env as never);
-    if (proxiedSandboxResponse) {
-      return proxiedSandboxResponse;
-    }
+    const isWebSocketRequest = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
@@ -51,6 +48,10 @@ export default {
         cors: true,
       });
       if (response) return response;
+
+      if (isWebSocketRequest) {
+        console.warn(`[worker] Agent websocket route returned no response for ${url.pathname}`);
+      }
     }
 
     const sessionEventsMatch = url.pathname.match(/^\/session-events\/([^/]+)$/);
@@ -58,10 +59,8 @@ export default {
       const [, sessionId] = sessionEventsMatch;
       const sessionNamespace = env.SESSION_DO as any;
       const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
-      return stub.fetch('https://session/connect', {
-        method: 'GET',
-        headers: request.headers,
-      });
+      const connectRequest = new Request("https://session/connect", request);
+      return stub.fetch(connectRequest);
     }
 
     const internalSessionEventMatch = url.pathname.match(/^\/internal\/sessions\/([^/]+)\/events$/);
@@ -69,13 +68,18 @@ export default {
       const [, sessionId] = internalSessionEventMatch;
       const sessionNamespace = env.SESSION_DO as any;
       const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
-      return stub.fetch('https://session/events', {
+      return stub.fetch(new Request('https://session/events', {
         method: 'POST',
         headers: {
           'Content-Type': request.headers.get('content-type') || 'application/json',
         },
         body: request.body,
-      });
+      }));
+    }
+
+    const proxiedSandboxResponse = await proxyToSandbox(request as never, env as never);
+    if (proxiedSandboxResponse) {
+      return proxiedSandboxResponse;
     }
 
     return new Response('Not found', { status: 404 });

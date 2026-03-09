@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run all production gates in order
+# Run the canonical release gates in order
 # Usage: ./gates/production/run-all.sh [base_url]
 #
 # Environment variables:
@@ -17,7 +17,7 @@ PASSED=0
 TOTAL=0
 
 echo "╔═══════════════════════════════════════╗"
-echo "║  PRODUCTION GATES - myfilepath.com    ║"
+echo "║  RELEASE GATES                         ║"
 echo "╠═══════════════════════════════════════╣"
 echo "║  Target: $BASE_URL"
 echo "╚═══════════════════════════════════════╝"
@@ -35,7 +35,7 @@ echo ""
 
 GATES=(
   "visual-regression"
-  "agent-chat"
+  "browser-chat-send"
   "api-key-auth"
 )
 
@@ -64,7 +64,7 @@ for gate in "${GATES[@]}"; do
 done
 
 echo "════════════════════════════════════════"
-echo "PRODUCTION GATE RESULTS"
+echo "RELEASE GATE RESULTS"
 echo "════════════════════════════════════════"
 echo "Total:  $TOTAL"
 echo "Passed: $PASSED"
@@ -72,7 +72,7 @@ echo "Failed: $FAILED"
 echo "════════════════════════════════════════"
 
 if [ $FAILED -eq 0 ]; then
-  echo "✅ ALL PRODUCTION GATES PASSED"
+  echo "✅ ALL RELEASE GATES PASSED"
   exit 0
 else
   echo "❌ $FAILED GATE(S) FAILED"

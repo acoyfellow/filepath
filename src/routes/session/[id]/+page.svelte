@@ -198,8 +198,9 @@
   function ensureSessionEventsConnection() {
     if (!workerUrl || !sessionId || sessionEventsSocket) return;
 
-    const wsBase = workerUrl.replace(/^http/, "ws");
-    const socket = new WebSocket(`${wsBase}/session-events/${sessionId}`);
+    const base = new URL(workerUrl);
+    base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(new URL(`/session-events/${sessionId}`, base));
 
     socket.onopen = () => {
       sessionEventsReconnectAttempts = 0;
