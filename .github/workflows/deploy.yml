@@ -71,6 +71,8 @@ jobs:
           STAGE_KEY=$(echo "${BRANCH_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/_' '-' | sed 's/[^a-z0-9-]//g')
           STAGE="preview-${STAGE_KEY}"
           echo "Deploying preview stage: ${STAGE}"
+          echo "Destroying existing preview stage first to force a clean disposable D1 database"
+          bunx alchemy destroy --stage "${STAGE}" || true
           bunx alchemy deploy --stage "${STAGE}"
         env:
           BRANCH_NAME: ${{ github.ref_name }}
