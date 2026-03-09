@@ -42,7 +42,7 @@ check_page() {
   BODY=$(echo "$RESP" | sed '$d')
   
   if [ "$HTTP" = "200" ]; then
-    if [ -n "$marker" ] && echo "$BODY" | grep -qi "$marker"; then
+    if [ -n "$marker" ] && grep -Eqi "$marker" <<<"$BODY"; then
       echo "PASS (content: \"$marker\" found)"
     elif [ -n "$marker" ]; then
       echo "WARN (HTTP 200 but marker \"$marker\" not found)"

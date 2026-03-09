@@ -126,6 +126,12 @@ export function initAuth(
     }),
     emailOTP({
       sendVerificationOTP: async ({ email, otp, type }) => {
+        const isLocalAuth = /localhost|127\.0\.0\.1/.test(baseURL);
+        if (isLocalAuth) {
+          console.log(`[auth] Skipping ${type} email delivery for local auth user ${email}`);
+          return;
+        }
+
         const mgKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
         const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
 
