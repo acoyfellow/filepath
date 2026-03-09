@@ -2,6 +2,11 @@
   import Self from "./TreeNode.svelte";
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import type { AgentNode } from "$lib/types/session";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import MoreHorizontalIcon from "@lucide/svelte/icons/ellipsis";
+  import MoveRightIcon from "@lucide/svelte/icons/move";
+  import PencilIcon from "@lucide/svelte/icons/pencil";
+  import Trash2Icon from "@lucide/svelte/icons/trash-2";
 
   interface Props {
     node: AgentNode;
@@ -9,11 +14,11 @@
     depth?: number;
     onselect: (id: string) => void;
     onmove: (payload: { nodeId: string; parentId: string | null; sortOrder: number }) => Promise<void>;
-    onrequestmove: (nodeId: string) => void;
+    onrequestaction: (payload: { nodeId: string; action: "move" | "rename" | "delete" }) => void;
     ontoggle: (id: string) => void;
   }
 
-  let { node, selectedId, depth = 0, onselect, onmove, onrequestmove, ontoggle }: Props = $props();
+  let { node, selectedId, depth = 0, onselect, onmove, onrequestaction, ontoggle }: Props = $props();
 
   let hasChildren = $derived(node.children.length > 0);
   let isSelected = $derived(node.id === selectedId);
@@ -135,17 +140,45 @@
     <span class="tn-count">{leafCount.done}/{leafCount.total}</span>
   {/if}
 
-  <button
-    type="button"
-    class="tn-move"
-    aria-label={`Move ${node.name}`}
-    onclick={(e) => {
-      e.stopPropagation();
-      onrequestmove(node.id);
-    }}
-  >
-    ⋯
-  </button>
+  <DropdownMenu.Root>
+    <DropdownMenu.Trigger
+      class="tn-menu"
+      aria-label={`Agent actions for ${node.name}`}
+      onclick={(e) => {
+        e.stopPropagation();
+      }}
+    >
+      <MoreHorizontalIcon size={14} />
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content
+      align="end"
+      sideOffset={6}
+      onclick={(e) => {
+        e.stopPropagation();
+      }}
+    >
+      <DropdownMenu.Item
+        onclick={() => onrequestaction({ nodeId: node.id, action: "move" })}
+      >
+        <MoveRightIcon />
+        Move
+      </DropdownMenu.Item>
+      <DropdownMenu.Item
+        onclick={() => onrequestaction({ nodeId: node.id, action: "rename" })}
+      >
+        <PencilIcon />
+        Rename
+      </DropdownMenu.Item>
+      <DropdownMenu.Separator />
+      <DropdownMenu.Item
+        variant="destructive"
+        onclick={() => onrequestaction({ nodeId: node.id, action: "delete" })}
+      >
+        <Trash2Icon />
+        Delete
+      </DropdownMenu.Item>
+    </DropdownMenu.Content>
+  </DropdownMenu.Root>
 </div>
 
 {#if hasChildren && !collapsed}
@@ -156,7 +189,7 @@
       depth={depth + 1}
       {onselect}
       {onmove}
-      {onrequestmove}
+      {onrequestaction}
       {ontoggle}
     />
   {/each}
@@ -213,13 +246,21 @@
     font-size: 9px;
     color: var(--t5);
   }
-  .tn-move {
+  :global(.tn-menu) {
     border: none;
     background: none;
     color: var(--t6);
-    font-family: var(--m);
-    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    width: 22px;
+    height: 22px;
     cursor: pointer;
-    opacity: 0.8;
+    opacity: 0.9;
+  }
+  :global(.tn-menu:hover) {
+    background: var(--bg3);
+    color: var(--t3);
   }
 </style>

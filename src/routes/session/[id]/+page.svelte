@@ -181,6 +181,25 @@
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
   );
 
+  function dropNodeConnection(nodeId: string) {
+    const client = activeClients[nodeId];
+    if (client) {
+      client.close();
+    }
+
+    const nextClients = { ...activeClients };
+    delete nextClients[nodeId];
+    activeClients = nextClients;
+
+    const nextStates = { ...connectionStates };
+    delete nextStates[nodeId];
+    connectionStates = nextStates;
+
+    const nextMessages = { ...messagesByNode };
+    delete nextMessages[nodeId];
+    messagesByNode = nextMessages;
+  }
+
   function ensureConnection(nodeId: string) {
     if (!workerUrl || activeClients[nodeId]) return;
 
@@ -378,6 +397,39 @@
     await refreshSessionSnapshot();
   }
 
+  async function handleRenameNode(payload: { nodeId: string; name: string }) {
+    if (!sessionId) return;
+
+    const response = await fetch(`/api/sessions/${sessionId}/nodes/${payload.nodeId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: payload.name }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      throw new Error(data.error || data.message || "Unable to rename agent");
+    }
+
+    await refreshSessionSnapshot();
+  }
+
+  async function handleDeleteNode(nodeId: string) {
+    if (!sessionId) return;
+
+    const response = await fetch(`/api/sessions/${sessionId}/nodes/${nodeId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      throw new Error(data.error || data.message || "Unable to delete agent");
+    }
+
+    dropNodeConnection(nodeId);
+    await refreshSessionSnapshot();
+  }
+
   function handleSend(message: string) {
     if (!selectedAgent) return;
     if (selectedAgent.status === "exhausted") {
@@ -486,6 +538,8 @@
         {selectedId}
         onselect={handleSelect}
         onmove={handleMoveThread}
+        onrename={handleRenameNode}
+        ondelete={handleDeleteNode}
         onspawn={() => {
           showSpawn = true;
         }}

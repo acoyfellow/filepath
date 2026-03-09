@@ -174,6 +174,8 @@
 
   function handleSpawn() {}
   async function handleMove() {}
+  async function handleRename() {}
+  async function handleDelete() {}
 </script>
 
 <div class="demo-shell">
@@ -196,6 +198,8 @@
       width={300}
       onselect={handleSelect}
       onmove={handleMove}
+      onrename={handleRename}
+      ondelete={handleDelete}
       onspawn={handleSpawn}
     />
     <div class="demo-panel">
