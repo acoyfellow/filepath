@@ -8,13 +8,11 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey, passkey as passkeyTable } from './schema';
 import { eq } from 'drizzle-orm';
-import { getRequestEvent } from '$app/server';
 // Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-let authInstance: Auth | undefined = undefined;
-let authBaseURL: string | null = null;
+const authInstances = new Map<string, Auth>();
 let drizzleInstance: ReturnType<typeof drizzle> | null = null;
 
 export function getDrizzle(): ReturnType<typeof drizzle> {
@@ -30,6 +28,8 @@ interface AuthEnv {
   MAILGUN_DOMAIN?: string;
   [key: string]: unknown;
 }
+
+type SvelteKitRequestEventGetter = Parameters<typeof sveltekitCookies>[0];
 
 export interface ResolvedAuthUser {
   id: string;
@@ -66,7 +66,14 @@ function getApiKeyFromHeaders(headers: Headers): string | null {
   return authorization.trim() || null;
 }
 
-export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: string): Auth {
+export function initAuth(
+  db: D1Database,
+  env: AuthEnv | undefined,
+  baseURL: string,
+  options?: {
+    getRequestEvent?: SvelteKitRequestEventGetter;
+  },
+): Auth {
   if (!db) {
     throw new Error('D1 database is required for Better Auth');
   }
@@ -89,15 +96,100 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
     });
   }
 
-  if (authInstance !== undefined) {
-    if (authBaseURL !== baseURL) {
-      throw new Error(`Auth already initialized for ${authBaseURL}, cannot re-init for ${baseURL}`);
-    }
-    return authInstance;
+  const authKey = `${baseURL}::${options?.getRequestEvent ? "sveltekit" : "core"}`;
+  const existingAuth = authInstances.get(authKey);
+  if (existingAuth) {
+    return existingAuth;
   }
 
-  authBaseURL = baseURL;
-  authInstance = betterAuth({
+  const plugins = [
+    ...(options?.getRequestEvent ? [sveltekitCookies(options.getRequestEvent)] : []),
+    apiKey({
+      configId: 'default',
+      references: 'user',
+      // Prefix for agent API keys
+      apiKeyHeaders: ['x-api-key', 'authorization'],
+      // Enable metadata for storing agent name, owner info
+      enableMetadata: true,
+      // Rate limiting per API key
+      rateLimit: {
+        enabled: true,
+        timeWindow: 1000 * 60 * 60, // 1 hour
+        maxRequests: 1000,
+      },
+    }),
+    passkeyPlugin({
+      rpID: baseURL.includes('localhost') ? 'localhost' : 'myfilepath.com',
+      rpName: 'myfilepath',
+      origin: baseURL,
+    }),
+    emailOTP({
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        const mgKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
+        const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
+
+        const sendMail = async (subject: string, text: string, html: string) => {
+          const form = new FormData();
+          form.append('from', `Filepath <support@${domain}>`);
+          form.append('to', email);
+          form.append('subject', subject);
+          form.append('text', text);
+          form.append('html', html);
+
+          const resp = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Basic ${btoa(`api:${mgKey}`)}` },
+            body: form,
+          });
+          if (!resp.ok) {
+            const body = await resp.text();
+            throw new Error(`Mailgun ${resp.status}: ${body}`);
+          }
+        };
+
+        try {
+          if (type === 'forget-password') {
+            await sendMail(
+              'Password Reset Request',
+              `You requested to reset your password. Use this code: ${otp}`,
+              `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
+            );
+          } else if (type === 'email-verification') {
+            await sendMail(
+              'Welcome to Filepath!',
+              `Welcome to Filepath! Your verification code is: ${otp}\n\nFilepath is the platform for agents.`,
+              `<h1>Welcome to Filepath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>Filepath is the platform for agents.</p>`,
+            );
+          }
+        } catch (error) {
+          console.error('Error sending email:', error);
+          throw error;
+        }
+      },
+      otpLength: 6,
+      expiresIn: 60 * 10, // 10 minutes
+      sendVerificationOnSignUp: true, // Send welcome email on sign-up
+    }),
+    multiSession({
+      maximumSessions: 5,
+    }),
+    organization({
+      // Organization plugin configuration
+    }),
+    admin({
+      // Admin plugin configuration
+      adminRoles: ['admin'],
+      defaultRole: 'user',
+    }),
+    openAPI({
+      path: '/api/auth/reference',
+      playground: {
+        enabled: true
+      },
+    }),
+  ];
+
+  const authInstance = betterAuth({
     database: drizzleAdapter(drizzleInstance!, {
       provider: 'sqlite',
       schema: {
@@ -127,94 +219,10 @@ export function initAuth(db: D1Database, env: AuthEnv | undefined, baseURL: stri
       throw new Error('BETTER_AUTH_SECRET environment variable is required');
     })(),
     baseURL,
-    plugins: [
-      sveltekitCookies(getRequestEvent),
-      apiKey({
-        configId: 'default',
-        references: 'user',
-        // Prefix for agent API keys
-        apiKeyHeaders: ['x-api-key', 'authorization'],
-        // Enable metadata for storing agent name, owner info
-        enableMetadata: true,
-        // Rate limiting per API key
-        rateLimit: {
-          enabled: true,
-          timeWindow: 1000 * 60 * 60, // 1 hour
-          maxRequests: 1000,
-        },
-      }),
-      passkeyPlugin({
-        rpID: baseURL.includes('localhost') ? 'localhost' : 'myfilepath.com',
-        rpName: 'myfilepath',
-        origin: baseURL,
-      }),
-      emailOTP({
-        sendVerificationOTP: async ({ email, otp, type }) => {
-          const mgKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
-          const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
-
-          const sendMail = async (subject: string, text: string, html: string) => {
-            const form = new FormData();
-            form.append('from', `Filepath <support@${domain}>`);
-            form.append('to', email);
-            form.append('subject', subject);
-            form.append('text', text);
-            form.append('html', html);
-
-            const resp = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-              method: 'POST',
-              headers: { Authorization: `Basic ${btoa(`api:${mgKey}`)}` },
-              body: form,
-            });
-            if (!resp.ok) {
-              const body = await resp.text();
-              throw new Error(`Mailgun ${resp.status}: ${body}`);
-            }
-          };
-
-          try {
-            if (type === 'forget-password') {
-              await sendMail(
-                'Password Reset Request',
-                `You requested to reset your password. Use this code: ${otp}`,
-                `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
-              );
-            } else if (type === 'email-verification') {
-              await sendMail(
-                'Welcome to Filepath!',
-                `Welcome to Filepath! Your verification code is: ${otp}\n\nFilepath is the platform for agents.`,
-                `<h1>Welcome to Filepath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>Filepath is the platform for agents.</p>`,
-              );
-            }
-          } catch (error) {
-            console.error('Error sending email:', error);
-            throw error;
-          }
-        },
-        otpLength: 6,
-        expiresIn: 60 * 10, // 10 minutes
-        sendVerificationOnSignUp: true, // Send welcome email on sign-up
-      }),
-      multiSession({
-        maximumSessions: 5,
-      }),
-      organization({
-        // Organization plugin configuration
-      }),
-      admin({
-        // Admin plugin configuration
-        adminRoles: ['admin'],
-        defaultRole: 'user',
-      }),
-      openAPI({
-        path: '/api/auth/reference',
-        playground: {
-          enabled: true
-        },
-      }),
-    ],
+    plugins,
   }) as unknown as Auth;
 
+  authInstances.set(authKey, authInstance);
   return authInstance;
 }
 
