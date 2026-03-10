@@ -1,12 +1,12 @@
 #!/bin/bash
-# Run all production gates in order
+# Run the canonical release gates in order
 # Usage: ./gates/production/run-all.sh [base_url]
 #
 # Environment variables:
 #   BASE_URL - Override base URL (default: https://myfilepath.com)
 #   TEST_EMAIL - Test account email
 #   TEST_PASSWORD - Test account password
-#   TEST_API_KEY - Valid API key for credit tests
+#   TEST_OPENROUTER_KEY - Valid OpenRouter key for the gate user
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ PASSED=0
 TOTAL=0
 
 echo "╔═══════════════════════════════════════╗"
-echo "║  PRODUCTION GATES - myfilepath.com    ║"
+echo "║  RELEASE GATES                         ║"
 echo "╠═══════════════════════════════════════╣"
 echo "║  Target: $BASE_URL"
 echo "╚═══════════════════════════════════════╝"
@@ -34,10 +34,8 @@ fi
 echo ""
 
 GATES=(
-  "roadmap-truth"
-  "visual-regression"
-  "terminal-start"
-  "agent-chat"
+  "browser-chat-send"
+  "api-key-auth"
 )
 
 for gate in "${GATES[@]}"; do
@@ -65,7 +63,7 @@ for gate in "${GATES[@]}"; do
 done
 
 echo "════════════════════════════════════════"
-echo "PRODUCTION GATE RESULTS"
+echo "RELEASE GATE RESULTS"
 echo "════════════════════════════════════════"
 echo "Total:  $TOTAL"
 echo "Passed: $PASSED"
@@ -73,7 +71,7 @@ echo "Failed: $FAILED"
 echo "════════════════════════════════════════"
 
 if [ $FAILED -eq 0 ]; then
-  echo "✅ ALL PRODUCTION GATES PASSED"
+  echo "✅ ALL RELEASE GATES PASSED"
   exit 0
 else
   echo "❌ $FAILED GATE(S) FAILED"

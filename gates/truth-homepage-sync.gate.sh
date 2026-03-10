@@ -14,9 +14,8 @@ CLAIMS=(
   "Supported harnesses, exact models, no extra lock-in"
   "Durable session state that reconnects cleanly"
   "Realtime session state across your devices"
-  "Visible runtime processes, plus a workspace terminal"
-  "Cross-thread file handoff"
-  "Move threads like files and folders"
+  "Chat-first runtime visibility"
+  "Move agents like files and folders"
 )
 
 for claim in "${CLAIMS[@]}"; do

@@ -2,9 +2,10 @@
   interface Props {
     onsend: (message: string) => void;
     disabled?: boolean;
+    placeholder?: string;
   }
 
-  let { onsend, disabled = false }: Props = $props();
+  let { onsend, disabled = false, placeholder = "Message..." }: Props = $props();
   let value = $state("");
 
   function handleSend() {
@@ -25,7 +26,7 @@
 <div class="chat-bar">
   <input
     class="chat-input"
-    placeholder="Message..."
+    {placeholder}
     bind:value
     onkeydown={handleKeydown}
     {disabled}

@@ -3,21 +3,27 @@
 # This is THE gate. If this passes, the demo works.
 #
 # Usage: ./gates/production/agent-chat.gate.sh [base_url]
-# Env: TEST_EMAIL, TEST_PASSWORD
+# Env: TEST_EMAIL, TEST_PASSWORD, TEST_OPENROUTER_KEY, optional API_URL
 
 set -euo pipefail
 
 BASE_URL="${1:-${BASE_URL:-https://myfilepath.com}}"
-API_URL="${API_URL:-https://api.myfilepath.com}"
+API_URL="${API_URL:-}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COOKIE_JAR=$(mktemp)
 FAILED=0
 
 TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
+TEST_OPENROUTER_KEY="${TEST_OPENROUTER_KEY:-}"
 
 if [ -z "$TEST_PASSWORD" ]; then
   echo "❌ TEST_PASSWORD not set"
+  exit 1
+fi
+
+if [ -z "$TEST_OPENROUTER_KEY" ]; then
+  echo "❌ TEST_OPENROUTER_KEY not set"
   exit 1
 fi
 
@@ -25,8 +31,17 @@ echo "=== PRODUCTION GATE: AGENT CHAT E2E ==="
 echo "Target: $BASE_URL"
 echo ""
 
+# Step 0: Ensure fixture state
+echo -n "0. Ensure test user + router key... "
+if bash "$SCRIPT_DIR/ensure-test-user.sh" "$BASE_URL" >/dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  exit 1
+fi
+
 # Step 1: Login
-echo -n "1. Login... "
+echo -n "1. Login with Better Auth... "
 LOGIN_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/sign-in/email" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASSWORD\"}" \
@@ -64,7 +79,7 @@ if [ -n "$SESSION_ID" ]; then
   NODE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
     -H "Content-Type: application/json" \
     -b "$COOKIE_JAR" \
-    -d '{"name": "gate-agent", "agentType": "shelley", "model": "claude-sonnet-4"}' --max-time 15 2>&1)
+    -d '{"name": "gate-agent", "harnessId": "shelley", "model": "anthropic/claude-sonnet-4"}' --max-time 15 2>&1)
   NODE_HTTP=$(echo "$NODE_RESP" | tail -1)
   NODE_BODY=$(echo "$NODE_RESP" | sed '$d')
   NODE_ID=$(echo "$NODE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
@@ -80,24 +95,87 @@ else
   echo "3. Spawn agent... SKIP (no session)"
 fi
 
-# Step 4: WebSocket connect + send message + get response
+# Step 4: Resolve browser worker URL
+WORKER_URL=""
 if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ]; then
-  echo -n "4. Chat: send message + get LLM response... "
-  CHAT_RESULT=$(timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
-    "wss://$(echo "$API_URL" | sed 's|https://||')/agents/chat-agent/$NODE_ID" \
+  echo -n "4. Load browser worker config... "
+  CONFIG_RESP=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/config" --max-time 15 2>&1)
+  CONFIG_HTTP=$(echo "$CONFIG_RESP" | tail -1)
+  CONFIG_BODY=$(echo "$CONFIG_RESP" | sed '$d')
+  CONFIG_WORKER_URL=$(echo "$CONFIG_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('workerUrl',''))" 2>/dev/null || echo "")
+
+  if [ "$CONFIG_HTTP" = "200" ] && [ -n "$CONFIG_WORKER_URL" ]; then
+    WORKER_URL="${API_URL:-$CONFIG_WORKER_URL}"
+    echo "PASS ($WORKER_URL)"
+  else
+    echo "FAIL (HTTP $CONFIG_HTTP, body: $(echo "$CONFIG_BODY" | head -c 200))"
+    FAILED=$((FAILED + 1))
+  fi
+else
+  echo "4. Load browser worker config... SKIP (no node)"
+fi
+
+# Step 5: Fetch dashboard-compatible websocket token
+DASHBOARD_WS_TOKEN=""
+if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ] && [ -n "$WORKER_URL" ]; then
+  echo -n "5. Fetch dashboard websocket token... "
+  if TOKEN_RESULT=$(node "$SCRIPT_DIR/../lib/fetch-session-ws-token.mjs" \
+    "$BASE_URL" \
+    "$SESSION_ID" \
+    "$COOKIE_JAR" 2>&1); then
+    if [ -n "$TOKEN_RESULT" ]; then
+      DASHBOARD_WS_TOKEN="$TOKEN_RESULT"
+      echo "PASS"
+    else
+      echo "FAIL (empty token result)"
+      FAILED=$((FAILED + 1))
+    fi
+  else
+    echo "FAIL ($TOKEN_RESULT)"
+    FAILED=$((FAILED + 1))
+  fi
+else
+  echo "5. Fetch dashboard websocket token... SKIP (missing session/browser state)"
+fi
+
+WORKER_WS_URL=""
+if [ -n "$WORKER_URL" ]; then
+  case "$WORKER_URL" in
+    https://*)
+      WORKER_WS_URL="wss://${WORKER_URL#https://}"
+      ;;
+    http://*)
+      WORKER_WS_URL="ws://${WORKER_URL#http://}"
+      ;;
+    *)
+      WORKER_WS_URL="$WORKER_URL"
+      ;;
+  esac
+fi
+
+# Step 6: WebSocket connect + send message + get exact response
+if [ -n "$NODE_ID" ] && [ -n "$SESSION_ID" ] && [ -n "$WORKER_WS_URL" ] && [ -n "$DASHBOARD_WS_TOKEN" ]; then
+  echo -n "6. Chat through browser websocket path... "
+  CHAT_RESULT=$(EXPECTED_REPLY="GATE_PASS" timeout 30 node "$SCRIPT_DIR/../lib/send-chat-and-wait.mjs" \
+    "$WORKER_WS_URL/agents/chat-agent/$SESSION_ID?token=$DASHBOARD_WS_TOKEN" \
     "$NODE_ID" \
     "$SESSION_ID" \
     "Reply with exactly: GATE_PASS" \
     "25000" 2>&1 || echo "TIMEOUT")
   if echo "$CHAT_RESULT" | grep -q 'RESPONSE:'; then
     REPLY=$(echo "$CHAT_RESULT" | grep 'RESPONSE:' | sed 's/RESPONSE://')
-    echo "PASS (reply: $REPLY)"
+    if [ "$REPLY" = "GATE_PASS" ]; then
+      echo "PASS (reply: $REPLY)"
+    else
+      echo "FAIL (unexpected reply: $REPLY)"
+      FAILED=$((FAILED + 1))
+    fi
   else
     echo "FAIL ($CHAT_RESULT)"
     FAILED=$((FAILED + 1))
   fi
 else
-  echo "4. Chat... SKIP (no node)"
+  echo "6. Chat... SKIP (missing websocket auth state)"
 fi
 
 # Cleanup

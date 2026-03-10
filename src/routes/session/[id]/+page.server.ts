@@ -4,6 +4,7 @@ import { agentSession, agentNode, user } from "$lib/schema";
 import { eq, and } from "drizzle-orm";
 import type { ServerLoadEvent } from "@sveltejs/kit";
 import { decryptApiKey } from "$lib/crypto";
+import { createDashboardWsToken } from "$lib/dashboard-ws-auth";
 import { deserializeStoredProviderKeys, maskProviderKeys } from "$lib/provider-keys";
 
 function getBetterAuthSecret(platform: ServerLoadEvent["platform"]): string | undefined {
@@ -66,11 +67,22 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
     }
   }
 
+  const dashboardWsToken = secret
+    ? await createDashboardWsToken(
+        {
+          userId: locals.user.id,
+          sessionId: params.id as string,
+        },
+        secret,
+      )
+    : null;
+
   return {
     user: locals.user,
     session,
     nodes,
     accountKeysMasked,
     accountKeysError,
+    dashboardWsToken,
   };
 };

@@ -139,18 +139,16 @@ export const GET: RequestHandler = async ({ platform, url }) => {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['name', 'agentType', 'model'],
+                  required: ['name', 'harnessId', 'model'],
                   properties: {
                     name: { type: 'string', description: 'Agent name' },
-                    agentType: { 
-                      type: 'string', 
-                      enum: ['shelley', 'pi', 'claude-code', 'codex', 'cursor', 'amp', 'opencode', 'custom'],
-                      description: 'Type of agent to spawn'
+                    harnessId: {
+                      type: 'string',
+                      description: 'Harness ID from /api/harnesses'
                     },
                     model: { type: 'string', description: `LLM model (e.g., ${DEFAULT_MODEL_FULL})` },
                     parentId: { type: 'string', description: 'Parent node ID for nested agents' },
-                    config: { type: 'object', description: 'Agent configuration' },
-                    apiKey: { type: 'string', description: 'Optional per-session API key' }
+                    config: { type: 'object', description: 'Agent configuration' }
                   }
                 }
               }
@@ -300,6 +298,106 @@ export const GET: RequestHandler = async ({ platform, url }) => {
             }
           }
         }
+      },
+      '/api/harnesses': {
+        get: {
+          tags: ['Harnesses'],
+          summary: 'List available harnesses',
+          description: 'Get registered agent harnesses from the database-backed harness registry',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': { description: 'List of harnesses' },
+            '401': { description: 'Unauthorized' }
+          }
+        },
+        post: {
+          tags: ['Harnesses'],
+          summary: 'Create a harness',
+          description: 'Admin-only. Add a harness to the registry.',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['id', 'name', 'description', 'adapter', 'defaultModel', 'icon'],
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                    adapter: { type: 'string' },
+                    entryCommand: { type: 'string' },
+                    defaultModel: { type: 'string' },
+                    icon: { type: 'string' },
+                    enabled: { type: 'boolean' },
+                    config: { type: 'object' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '201': { description: 'Harness created' },
+            '401': { description: 'Unauthorized' },
+            '403': { description: 'Admin only' },
+            '409': { description: 'Harness already exists' }
+          }
+        }
+      },
+      '/api/harnesses/{id}': {
+        patch: {
+          tags: ['Harnesses'],
+          summary: 'Update a harness',
+          description: 'Admin-only. Update a registered harness.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } }
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['name', 'description', 'adapter', 'defaultModel', 'icon'],
+                  properties: {
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                    adapter: { type: 'string' },
+                    entryCommand: { type: 'string' },
+                    defaultModel: { type: 'string' },
+                    icon: { type: 'string' },
+                    enabled: { type: 'boolean' },
+                    config: { type: 'object' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '200': { description: 'Harness updated' },
+            '401': { description: 'Unauthorized' },
+            '403': { description: 'Admin only' },
+            '404': { description: 'Harness not found' }
+          }
+        },
+        delete: {
+          tags: ['Harnesses'],
+          summary: 'Delete a harness',
+          description: 'Admin-only. Delete a registered harness when it is not in use.',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } }
+          ],
+          responses: {
+            '200': { description: 'Harness deleted' },
+            '401': { description: 'Unauthorized' },
+            '403': { description: 'Admin only' },
+            '404': { description: 'Harness not found' },
+            '409': { description: 'Harness is in use' }
+          }
+        }
       }
     };
 
@@ -330,7 +428,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
           schema: {
             type: 'object',
             properties: {
-              type: { type: 'string', enum: ['text', 'tool', 'status', 'done'] },
+              type: { type: 'string', enum: ['text', 'tool', 'status', 'done', 'handoff'] },
               content: { type: 'string' }
             }
           }
@@ -378,7 +476,7 @@ export const GET: RequestHandler = async ({ platform, url }) => {
             properties: {
               id: { type: 'string' },
               name: { type: 'string' },
-              status: { type: 'string', enum: ['draft', 'active', 'completed'] },
+              status: { type: 'string', enum: ['draft', 'running', 'paused', 'stopped', 'error'] },
               createdAt: { type: 'number' },
               updatedAt: { type: 'number' },
               nodeCount: { type: 'number' }
@@ -389,9 +487,9 @@ export const GET: RequestHandler = async ({ platform, url }) => {
             properties: {
               id: { type: 'string' },
               name: { type: 'string' },
-              agentType: { type: 'string' },
+              harnessId: { type: 'string' },
               model: { type: 'string' },
-              status: { type: 'string', enum: ['idle', 'running', 'error', 'done'] },
+              status: { type: 'string', enum: ['idle', 'thinking', 'running', 'done', 'exhausted', 'error'] },
               parentId: { type: 'string', nullable: true }
             }
           },

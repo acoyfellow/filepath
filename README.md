@@ -1,106 +1,98 @@
 # filepath
 
-> Long-running sessions made of durable agent threads, backed by Cloudflare sandboxes.
+> Durable agent sessions, organized as trees, running through a session-root ChatAgent and Cloudflare sandboxes.
 
-filepath is the orchestration layer that stays thin around the real primitives: Cloudflare sandboxes, your chosen harness, your chosen model, and your own router keys. The product surface is:
+filepath is a chat-first orchestration layer for AI agents. The main product surface is:
+
 - a durable session
-- a thread tree that organizes work like a filesystem
-- a chat-first control surface
-- real process visibility and a workspace terminal when the runtime supports it
+- a tree of agent nodes
+- a chat and event timeline per node
+- isolated execution in Cloudflare sandboxes
+
+The system stays thin around the real primitives: harness, model, sandbox, and router keys.
 
 ## What Is True Today
 
-- Each thread runs inside its own Cloudflare sandbox with its own filesystem and process space.
-- The selected thread exposes real runtime processes in the UI.
-- You can open a workspace terminal for a thread when the runtime supports it.
-- Sessions reconnect cleanly to the same tree and history.
-- Session state streams live across your own devices on the same account.
-- Threads can hand files to each other explicitly.
-- Threads can be moved and regrouped like files and folders.
+- Each session uses one root ChatAgent route for browser chat connections.
+- The selected node is bound in the websocket init message, not in the URL.
+- Each active node execution runs in its own sandbox workspace and process context.
+- Sessions, nodes, and tree structure persist in D1.
+- Chat history persists and reconnects cleanly across devices on the same account.
+- Chat is the only built-in control surface.
+- Provider router keys are account-level.
+- `/api/models` only returns models from routers the account has configured.
+- Exhausted agents become read-only instead of silently continuing.
+
+## Core Model
+
+- **Session**: the durable workspace
+- **Agent node**: one harness + one model inside the tree
+- **Chat/event history**: the runtime timeline for that node
+
+Every node is the same primitive. There is no special orchestrator node type in the product surface.
 
 ## Quick Start
 
-1. **Sign up** at https://myfilepath.com
-2. **Add your router key** in Settings → Provider Router Keys
-   - Get an OpenRouter key at https://openrouter.ai/keys
-   - Or get an OpenCode Zen key at https://opencode.ai/zen
-3. **Create a session** from the dashboard
-4. **Spawn a thread** — choose from the supported harnesses and use the exact model string from your router
-5. **Send a message** — chat is the thread's control surface
-6. **Watch it work** — process updates, tool calls, file writes, and explicit handoffs show up in the session
+1. Sign up at [myfilepath.com](https://myfilepath.com).
+2. Add a router key in Settings → Provider Router Keys.
+3. Create a session.
+4. Spawn an agent by choosing a harness and model.
+5. Send work through chat.
+6. Watch the agent stream status, tool calls, commands, commits, and handoffs into the session.
 
-## How It Works
+## Runtime Shape
 
-1. Create a session (like a project folder). Optional git repo to clone.
-2. Spawn a thread — choose a supported harness and the exact model string your router exposes
-3. The thread runs in its own sandboxed runtime. Send it work through chat.
-4. The selected thread can show real runtime processes, and you can open a workspace terminal when available.
-5. Threads can spawn child threads, hand files across the tree, and be reorganized while the work stays live.
-6. Reopen the session on another device on the same account and keep going.
+```text
+Browser / API / MCP client
+        ↓
+thin SvelteKit routes
+        ↓
+shared core app operations
+        ↓
+D1
 
-**BYOK Model:** You bring your own router key. We don't charge for usage — your keys, your spend.
+Browser
+  ↕ WebSocket
+session-root ChatAgent
+  ↕ node init + message dispatch
+selected node runtime
+  ↕ sandbox exec
+Sandboxed CLI harness
+```
 
-## Stack
+The ChatAgent is a relay and lifecycle manager for the session-root websocket path. It does not silently fall back to a direct LLM call when the sandbox path fails.
 
-SvelteKit (Svelte 5) + Cloudflare Workers + Agents SDK + D1 + CF Sandbox + Alchemy
+## filepath Agent Protocol
 
-## Thread Model
+Harnesses speak NDJSON over stdin/stdout.
 
-- **Session**: the durable workspace
-- **Thread**: one agent lane inside the tree
-- **Process**: a live runtime process inside a thread's sandbox
+Container receives:
+- `FILEPATH_TASK`
+- `FILEPATH_AGENT_ID`
+- `FILEPATH_SESSION_ID`
+- router credentials via adapter-prepared env vars
+- user messages over stdin
 
-Chat is always primary. Terminal attach is additive. filepath does not promise a universal "headful mode" for every harness.
+Container emits:
+- structured NDJSON events validated by the protocol schema in `src/lib/protocol/`
 
-## The filepath Agent Protocol (FAP)
-
-Agents communicate via NDJSON over stdout/stdin. One JSON object per line, validated with Zod schemas.
-
-This protocol keeps filepath thin — the harness can vary, but the orchestration surface stays consistent.
-
-**Container receives:** repo at `/workspace`, task via `FILEPATH_TASK` env var, user messages on stdin.
-
-**Container emits:** structured events to stdout — text, tool calls, commands, commits, spawn requests, status updates, handoffs.
-
-Built-in agents (Shelley, Claude Code, Cursor, Codex, Amp) are reference implementations. BYO = bring a Dockerfile that speaks the protocol.
-
-See [NORTHSTAR.md](./NORTHSTAR.md) for the protocol and long-range direction.
+Built-in harnesses are reference implementations. BYO means shipping a container that speaks the same protocol.
 
 ## Development
 
 ```bash
 bun install
-bun run dev          # localhost:5173
-bun run deploy       # Alchemy (never wrangler)
-bun run prd          # Run gates
+bun run dev
+bash gates/health.sh
+bun run deploy
 ```
 
-## Agent Memory (Deja)
+## Docs
 
-This project uses [deja](https://deja.coey.dev) for persistent memory across agent sessions.
-
-Set `DEJA_API_KEY` in your `.env` (ask project owner for the key).
-
-```bash
-# Query memories at session start
-curl -s -X POST https://deja.coey.dev/inject \
-  -H "Authorization: Bearer $DEJA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"context": "filepath current status", "format": "prompt", "limit": 7}'
-
-# Store learnings after milestones
-curl -s -X POST https://deja.coey.dev/learn \
-  -H "Authorization: Bearer $DEJA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"trigger": "when to surface", "learning": "what was learned", "confidence": 0.9}'
-```
-
-## Documentation
-
-- [NORTHSTAR.md](./NORTHSTAR.md) — protocol and long-range direction
-- [AGENTS.md](./AGENTS.md) — agent catalog, architecture, development rules
-- [docs/API-REFERENCE.md](./docs/API-REFERENCE.md) — API endpoints
-- [llms.txt](./llms.txt) — context for AI tools
+- [NORTHSTAR.md](./NORTHSTAR.md) — current product truth and direction
+- [AGENTS.md](./AGENTS.md) — repo rules and architecture notes for coding agents
+- [docs/README.md](./docs/README.md) — surviving repo markdown docs
+- [static/llms.txt](./static/llms.txt) — compact repo context for AI tools
 
 ## License
 

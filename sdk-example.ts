@@ -5,7 +5,7 @@
  * This is what a proper SDK would look like vs raw fetch calls.
  */
 
-import type { AgentType, AgentNode, AgentSession, SpawnRequest } from './types';
+import type { HarnessId, AgentNode, AgentSession, SpawnRequest } from './types';
 
 // =============================================================================
 // TYPES (from your schema)
@@ -26,7 +26,7 @@ export interface Node {
   sessionId: string;
   parentId: string | null;
   name: string;
-  agentType: AgentType;
+  harnessId: HarnessId;
   model: string;
   status: 'idle' | 'running' | 'error' | 'done';
   config: Record<string, unknown>;
@@ -142,7 +142,7 @@ export class FilepathClient {
    * ```ts
    * const node = await client.nodes.spawn(sessionId, {
    *   name: 'My Researcher',
-   *   agentType: 'pi',
+   *   harnessId: 'pi',
    *   model: 'anthropic/claude-sonnet-4'
    * });
    * ```
@@ -155,7 +155,7 @@ export class FilepathClient {
    *   credentials: 'include',
    *   body: JSON.stringify({
    *     name: 'My Researcher',
-   *     agentType: 'pi',
+   *     harnessId: 'pi',
    *     model: 'anthropic/claude-sonnet-4'
    *   })
    * });
@@ -378,7 +378,7 @@ export class FilepathClient {
  * const { session, node } = await quickstart({
  *   sessionName: 'API Project',
  *   agentName: 'Researcher',
- *   agentType: 'pi',
+ *   harnessId: 'pi',
  *   task: 'Research this API for me'
  * });
  * ```
@@ -386,7 +386,7 @@ export class FilepathClient {
 export async function quickstart(options: {
   sessionName: string;
   agentName: string;
-  agentType: AgentType;
+  harnessId: HarnessId;
   model?: string;
   task?: string;
   baseURL?: string;
@@ -399,7 +399,7 @@ export async function quickstart(options: {
   // Spawn first agent
   const node = await client.nodes.spawn(session.id, {
     name: options.agentName,
-    agentType: options.agentType,
+    harnessId: options.harnessId,
     model: options.model || 'anthropic/claude-sonnet-4'
   });
   

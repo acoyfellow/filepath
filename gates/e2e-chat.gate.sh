@@ -101,7 +101,7 @@ if [ -n "$SESSION_ID" ] && [ $FAILED -eq 0 ]; then
   NODE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/sessions/$SESSION_ID/nodes" \
     -H "Content-Type: application/json" \
     -b "$COOKIE_JAR" \
-    -d '{"agentType":"shelley","name":"Test Agent","model":"claude-sonnet-4"}' --max-time 10 2>&1)
+    -d '{"harnessId":"shelley","name":"Test Agent","model":"claude-sonnet-4"}' --max-time 10 2>&1)
   NODE_HTTP=$(echo "$NODE_RESP" | tail -1)
   NODE_BODY=$(echo "$NODE_RESP" | sed '$d')
   NODE_ID=$(echo "$NODE_BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")

@@ -132,9 +132,8 @@ Infrastructure is defined in `alchemy.run.ts`. Changes deploy automatically.
 
 **Resources managed:**
 - D1 Database
-- Durable Objects (TaskAgent)
+- Durable Objects (`ChatAgent`, `SessionEventBusV2`)
 - Containers
-- Workflows
 - Service bindings
 
 ## Post-Deploy Verification

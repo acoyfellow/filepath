@@ -1,6 +1,11 @@
-import { json } from "@sveltejs/kit";
-import type { RequestEvent, RequestHandler } from "@sveltejs/kit";
+import { json, error } from "@sveltejs/kit";
+import type { RequestEvent, RequestHandler, ServerLoadEvent } from "@sveltejs/kit";
+import { getDrizzle } from "$lib/auth";
+import { user } from "$lib/schema";
+import { decryptApiKey } from "$lib/crypto";
 import { PROVIDERS, prefixModelForProvider, type ProviderId } from "$lib/provider-keys";
+import { deserializeStoredProviderKeys } from "$lib/provider-keys";
+import { eq } from "drizzle-orm";
 
 interface OpenRouterModel {
   id: string;
@@ -25,9 +30,16 @@ interface CachedCatalog {
   warnings?: string[];
 }
 
-let cachedCatalog: CachedCatalog | null = null;
-let cacheTimestamp = 0;
+const cachedCatalogs = new Map<string, { payload: CachedCatalog; timestamp: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function getBetterAuthSecret(platform: ServerLoadEvent["platform"]): string | undefined {
+  const secret =
+    platform?.env && "BETTER_AUTH_SECRET" in platform.env
+      ? platform.env.BETTER_AUTH_SECRET
+      : undefined;
+  return typeof secret === "string" ? secret : undefined;
+}
 
 function inferProvider(modelId: string): string {
   const normalized = modelId.toLowerCase();
@@ -118,32 +130,68 @@ async function fetchZenModels(): Promise<ModelEntry[]> {
 }
 
 export const GET: RequestHandler = async (_event: RequestEvent) => {
-  const now = Date.now();
+  if (!_event.locals.user) throw error(401, "Unauthorized");
 
-  if (cachedCatalog && now - cacheTimestamp < CACHE_TTL) {
-    return json(cachedCatalog);
+  const db = getDrizzle();
+  const rows = await db
+    .select({ openrouterApiKey: user.openrouterApiKey })
+    .from(user)
+    .where(eq(user.id, _event.locals.user.id))
+    .limit(1);
+
+  const encryptedKeys = rows[0]?.openrouterApiKey;
+  const secret = getBetterAuthSecret(_event.platform);
+  let enabledRouters: ProviderId[] = [];
+
+  if (encryptedKeys && secret) {
+    try {
+      const decrypted = await decryptApiKey(encryptedKeys, secret);
+      const providerKeys = deserializeStoredProviderKeys(decrypted);
+      enabledRouters = (Object.entries(providerKeys) as Array<[ProviderId, string | undefined]>)
+        .filter(([, value]) => Boolean(value))
+        .map(([provider]) => provider);
+    } catch {
+      return json({
+        models: [],
+        warnings: ["Stored provider keys are unreadable. Re-save them in Settings / Account."],
+      });
+    }
   }
 
-  const [openRouterResult, zenResult] = await Promise.allSettled([
-    fetchOpenRouterModels(),
-    fetchZenModels(),
-  ]);
+  if (enabledRouters.length === 0) {
+    return json({
+      models: [],
+      warnings: ["No router keys configured. Add a provider key in Settings / Account."],
+    });
+  }
+
+  const cacheKey = enabledRouters.slice().sort().join(",");
+  const now = Date.now();
+
+  const cached = cachedCatalogs.get(cacheKey);
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    return json(cached.payload);
+  }
 
   const models: ModelEntry[] = [];
   const warnings: string[] = [];
-
-  if (openRouterResult.status === "fulfilled") {
-    models.push(...openRouterResult.value);
-  } else {
-    console.error("Failed to load models from OpenRouter:", openRouterResult.reason);
-    warnings.push("OpenRouter model catalog unavailable");
+  if (enabledRouters.includes("openrouter")) {
+    const openRouterResult = await Promise.allSettled([fetchOpenRouterModels()]);
+    if (openRouterResult[0].status === "fulfilled") {
+      models.push(...openRouterResult[0].value);
+    } else {
+      console.error("Failed to load models from OpenRouter:", openRouterResult[0].reason);
+      warnings.push("OpenRouter model catalog unavailable");
+    }
   }
-
-  if (zenResult.status === "fulfilled") {
-    models.push(...zenResult.value);
-  } else {
-    console.error("Failed to load models from OpenCode Zen:", zenResult.reason);
-    warnings.push("OpenCode Zen model catalog unavailable");
+  if (enabledRouters.includes("zen")) {
+    const zenResult = await Promise.allSettled([fetchZenModels()]);
+    if (zenResult[0].status === "fulfilled") {
+      models.push(...zenResult[0].value);
+    } else {
+      console.error("Failed to load models from OpenCode Zen:", zenResult[0].reason);
+      warnings.push("OpenCode Zen model catalog unavailable");
+    }
   }
 
   const dedupedModels = Array.from(
@@ -165,8 +213,6 @@ export const GET: RequestHandler = async (_event: RequestEvent) => {
     ...(warnings.length > 0 ? { warnings } : {}),
   };
 
-  cachedCatalog = payload;
-  cacheTimestamp = now;
-
+  cachedCatalogs.set(cacheKey, { payload, timestamp: now });
   return json(payload);
 };

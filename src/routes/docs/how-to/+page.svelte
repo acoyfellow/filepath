@@ -36,9 +36,9 @@
       </div>
     </a>
 
-    <a href="/docs/how-to/per-session-keys" class="block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
-      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mb-2">Use Per-Session API Keys</h2>
-      <p class="text-gray-600 dark:text-neutral-400 text-sm mb-4">Override your account-level API key for specific sessions. Use different providers per project.</p>
+    <a href="/settings/account" class="block bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition-colors">
+      <h2 class="text-xl font-medium text-gray-800 dark:text-neutral-200 mb-2">Manage Provider Keys</h2>
+      <p class="text-gray-600 dark:text-neutral-400 text-sm mb-4">Configure account-level router keys that determine which models and runtimes are available.</p>
       <div class="flex items-center text-gray-500 dark:text-neutral-500 text-sm">
         <span>5 min</span>
         <span class="mx-2">•</span>
