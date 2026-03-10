@@ -18,6 +18,8 @@ set -euo pipefail
 BASE_URL="${1:-https://myfilepath.com}"
 TEST_EMAIL="${TEST_EMAIL:-test-e2e-1770332875@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-TestPass123!}"
+CURL_MAX_TIME="${CURL_MAX_TIME:-30}"
+CURL_RETRIES="${CURL_RETRIES:-2}"
 COOKIE_JAR=$(mktemp)
 FAILED=0
 WARNS=0
@@ -25,24 +27,55 @@ WARNS=0
 cleanup() { rm -f "$COOKIE_JAR"; }
 trap cleanup EXIT
 
+fetch_page() {
+  local url="$1"
+  local cookie_arg="${2:-}"
+  local curl_args=(
+    -s
+    -w "\n%{http_code}"
+    --max-time "$CURL_MAX_TIME"
+    --retry "$CURL_RETRIES"
+    --retry-delay 1
+    --retry-connrefused
+    -L
+  )
+
+  if [ -n "$cookie_arg" ]; then
+    curl_args+=(-b "$cookie_arg")
+  fi
+
+  if ! curl "${curl_args[@]}" "$url"; then
+    return 1
+  fi
+}
+
 check_page() {
   local name="$1"
   local url="$2"
   local marker="$3"
   local use_auth="${4:-false}"
   local cookie_arg=""
+  local resp
+  local http
+  local body
   
   if [ "$use_auth" = "true" ]; then
-    cookie_arg="-b $COOKIE_JAR"
+    cookie_arg="$COOKIE_JAR"
   fi
   
   echo -n "  $name... "
-  RESP=$(curl -s -w "\n%{http_code}" $cookie_arg "$url" --max-time 15 -L 2>&1)
-  HTTP=$(echo "$RESP" | tail -1)
-  BODY=$(echo "$RESP" | sed '$d')
+
+  if ! resp=$(fetch_page "$url" "$cookie_arg" 2>&1); then
+    echo "FAIL (request error)"
+    FAILED=$((FAILED + 1))
+    return
+  fi
+
+  http=$(echo "$resp" | tail -1)
+  body=$(echo "$resp" | sed '$d')
   
-  if [ "$HTTP" = "200" ]; then
-    if [ -n "$marker" ] && grep -Eqi "$marker" <<<"$BODY"; then
+  if [ "$http" = "200" ]; then
+    if [ -n "$marker" ] && grep -Eqi "$marker" <<<"$body"; then
       echo "PASS (content: \"$marker\" found)"
     elif [ -n "$marker" ]; then
       echo "WARN (HTTP 200 but marker \"$marker\" not found)"
@@ -50,7 +83,7 @@ check_page() {
     else
       echo "PASS"
     fi
-  elif [ "$HTTP" = "302" ] || [ "$HTTP" = "303" ]; then
+  elif [ "$http" = "302" ] || [ "$http" = "303" ]; then
     if [ "$use_auth" = "true" ]; then
       echo "FAIL (redirected - auth cookie may be invalid)"
       FAILED=$((FAILED + 1))
@@ -58,7 +91,7 @@ check_page() {
       echo "PASS (redirect)"
     fi
   else
-    echo "FAIL (HTTP $HTTP)"
+    echo "FAIL (HTTP $http)"
     FAILED=$((FAILED + 1))
   fi
 }
