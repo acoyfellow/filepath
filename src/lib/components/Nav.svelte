@@ -189,13 +189,9 @@
     <div class="flex items-center gap-3 min-w-0">
       <a href="/dashboard" class="flex items-center gap-2 transition-colors text-sm shrink-0 text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100">
         {@render logoIcon(16)}
-        <span class="hidden sm:inline">dashboard</span>
         <span class="sm:hidden">back</span>
       </a>
-      {#if sessionId}
-        <span class="hidden sm:inline text-gray-300 dark:text-neutral-700">|</span>
-        <span class="text-xs truncate hidden sm:inline text-gray-500 dark:text-neutral-500">{sessionId}</span>
-      {/if}
+      
     </div>
 
     <!-- Desktop links -->
