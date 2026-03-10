@@ -35,6 +35,13 @@
   type SessionEventMessage =
     ({ type: "tree_update"; action?: string } & ThreadMovePayload);
 
+  type AgentNotice = {
+    tone: "info" | "warning" | "error" | "success";
+    title: string;
+    message: string;
+    blocking?: boolean;
+  };
+
   let { data } = $props();
 
   const sessionId = $derived(page.params.id ?? "");
@@ -173,6 +180,10 @@
     return null;
   }
 
+  function collectNodeIds(node: AgentNode): string[] {
+    return [node.id, ...node.children.flatMap(collectNodeIds)];
+  }
+
   let selectedAgent = $derived(
     selectedId && rootNode ? findNode(rootNode, selectedId) : null,
   );
@@ -180,6 +191,52 @@
   let currentMessages = $derived<ChatMsg[]>(
     selectedAgent ? (messagesByNode[selectedAgent.id] ?? []) : [],
   );
+  let nodeNotices = $state<Record<string, AgentNotice | null>>({});
+  let selectedNotice = $derived(
+    selectedAgent ? (nodeNotices[selectedAgent.id] ?? null) : null,
+  );
+
+  function setNodeNotice(nodeId: string, notice: AgentNotice | null) {
+    nodeNotices = { ...nodeNotices, [nodeId]: notice };
+  }
+
+  function clearNodeNotice(nodeId: string) {
+    if (!(nodeId in nodeNotices)) return;
+    const next = { ...nodeNotices };
+    delete next[nodeId];
+    nodeNotices = next;
+  }
+
+  function getConnectionNotice(state: ConnectionState): AgentNotice | null {
+    if (state === "connecting") {
+      return {
+        tone: "info",
+        title: "Connecting",
+        message: "Connecting to this agent now. You can send once the session socket is ready.",
+        blocking: true,
+      };
+    }
+
+    if (state === "closed") {
+      return {
+        tone: "warning",
+        title: "Connection closed",
+        message: "This agent is offline right now. Reselect it or refresh the page to reconnect.",
+        blocking: true,
+      };
+    }
+
+    if (state === "error") {
+      return {
+        tone: "error",
+        title: "Connection failed",
+        message: "filepath could not connect to this agent. Refresh the page or retry after the runtime recovers.",
+        blocking: true,
+      };
+    }
+
+    return null;
+  }
 
   function dropNodeConnection(nodeId: string) {
     const client = activeClients[nodeId];
@@ -198,6 +255,7 @@
     const nextMessages = { ...messagesByNode };
     delete nextMessages[nodeId];
     messagesByNode = nextMessages;
+    clearNodeNotice(nodeId);
   }
 
   function ensureConnection(nodeId: string) {
@@ -208,6 +266,17 @@
       onMessage: (msg: DOMessage) => handleDOMessage(nodeId, msg),
       onStateChange: (state: ConnectionState) => {
         connectionStates = { ...connectionStates, [nodeId]: state };
+        if (state === "open") {
+          if (selectedAgent?.id === nodeId && selectedAgent.status !== "error") {
+            clearNodeNotice(nodeId);
+          }
+          return;
+        }
+
+        const notice = getConnectionNotice(state);
+        if (notice) {
+          setNodeNotice(nodeId, notice);
+        }
       },
     });
 
@@ -278,13 +347,47 @@
         event: { type: "text", content: message.content },
       }));
       messagesByNode = { ...messagesByNode, [nodeId]: history };
+      const hasWarning = history.some(
+        (message) => message.from === "a" && message.event.type === "text" && message.event.content.startsWith("Warning:"),
+      );
+      if (!hasWarning) {
+        clearNodeNotice(nodeId);
+      }
       return;
     }
 
     if (msg.type === "event" && msg.event) {
       if (msg.event.type === "status") {
         setNodeStatus(nodeId, msg.event.state as AgentNode["status"]);
+        if (msg.event.state === "error") {
+          const existing = messagesByNode[nodeId] ?? [];
+          const latestWarning = [...existing]
+            .reverse()
+            .find((entry) => entry.from === "a" && entry.event.type === "text" && entry.event.content.startsWith("Warning:"));
+          setNodeNotice(nodeId, {
+            tone: "error",
+            title: "Failed to start",
+            message:
+              latestWarning && latestWarning.event.type === "text"
+                ? latestWarning.event.content.replace(/^Warning:\s*/, "")
+                : "This agent failed to start. Inspect the runtime details and try again.",
+            blocking: true,
+          });
+        } else if (msg.event.state === "idle") {
+          clearNodeNotice(nodeId);
+        }
         return;
+      }
+
+      if (msg.event.type === "text" && msg.event.content.startsWith("Warning:")) {
+        setNodeNotice(nodeId, {
+          tone: "error",
+          title: "Failed to start",
+          message: msg.event.content.replace(/^Warning:\s*/, ""),
+          blocking: true,
+        });
+      } else if (msg.event.type === "text") {
+        clearNodeNotice(nodeId);
       }
 
       const existing = messagesByNode[nodeId] ?? [];
@@ -332,11 +435,12 @@
     }
 
     if (msg.type === "error" && msg.message) {
-      const existing = messagesByNode[nodeId] ?? [];
-      messagesByNode = {
-        ...messagesByNode,
-        [nodeId]: [...existing, { from: "a", event: { type: "text", content: `Error: ${msg.message}` } }],
-      };
+      setNodeNotice(nodeId, {
+        tone: "error",
+        title: "Agent error",
+        message: msg.message,
+        blocking: true,
+      });
     }
   }
 
@@ -417,6 +521,9 @@
   async function handleDeleteNode(nodeId: string) {
     if (!sessionId) return;
 
+    const targetNode = rootNode ? findNode(rootNode, nodeId) : null;
+    const idsToDrop = targetNode ? collectNodeIds(targetNode) : [nodeId];
+
     const response = await fetch(`/api/sessions/${sessionId}/nodes/${nodeId}`, {
       method: "DELETE",
     });
@@ -426,7 +533,9 @@
       throw new Error(data.error || data.message || "Unable to delete agent");
     }
 
-    dropNodeConnection(nodeId);
+    for (const id of idsToDrop) {
+      dropNodeConnection(id);
+    }
     await refreshSessionSnapshot();
   }
 
@@ -439,11 +548,13 @@
     const nodeId = selectedAgent.id;
     const connectionState = connectionStates[nodeId];
     if (connectionState && connectionState !== "open") {
-      const existing = messagesByNode[nodeId] ?? [];
-      messagesByNode = {
-        ...messagesByNode,
-        [nodeId]: [...existing, { from: "a", event: { type: "text", content: `Cannot send: WebSocket ${connectionState}` } }],
+      const notice = getConnectionNotice(connectionState) ?? {
+        tone: "warning",
+        title: "Agent unavailable",
+        message: "filepath cannot send this message until the agent connection is ready.",
+        blocking: true,
       };
+      setNodeNotice(nodeId, notice);
       return;
     }
 
@@ -452,17 +563,28 @@
       ...messagesByNode,
       [nodeId]: [...existing, { from: "u", event: { type: "text", content: message } }],
     };
+    clearNodeNotice(nodeId);
 
     ensureConnection(nodeId);
     const client = activeClients[nodeId];
     if (!client) {
-      messagesByNode = {
-        ...messagesByNode,
-        [nodeId]: [
-          ...messagesByNode[nodeId],
-          { from: "a", event: { type: "text", content: "Connecting to agent..." } },
-        ],
-      };
+      setNodeNotice(nodeId, {
+        tone: "info",
+        title: "Connecting",
+        message: "filepath is connecting to the agent now. Try sending again when the socket opens.",
+        blocking: true,
+      });
+      return;
+    }
+
+    const currentState = client.getState();
+    if (currentState !== "open") {
+      setNodeNotice(nodeId, getConnectionNotice(currentState) ?? {
+        tone: "warning",
+        title: "Agent unavailable",
+        message: "filepath cannot send this message until the agent connection is ready.",
+        blocking: true,
+      });
       return;
     }
 
@@ -470,10 +592,12 @@
       client.send(message);
     } catch (error) {
       const text = error instanceof Error ? error.message : "Failed to send message";
-      messagesByNode = {
-        ...messagesByNode,
-        [nodeId]: [...messagesByNode[nodeId], { from: "a", event: { type: "text", content: `Error: ${text}` } }],
-      };
+      setNodeNotice(nodeId, {
+        tone: "error",
+        title: "Send failed",
+        message: text,
+        blocking: true,
+      });
     }
   }
 
@@ -549,6 +673,7 @@
         <AgentPanel
           agent={selectedAgent}
           messages={currentMessages}
+          notice={selectedNotice}
           onsend={handleSend}
           onnavigate={handleNavigate}
         />

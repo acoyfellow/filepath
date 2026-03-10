@@ -100,6 +100,9 @@
   let spawning = $state(false);
 
   let hasAnyAccountKey = $derived(Object.values(accountKeys).some(Boolean));
+  let selectedHarness = $derived(
+    availableHarnesses.find((entry) => entry.id === agent) ?? null,
+  );
   let availableRouters = $derived(
     Object.entries(accountKeys)
       .filter(([, value]) => Boolean(value))
@@ -130,6 +133,19 @@
   let selectedModelEntry = $derived(
     availableModels.find((entry) => entry.id === model) ?? null,
   );
+
+  let setupSummary = $derived.by(() => {
+    if (accountKeysStateError) {
+      return "Re-save your account router key to unlock models and spawn.";
+    }
+    if (!hasSelectedProviderKey) {
+      return `Save a ${activeProviderDefinition.label} key, then choose a model and spawn.`;
+    }
+    if (!model) {
+      return "Choose a model before spawning this agent.";
+    }
+    return "This agent is ready to spawn into the current session.";
+  });
 
   let modelSelectPlaceholder = $derived.by(() => {
     if (!hasAnyAccountKey) {
@@ -224,6 +240,14 @@
       availableModels = Array.from(uniqueModels.values());
 
       if (model && uniqueModels.has(model)) {
+        return;
+      }
+
+      const harnessDefault = selectedHarness?.defaultModel
+        ? canonicalizeStoredModel(selectedHarness.defaultModel)
+        : "";
+      if (harnessDefault && uniqueModels.has(harnessDefault)) {
+        model = harnessDefault;
         return;
       }
 
@@ -337,6 +361,8 @@
   >
     <div class="modal-title" id="spawn-agent-title">spawn agent</div>
     <div class="modal-body">
+      <div class="modal-banner modal-banner-setup">{setupSummary}</div>
+
       <label class="modal-label" for="spawn-name">name</label>
       <div class="modal-name-row">
         <input id="spawn-name" bind:value={name} class="modal-input" />
@@ -357,12 +383,90 @@
           <div class="modal-placeholder">Loading harnesses...</div>
         {:else}
           {#each availableHarnesses as harness}
-            <button class="modal-option" class:on={agent === harness.id} onclick={() => { agent = harness.id; }}>
+            <button
+              class="modal-option"
+              class:on={agent === harness.id}
+              onclick={() => {
+                agent = harness.id;
+                const defaultModel = canonicalizeStoredModel(harness.defaultModel);
+                if (availableModels.some((entry) => entry.id === defaultModel)) {
+                  model = defaultModel;
+                }
+              }}
+            >
               {harness.name}
             </button>
           {/each}
         {/if}
       </div>
+      {#if selectedHarness}
+        <div class="modal-meta">
+          {selectedHarness.description}
+        </div>
+      {/if}
+
+      <div class="modal-label">router access</div>
+      {#if accountKeysStateError}
+        <div class="modal-banner modal-banner-error">
+          {accountKeysStateError}
+        </div>
+      {/if}
+
+      {#if hasSelectedProviderKey}
+        <div class="modal-key-card modal-key-card-ready">
+          <div class="modal-key-title">Ready to load live models</div>
+          <div class="modal-key-copy">
+            Using saved {activeProviderDefinition.label} access for this agent.
+          </div>
+          <div class="modal-options">
+            <button class="modal-option on" disabled>
+              account router key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="modal-key-card">
+          <div class="modal-key-head">
+            <div>
+              <div class="modal-key-title">Save {activeProviderDefinition.label} access here</div>
+              <div class="modal-key-copy">
+                This is required before model selection and spawn.
+              </div>
+            </div>
+            <a href={activeProviderDefinition.docsUrl} class="modal-key-link" target="_blank" rel="noopener">
+              get key
+            </a>
+          </div>
+
+          <div class="modal-key-row">
+            <input
+              class="modal-input"
+              type="password"
+              placeholder={activeProviderDefinition.keyPlaceholder}
+              bind:value={inlineKeyDraft}
+            />
+            <button
+              class="modal-save"
+              onclick={saveInlineKey}
+              disabled={inlineKeySaving || !inlineKeyDraft.trim()}
+            >
+              {inlineKeySaving ? "saving..." : "save key"}
+            </button>
+          </div>
+
+          <div class="modal-key-copy">
+            Stored to your account and reused for future agent spawns.
+            <a href="/settings/account" class="modal-key-link">Manage keys in Settings</a>
+          </div>
+
+          {#if inlineKeyError}
+            <div class="modal-banner modal-banner-error">{inlineKeyError}</div>
+          {/if}
+          {#if inlineKeySuccess}
+            <div class="modal-banner modal-banner-success">{inlineKeySuccess}</div>
+          {/if}
+        </div>
+      {/if}
 
       <label class="modal-label" for="spawn-model-search">model</label>
       <div class="modal-section">
@@ -406,7 +510,7 @@
           <div class="modal-banner">{modelWarnings.join(" · ")}</div>
         {:else if !hasAnyAccountKey}
           <div class="modal-banner">
-            Save a router key below to load the live model catalog here instead of jumping to Settings.
+            Save router access above to unlock the live model catalog here.
           </div>
         {:else if !modelsLoading}
           <div class="modal-meta">
@@ -419,71 +523,12 @@
             <span class="modal-selection-label">selected</span>
             <span class="modal-selection-value">{selectedModelEntry.id}</span>
           </div>
+        {:else if selectedHarness && hasAnyAccountKey}
+          <div class="modal-meta">
+            Default for {selectedHarness.name}: {selectedHarness.defaultModel}
+          </div>
         {/if}
       </div>
-
-      <div class="modal-label">router access</div>
-      {#if accountKeysStateError}
-        <div class="modal-banner modal-banner-error">
-          {accountKeysStateError}
-        </div>
-      {/if}
-
-      {#if hasSelectedProviderKey}
-        <div class="modal-key-card modal-key-card-ready">
-          <div class="modal-key-title">Ready to spawn</div>
-          <div class="modal-key-copy">
-            Using saved {activeProviderDefinition.label} access for this model.
-          </div>
-          <div class="modal-options">
-            <button class="modal-option on" disabled>
-              account router key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
-            </button>
-          </div>
-        </div>
-      {:else}
-        <div class="modal-key-card">
-          <div class="modal-key-head">
-            <div>
-              <div class="modal-key-title">Save {activeProviderDefinition.label} access here</div>
-              <div class="modal-key-copy">
-                Store one account-level key now and unlock spawn immediately.
-              </div>
-            </div>
-            <a href={activeProviderDefinition.docsUrl} class="modal-key-link" target="_blank" rel="noopener">
-              get key
-            </a>
-          </div>
-
-          <div class="modal-key-row">
-            <input
-              class="modal-input"
-              type="password"
-              placeholder={activeProviderDefinition.keyPlaceholder}
-              bind:value={inlineKeyDraft}
-            />
-            <button
-              class="modal-save"
-              onclick={saveInlineKey}
-              disabled={inlineKeySaving || !inlineKeyDraft.trim()}
-            >
-              {inlineKeySaving ? "saving..." : "save key"}
-            </button>
-          </div>
-
-          <div class="modal-key-copy">
-            Stored to your account and reused for future agent spawns.
-            <a href="/settings/account" class="modal-key-link">Manage keys in Settings</a>
-          </div>
-
-          {#if inlineKeyError}
-            <div class="modal-banner modal-banner-error">{inlineKeyError}</div>
-          {/if}
-          {#if inlineKeySuccess}
-            <div class="modal-banner modal-banner-success">{inlineKeySuccess}</div>
-          {/if}
-        </div>
-      {/if}
     </div>
 
     <div class="modal-footer">

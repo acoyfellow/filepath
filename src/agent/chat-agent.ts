@@ -444,16 +444,17 @@ export class ChatNodeAgent extends SubAgent<Env> {
   }> {
     await this.ensureInitialized(sessionId);
 
-    const message =
+    const detail =
       `${reason}. filepath will not bypass the sandbox with a direct model call. ` +
-      "Restart the branch or inspect the container runtime.";
-    const messageId = this.saveMessage("assistant", `Warning: ${message}`);
+      "Inspect the container runtime and retry when setup is fixed.";
+    const summary = "This agent failed to start in the sandbox.";
+    const messageId = this.saveMessage("assistant", `Warning: ${summary} ${detail}`);
     await this.setStatus("error");
 
     return {
       warningEnvelope: {
         type: "event",
-        event: { type: "text", content: `Warning: ${message}` },
+        event: { type: "text", content: `Warning: ${summary} ${detail}` },
         role: "assistant",
         messageId,
         nodeId: this.nodeId,
@@ -465,7 +466,7 @@ export class ChatNodeAgent extends SubAgent<Env> {
         nodeId: this.nodeId,
         timestamp: Date.now(),
       },
-      errorMessage: message,
+      errorMessage: `${summary} ${detail}`,
     };
   }
 }
@@ -853,16 +854,17 @@ export class ChatAgent extends ChatAgentBase<Env, ChatAgentState> {
   }> {
     await this.ensureNodeInitialized(nodeId, sessionId);
 
-    const message =
+    const detail =
       `${reason}. filepath will not bypass the sandbox with a direct model call. ` +
-      "Restart the branch or inspect the container runtime.";
-    const messageId = this.saveNodeMessage(nodeId, "assistant", `Warning: ${message}`);
+      "Inspect the container runtime and retry when setup is fixed.";
+    const summary = "This agent failed to start in the sandbox.";
+    const messageId = this.saveNodeMessage(nodeId, "assistant", `Warning: ${summary} ${detail}`);
     await this.setNodeStatus(nodeId, "error");
 
     return {
       warningEnvelope: {
         type: "event",
-        event: { type: "text", content: `Warning: ${message}` },
+        event: { type: "text", content: `Warning: ${summary} ${detail}` },
         role: "assistant",
         messageId,
         nodeId,
@@ -874,7 +876,7 @@ export class ChatAgent extends ChatAgentBase<Env, ChatAgentState> {
         nodeId,
         timestamp: Date.now(),
       },
-      errorMessage: message,
+      errorMessage: `${summary} ${detail}`,
     };
   }
 

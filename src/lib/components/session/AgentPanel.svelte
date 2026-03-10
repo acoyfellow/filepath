@@ -6,17 +6,31 @@
   import type { ChatMsg } from "./ChatView.svelte";
   import ChatView from "./ChatView.svelte";
 
+  type AgentNotice = {
+    tone: "info" | "warning" | "error" | "success";
+    title: string;
+    message: string;
+    blocking?: boolean;
+  };
+
   interface Props {
     agent: AgentNode | null;
     messages: ChatMsg[];
+    notice?: AgentNotice | null;
     onsend: (message: string) => void;
     onnavigate?: (name: string) => void;
   }
 
-  let { agent, messages, onsend, onnavigate }: Props = $props();
+  let { agent, messages, notice = null, onsend, onnavigate }: Props = $props();
 
-  let isReadOnly = $derived(agent?.status === "exhausted");
-  let composerPlaceholder = $derived(isReadOnly ? "Agent exhausted" : "Message...");
+  let isExhausted = $derived(agent?.status === "exhausted");
+  let composerDisabled = $derived(Boolean(isExhausted || notice?.blocking));
+  let composerPlaceholder = $derived.by(() => {
+    if (notice?.blocking) return notice.title;
+    if (isExhausted) return "Agent exhausted";
+    if (agent?.status === "idle" && messages.length === 0) return "Send the first message...";
+    return "Message...";
+  });
 </script>
 
 {#if agent}
@@ -40,7 +54,18 @@
     </div>
 
     <div class="panel-body">
-      {#if isReadOnly}
+      {#if notice}
+        <div class={`panel-notice panel-notice-${notice.tone}`}>
+          <div class="panel-notice-title">{notice.title}</div>
+          <div>{notice.message}</div>
+        </div>
+      {:else if agent.status === "idle" && messages.length === 0}
+        <div class="panel-notice panel-notice-info">
+          <div class="panel-notice-title">Ready</div>
+          <div>This agent is ready for its first message.</div>
+        </div>
+      {/if}
+      {#if isExhausted}
         <div class="readonly-banner">
           This agent is exhausted. Its history remains visible, but it is read-only for now.
         </div>
@@ -52,7 +77,7 @@
       />
     </div>
 
-    <ChatInput {onsend} disabled={isReadOnly} placeholder={composerPlaceholder} />
+    <ChatInput {onsend} disabled={composerDisabled} placeholder={composerPlaceholder} />
   </div>
 {:else}
   <div class="panel-empty">
@@ -136,5 +161,40 @@
     font-size: 11px;
     color: #fb923c;
     background: color-mix(in srgb, #fb923c 10%, transparent);
+  }
+
+  .panel-notice {
+    margin: 12px 16px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--b1);
+    font-family: var(--m);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .panel-notice-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .panel-notice-info {
+    color: var(--t3);
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+
+  .panel-notice-warning {
+    color: #b45309;
+    background: color-mix(in srgb, #f59e0b 12%, transparent);
+  }
+
+  .panel-notice-error {
+    color: #dc2626;
+    background: color-mix(in srgb, #ef4444 10%, transparent);
+  }
+
+  .panel-notice-success {
+    color: #15803d;
+    background: color-mix(in srgb, #22c55e 10%, transparent);
   }
 </style>

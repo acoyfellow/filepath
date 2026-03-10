@@ -32,7 +32,7 @@ Everything else stays thin around those primitives.
 
 - **Chat is the only built-in interaction surface.** There is no terminal UI.
 - **Every agent is the same primitive.** There is no orchestrator-vs-worker product split in the tree.
-- **Each agent gets its own ChatAgent Durable Object.** The DO is a relay and lifecycle manager, not the model brain.
+- **Browser chat currently connects through a session-root ChatAgent route.** The selected node is bound in the websocket init message.
 - **Each active agent runs inside its own Cloudflare sandbox.**
 - **The tree is persisted in D1.**
 - **Message history is persisted in the ChatAgent DO SQLite store.**
@@ -56,16 +56,19 @@ D1 (sessions, nodes, harness metadata)
 
 Browser
   ↕ WebSocket
-ChatAgent Durable Object
-  ↕ stdin/stdout
+session-root ChatAgent
+  ↕ node init + message dispatch
+selected node runtime
+  ↕ sandbox exec
 Sandboxed CLI harness
 ```
 
-The ChatAgent DO is responsible for:
+The ChatAgent is responsible for:
 - authenticating websocket clients
-- loading and persisting message history
+- loading and persisting per-node message history
 - starting the sandboxed harness on demand
-- forwarding user messages to stdin as NDJSON
+- binding the selected node from the websocket init payload
+- forwarding user messages to the selected node runtime
 - parsing harness stdout as structured events
 - broadcasting those events back to connected clients
 - persisting status transitions like `thinking`, `running`, `done`, `error`, and `exhausted`
@@ -156,10 +159,10 @@ If the docs claim something the gates do not verify, the docs are suspect.
 
 The remaining work should keep closing the gap between current code and current story:
 
-1. Finish rewriting docs so they describe the shipped architecture, not the deleted one.
+1. Make the first-run session, spawn, and chat flow clearer and more trustworthy.
 2. Keep collapsing duplicated logic into the shared core and thin clients.
-3. Prove the live stack with canonical gate execution against a deployed environment.
-4. Continue deleting stale examples and dead compatibility surfaces.
+3. Finish rewriting docs so they describe the shipped temporary runtime, not the deleted or deferred one.
+4. Resume sub-agent ownership changes only after the current product flow is calm again.
 
 ## Design Rules
 

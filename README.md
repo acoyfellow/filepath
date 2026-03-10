@@ -1,6 +1,6 @@
 # filepath
 
-> Durable agent sessions, organized as trees, running in Cloudflare sandboxes.
+> Durable agent sessions, organized as trees, running through a session-root ChatAgent and Cloudflare sandboxes.
 
 filepath is a chat-first orchestration layer for AI agents. The main product surface is:
 
@@ -13,8 +13,9 @@ The system stays thin around the real primitives: harness, model, sandbox, and r
 
 ## What Is True Today
 
-- Each agent node has its own ChatAgent Durable Object.
-- Each active agent runs in its own sandbox with its own process and filesystem.
+- Each session uses one root ChatAgent route for browser chat connections.
+- The selected node is bound in the websocket init message, not in the URL.
+- Each active node execution runs in its own sandbox workspace and process context.
 - Sessions, nodes, and tree structure persist in D1.
 - Chat history persists and reconnects cleanly across devices on the same account.
 - Chat is the only built-in control surface.
@@ -52,12 +53,14 @@ D1
 
 Browser
   ↕ WebSocket
-ChatAgent DO
-  ↕ stdin/stdout
+session-root ChatAgent
+  ↕ node init + message dispatch
+selected node runtime
+  ↕ sandbox exec
 Sandboxed CLI harness
 ```
 
-The ChatAgent DO is a relay and lifecycle manager. It does not silently fall back to a direct LLM call when the sandbox path fails.
+The ChatAgent is a relay and lifecycle manager for the session-root websocket path. It does not silently fall back to a direct LLM call when the sandbox path fails.
 
 ## filepath Agent Protocol
 
@@ -82,19 +85,7 @@ bun install
 bun run dev
 bash gates/health.sh
 bun run deploy
-bun run prd
 ```
-
-Release-proof command:
-
-```bash
-TEST_EMAIL=... TEST_PASSWORD=... TEST_OPENROUTER_KEY=... bun run prd
-```
-
-That command is the current “ready to play” bar. It runs the canonical production suite:
-- visual regression
-- north-star agent chat
-- Better Auth API key flow
 
 ## Docs
 
