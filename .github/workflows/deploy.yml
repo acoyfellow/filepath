@@ -21,9 +21,6 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
-
       - name: Run repo proof tooling checks
         run: |
           bash -n gates/production/run-all.sh
@@ -73,7 +70,7 @@ jobs:
           CI: "true"
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: dev-secret-not-for-production
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:5173
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
@@ -92,7 +89,7 @@ jobs:
           CI: "true"
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: dev-secret-not-for-production
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:5173
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
@@ -111,7 +108,7 @@ jobs:
           CI: "true"
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: dev-secret-not-for-production
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:5173
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
