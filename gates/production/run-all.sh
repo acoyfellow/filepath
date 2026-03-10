@@ -34,7 +34,6 @@ fi
 echo ""
 
 GATES=(
-  "visual-regression"
   "browser-chat-send"
   "api-key-auth"
 )

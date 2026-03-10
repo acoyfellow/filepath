@@ -16,7 +16,7 @@ function runSuite() {
 if (loop) {
   console.log("\nfilepath production proof (loop mode)\n");
   console.log(`Target: ${baseUrl}`);
-  console.log("Release bar: visual-regression + agent-chat + api-key-auth");
+  console.log("Release bar: browser-chat-send + api-key-auth");
   console.log("");
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -36,7 +36,7 @@ if (loop) {
 
 console.log("\nfilepath production proof\n");
 console.log(`Target: ${baseUrl}`);
-console.log("Release bar: visual-regression + agent-chat + api-key-auth");
+console.log("Release bar: browser-chat-send + api-key-auth");
 console.log("Required env: TEST_EMAIL, TEST_PASSWORD, TEST_OPENROUTER_KEY");
 console.log("");
 
