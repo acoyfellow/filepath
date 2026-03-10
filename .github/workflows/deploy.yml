@@ -70,7 +70,7 @@ jobs:
           CI: "true"
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_SECRET: dev-secret-not-for-production
           BETTER_AUTH_URL: http://localhost:5173
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
@@ -89,7 +89,7 @@ jobs:
           CI: "true"
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_SECRET: dev-secret-not-for-production
           BETTER_AUTH_URL: http://localhost:5173
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
@@ -108,7 +108,7 @@ jobs:
           CI: "true"
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_SECRET: dev-secret-not-for-production
           BETTER_AUTH_URL: http://localhost:5173
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
