@@ -84,7 +84,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
   entrypoint: "./worker/agent.ts",
   compatibilityDate: "2025-11-15",
-  compatibilityFlags: ["nodejs_compat", "experimental"],
+  compatibilityFlags: ["nodejs_compat"],
   adopt: true,
   bundle: {
   },

@@ -1,5 +1,4 @@
 import { Agent, type Connection, type ConnectionContext, type WSMessage } from "agents";
-import { SubAgent, withSubAgents } from "agents/experimental/subagent";
 import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
 import { parseAgentEvent } from "$lib/protocol";
 import type { AgentEventType, AgentStatusType } from "$lib/protocol";
@@ -80,13 +79,13 @@ interface ExecRelay {
   stderrSummary: () => string;
 }
 
-const ChatAgentBase = withSubAgents(Agent);
+const ChatAgentBase = Agent;
 
 function serialize(message: ChatTransportMessage): string {
   return JSON.stringify(message);
 }
 
-export class ChatNodeAgent extends SubAgent<Env> {
+export class ChatNodeAgent extends Agent<Env> {
   private schemaReady = false;
 
   private get nodeId(): string {
