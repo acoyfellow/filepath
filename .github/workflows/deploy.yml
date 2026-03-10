@@ -60,6 +60,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
       - name: Start local dev stack
         run: |
           mkdir -p output
