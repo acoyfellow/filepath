@@ -265,6 +265,10 @@ bun run check
 bun run build
 ```
 
+### CI/CD
+
+On push (any branch): `test` runs `bun run check`, `bun run build`, and `gates/protocol.gate.sh`. On success, `deploy` runs: production (`bun run deploy`) on `main`, or preview (destroy + deploy by branch) on other branches. Legacy proof engine and production e2e gates have been removed; remaining gates (`gates/protocol.gate.sh`, `gates/no-fallback-runtime.gate.sh`, `gates/health.sh`) are for manual use.
+
 ### Key files
 
 - `src/core/app.ts`

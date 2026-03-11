@@ -11,7 +11,7 @@ const events = [
   { type: 'command', cmd: 'npm test', status: 'done', exit: 0, stdout: 'pass' },
   { type: 'commit', hash: 'abc1234', message: 'feat: thing' },
   { type: 'spawn', name: 'worker-1', agent: 'shelley', model: 'sonnet-4.5' },
-  { type: 'workers', workers: [{ name: 'a', status: 'done' }] },
+  { type: 'agents', agents: [{ name: 'a', status: 'done' }] },
   { type: 'status', state: 'running', context_pct: 0.5 },
   { type: 'handoff', summary: 'handing off' },
   { type: 'done', summary: 'finished' },

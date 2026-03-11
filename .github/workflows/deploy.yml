@@ -6,6 +6,9 @@ on:
       - main
       - '**'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,127 +24,18 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run repo proof tooling checks
-        run: |
-          bash -n gates/production/run-all.sh
-          bash -n gates/production/ensure-test-user.sh
-          bash -n gates/production/agent-chat.gate.sh
-          bash -n gates/production/api-key-auth.gate.sh
-          bash -n gates/production/browser-chat-send.gate.sh
-          node --check gates/lib/send-chat-and-wait.mjs
-          node --check gates/lib/fetch-session-ws-token.mjs
-          node --check gates/lib/repro-session-chat-send.mjs
-          node --check scripts/dev-preflight.mjs
-          node --check scripts/dev-stop.mjs
-          node --check scripts/wait-for-local-dev.mjs
-          node --check scripts/dev-proof.mjs
-          node --check scripts/dev-repro.mjs
-          node --check adapters/_shared/run-adapter.mjs
-          node --check adapters/shelley/index.mjs
-          node --check adapters/pi/index.mjs
-          node --check adapters/claude-code/index.mjs
-          node --check adapters/codex/index.mjs
-          node --check adapters/cursor/index.mjs
-          node --check adapters/amp/index.mjs
+      - name: Check
+        run: bun run check
 
-  local-parity:
-    runs-on: ubuntu-latest
-    needs: test
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Build
+        run: bun run build
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
-
-      - name: Start local dev stack
-        run: |
-          mkdir -p output
-          nohup bun run dev > output/local-dev.log 2>&1 &
-          echo $! > output/local-dev.pid
-        env:
-          NODE_ENV: development
-          CI: "true"
-          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
-          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: dev-secret-not-for-production
-          BETTER_AUTH_URL: http://localhost:5173
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
-
-      - name: Wait for local dev
-        run: bun run dev:wait
-        env:
-          NODE_ENV: development
-          CI: "true"
-          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
-          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: dev-secret-not-for-production
-          BETTER_AUTH_URL: http://localhost:5173
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
-
-      - name: Run local parity proof
-        run: bun run dev:proof
-        env:
-          NODE_ENV: development
-          CI: "true"
-          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
-          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          BETTER_AUTH_SECRET: dev-secret-not-for-production
-          BETTER_AUTH_URL: http://localhost:5173
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
-
-      - name: Stop local dev stack
-        if: always()
-        run: bun run dev:stop || true
-
-      - name: Upload local parity artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: local-parity-artifacts
-          if-no-files-found: warn
-          path: |
-            output/local-dev.log
-            output/playwright/**
+      - name: Protocol gate
+        run: bash gates/protocol.gate.sh
 
   deploy:
     runs-on: ubuntu-latest
-    needs:
-      - test
-      - local-parity
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -168,7 +62,6 @@ jobs:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          # OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }} # BYOK: Users provide via Settings
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
           MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
@@ -197,47 +90,7 @@ jobs:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          # OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }} # BYOK: Users provide via Settings
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
           MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
           MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-
-  production-gates:
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Wait for deploy propagation
-        run: sleep 10
-
-      - name: Run Production Gates
-        run: |
-          mkdir -p output
-          set -o pipefail
-          bash gates/production/run-all.sh https://myfilepath.com | tee output/production-gates.log
-        env:
-          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          TEST_OPENROUTER_KEY: ${{ secrets.TEST_OPENROUTER_KEY }}
-
-      - name: Upload production gate artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: production-gates-artifacts
-          if-no-files-found: warn
-          path: |
-            output/production-gates.log
-            output/playwright/**
