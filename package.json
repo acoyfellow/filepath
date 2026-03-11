@@ -69,6 +69,7 @@
     "deploy:preview": "alchemy deploy",
     "destroy": "alchemy destroy",
     "d1:destroy": "wrangler d1 delete filepath-db",
+    "state:clear-d1": "ALCHEMY_D1_SKIP_DELETE_API=1 NODE_ENV=production bunx alchemy destroy --stage prod alchemy.state-clear-d1.ts",
     "d1:fresh": "wrangler d1 delete filepath-db -y && bun run deploy",
     "build": "FILEPATH_VERIFY_BUILD=1 vite build",
     "preview": "vite preview",

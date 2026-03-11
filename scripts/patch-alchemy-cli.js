@@ -62,8 +62,25 @@ function patchContainerBinding(filePath) {
   fs.writeFileSync(filePath, updated);
 }
 
+const d1DbSrcPath = path.join(alchemyRoot, "src", "cloudflare", "d1-database.ts");
+const d1DbPath = path.join(alchemyRoot, "lib", "cloudflare", "d1-database.js");
+const D1_STATE_CLEAR_MARKER = "ALCHEMY_D1_SKIP_DELETE_API";
+
+function patchD1DeleteSkipApi(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const current = fs.readFileSync(filePath, "utf8");
+  if (current.includes(D1_STATE_CLEAR_MARKER)) return;
+  const pattern =
+    /(if \(props\.delete !== false && this\.output\?\.id\) \{\s*\n\s*)await deleteDatabase\(api, this\.output\.id\);/;
+  const replacement = `$1if (process.env.ALCHEMY_D1_SKIP_DELETE_API !== "1") {\n        await deleteDatabase(api, this.output.id);\n      }`;
+  if (!pattern.test(current)) return;
+  const updated = current.replace(pattern, replacement);
+  fs.writeFileSync(filePath, updated);
+}
+
 ensureExists(alchemyRoot);
 ensureExists(srcMetadataPath);
 
 patchContainerBinding(srcMetadataPath);
 patchContainerBinding(libMetadataPath);
+patchD1DeleteSkipApi(d1DbSrcPath);
