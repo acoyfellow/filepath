@@ -68,6 +68,8 @@
     "deploy": "NODE_ENV=production alchemy deploy --stage prod",
     "deploy:preview": "alchemy deploy",
     "destroy": "alchemy destroy",
+    "d1:destroy": "wrangler d1 delete filepath-db",
+    "d1:fresh": "wrangler d1 delete filepath-db -y && bun run deploy",
     "build": "FILEPATH_VERIFY_BUILD=1 vite build",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo \"\" && ./hooks/install.sh || echo \"\"",
