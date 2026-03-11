@@ -27,16 +27,10 @@ vite.config.ts.timestamp-*
 dist/
 
 # Screenshots and previews
-e2e-screenshots/
 preview/
 .sisyphus
 .cursor
 .dev.vars
 
-# API keys (test artifacts)
-e2e-api-key.txt
-e2e-api-key-new.txt
-
 # Brand/marketing assets (not source code)
 brand-screenshots/
-

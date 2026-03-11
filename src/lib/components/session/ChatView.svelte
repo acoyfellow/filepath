@@ -2,7 +2,7 @@
   import TextMessage from "$lib/components/chat/TextMessage.svelte";
   import ToolBlock from "$lib/components/chat/ToolBlock.svelte";
   import CommandBlock from "$lib/components/chat/CommandBlock.svelte";
-  import WorkerPills from "$lib/components/chat/WorkerPills.svelte";
+  import AgentPills from "$lib/components/chat/AgentPills.svelte";
   import CommitLog from "$lib/components/chat/CommitLog.svelte";
   import TypingIndicator from "$lib/components/chat/TypingIndicator.svelte";
   import type { AgentEvent } from "$lib/protocol";
@@ -55,7 +55,7 @@
           <path d="M12 3C6.5 3 2 6.58 2 11c0 2.12 1.03 4.04 2.74 5.46L3.5 21l4.75-2.08C9.42 19.3 10.67 19.5 12 19.5c5.5 0 10-3.08 10-6.5S17.5 3 12 3z" />
         </svg>
       </div>
-      <span>Send a message to activate this agent</span>
+      <span>Send a task to activate this agent</span>
       {#if task}
         <span class="chat-empty-task">{task}</span>
       {/if}
@@ -78,9 +78,9 @@
             stderr={msg.event.stderr}
           />
         </div>
-      {:else if msg.event.type === "workers"}
+      {:else if msg.event.type === "agents"}
         <div class="msg msg-a">
-          <WorkerPills workers={msg.event.workers} {onnavigate} />
+          <AgentPills agents={msg.event.agents} {onnavigate} />
         </div>
       {:else if msg.event.type === "commit"}
         <div class="msg msg-a">

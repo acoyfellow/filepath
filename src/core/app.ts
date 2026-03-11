@@ -1,7 +1,12 @@
 import { getDrizzle } from "$lib/auth";
+import {
+  NODE_AUTHORITIES,
+  normalizeNodeRuntimePolicy,
+  validateNodeRuntimePolicy,
+} from "$lib/runtime/authority";
 import { getBuiltinHarnessRows } from "$lib/agents/harnesses";
-import { agentHarness, agentNode, agentSession } from "$lib/schema";
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { agent, agentTask, harness, workspace } from "$lib/schema";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { Data, Effect, Schema } from "effect";
 
 type Db = ReturnType<typeof getDrizzle>;
@@ -10,7 +15,6 @@ export interface AppContext {
   db: Db;
   userId: string;
   role?: string | null;
-  publishSessionEvent?: (sessionId: string, payload: Record<string, unknown>) => Promise<void>;
 }
 
 export class Unauthorized extends Data.TaggedError("Unauthorized")<{
@@ -51,18 +55,22 @@ export type AppError =
   | Unavailable
   | Internal;
 
-export const SessionCreateInputSchema = Schema.Struct({
+export const WorkspaceCreateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   gitRepoUrl: Schema.optional(Schema.String),
 });
-export type SessionCreateInput = Schema.Schema.Type<typeof SessionCreateInputSchema>;
+export type WorkspaceCreateInput = Schema.Schema.Type<
+  typeof WorkspaceCreateInputSchema
+>;
 
-export const SessionUpdateInputSchema = Schema.Struct({
+export const WorkspaceUpdateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   gitRepoUrl: Schema.optional(Schema.String),
 });
-export type SessionUpdateInput = Schema.Schema.Type<typeof SessionUpdateInputSchema>;
+export type WorkspaceUpdateInput = Schema.Schema.Type<
+  typeof WorkspaceUpdateInputSchema
+>;
 
 export const HarnessCreateInputSchema = Schema.Struct({
   id: Schema.String,
@@ -75,7 +83,9 @@ export const HarnessCreateInputSchema = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 });
-export type HarnessCreateInput = Schema.Schema.Type<typeof HarnessCreateInputSchema>;
+export type HarnessCreateInput = Schema.Schema.Type<
+  typeof HarnessCreateInputSchema
+>;
 
 export const HarnessUpdateInputSchema = Schema.Struct({
   name: Schema.String,
@@ -87,31 +97,60 @@ export const HarnessUpdateInputSchema = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 });
-export type HarnessUpdateInput = Schema.Schema.Type<typeof HarnessUpdateInputSchema>;
+export type HarnessUpdateInput = Schema.Schema.Type<
+  typeof HarnessUpdateInputSchema
+>;
 
-export const NodeSpawnInputSchema = Schema.Struct({
+export const AgentCreateInputSchema = Schema.Struct({
   name: Schema.String,
   harnessId: Schema.String,
   model: Schema.String,
-  parentId: Schema.optional(Schema.String),
+  allowedPaths: Schema.Array(Schema.String),
+  forbiddenPaths: Schema.Array(Schema.String),
+  toolPermissions: Schema.Array(Schema.String),
+  writableRoot: Schema.NullOr(Schema.String),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 });
-export type NodeSpawnInput = Schema.Schema.Type<typeof NodeSpawnInputSchema>;
+export type AgentCreateInput = Schema.Schema.Type<
+  typeof AgentCreateInputSchema
+>;
 
-export const NodeUpdateInputSchema = Schema.Struct({
+export const AgentUpdateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  allowedPaths: Schema.optional(Schema.Array(Schema.String)),
+  forbiddenPaths: Schema.optional(Schema.Array(Schema.String)),
+  toolPermissions: Schema.optional(Schema.Array(Schema.String)),
+  writableRoot: Schema.optional(Schema.NullOr(Schema.String)),
   containerId: Schema.optional(Schema.String),
   tokens: Schema.optional(Schema.Number),
 });
-export type NodeUpdateInput = Schema.Schema.Type<typeof NodeUpdateInputSchema>;
+export type AgentUpdateInput = Schema.Schema.Type<
+  typeof AgentUpdateInputSchema
+>;
 
-export const NodeMoveInputSchema = Schema.Struct({
-  parentId: Schema.optional(Schema.NullOr(Schema.String)),
-  sortOrder: Schema.Number,
+export const AgentTaskInputSchema = Schema.Struct({
+  content: Schema.String,
 });
-export type NodeMoveInput = Schema.Schema.Type<typeof NodeMoveInputSchema>;
+export type AgentTaskInput = Schema.Schema.Type<typeof AgentTaskInputSchema>;
+
+function decodePolicy(input: {
+  allowedPaths?: readonly string[];
+  forbiddenPaths?: readonly string[];
+  toolPermissions?: readonly string[];
+  writableRoot?: string | null;
+}): Effect.Effect<
+  ReturnType<typeof normalizeNodeRuntimePolicy>,
+  BadRequest
+> {
+  const policy = normalizeNodeRuntimePolicy("agent", input);
+  const policyError = validateNodeRuntimePolicy("agent", policy);
+  return policyError
+    ? Effect.fail(new BadRequest({ message: policyError }))
+    : Effect.succeed(policy);
+}
 
 export function decodeInput<S extends Schema.Top>(
   schema: S,
@@ -122,13 +161,17 @@ export function decodeInput<S extends Schema.Top>(
   ) as Effect.Effect<Schema.Schema.Type<S>, BadRequest>;
 }
 
-function fromPromise<A>(thunk: () => Promise<A>, message: string): Effect.Effect<A, Internal> {
+function fromPromise<A>(
+  thunk: () => Promise<A>,
+  message: string,
+): Effect.Effect<A, Internal> {
   return Effect.tryPromise({
     try: thunk,
-    catch: (cause) => new Internal({
-      message,
-      cause,
-    }),
+    catch: (cause) =>
+      new Internal({
+        message,
+        cause,
+      }),
   });
 }
 
@@ -147,19 +190,19 @@ function requireAdmin(ctx: AppContext): Effect.Effect<void, Forbidden> {
     : Effect.fail(new Forbidden({ message: "Admin only" }));
 }
 
-function ensureSessionAccess(ctx: AppContext, sessionId: string) {
+function ensureWorkspaceAccess(ctx: AppContext, workspaceId: string) {
   return fromPromise(
     () =>
       ctx.db
-        .select({ id: agentSession.id })
-        .from(agentSession)
-        .where(and(eq(agentSession.id, sessionId), eq(agentSession.userId, ctx.userId))),
-    "Failed to verify session access",
+        .select({ id: workspace.id })
+        .from(workspace)
+        .where(and(eq(workspace.id, workspaceId), eq(workspace.userId, ctx.userId))),
+    "Failed to verify workspace access",
   ).pipe(
     Effect.flatMap((rows) =>
       rows.length > 0
         ? Effect.succeed(rows[0])
-        : Effect.fail(new NotFound({ message: "Session not found" })),
+        : Effect.fail(new NotFound({ message: "Workspace not found" })),
     ),
   );
 }
@@ -167,53 +210,16 @@ function ensureSessionAccess(ctx: AppContext, sessionId: string) {
 function ensureBuiltinHarnesses(ctx: AppContext) {
   return fromPromise(
     () =>
-      ctx.db
-        .insert(agentHarness)
-        .values(getBuiltinHarnessRows())
-        .onConflictDoNothing(),
+      ctx.db.insert(harness).values(getBuiltinHarnessRows()).onConflictDoNothing(),
     "Failed to bootstrap builtin harnesses",
   ).pipe(Effect.asVoid);
-}
-
-function buildTree<T extends { id: string; parentId: string | null }>(nodes: T[]): Array<T & { children: Array<T & { children: unknown[] }> }> {
-  const nodeMap = new Map<string, T & { children: Array<T & { children: unknown[] }> }>();
-  for (const node of nodes) {
-    nodeMap.set(node.id, { ...node, children: [] });
-  }
-
-  const roots: Array<T & { children: Array<T & { children: unknown[] }> }> = [];
-  for (const node of nodeMap.values()) {
-    if (node.parentId && nodeMap.has(node.parentId)) {
-      nodeMap.get(node.parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-  return roots;
-}
-
-function collectDescendants(nodes: Array<{ id: string; parentId: string | null }>, parentId: string): Set<string> {
-  const descendants = new Set<string>();
-  const queue = [parentId];
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    for (const node of nodes) {
-      if (node.parentId === current && !descendants.has(node.id)) {
-        descendants.add(node.id);
-        queue.push(node.id);
-      }
-    }
-  }
-
-  return descendants;
 }
 
 export function listHarnesses(ctx: AppContext) {
   return ensureBuiltinHarnesses(ctx).pipe(
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select().from(agentHarness).orderBy(asc(agentHarness.name)),
+        () => ctx.db.select().from(harness).orderBy(asc(harness.name)),
         "Failed to list harnesses",
       ),
     ),
@@ -238,7 +244,7 @@ export function createHarness(ctx: AppContext, input: HarnessCreateInput) {
     Effect.flatMap(() => requireAdmin(ctx)),
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select({ id: agentHarness.id }).from(agentHarness).where(eq(agentHarness.id, input.id.trim())),
+        () => ctx.db.select({ id: harness.id }).from(harness).where(eq(harness.id, input.id.trim())),
         "Failed to check harness uniqueness",
       ),
     ),
@@ -250,7 +256,7 @@ export function createHarness(ctx: AppContext, input: HarnessCreateInput) {
     Effect.flatMap(() =>
       fromPromise(
         () =>
-          ctx.db.insert(agentHarness).values({
+          ctx.db.insert(harness).values({
             id: input.id.trim(),
             name: input.name.trim(),
             description: input.description.trim(),
@@ -273,7 +279,7 @@ export function updateHarness(ctx: AppContext, id: string, input: HarnessUpdateI
     Effect.flatMap(() => requireAdmin(ctx)),
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select({ id: agentHarness.id }).from(agentHarness).where(eq(agentHarness.id, id)),
+        () => ctx.db.select({ id: harness.id }).from(harness).where(eq(harness.id, id)),
         "Failed to load harness",
       ),
     ),
@@ -286,7 +292,7 @@ export function updateHarness(ctx: AppContext, id: string, input: HarnessUpdateI
       fromPromise(
         () =>
           ctx.db
-            .update(agentHarness)
+            .update(harness)
             .set({
               name: input.name.trim(),
               description: input.description.trim(),
@@ -297,7 +303,7 @@ export function updateHarness(ctx: AppContext, id: string, input: HarnessUpdateI
               enabled: input.enabled ?? true,
               config: JSON.stringify(input.config ?? {}),
             })
-            .where(eq(agentHarness.id, id)),
+            .where(eq(harness.id, id)),
         "Failed to update harness",
       ),
     ),
@@ -310,7 +316,7 @@ export function deleteHarness(ctx: AppContext, id: string) {
     Effect.flatMap(() => requireAdmin(ctx)),
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select({ id: agentHarness.id }).from(agentHarness).where(eq(agentHarness.id, id)),
+        () => ctx.db.select({ id: harness.id }).from(harness).where(eq(harness.id, id)),
         "Failed to load harness",
       ),
     ),
@@ -321,7 +327,7 @@ export function deleteHarness(ctx: AppContext, id: string) {
     ),
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select({ id: agentNode.id }).from(agentNode).where(eq(agentNode.harnessId, id)),
+        () => ctx.db.select({ id: agent.id }).from(agent).where(eq(agent.harnessId, id)),
         "Failed to load linked agents",
       ),
     ),
@@ -332,7 +338,7 @@ export function deleteHarness(ctx: AppContext, id: string) {
     ),
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.delete(agentHarness).where(eq(agentHarness.id, id)),
+        () => ctx.db.delete(harness).where(eq(harness.id, id)),
         "Failed to delete harness",
       ),
     ),
@@ -340,47 +346,49 @@ export function deleteHarness(ctx: AppContext, id: string) {
   );
 }
 
-export function listSessions(ctx: AppContext) {
+export function listWorkspaces(ctx: AppContext) {
   return fromPromise(
     () =>
       ctx.db
         .select()
-        .from(agentSession)
-        .where(eq(agentSession.userId, ctx.userId))
-        .orderBy(desc(agentSession.updatedAt)),
-    "Failed to list sessions",
+        .from(workspace)
+        .where(eq(workspace.userId, ctx.userId))
+        .orderBy(desc(workspace.updatedAt)),
+    "Failed to list workspaces",
   ).pipe(
-    Effect.flatMap((sessionsData) => {
-      const sessionIds = sessionsData.map((session) => session.id);
-      if (sessionIds.length === 0) {
-        return Effect.succeed({ sessions: [] as Array<Record<string, unknown>> });
+    Effect.flatMap((workspaceRows) => {
+      const workspaceIds = workspaceRows.map((entry) => entry.id);
+      if (workspaceIds.length === 0) {
+        return Effect.succeed({ workspaces: [] as Array<Record<string, unknown>> });
       }
 
       return fromPromise(
         () =>
           ctx.db
             .select({
-              sessionId: agentNode.sessionId,
-              count: count(),
+              workspaceId: agent.workspaceId,
+              count: count(agent.id),
             })
-            .from(agentNode)
-            .where(inArray(agentNode.sessionId, sessionIds))
-            .groupBy(agentNode.sessionId),
-        "Failed to count session agents",
+            .from(agent)
+            .where(inArray(agent.workspaceId, workspaceIds))
+            .groupBy(agent.workspaceId),
+        "Failed to count workspace agents",
       ).pipe(
-        Effect.map((nodeCounts) => {
-          const countMap = new Map(nodeCounts.map((row) => [row.sessionId, row.count]));
+        Effect.map((agentCounts) => {
+          const countMap = new Map(
+            agentCounts.map((entry) => [entry.workspaceId, entry.count]),
+          );
+
           return {
-            sessions: sessionsData.map((session) => ({
-              id: session.id,
-              name: session.name,
-              gitRepoUrl: session.gitRepoUrl,
-              status: session.status,
-              rootNodeId: session.rootNodeId,
-              startedAt: session.startedAt,
-              createdAt: session.createdAt?.getTime() ?? 0,
-              updatedAt: session.updatedAt?.getTime() ?? 0,
-              nodeCount: countMap.get(session.id) ?? 0,
+            workspaces: workspaceRows.map((entry) => ({
+              id: entry.id,
+              name: entry.name,
+              gitRepoUrl: entry.gitRepoUrl,
+              status: entry.status,
+              startedAt: entry.startedAt?.getTime() ?? null,
+              createdAt: entry.createdAt?.getTime() ?? 0,
+              updatedAt: entry.updatedAt?.getTime() ?? 0,
+              agentCount: countMap.get(entry.id) ?? 0,
             })),
           };
         }),
@@ -389,49 +397,60 @@ export function listSessions(ctx: AppContext) {
   );
 }
 
-export function createSession(ctx: AppContext, input: SessionCreateInput) {
+export function createWorkspace(ctx: AppContext, input: WorkspaceCreateInput) {
   const id = generateId();
-  const name = input.name?.trim() || `Session ${id.slice(0, 6)}`;
+  const name = input.name?.trim() || `Workspace ${id.slice(0, 6)}`;
 
   return fromPromise(
     () =>
-      ctx.db.insert(agentSession).values({
+      ctx.db.insert(workspace).values({
         id,
         userId: ctx.userId,
         name,
         gitRepoUrl: input.gitRepoUrl?.trim() || null,
         status: "draft",
       }),
-    "Failed to create session",
-  ).pipe(
-    Effect.as({ id, name }),
-  );
+    "Failed to create workspace",
+  ).pipe(Effect.as({ id, name }));
 }
 
-export function getSession(ctx: AppContext, id: string) {
-  return ensureSessionAccess(ctx, id).pipe(
-    Effect.flatMap((_) =>
+export function getWorkspace(ctx: AppContext, id: string) {
+  return ensureWorkspaceAccess(ctx, id).pipe(
+    Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.select().from(agentSession).where(and(eq(agentSession.id, id), eq(agentSession.userId, ctx.userId))),
-        "Failed to load session",
+        () =>
+          ctx.db
+            .select()
+            .from(workspace)
+            .where(and(eq(workspace.id, id), eq(workspace.userId, ctx.userId))),
+        "Failed to load workspace",
       ),
     ),
-    Effect.flatMap((sessions) =>
+    Effect.flatMap((workspaceRows) =>
       fromPromise(
-        () => ctx.db.select().from(agentNode).where(eq(agentNode.sessionId, id)).orderBy(agentNode.sortOrder),
-        "Failed to load session agents",
+        () =>
+          ctx.db
+            .select()
+            .from(agent)
+            .where(eq(agent.workspaceId, id))
+            .orderBy(desc(agent.updatedAt), desc(agent.createdAt)),
+        "Failed to load workspace agents",
       ).pipe(
-        Effect.map((nodes) => ({
-          session: sessions[0],
-          tree: buildTree(nodes),
+        Effect.map((agents) => ({
+          workspace: workspaceRows[0],
+          agents,
         })),
       ),
     ),
   );
 }
 
-export function updateSession(ctx: AppContext, id: string, input: SessionUpdateInput) {
-  return ensureSessionAccess(ctx, id).pipe(
+export function updateWorkspace(
+  ctx: AppContext,
+  id: string,
+  input: WorkspaceUpdateInput,
+) {
+  return ensureWorkspaceAccess(ctx, id).pipe(
     Effect.flatMap(() => {
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
@@ -442,166 +461,171 @@ export function updateSession(ctx: AppContext, id: string, input: SessionUpdateI
       }
 
       return fromPromise(
-        () => ctx.db.update(agentSession).set(updates).where(eq(agentSession.id, id)),
-        "Failed to update session",
+        () => ctx.db.update(workspace).set(updates).where(eq(workspace.id, id)),
+        "Failed to update workspace",
       ).pipe(Effect.as({ ok: true as const }));
     }),
   );
 }
 
-export function deleteSession(ctx: AppContext, id: string) {
-  return ensureSessionAccess(ctx, id).pipe(
+export function deleteWorkspace(ctx: AppContext, id: string) {
+  return ensureWorkspaceAccess(ctx, id).pipe(
     Effect.flatMap(() =>
       fromPromise(
-        () => ctx.db.delete(agentSession).where(eq(agentSession.id, id)),
-        "Failed to delete session",
+        () => ctx.db.delete(workspace).where(eq(workspace.id, id)),
+        "Failed to delete workspace",
       ),
     ),
     Effect.as({ ok: true as const }),
   );
 }
 
-export function listNodes(ctx: AppContext, sessionId: string) {
-  return ensureSessionAccess(ctx, sessionId).pipe(
-    Effect.flatMap(() =>
-      fromPromise(
-        () => ctx.db.select().from(agentNode).where(eq(agentNode.sessionId, sessionId)).orderBy(agentNode.sortOrder),
-        "Failed to list session agents",
-      ),
-    ),
-    Effect.map((nodes) => ({ nodes })),
-  );
-}
-
-export function spawnNode(ctx: AppContext, sessionId: string, input: NodeSpawnInput) {
-  return ensureBuiltinHarnesses(ctx).pipe(
-    Effect.flatMap(() => ensureSessionAccess(ctx, sessionId)),
-    Effect.flatMap(() =>
-      fromPromise(
-        () =>
-          ctx.db
-            .select({ id: agentHarness.id, enabled: agentHarness.enabled })
-            .from(agentHarness)
-            .where(eq(agentHarness.id, input.harnessId)),
-        "Failed to load harness",
-      ),
-    ),
-    Effect.flatMap((harnesses) => {
-      if (harnesses.length === 0) {
-        return Effect.fail(new BadRequest({ message: "Harness not found" }));
-      }
-      if (!harnesses[0].enabled) {
-        return Effect.fail(new BadRequest({ message: "Harness is disabled" }));
-      }
-      return Effect.void;
-    }),
-    Effect.flatMap(() =>
-      input.parentId
-        ? fromPromise(
-            () =>
-              ctx.db
-                .select({ id: agentNode.id })
-                .from(agentNode)
-                .where(and(eq(agentNode.id, input.parentId!), eq(agentNode.sessionId, sessionId))),
-            "Failed to load parent agent",
-          ).pipe(
-            Effect.flatMap((parents) =>
-              parents.length > 0
-                ? Effect.void
-                : Effect.fail(new BadRequest({ message: "Parent node not found" })),
-            ),
-          )
-        : Effect.void,
-    ),
-    Effect.flatMap(() =>
-      fromPromise(
-        () =>
-          (input.parentId
-            ? ctx.db
-                .select({ sortOrder: agentNode.sortOrder })
-                .from(agentNode)
-                .where(and(eq(agentNode.sessionId, sessionId), eq(agentNode.parentId, input.parentId)))
-            : ctx.db
-                .select({ sortOrder: agentNode.sortOrder })
-                .from(agentNode)
-                .where(and(eq(agentNode.sessionId, sessionId), sql`${agentNode.parentId} IS NULL`))),
-        "Failed to load sibling agents",
-      ),
-    ),
-    Effect.flatMap((siblings) => {
-      const nextSort = siblings.length > 0 ? Math.max(...siblings.map((row) => row.sortOrder)) + 1 : 0;
-      const nodeId = generateId();
-
-      return fromPromise(
-        () =>
-          ctx.db.insert(agentNode).values({
-            id: nodeId,
-            sessionId,
-            parentId: input.parentId || null,
-            name: input.name,
-            harnessId: input.harnessId,
-            model: input.model,
-            config: JSON.stringify(input.config ?? {}),
-            sortOrder: nextSort,
-          }),
-        "Failed to create agent",
-      ).pipe(
-        Effect.flatMap(() =>
-          !input.parentId
-            ? fromPromise(
-                () =>
-                  ctx.db
-                    .select({ rootNodeId: agentSession.rootNodeId })
-                    .from(agentSession)
-                    .where(eq(agentSession.id, sessionId)),
-                "Failed to load session root agent",
-              ).pipe(
-                Effect.flatMap((rows) =>
-                  !rows[0]?.rootNodeId
-                    ? fromPromise(
-                        () => ctx.db.update(agentSession).set({ rootNodeId: nodeId }).where(eq(agentSession.id, sessionId)),
-                        "Failed to set session root agent",
-                      )
-                    : Effect.void,
-                ),
-              )
-            : Effect.void,
-        ),
-        Effect.as({ id: nodeId, name: input.name }),
-      );
-    }),
-  );
-}
-
-export function getNode(ctx: AppContext, sessionId: string, nodeId: string) {
-  return ensureSessionAccess(ctx, sessionId).pipe(
+export function listAgents(ctx: AppContext, workspaceId: string) {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
     Effect.flatMap(() =>
       fromPromise(
         () =>
           ctx.db
             .select()
-            .from(agentNode)
-            .where(and(eq(agentNode.id, nodeId), eq(agentNode.sessionId, sessionId))),
+            .from(agent)
+            .where(eq(agent.workspaceId, workspaceId))
+            .orderBy(desc(agent.updatedAt), desc(agent.createdAt)),
+        "Failed to list workspace agents",
+      ),
+    ),
+    Effect.map((agents) => ({ agents })),
+  );
+}
+
+export function createAgent(
+  ctx: AppContext,
+  workspaceId: string,
+  input: AgentCreateInput,
+) {
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() => ensureWorkspaceAccess(ctx, workspaceId)),
+    Effect.flatMap(() =>
+      fromPromise(
+        () =>
+          ctx.db
+            .select({ id: harness.id, enabled: harness.enabled })
+            .from(harness)
+            .where(eq(harness.id, input.harnessId)),
+        "Failed to load harness",
+      ),
+    ),
+    Effect.flatMap((harnessRows) => {
+      if (harnessRows.length === 0) {
+        return Effect.fail(new BadRequest({ message: "Harness not found" }));
+      }
+      if (!harnessRows[0].enabled) {
+        return Effect.fail(new BadRequest({ message: "Harness is disabled" }));
+      }
+      return Effect.void;
+    }),
+    Effect.flatMap(() =>
+      decodePolicy({
+        allowedPaths: input.allowedPaths,
+        forbiddenPaths: input.forbiddenPaths,
+        toolPermissions: input.toolPermissions,
+        writableRoot: input.writableRoot,
+      }),
+    ),
+    Effect.flatMap((policy): Effect.Effect<{ id: string; name: string }, AppError> => {
+      const agentId = generateId();
+      const trimmedName = input.name.trim();
+      if (!trimmedName) {
+        return Effect.fail(new BadRequest({ message: "Agent name is required" }));
+      }
+      if (!input.model.trim()) {
+        return Effect.fail(new BadRequest({ message: "Choose a model before creating an agent" }));
+      }
+
+      return fromPromise(
+        () =>
+          ctx.db.insert(agent).values({
+            id: agentId,
+            workspaceId,
+            name: trimmedName,
+            harnessId: input.harnessId,
+            model: input.model.trim(),
+            config: JSON.stringify(input.config ?? {}),
+            allowedPaths: JSON.stringify(policy.allowedPaths),
+            forbiddenPaths: JSON.stringify(policy.forbiddenPaths),
+            toolPermissions: JSON.stringify(policy.toolPermissions),
+            writableRoot: policy.writableRoot,
+          }),
+        "Failed to create agent",
+      ).pipe(Effect.as({ id: agentId, name: trimmedName }));
+    }),
+  );
+}
+
+export function getAgent(ctx: AppContext, workspaceId: string, agentId: string) {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
+    Effect.flatMap(() =>
+      fromPromise(
+        () =>
+          ctx.db
+            .select()
+            .from(agent)
+            .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
         "Failed to load agent",
       ),
     ),
     Effect.flatMap((rows) =>
       rows.length > 0
-        ? Effect.succeed({ node: rows[0] })
-        : Effect.fail(new NotFound({ message: "Node not found" })),
+        ? Effect.succeed({ agent: rows[0] })
+        : Effect.fail(new NotFound({ message: "Agent not found" })),
     ),
   );
 }
 
-export function updateNode(ctx: AppContext, sessionId: string, nodeId: string, input: NodeUpdateInput) {
-  return ensureSessionAccess(ctx, sessionId).pipe(
-    Effect.flatMap(() => {
+export function updateAgent(
+  ctx: AppContext,
+  workspaceId: string,
+  agentId: string,
+  input: AgentUpdateInput,
+) {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
+    Effect.flatMap((): Effect.Effect<{ ok: true }, AppError> => {
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
+      if (input.model !== undefined) updates.model = input.model;
       if (input.status !== undefined) updates.status = input.status;
       if (input.config !== undefined) updates.config = JSON.stringify(input.config);
       if (input.containerId !== undefined) updates.containerId = input.containerId;
       if (input.tokens !== undefined) updates.tokens = input.tokens;
+
+      if (
+        input.allowedPaths !== undefined ||
+        input.forbiddenPaths !== undefined ||
+        input.toolPermissions !== undefined ||
+        input.writableRoot !== undefined
+      ) {
+        return decodePolicy({
+          allowedPaths: input.allowedPaths,
+          forbiddenPaths: input.forbiddenPaths,
+          toolPermissions: input.toolPermissions,
+          writableRoot: input.writableRoot,
+        }).pipe(
+          Effect.flatMap((policy) => {
+            updates.allowedPaths = JSON.stringify(policy.allowedPaths);
+            updates.forbiddenPaths = JSON.stringify(policy.forbiddenPaths);
+            updates.toolPermissions = JSON.stringify(policy.toolPermissions);
+            updates.writableRoot = policy.writableRoot;
+
+            return fromPromise(
+              () =>
+                ctx.db
+                  .update(agent)
+                  .set(updates)
+                  .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
+              "Failed to update agent",
+            ).pipe(Effect.as({ ok: true as const }));
+          }),
+        );
+      }
 
       if (Object.keys(updates).length === 0) {
         return Effect.succeed({ ok: true as const });
@@ -610,237 +634,76 @@ export function updateNode(ctx: AppContext, sessionId: string, nodeId: string, i
       return fromPromise(
         () =>
           ctx.db
-            .update(agentNode)
+            .update(agent)
             .set(updates)
-            .where(and(eq(agentNode.id, nodeId), eq(agentNode.sessionId, sessionId))),
+            .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
         "Failed to update agent",
       ).pipe(Effect.as({ ok: true as const }));
     }),
   );
 }
 
-export function deleteNode(ctx: AppContext, sessionId: string, nodeId: string): Effect.Effect<{ ok: true; deleted: number }, AppError> {
-  return ensureSessionAccess(ctx, sessionId).pipe(
+export function deleteAgent(ctx: AppContext, workspaceId: string, agentId: string) {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
     Effect.flatMap(() =>
       fromPromise(
         () =>
           ctx.db
-            .select({ id: agentNode.id, parentId: agentNode.parentId })
-            .from(agentNode)
-            .where(eq(agentNode.sessionId, sessionId)),
-        "Failed to load session agents",
+            .delete(agent)
+            .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
+        "Failed to delete agent",
       ),
     ),
-    Effect.flatMap((nodes) => {
-      if (!nodes.some((node) => node.id === nodeId)) {
-        return Effect.fail<AppError>(new NotFound({ message: "Node not found" }));
-      }
-
-      const toDelete = new Set<string>([nodeId]);
-      const queue = [nodeId];
-      while (queue.length > 0) {
-        const parentId = queue.shift()!;
-        for (const node of nodes) {
-          if (node.parentId === parentId && !toDelete.has(node.id)) {
-            toDelete.add(node.id);
-            queue.push(node.id);
-          }
-        }
-      }
-
-      return Effect.forEach([...toDelete], (id) =>
-        fromPromise(
-          () => ctx.db.delete(agentNode).where(and(eq(agentNode.id, id), eq(agentNode.sessionId, sessionId))),
-          "Failed to delete agent",
-        ),
-      ).pipe(
-        Effect.as({ ok: true as const, deleted: toDelete.size }),
-      );
-    }),
+    Effect.as({ ok: true as const }),
   );
 }
 
-export function moveNode(ctx: AppContext, sessionId: string, nodeId: string, input: NodeMoveInput): Effect.Effect<{ ok: true }, AppError> {
-  return ensureSessionAccess(ctx, sessionId).pipe(
-    Effect.flatMap(() => {
-      if (!ctx.publishSessionEvent) {
-        return Effect.fail<AppError>(new Unavailable({ message: "Session event bus unavailable" }));
-      }
-
-      return fromPromise(
-        () =>
-          ctx.db
-            .select({
-              id: agentNode.id,
-              parentId: agentNode.parentId,
-              sortOrder: agentNode.sortOrder,
-            })
-            .from(agentNode)
-            .where(eq(agentNode.sessionId, sessionId)),
-        "Failed to load agents for move",
-      );
-    }),
-    Effect.flatMap((nodes) => {
-      const movingNode = nodes.find((node) => node.id === nodeId);
-      if (!movingNode) {
-        return Effect.fail<AppError>(new NotFound({ message: "Node not found" }));
-      }
-      if (input.parentId === nodeId) {
-        return Effect.fail<AppError>(new BadRequest({ message: "An agent cannot be moved under itself" }));
-      }
-      if (input.parentId && !nodes.some((node) => node.id === input.parentId)) {
-        return Effect.fail<AppError>(new BadRequest({ message: "Destination agent not found" }));
-      }
-
-      const descendants = collectDescendants(nodes, nodeId);
-      if (input.parentId && descendants.has(input.parentId)) {
-        return Effect.fail<AppError>(new BadRequest({ message: "An agent cannot be moved under its descendant" }));
-      }
-
-      const clampIndex = (value: number, max: number) =>
-        Math.max(0, Math.min(Number.isFinite(value) ? Math.floor(value) : 0, max));
-      const sameParent = movingNode.parentId === (input.parentId ?? null);
-
-      if (sameParent) {
-        const siblingIds = nodes
-          .filter((node) => node.parentId === movingNode.parentId)
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((node) => node.id)
-          .filter((id) => id !== nodeId);
-
-        siblingIds.splice(clampIndex(input.sortOrder, siblingIds.length), 0, nodeId);
-
-        return Effect.forEach(siblingIds, (id, index) =>
-          fromPromise(
-            () =>
-              ctx.db
-                .update(agentNode)
-                .set({
-                  parentId: movingNode.parentId,
-                  sortOrder: index,
-                })
-                .where(and(eq(agentNode.id, id), eq(agentNode.sessionId, sessionId))),
-            "Failed to reorder sibling agents",
-          ),
-        ).pipe(
-          Effect.flatMap(() =>
-            fromPromise(
-              () =>
-                ctx.publishSessionEvent!(sessionId, {
-                  type: "tree_update",
-                  action: "move",
-                  nodeId,
-                  parentId: movingNode.parentId,
-                  sortOrder: clampIndex(input.sortOrder, siblingIds.length - 1),
-                }),
-              "Failed to publish move event",
-            ),
-          ),
-          Effect.as({ ok: true as const }),
-        );
-      }
-
-      const oldSiblingIds = nodes
-        .filter((node) => node.parentId === movingNode.parentId && node.id !== nodeId)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((node) => node.id);
-
-      const newSiblingIds = nodes
-        .filter((node) => node.parentId === (input.parentId ?? null) && node.id !== nodeId)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((node) => node.id);
-
-      newSiblingIds.splice(clampIndex(input.sortOrder, newSiblingIds.length), 0, nodeId);
-
-      return Effect.forEach(oldSiblingIds, (id, index) =>
-        fromPromise(
-          () =>
-            ctx.db
-              .update(agentNode)
-              .set({ sortOrder: index })
-              .where(and(eq(agentNode.id, id), eq(agentNode.sessionId, sessionId))),
-          "Failed to normalize old sibling order",
-        ),
-      ).pipe(
-        Effect.flatMap(() =>
-          Effect.forEach(newSiblingIds, (id, index) =>
-            fromPromise(
-              () =>
-                ctx.db
-                  .update(agentNode)
-                  .set({
-                    parentId: input.parentId ?? null,
-                    sortOrder: index,
-                  })
-                  .where(and(eq(agentNode.id, id), eq(agentNode.sessionId, sessionId))),
-              "Failed to write new sibling order",
-            ),
-          ),
-        ),
-        Effect.flatMap(() =>
-          fromPromise(
-            () =>
-              ctx.publishSessionEvent!(sessionId, {
-                type: "tree_update",
-                action: "move",
-                nodeId,
-                parentId: input.parentId ?? null,
-                sortOrder: clampIndex(input.sortOrder, newSiblingIds.length - 1),
-              }),
-            "Failed to publish move event",
-          ),
-        ),
-        Effect.as({ ok: true as const }),
-      );
-    }),
-  );
-}
-
-export function getSessionStatus(ctx: AppContext, sessionId: string) {
-  return ensureSessionAccess(ctx, sessionId).pipe(
+export function listAgentResults(
+  ctx: AppContext,
+  workspaceId: string,
+  agentId: string,
+  limit = 20,
+) {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
     Effect.flatMap(() =>
       fromPromise(
         () =>
           ctx.db
             .select({
-              id: agentSession.id,
-              status: agentSession.status,
-              name: agentSession.name,
+              id: agentTask.id,
+              content: agentTask.content,
+              status: agentTask.status,
+              summary: agentTask.summary,
+              commands: agentTask.commands,
+              filesTouched: agentTask.filesTouched,
+              violations: agentTask.violations,
+              diffSummary: agentTask.diffSummary,
+              commitJson: agentTask.commitJson,
+              startedAt: agentTask.startedAt,
+              finishedAt: agentTask.finishedAt,
             })
-            .from(agentSession)
-            .where(and(eq(agentSession.id, sessionId), eq(agentSession.userId, ctx.userId))),
-        "Failed to load session status",
+            .from(agentTask)
+            .innerJoin(agent, eq(agentTask.agentId, agent.id))
+            .where(and(eq(agentTask.agentId, agentId), eq(agent.workspaceId, workspaceId)))
+            .orderBy(desc(agentTask.finishedAt))
+            .limit(limit),
+        "Failed to list agent results",
       ),
     ),
-    Effect.flatMap((sessions) =>
-      fromPromise(
-        () =>
-          ctx.db
-            .select({
-              id: agentNode.id,
-              name: agentNode.name,
-              status: agentNode.status,
-              parentId: agentNode.parentId,
-              harnessId: agentNode.harnessId,
-              tokens: agentNode.tokens,
-              containerId: agentNode.containerId,
-            })
-            .from(agentNode)
-            .where(eq(agentNode.sessionId, sessionId)),
-        "Failed to load agent statuses",
-      ).pipe(
-        Effect.map((nodes) => ({
-          session: sessions[0],
-          nodes,
-          summary: {
-            total: nodes.length,
-            done: nodes.filter((node) => node.status === "done").length,
-            running: nodes.filter((node) => node.status === "running" || node.status === "thinking").length,
-            exhausted: nodes.filter((node) => node.status === "exhausted").length,
-            error: nodes.filter((node) => node.status === "error").length,
-          },
-        })),
-      ),
-    ),
+    Effect.map((rows) => ({
+      results: rows.map((row) => ({
+        id: row.id,
+        content: row.content,
+        status: row.status,
+        summary: row.summary,
+        commands: JSON.parse(row.commands) as Array<{ command: string; exitCode: number | null }>,
+        filesTouched: JSON.parse(row.filesTouched) as string[],
+        violations: JSON.parse(row.violations) as string[],
+        diffSummary: row.diffSummary,
+        commit: row.commitJson ? (JSON.parse(row.commitJson) as { sha: string; message: string }) : null,
+        startedAt: row.startedAt,
+        finishedAt: row.finishedAt,
+      })),
+    })),
   );
 }

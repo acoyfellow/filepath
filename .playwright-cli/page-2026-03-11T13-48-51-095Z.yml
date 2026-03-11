@@ -1,0 +1,40 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "filepath" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e9]: filepath
+      - generic [ref=e10]:
+        - link "api" [ref=e11] [cursor=pointer]:
+          - /url: /api/openapi.json
+        - link "github" [ref=e12] [cursor=pointer]:
+          - /url: https://github.com/acoyfellow/filepath
+        - link "dashboard" [ref=e13] [cursor=pointer]:
+          - /url: /dashboard
+        - button "Toggle theme" [ref=e14] [cursor=pointer]:
+          - img [ref=e16]
+  - generic [ref=e19]:
+    - main [ref=e20]:
+      - generic [ref=e21]:
+        - img [ref=e22]
+        - heading "Create your account" [level=1] [ref=e24]
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]: Email
+          - textbox "Email" [ref=e28]:
+            - /placeholder: you@example.com
+        - generic [ref=e29]:
+          - generic [ref=e30]: Password
+          - textbox "Password" [ref=e31]:
+            - /placeholder: ••••••••
+        - generic [ref=e32]:
+          - generic [ref=e33]: Confirm Password
+          - textbox "Confirm Password" [ref=e34]:
+            - /placeholder: ••••••••
+        - button "Create account" [ref=e35]
+      - generic [ref=e36]:
+        - text: Already have an account?
+        - link "Sign in" [ref=e37] [cursor=pointer]:
+          - /url: /login
+    - contentinfo [ref=e38]: myfilepath.com

@@ -1,6 +1,12 @@
 <script lang="ts">
   import { DEFAULT_MODEL } from "$lib/config";
-  import { onMount } from "svelte";
+  import {
+    AGENT_POLICY_PRESET,
+    TOOL_PERMISSION_OPTIONS,
+    normalizeNodeRuntimePolicy,
+    parseDelimitedInput,
+    type ToolPermission,
+  } from "$lib/runtime/authority";
   import {
     PROVIDERS,
     PROVIDER_IDS,
@@ -8,7 +14,8 @@
     getProviderForModel,
     type ProviderId,
   } from "$lib/provider-keys";
-  import type { AgentHarness, HarnessId, SpawnRequest } from "$lib/types/session";
+  import { onMount } from "svelte";
+  import type { AgentCreateRequest, AgentHarness, HarnessId } from "$lib/types/workspace";
 
   interface ModelEntry {
     id: string;
@@ -19,7 +26,7 @@
 
   interface Props {
     onclose: () => void;
-    onspawn: (req: SpawnRequest) => Promise<void> | void;
+    onspawn: (req: AgentCreateRequest) => Promise<void> | void;
     lastAgent?: HarnessId;
     lastModel?: string;
     accountKeysMasked?: Record<ProviderId, string | null>;
@@ -31,6 +38,8 @@
     zen: null,
   };
 
+  const NAME_POOL = ["atlas", "bolt", "cipher", "drift", "echo", "helix", "orbit", "relay", "trace", "vortex"];
+
   let {
     onclose,
     onspawn,
@@ -40,12 +49,20 @@
     accountKeysError = null,
   }: Props = $props();
 
-  const NAMES = ["atlas", "bolt", "cipher", "drift", "echo", "flux", "ghost", "helix", "iris", "kite", "nova", "orbit", "pulse", "relay", "spark", "trace", "vortex", "wave", "zero"];
+  function getInitialHarnessId() {
+    return lastAgent;
+  }
+
+  function getInitialAccountKeys() {
+    return cloneMaskedKeys(accountKeysMasked);
+  }
+
+  function getInitialAccountKeysError() {
+    return accountKeysError ?? "";
+  }
 
   function pickName(): string {
-    const word = NAMES[Math.floor(Math.random() * NAMES.length)];
-    const num = Math.floor(Math.random() * 99);
-    return `${word}-${num}`;
+    return `${NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)]}-${Math.floor(Math.random() * 99)}`;
   }
 
   function cloneMaskedKeys(source: Record<ProviderId, string | null>): Record<ProviderId, string | null> {
@@ -55,68 +72,39 @@
     };
   }
 
-  function getInitialPreferredModel() {
-    return canonicalizeStoredModel(lastModel);
-  }
-
-  function getInitialMaskedKeys() {
-    return cloneMaskedKeys(accountKeysMasked);
-  }
-
-  function getInitialHarness() {
-    return lastAgent;
-  }
-
-  function getInitialAccountKeysError() {
-    return accountKeysError ?? "";
-  }
-
-  const preferredModel = getInitialPreferredModel();
-  const initialKeys = getInitialMaskedKeys();
-  const initialHasAccountKey = Object.values(initialKeys).some(Boolean);
-
   let name = $state(pickName());
-  let agent = $state<HarnessId>(getInitialHarness());
-  let model = $state(initialHasAccountKey ? preferredModel : "");
+  let harnessId = $state<HarnessId>(getInitialHarnessId());
+  let model = $state("");
   let modelFilter = $state("");
-  let accountKeys = $state<Record<ProviderId, string | null>>(initialKeys);
-  let accountKeysStateError = $state(getInitialAccountKeysError());
 
-  let modelsLoading = $state(initialHasAccountKey);
-  let modelsError = $state("");
-  let modelWarnings = $state<string[]>([]);
+  let allowedPathsInput = $state(AGENT_POLICY_PRESET.allowedPaths.join(", "));
+  let forbiddenPathsInput = $state(AGENT_POLICY_PRESET.forbiddenPaths.join(", "));
+  let writableRootInput = $state(AGENT_POLICY_PRESET.writableRoot ?? ".");
+  let selectedToolPermissions = $state<ToolPermission[]>([...AGENT_POLICY_PRESET.toolPermissions]);
+
+  let accountKeys = $state(getInitialAccountKeys());
+  let accountKeysStateError = $state(getInitialAccountKeysError());
   let availableModels = $state<ModelEntry[]>([]);
+  let availableHarnesses = $state<AgentHarness[]>([]);
 
   let harnessesLoading = $state(true);
   let harnessesError = $state("");
-  let availableHarnesses = $state<AgentHarness[]>([]);
-
+  let modelsLoading = $state(false);
+  let modelsError = $state("");
+  let modelWarnings = $state<string[]>([]);
   let inlineKeyDraft = $state("");
   let inlineKeySaving = $state(false);
   let inlineKeyError = $state("");
   let inlineKeySuccess = $state("");
-
   let spawnError = $state("");
   let spawning = $state(false);
 
   let hasAnyAccountKey = $derived(Object.values(accountKeys).some(Boolean));
-  let selectedHarness = $derived(
-    availableHarnesses.find((entry) => entry.id === agent) ?? null,
-  );
-  let availableRouters = $derived(
-    Object.entries(accountKeys)
-      .filter(([, value]) => Boolean(value))
-      .map(([provider, value]) => `${PROVIDERS[provider as ProviderId].label} (${value})`),
-  );
-
+  let selectedHarness = $derived(availableHarnesses.find((entry) => entry.id === harnessId) ?? null);
   let activeProvider = $derived.by<ProviderId>(() => {
-    if (model) {
-      return getProviderForModel(model);
-    }
-
+    if (model) return getProviderForModel(model);
     return PROVIDER_IDS.find((provider) => accountKeys[provider]) ?? "openrouter";
   });
-
   let activeProviderDefinition = $derived(PROVIDERS[activeProvider]);
   let hasSelectedProviderKey = $derived(Boolean(accountKeys[activeProvider]));
 
@@ -130,70 +118,70 @@
       : availableModels,
   );
 
-  let selectedModelEntry = $derived(
-    availableModels.find((entry) => entry.id === model) ?? null,
+  let runtimePolicy = $derived(
+    normalizeNodeRuntimePolicy("agent", {
+      allowedPaths: parseDelimitedInput(allowedPathsInput),
+      forbiddenPaths: parseDelimitedInput(forbiddenPathsInput),
+      toolPermissions: selectedToolPermissions,
+      writableRoot: writableRootInput || null,
+    }),
   );
+
+  let selectedModelEntry = $derived(availableModels.find((entry) => entry.id === model) ?? null);
 
   let setupSummary = $derived.by(() => {
     if (accountKeysStateError) {
-      return "Re-save your account router key to unlock models and spawn.";
+      return "Re-save your router key to unlock live models and agent execution.";
     }
     if (!hasSelectedProviderKey) {
-      return `Save a ${activeProviderDefinition.label} key, then choose a model and spawn.`;
+      return `Save a ${activeProviderDefinition.label} key, then choose a model and agent scope.`;
     }
     if (!model) {
-      return "Choose a model before spawning this agent.";
+      return "Choose a model, then confirm the agent scope before creating it.";
     }
-    return "This agent is ready to spawn into the current session.";
-  });
-
-  let modelSelectPlaceholder = $derived.by(() => {
-    if (!hasAnyAccountKey) {
-      return `Save a ${activeProviderDefinition.label} key to unlock models`;
-    }
-    if (modelsLoading) {
-      return "Loading live models...";
-    }
-    if (modelsError) {
-      return "Model catalog unavailable";
-    }
-    return "Choose a model";
+    return "This agent will run with explicit path and tool boundaries.";
   });
 
   let spawnBlocker = $derived.by(() => {
     if (!name.trim()) return "Name is required";
     if (harnessesLoading) return "Loading harnesses...";
     if (harnessesError) return harnessesError;
-    if (!agent) return "Choose an agent harness";
+    if (!harnessId) return "Choose a harness";
     if (accountKeysStateError) return "Re-save your router key before spawning";
     if (!hasSelectedProviderKey) return `Add a ${activeProviderDefinition.label} key to continue`;
     if (modelsLoading) return "Loading live models...";
     if (modelsError) return modelsError;
     if (!model) return "Choose a model";
+    if (runtimePolicy.allowedPaths.length === 0) return "Agent needs at least one allowed path";
+    if (!runtimePolicy.writableRoot) return "Agent needs a writable root";
+    if (!runtimePolicy.toolPermissions.includes("write")) return "Agent needs write permission";
     return null;
   });
+
+  function toggleToolPermission(permission: ToolPermission) {
+    if (selectedToolPermissions.includes(permission)) {
+      selectedToolPermissions = selectedToolPermissions.filter((entry) => entry !== permission);
+      return;
+    }
+
+    selectedToolPermissions = [...selectedToolPermissions, permission];
+  }
 
   async function loadHarnesses() {
     harnessesLoading = true;
     harnessesError = "";
-
     try {
       const response = await fetch("/api/harnesses");
-      const data = await response.json().catch(() => ({})) as {
-        harnesses?: AgentHarness[];
-        error?: string;
-      };
-
+      const data = await response.json().catch(() => ({})) as { harnesses?: AgentHarness[]; error?: string };
       if (!response.ok) {
         harnessesError = data.error ?? "Harness catalog unavailable";
         availableHarnesses = [];
         return;
       }
 
-      const harnesses = (data.harnesses ?? []).filter((entry) => entry.enabled);
-      availableHarnesses = harnesses;
-      if (harnesses.length > 0 && !harnesses.some((entry) => entry.id === agent)) {
-        agent = harnesses[0].id;
+      availableHarnesses = (data.harnesses ?? []).filter((entry) => entry.enabled);
+      if (!availableHarnesses.some((entry) => entry.id === harnessId) && availableHarnesses[0]) {
+        harnessId = availableHarnesses[0].id;
       }
     } catch {
       harnessesError = "Harness catalog unavailable";
@@ -205,11 +193,10 @@
 
   async function loadModels() {
     if (!hasAnyAccountKey) {
-      modelsLoading = false;
-      modelsError = "";
-      modelWarnings = [];
       availableModels = [];
       model = "";
+      modelsError = "";
+      modelsLoading = false;
       return;
     }
 
@@ -227,7 +214,6 @@
       };
 
       modelWarnings = data.warnings ?? [];
-
       if (!response.ok) {
         modelsError = data.error ?? data.message ?? "Model catalog unavailable";
         availableModels = [];
@@ -235,23 +221,16 @@
         return;
       }
 
-      const models = data.models ?? [];
-      const uniqueModels = new Map(models.map((entry) => [entry.id, entry]));
-      availableModels = Array.from(uniqueModels.values());
+      const nextModels = Array.from(new Map((data.models ?? []).map((entry) => [entry.id, entry])).values());
+      availableModels = nextModels;
 
-      if (model && uniqueModels.has(model)) {
-        return;
-      }
+      if (model && nextModels.some((entry) => entry.id === model)) return;
 
       const harnessDefault = selectedHarness?.defaultModel
         ? canonicalizeStoredModel(selectedHarness.defaultModel)
-        : "";
-      if (harnessDefault && uniqueModels.has(harnessDefault)) {
-        model = harnessDefault;
-        return;
-      }
+        : canonicalizeStoredModel(lastModel);
 
-      model = uniqueModels.has(preferredModel) ? preferredModel : "";
+      model = nextModels.some((entry) => entry.id === harnessDefault) ? harnessDefault : "";
     } catch {
       modelsError = "Model catalog unavailable";
       availableModels = [];
@@ -277,7 +256,6 @@
           key: inlineKeyDraft.trim(),
         }),
       });
-
       const data = await response.json().catch(() => ({})) as {
         message?: string;
         keys?: Record<ProviderId, string | null>;
@@ -302,7 +280,6 @@
 
   async function handleSpawn() {
     spawnError = "";
-
     if (spawnBlocker) {
       spawnError = spawnBlocker;
       return;
@@ -312,44 +289,35 @@
     try {
       await Promise.resolve(onspawn({
         name: name.trim(),
-        harnessId: agent,
+        harnessId,
         model,
+        allowedPaths: runtimePolicy.allowedPaths,
+        forbiddenPaths: runtimePolicy.forbiddenPaths,
+        toolPermissions: runtimePolicy.toolPermissions,
+        writableRoot: runtimePolicy.writableRoot,
       }));
     } catch (error) {
-      spawnError = error instanceof Error ? error.message : "Failed to spawn agent";
+      spawnError = error instanceof Error ? error.message : "Failed to create agent";
     } finally {
       spawning = false;
     }
   }
 
-  function handleBackdrop(event: MouseEvent) {
-    if (event.target === event.currentTarget) onclose();
-  }
-
-  function handleBackdropKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onclose();
-    }
-  }
-
-  function stopModalKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      onclose();
-      return;
-    }
-    event.stopPropagation();
-  }
-
   onMount(async () => {
-    await Promise.all([loadHarnesses(), loadModels()]);
+    await loadHarnesses();
+  });
+
+  $effect(() => {
+    harnessId;
+    accountKeys.openrouter;
+    accountKeys.zen;
+    void loadModels();
   });
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-bg" onclick={handleBackdrop} onkeydown={handleBackdropKeydown}>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-bg" onclick={(event) => event.target === event.currentTarget && onclose()}>
   <div
     class="modal"
     role="dialog"
@@ -357,9 +325,14 @@
     aria-labelledby="spawn-agent-title"
     tabindex="-1"
     onclick={(event) => event.stopPropagation()}
-    onkeydown={stopModalKeydown}
+    onkeydown={(event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onclose();
+      }
+    }}
   >
-    <div class="modal-title" id="spawn-agent-title">spawn agent</div>
+    <div class="modal-title" id="spawn-agent-title">new agent</div>
     <div class="modal-body">
       <div class="modal-banner modal-banner-setup">{setupSummary}</div>
 
@@ -374,7 +347,7 @@
         </button>
       </div>
 
-      <div class="modal-label">agent harness</div>
+      <div class="modal-label">harness</div>
       {#if harnessesError}
         <div class="modal-banner modal-banner-error">{harnessesError}</div>
       {/if}
@@ -385,12 +358,12 @@
           {#each availableHarnesses as harness}
             <button
               class="modal-option"
-              class:on={agent === harness.id}
+              class:on={harnessId === harness.id}
               onclick={() => {
-                agent = harness.id;
-                const defaultModel = canonicalizeStoredModel(harness.defaultModel);
-                if (availableModels.some((entry) => entry.id === defaultModel)) {
-                  model = defaultModel;
+                harnessId = harness.id;
+                const fallbackModel = canonicalizeStoredModel(harness.defaultModel);
+                if (availableModels.some((entry) => entry.id === fallbackModel)) {
+                  model = fallbackModel;
                 }
               }}
             >
@@ -400,149 +373,107 @@
         {/if}
       </div>
       {#if selectedHarness}
-        <div class="modal-meta">
-          {selectedHarness.description}
-        </div>
+        <div class="modal-meta">{selectedHarness.description}</div>
       {/if}
 
       <div class="modal-label">router access</div>
       {#if accountKeysStateError}
-        <div class="modal-banner modal-banner-error">
-          {accountKeysStateError}
-        </div>
+        <div class="modal-banner modal-banner-error">{accountKeysStateError}</div>
       {/if}
-
       {#if hasSelectedProviderKey}
         <div class="modal-key-card modal-key-card-ready">
-          <div class="modal-key-title">Ready to load live models</div>
-          <div class="modal-key-copy">
-            Using saved {activeProviderDefinition.label} access for this agent.
-          </div>
-          <div class="modal-options">
-            <button class="modal-option on" disabled>
-              account router key{availableRouters.length > 1 ? "s" : ""} ({availableRouters.join(", ")})
-            </button>
-          </div>
+          <div class="modal-key-title">Model access is ready</div>
+          <div class="modal-key-copy">Using saved {activeProviderDefinition.label} access for this agent.</div>
         </div>
       {:else}
         <div class="modal-key-card">
-          <div class="modal-key-head">
-            <div>
-              <div class="modal-key-title">Save {activeProviderDefinition.label} access here</div>
-              <div class="modal-key-copy">
-                This is required before model selection and spawn.
-              </div>
-            </div>
-            <a href={activeProviderDefinition.docsUrl} class="modal-key-link" target="_blank" rel="noopener">
-              get key
-            </a>
+          <div class="modal-key-title">Add {activeProviderDefinition.label} access inline</div>
+          <div class="modal-key-copy">
+            filepath does not create agents into a known-bad missing-key state. Save the account key here and keep going.
           </div>
-
-          <div class="modal-key-row">
+          <div class="modal-inline-key">
             <input
+              bind:value={inlineKeyDraft}
               class="modal-input"
               type="password"
-              placeholder={activeProviderDefinition.keyPlaceholder}
-              bind:value={inlineKeyDraft}
+              placeholder={`${activeProviderDefinition.label} key`}
             />
-            <button
-              class="modal-save"
-              onclick={saveInlineKey}
-              disabled={inlineKeySaving || !inlineKeyDraft.trim()}
-            >
+            <button class="modal-inline-save" onclick={saveInlineKey} disabled={inlineKeySaving || !inlineKeyDraft.trim()}>
               {inlineKeySaving ? "saving..." : "save key"}
             </button>
           </div>
-
-          <div class="modal-key-copy">
-            Stored to your account and reused for future agent spawns.
-            <a href="/settings/account" class="modal-key-link">Manage keys in Settings</a>
-          </div>
-
           {#if inlineKeyError}
-            <div class="modal-banner modal-banner-error">{inlineKeyError}</div>
+            <div class="modal-meta modal-meta-error">{inlineKeyError}</div>
           {/if}
           {#if inlineKeySuccess}
-            <div class="modal-banner modal-banner-success">{inlineKeySuccess}</div>
+            <div class="modal-meta modal-meta-success">{inlineKeySuccess}</div>
           {/if}
         </div>
       {/if}
 
-      <label class="modal-label" for="spawn-model-search">model</label>
-      <div class="modal-section">
-        <div class="modal-combo-row">
-          <input
-            id="spawn-model-search"
-            class="modal-input"
-            placeholder={hasAnyAccountKey ? "Search models..." : `Save a ${activeProviderDefinition.label} key first`}
-            bind:value={modelFilter}
-            disabled={!hasAnyAccountKey || modelsLoading}
-          />
-          <button
-            class="modal-clear"
-            onclick={() => {
-              model = "";
-              modelFilter = "";
-            }}
-            disabled={!model}
-            aria-label="Clear selected model"
-          >
-            clear
-          </button>
-        </div>
-
-        <select
-          class="modal-select"
-          bind:value={model}
-          disabled={!hasAnyAccountKey || modelsLoading || availableModels.length === 0}
-        >
-          <option value="">{modelSelectPlaceholder}</option>
+      <div class="modal-label">model</div>
+      <input bind:value={modelFilter} class="modal-input" placeholder="Search live models..." />
+      <div class="modal-select-shell">
+        <select bind:value={model} class="modal-select" disabled={!hasSelectedProviderKey || modelsLoading || Boolean(modelsError)}>
+          <option value="">{modelsLoading ? "Loading live models..." : "Choose a model"}</option>
           {#each filteredModels as entry}
-            <option value={entry.id}>
-              {entry.name} · {entry.id}
-            </option>
+            <option value={entry.id}>{entry.id}</option>
           {/each}
         </select>
-
-        {#if modelsError}
-          <div class="modal-banner modal-banner-error">{modelsError}</div>
-        {:else if modelWarnings.length > 0}
-          <div class="modal-banner">{modelWarnings.join(" · ")}</div>
-        {:else if !hasAnyAccountKey}
-          <div class="modal-banner">
-            Save router access above to unlock the live model catalog here.
-          </div>
-        {:else if !modelsLoading}
-          <div class="modal-meta">
-            {filteredModels.length} of {availableModels.length} models
-          </div>
-        {/if}
-
-        {#if selectedModelEntry}
-          <div class="modal-selection">
-            <span class="modal-selection-label">selected</span>
-            <span class="modal-selection-value">{selectedModelEntry.id}</span>
-          </div>
-        {:else if selectedHarness && hasAnyAccountKey}
-          <div class="modal-meta">
-            Default for {selectedHarness.name}: {selectedHarness.defaultModel}
-          </div>
-        {/if}
       </div>
+      {#if selectedModelEntry}
+        <div class="modal-meta">Selected: {selectedModelEntry.name} via {selectedModelEntry.provider}</div>
+      {/if}
+      {#if modelsError}
+        <div class="modal-meta modal-meta-error">{modelsError}</div>
+      {/if}
+      {#if modelWarnings.length > 0}
+        <div class="modal-meta">{modelWarnings.join(" ")}</div>
+      {/if}
+
+      <div class="modal-label">allowed paths</div>
+      <input bind:value={allowedPathsInput} class="modal-input" placeholder="src, docs, apps/web" />
+      <div class="modal-meta">Comma or newline separated relative paths this agent can change.</div>
+
+      <div class="modal-label">forbidden paths</div>
+      <input bind:value={forbiddenPathsInput} class="modal-input" placeholder=".git, node_modules, secrets" />
+      <div class="modal-meta">Optional guardrails inside the allowed area.</div>
+
+      <div class="modal-label">writable root</div>
+      <input bind:value={writableRootInput} class="modal-input" placeholder="src" />
+      <div class="modal-meta">Commands run from here. Keep it inside the allowed paths.</div>
+
+      <div class="modal-label">tool permissions</div>
+      <div class="tool-grid">
+        {#each TOOL_PERMISSION_OPTIONS as option}
+          <button
+            class="tool-chip"
+            class:on={selectedToolPermissions.includes(option.id)}
+            onclick={() => toggleToolPermission(option.id)}
+          >
+            <span>{option.label}</span>
+            <small>{option.description}</small>
+          </button>
+        {/each}
+      </div>
+
+      <div class="modal-policy-preview">
+        <div><strong>agent</strong> scope</div>
+        <div>Allowed: {runtimePolicy.allowedPaths.join(", ")}</div>
+        <div>Forbidden: {runtimePolicy.forbiddenPaths.length > 0 ? runtimePolicy.forbiddenPaths.join(", ") : "none"}</div>
+        <div>Tools: {runtimePolicy.toolPermissions.join(", ")}</div>
+        <div>Writable root: {runtimePolicy.writableRoot ?? "read-only"}</div>
+      </div>
+
+      {#if spawnError}
+        <div class="modal-banner modal-banner-error">{spawnError}</div>
+      {/if}
     </div>
 
-    <div class="modal-footer">
-      {#if spawnError}
-        <div class="modal-footer-error">{spawnError}</div>
-      {/if}
-      <button class="modal-cancel" onclick={onclose}>cancel</button>
-      <button
-        class="modal-go"
-        onclick={handleSpawn}
-        disabled={Boolean(spawnBlocker) || spawning}
-        title={spawnBlocker ?? ""}
-      >
-        {spawning ? "spawning..." : "spawn agent"}
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-secondary" onclick={onclose}>cancel</button>
+      <button class="modal-btn modal-btn-primary" disabled={Boolean(spawnBlocker) || spawning} onclick={handleSpawn}>
+        {spawning ? "creating..." : "create agent"}
       </button>
     </div>
   </div>
@@ -552,296 +483,197 @@
   .modal-bg {
     position: fixed;
     inset: 0;
-    background: var(--overlay);
+    background: color-mix(in srgb, black 30%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
-    backdrop-filter: blur(2px);
+    z-index: 80;
   }
-
   .modal {
-    width: min(460px, calc(100vw - 32px));
-    background: var(--modal-bg);
-    border: 1px solid var(--b2);
+    width: min(760px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--b1);
     border-radius: 16px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
   }
-
   .modal-title {
-    padding: 16px 20px 10px;
     font-family: var(--m);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--t1);
+    font-size: 20px;
+    font-weight: 700;
+    padding: 20px 24px 0;
   }
-
   .modal-body {
-    padding: 0 20px 18px;
-  }
-
-  .modal-label {
-    display: block;
-    font-family: var(--m);
-    font-size: 9px;
-    color: var(--t4);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin: 12px 0 6px;
-  }
-
-  .modal-label:first-child {
-    margin-top: 0;
-  }
-
-  .modal-name-row,
-  .modal-combo-row,
-  .modal-key-row {
+    padding: 18px 24px 24px;
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    gap: 12px;
   }
-
+  .modal-label {
+    font-family: var(--m);
+    text-transform: uppercase;
+    font-size: 11px;
+    color: var(--t5);
+    letter-spacing: 0.16em;
+    margin-top: 4px;
+  }
   .modal-input,
   .modal-select {
     width: 100%;
-    background: var(--bg3);
-    border: 1px solid var(--b2);
-    border-radius: 9px;
-    padding: 10px 12px;
+    border: 1px solid var(--b1);
+    border-radius: 12px;
+    background: var(--bg2);
     color: var(--t1);
+    padding: 14px 16px;
+    font-family: var(--m);
+    font-size: 14px;
+  }
+  .modal-select-shell {
+    border: 1px solid var(--b1);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .modal-select {
+    border: 0;
+    border-radius: 0;
+    appearance: none;
+  }
+  .modal-name-row,
+  .modal-inline-key {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+  .modal-dice,
+  .modal-inline-save {
+    border: 1px solid var(--b1);
+    border-radius: 12px;
+    background: var(--bg2);
+    color: var(--t2);
+    font-family: var(--m);
+    padding: 0 14px;
+    cursor: pointer;
+  }
+  .modal-banner,
+  .modal-key-card,
+  .modal-policy-preview {
+    border: 1px solid var(--b1);
+    border-radius: 12px;
+    padding: 12px 14px;
     font-family: var(--m);
     font-size: 12px;
-    outline: none;
+    line-height: 1.5;
   }
-
-  .modal-select {
-    appearance: auto;
-    min-height: 40px;
-  }
-
-  .modal-input:focus,
-  .modal-select:focus {
-    border-color: var(--t5);
-  }
-
-  .modal-input:disabled,
-  .modal-select:disabled,
-  .modal-go:disabled,
-  .modal-save:disabled,
-  .modal-clear:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  .modal-input::placeholder {
-    color: var(--t5);
-  }
-
-  .modal-section {
-    display: grid;
-    gap: 8px;
-  }
-
-  .modal-options {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .modal-options-harness {
-    min-height: 42px;
-    align-items: flex-start;
-  }
-
-  .modal-option {
-    padding: 7px 11px;
-    background: var(--bg3);
-    border: 1px solid var(--b2);
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: var(--m);
-    font-size: 11px;
-    color: var(--t4);
-    transition: all 0.1s;
-  }
-
-  .modal-option:hover {
-    border-color: var(--t5);
-    color: var(--t3);
-  }
-
-  .modal-option.on {
-    background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
-    color: var(--t1);
-  }
-
-  .modal-banner,
-  .modal-meta,
-  .modal-key-copy,
-  .modal-placeholder,
-  .modal-footer-error {
-    font-family: var(--m);
-    font-size: 10px;
-    line-height: 1.45;
-  }
-
-  .modal-banner,
-  .modal-key-card {
-    border: 1px solid var(--b2);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--bg3) 82%, transparent);
-  }
-
-  .modal-banner {
-    padding: 8px 10px;
-    color: var(--t4);
-  }
-
-  .modal-banner-error,
-  .modal-footer-error {
-    color: #dc2626;
-  }
-
-  .modal-banner-success {
-    color: #15803d;
-  }
-
-  .modal-meta {
-    color: var(--t5);
-  }
-
-  .modal-selection {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--accent) 7%, var(--bg3));
-    border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-
-  .modal-selection-label {
-    font-family: var(--m);
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--t5);
-  }
-
-  .modal-selection-value {
-    font-family: var(--m);
-    font-size: 11px;
-    color: var(--t1);
-  }
-
-  .modal-placeholder {
-    display: flex;
-    align-items: center;
-    min-height: 40px;
-    color: var(--t5);
-  }
-
-  .modal-dice,
-  .modal-clear,
-  .modal-save,
-  .modal-cancel,
-  .modal-go {
-    border-radius: 9px;
-    font-family: var(--m);
-    font-size: 11px;
-    transition: all 0.1s ease;
-  }
-
-  .modal-dice,
-  .modal-clear {
-    background: var(--bg3);
-    border: 1px solid var(--b2);
-    color: var(--t4);
-    padding: 0 11px;
-    cursor: pointer;
-  }
-
-  .modal-dice:hover,
-  .modal-clear:hover:not(:disabled),
-  .modal-cancel:hover {
-    border-color: var(--t5);
+  .modal-banner-setup {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
     color: var(--t2);
   }
-
-  .modal-key-card {
-    padding: 12px;
+  .modal-banner-error {
+    background: color-mix(in srgb, #ef4444 10%, transparent);
+    color: #b91c1c;
+  }
+  .modal-key-card-ready {
+    background: color-mix(in srgb, #10b981 10%, transparent);
+  }
+  .modal-key-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .modal-key-copy,
+  .modal-meta {
+    font-family: var(--m);
+    font-size: 11px;
+    color: var(--t5);
+    line-height: 1.5;
+  }
+  .modal-meta-error {
+    color: #b91c1c;
+  }
+  .modal-meta-success {
+    color: #047857;
+  }
+  .tool-grid,
+  .modal-options {
     display: grid;
     gap: 10px;
   }
-
-  .modal-key-card-ready {
-    background: color-mix(in srgb, var(--accent) 6%, var(--bg3));
+  .tool-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-
-  .modal-key-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
+  .modal-options-harness {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   }
-
-  .modal-key-title {
+  .tool-chip,
+  .modal-option {
+    border: 1px solid var(--b1);
+    border-radius: 12px;
+    background: var(--bg2);
+    color: var(--t2);
     font-family: var(--m);
-    font-size: 11px;
-    color: var(--t1);
-  }
-
-  .modal-key-copy {
-    color: var(--t5);
-  }
-
-  .modal-key-link {
-    color: var(--t3);
-    text-decoration: underline;
-  }
-
-  .modal-key-link:hover {
-    color: var(--t1);
-  }
-
-  .modal-save {
-    border: none;
-    background: color-mix(in srgb, var(--accent) 85%, white 15%);
-    color: white;
-    padding: 0 14px;
+    padding: 12px;
+    text-align: left;
     cursor: pointer;
-    white-space: nowrap;
   }
-
-  .modal-footer {
-    padding: 12px 20px 16px;
+  .tool-chip.on,
+  .modal-option.on {
+    border-color: color-mix(in srgb, var(--accent) 65%, var(--b1));
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg2));
+    color: var(--t1);
+  }
+  .tool-chip small {
+    display: block;
+    color: var(--t5);
+    font-size: 10px;
+    line-height: 1.4;
+    margin-top: 4px;
+  }
+  .modal-placeholder {
+    padding: 12px;
+    border: 1px dashed var(--b1);
+    border-radius: 12px;
+    color: var(--t5);
+    font-family: var(--m);
+    font-size: 12px;
+  }
+  .modal-policy-preview {
+    background: var(--bg2);
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .modal-actions {
+    padding: 16px 24px 24px;
+    display: flex;
     justify-content: flex-end;
+    gap: 12px;
     border-top: 1px solid var(--b1);
   }
-
-  .modal-footer-error {
-    margin-right: auto;
-  }
-
-  .modal-cancel {
-    background: none;
-    border: 1px solid var(--b2);
-    color: var(--t4);
-    padding: 8px 14px;
+  .modal-btn {
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--b1);
+    font-family: var(--m);
     cursor: pointer;
   }
-
-  .modal-go {
+  .modal-btn-primary {
     background: var(--accent);
-    border: none;
-    color: #fff;
-    padding: 8px 18px;
-    font-weight: 600;
-    cursor: pointer;
+    color: white;
+    border-color: var(--accent);
+  }
+  .modal-btn-secondary {
+    background: var(--bg2);
+    color: var(--t2);
+  }
+  .modal-btn:disabled,
+  .tool-chip:disabled,
+  .modal-inline-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  @media (max-width: 720px) {
+    .tool-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

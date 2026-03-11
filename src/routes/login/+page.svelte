@@ -3,15 +3,20 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { signIn } from '$lib/auth-client';
+
+  const redirectTo = $derived.by(() => {
+    const r = page.url.searchParams.get('redirect');
+    if (!r || !r.startsWith('/')) return '/dashboard';
+    return r;
+  });
   let email = $state('');
   let password = $state('');
   let isLoading = $state(false);
   let error = $state<string | null>(null);
   
   onMount(() => {
-    // If user is already authenticated, redirect to dashboard
     if (page.data.user) {
-      goto('/dashboard');
+      goto(redirectTo);
     }
   });
   
@@ -39,7 +44,7 @@
         return;
       }
       
-      goto('/dashboard');
+      goto(redirectTo);
     } catch (err) {
       error = 'An unexpected error occurred. Please try again.';
       console.error(err);

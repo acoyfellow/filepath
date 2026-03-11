@@ -1,5 +1,5 @@
 import { DEFAULT_MODEL_FULL } from "$lib/config";
-import type { AgentHarness } from "$lib/types/session";
+import type { AgentHarness } from "$lib/types/workspace";
 
 export const BUILTIN_HARNESSES: AgentHarness[] = [
   {

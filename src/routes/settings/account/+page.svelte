@@ -336,7 +336,7 @@
       <h2 class="text-red-400 text-lg font-medium mb-2" id="delete-account-title">Delete account</h2>
       <p class="text-sm mb-2 text-gray-600 dark:text-neutral-400">This will permanently delete:</p>
       <ul class="text-sm space-y-1 mb-6 ml-4 text-gray-500 dark:text-neutral-500">
-        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All sessions and agent history</li>
+        <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All workspaces, agents, and task history</li>
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> All API keys</li>
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> Credit balance (non-refundable)</li>
         <li class="flex gap-2"><span class="text-gray-400 dark:text-neutral-600">•</span> Usage history</li>

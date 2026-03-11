@@ -177,7 +177,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   passkeys: many(passkey),
   apikeys: many(apikey),
-  agentSessions: many(agentSession),
+  workspaces: many(workspace),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -209,11 +209,11 @@ export const apikeyRelations = relations(apikey, ({ one }) => ({
 }));
 
 // ============================================
-// Agent Sessions (tree-native)
+// filepath v1 runtime tables
 // ============================================
 
-export const agentSession = sqliteTable(
-  "agent_session",
+export const workspace = sqliteTable(
+  "workspace",
   {
     id: text("id").primaryKey(),
     userId: text("user_id")
@@ -222,10 +222,7 @@ export const agentSession = sqliteTable(
     name: text("name").notNull(),
     gitRepoUrl: text("git_repo_url"),
     status: text("status").notNull().default("draft"),
-    // 'draft' | 'running' | 'paused' | 'stopped' | 'error'
-    rootNodeId: text("root_node_id"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
-    lastBilledAt: integer("last_billed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -235,13 +232,13 @@ export const agentSession = sqliteTable(
       .notNull(),
   },
   (table) => [
-    index("agent_session_user_id_idx").on(table.userId),
-    index("agent_session_status_idx").on(table.status),
+    index("workspace_user_id_idx").on(table.userId),
+    index("workspace_status_idx").on(table.status),
   ],
 );
 
-export const agentHarness = sqliteTable(
-  "agent_harness",
+export const harness = sqliteTable(
+  "harness",
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
@@ -261,30 +258,31 @@ export const agentHarness = sqliteTable(
       .notNull(),
   },
   (table) => [
-    index("agent_harness_enabled_idx").on(table.enabled),
+    index("harness_enabled_idx").on(table.enabled),
   ],
 );
 
-export const agentNode = sqliteTable(
-  "agent_node",
+export const agent = sqliteTable(
+  "agent",
   {
     id: text("id").primaryKey(),
-    sessionId: text("session_id")
+    workspaceId: text("workspace_id")
       .notNull()
-      .references(() => agentSession.id, { onDelete: "cascade" }),
-    parentId: text("parent_id"),
-    // Self-referential. NULL = root node. FK enforced at app level.
+      .references(() => workspace.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     harnessId: text("harness_id")
       .notNull()
-      .references(() => agentHarness.id),
+      .references(() => harness.id),
     model: text("model").notNull(),
     status: text("status").notNull().default("idle"),
-    // 'idle' | 'thinking' | 'running' | 'done' | 'error'
     config: text("config").notNull().default("{}"),
-    // JSON: { systemPrompt?, envVars?, maxTokens? }
+    allowedPaths: text("allowed_paths").notNull().default("[]"),
+    forbiddenPaths: text("forbidden_paths").notNull().default("[]"),
+    toolPermissions: text("tool_permissions").notNull().default("[]"),
+    writableRoot: text("writable_root"),
     containerId: text("container_id"),
-    sortOrder: integer("sort_order").notNull().default(0),
+    activeProcessId: text("active_process_id"),
+    cancelRequested: integer("cancel_requested", { mode: "boolean" }).notNull().default(false),
     tokens: integer("tokens").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -295,41 +293,86 @@ export const agentNode = sqliteTable(
       .notNull(),
   },
   (table) => [
-    index("agent_node_session_id_idx").on(table.sessionId),
-    index("agent_node_parent_id_idx").on(table.parentId),
-    index("agent_node_status_idx").on(table.status),
+    index("agent_workspace_id_idx").on(table.workspaceId),
+    index("agent_status_idx").on(table.status),
   ],
 );
 
-// ============================================
-// Agent Session Relations
-// ============================================
+export const agentMessage = sqliteTable(
+  "agent_message",
+  {
+    id: text("id").primaryKey(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agent.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [index("agent_message_agent_id_idx").on(table.agentId)],
+);
 
-export const agentSessionRelations = relations(agentSession, ({ one, many }) => ({
+export const agentResult = sqliteTable("agent_result", {
+  agentId: text("agent_id")
+    .primaryKey()
+    .notNull()
+    .references(() => agent.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  summary: text("summary").notNull(),
+  commands: text("commands").notNull(),
+  filesTouched: text("files_touched").notNull(),
+  violations: text("violations").notNull(),
+  diffSummary: text("diff_summary"),
+  commitJson: text("commit_json"),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  finishedAt: integer("finished_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const agentTask = sqliteTable(
+  "agent_task",
+  {
+    id: text("id").primaryKey(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agent.id, { onDelete: "cascade" }),
+    content: text("content").notNull().default(""),
+    status: text("status").notNull(),
+    summary: text("summary").notNull(),
+    commands: text("commands").notNull(),
+    filesTouched: text("files_touched").notNull(),
+    violations: text("violations").notNull(),
+    diffSummary: text("diff_summary"),
+    commitJson: text("commit_json"),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+    finishedAt: integer("finished_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("agent_task_agent_id_idx").on(table.agentId),
+    index("agent_task_finished_at_idx").on(table.finishedAt),
+  ],
+);
+
+export const workspaceRelations = relations(workspace, ({ one, many }) => ({
   user: one(user, {
-    fields: [agentSession.userId],
+    fields: [workspace.userId],
     references: [user.id],
   }),
-  nodes: many(agentNode),
+  agents: many(agent),
 }));
 
-export const agentHarnessRelations = relations(agentHarness, ({ many }) => ({
-  nodes: many(agentNode),
+export const harnessRelations = relations(harness, ({ many }) => ({
+  agents: many(agent),
 }));
 
-export const agentNodeRelations = relations(agentNode, ({ one, many }) => ({
-  session: one(agentSession, {
-    fields: [agentNode.sessionId],
-    references: [agentSession.id],
+export const agentRelations = relations(agent, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [agent.workspaceId],
+    references: [workspace.id],
   }),
-  harness: one(agentHarness, {
-    fields: [agentNode.harnessId],
-    references: [agentHarness.id],
+  harness: one(harness, {
+    fields: [agent.harnessId],
+    references: [harness.id],
   }),
-  parent: one(agentNode, {
-    fields: [agentNode.parentId],
-    references: [agentNode.id],
-    relationName: "parentChild",
-  }),
-  children: many(agentNode, { relationName: "parentChild" }),
 }));

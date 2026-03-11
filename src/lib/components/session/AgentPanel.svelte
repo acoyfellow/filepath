@@ -1,7 +1,7 @@
 <script lang="ts">
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import { STATUS_COLORS, STATUS_LABELS } from "$lib/protocol";
-  import type { AgentNode } from "$lib/types/session";
+  import type { AgentRecord, AgentResult } from "$lib/types/workspace";
   import ChatInput from "./ChatInput.svelte";
   import type { ChatMsg } from "./ChatView.svelte";
   import ChatView from "./ChatView.svelte";
@@ -14,22 +14,25 @@
   };
 
   interface Props {
-    agent: AgentNode | null;
+    agent: AgentRecord | null;
     messages: ChatMsg[];
+    result?: AgentResult | null;
     notice?: AgentNotice | null;
     onsend: (message: string) => void;
+    oncancel?: () => void;
     onnavigate?: (name: string) => void;
   }
 
-  let { agent, messages, notice = null, onsend, onnavigate }: Props = $props();
+  let { agent, messages, result = null, notice = null, onsend, oncancel, onnavigate }: Props = $props();
 
   let isExhausted = $derived(agent?.status === "exhausted");
+  let isBusy = $derived(agent?.status === "thinking" || agent?.status === "running");
   let composerDisabled = $derived(Boolean(isExhausted || notice?.blocking));
   let composerPlaceholder = $derived.by(() => {
     if (notice?.blocking) return notice.title;
     if (isExhausted) return "Agent exhausted";
-    if (agent?.status === "idle" && messages.length === 0) return "Send the first message...";
-    return "Message...";
+    if (agent?.status === "idle" && messages.length === 0) return "Start the first task...";
+    return "Describe the next task...";
   });
 </script>
 
@@ -44,11 +47,14 @@
         </span>
       </div>
       <div class="panel-right">
-        <span class="panel-tag">agent</span>
         <span class="panel-tag">{agent.harnessId}</span>
         <span class="panel-tag">{agent.model}</span>
+        <span class="panel-tag">scope {agent.writableRoot ?? "."}</span>
         {#if agent.tokens > 0}
           <span class="panel-tokens">{agent.tokens.toLocaleString()}t</span>
+        {/if}
+        {#if isBusy && oncancel}
+          <button class="panel-cancel" onclick={oncancel}>cancel</button>
         {/if}
       </div>
     </div>
@@ -62,12 +68,60 @@
       {:else if agent.status === "idle" && messages.length === 0}
         <div class="panel-notice panel-notice-info">
           <div class="panel-notice-title">Ready</div>
-          <div>This agent is ready for its first message.</div>
+          <div>This agent is ready for its first task.</div>
         </div>
       {/if}
       {#if isExhausted}
         <div class="readonly-banner">
           This agent is exhausted. Its history remains visible, but it is read-only for now.
+        </div>
+      {/if}
+      {#if result}
+        <div class="result-card">
+          <div class="result-header">
+            <span class="result-title">latest result</span>
+            <span class={`result-status result-status-${result.status}`}>{result.status}</span>
+          </div>
+          <div class="result-summary">{result.summary}</div>
+          {#if result.commands.length > 0}
+            <div class="result-meta">
+              <strong>commands</strong>
+              <ol class="result-command-list">
+                {#each result.commands as cmd}
+                  <li>
+                    <code>{cmd.command}</code>
+                    {#if cmd.exitCode !== null}
+                      <span class="result-exit">exit {cmd.exitCode}</span>
+                    {/if}
+                  </li>
+                {/each}
+              </ol>
+            </div>
+          {/if}
+          {#if result.filesTouched.length > 0}
+            <div class="result-meta">
+              <strong>files</strong>
+              <span>{result.filesTouched.join(", ")}</span>
+            </div>
+          {/if}
+          {#if result.violations.length > 0}
+            <div class="result-meta">
+              <strong>violations</strong>
+              <span>{result.violations.join(", ")}</span>
+            </div>
+          {/if}
+          {#if result.diffSummary}
+            <div class="result-meta">
+              <strong>diff</strong>
+              <span>{result.diffSummary}</span>
+            </div>
+          {/if}
+          {#if result.commit}
+            <div class="result-meta">
+              <strong>commit</strong>
+              <span>{result.commit.sha} · {result.commit.message}</span>
+            </div>
+          {/if}
         </div>
       {/if}
       <ChatView
@@ -77,7 +131,7 @@
       />
     </div>
 
-    <ChatInput {onsend} disabled={composerDisabled} placeholder={composerPlaceholder} />
+    <ChatInput {onsend} disabled={composerDisabled} placeholder={composerPlaceholder} actionLabel="Send task" />
   </div>
 {:else}
   <div class="panel-empty">
@@ -134,6 +188,21 @@
     font-family: var(--m);
     font-size: 9px;
     color: var(--t6);
+  }
+
+  .panel-cancel {
+    border: 1px solid color-mix(in srgb, #ef4444 35%, var(--b1));
+    background: color-mix(in srgb, #ef4444 10%, transparent);
+    color: #dc2626;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-family: var(--m);
+    font-size: 10px;
+    cursor: pointer;
+  }
+
+  .panel-cancel:hover {
+    background: color-mix(in srgb, #ef4444 16%, transparent);
   }
 
   .panel-body {
@@ -196,5 +265,81 @@
   .panel-notice-success {
     color: #15803d;
     background: color-mix(in srgb, #22c55e 10%, transparent);
+  }
+
+  .result-card {
+    margin: 12px 16px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--b1);
+    background: var(--bg2);
+    font-family: var(--m);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .result-title {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--t5);
+  }
+
+  .result-status {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .result-status-success {
+    color: #15803d;
+  }
+
+  .result-status-error,
+  .result-status-policy_error {
+    color: #dc2626;
+  }
+
+  .result-status-aborted {
+    color: #b45309;
+  }
+
+  .result-summary {
+    color: var(--t2);
+  }
+
+  .result-meta {
+    display: grid;
+    gap: 2px;
+    margin-top: 8px;
+    color: var(--t4);
+  }
+
+  .result-command-list {
+    margin: 4px 0 0;
+    padding-left: 16px;
+    list-style: decimal;
+    font-family: var(--m);
+    font-size: 10px;
+  }
+
+  .result-command-list code {
+    font-size: 10px;
+    background: var(--bg3);
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+
+  .result-exit {
+    margin-left: 6px;
+    color: var(--t5);
+    font-size: 9px;
   }
 </style>

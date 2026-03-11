@@ -2,35 +2,39 @@
  * Worker entry point.
  *
  * Exports:
- * - ChatAgent DO (relay between frontend and sandbox)
- * - SessionEventBusV2 (session-scoped event bus)
  * - Sandbox (re-export for Container binding)
  *
  * Routes:
- * - /agents/* → Agent SDK (WebSocket connections to ChatAgent)
- * - session event routes for session-scoped websocket fan-out
- * - internal session event fan-out routes
+ * - /runtime/* → internal workspace runtime bridge
  * - Everything else → 404
  */
 
-import { getAgentByName, routeAgentRequest } from 'agents';
 import { proxyToSandbox } from '@cloudflare/sandbox';
-import { ChatAgent, ChatNodeAgent } from '../src/agent/chat-agent';
-import {
-} from '../src/lib/agents/container';
-import { SessionEventBusV2, Sandbox } from './index';
+import { Sandbox } from './index';
 import type { Env } from '../src/types';
+import {
+  cancelAgentTask,
+  deleteAgentRuntime,
+  getAgentRuntimeSnapshot,
+  type RuntimeEnv,
+  runAgentTask,
+} from '../src/lib/runtime/agent-runtime';
 
-// Export DO classes (Alchemy needs these)
-export { ChatAgent };
-export { ChatNodeAgent };
-export { SessionEventBusV2 };
+function toRuntimeEnv(env: Env): RuntimeEnv {
+  return {
+    DB: env.DB,
+    Sandbox: env.Sandbox as unknown as RuntimeEnv["Sandbox"],
+    BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+  };
+}
+
 export { Sandbox };
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const isWebSocketRequest = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+    const runtimeEnv = toRuntimeEnv(env);
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
@@ -43,64 +47,81 @@ export default {
       });
     }
 
-    // /agents/* → Agent SDK handles WebSocket upgrade + routing
-    const chatAgentMatch = url.pathname.match(/^\/agents\/chat-agent\/([^/]+)(?:\/health)?$/);
-    if (chatAgentMatch) {
-      const [, sessionId] = chatAgentMatch;
-      const runtime = await getAgentByName(env.ChatAgent as never, sessionId);
-      return runtime.fetch(request);
-    }
-
-    if (url.pathname.startsWith('/agents/')) {
-      const response = await routeAgentRequest(request, env, {
-        cors: true,
-      });
-      if (response) return response;
-
-      if (isWebSocketRequest) {
-        console.warn(`[worker] Agent websocket route returned no response for ${url.pathname}`);
+    const runtimeMatch = url.pathname.match(
+      /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/health)?$/,
+    );
+    if (runtimeMatch) {
+      const [, workspaceId, suffix = ""] = runtimeMatch;
+      if (request.method === "GET" && suffix === "/health") {
+        return new Response(JSON.stringify({ ok: true, workspaceId }), {
+          headers: { "Content-Type": "application/json" },
+        });
       }
-    }
 
-    const sessionEventsMatch = url.pathname.match(/^\/session-events\/([^/]+)$/);
-    if (sessionEventsMatch) {
-      const [, sessionId] = sessionEventsMatch;
-      const sessionNamespace = env.SESSION_DO as any;
-      const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
-      const connectRequest = new Request("https://session/connect", request);
-      return stub.fetch(connectRequest);
-    }
+      const taskMatch = suffix.match(/^\/agents\/([^/]+)\/tasks$/);
+      if (request.method === "POST" && taskMatch) {
+        const agentId = taskMatch[1];
+        const body = (await request.json().catch(() => ({}))) as { content?: string };
+        const content = body.content?.trim();
+        if (!content) {
+          return new Response(JSON.stringify({ error: "Task content is required." }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
 
-    const internalSessionEventMatch = url.pathname.match(/^\/internal\/sessions\/([^/]+)\/events$/);
-    if (internalSessionEventMatch && request.method === 'POST') {
-      const [, sessionId] = internalSessionEventMatch;
-      const sessionNamespace = env.SESSION_DO as any;
-      const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
-      return stub.fetch(new Request('https://session/events', {
-        method: 'POST',
-        headers: {
-          'Content-Type': request.headers.get('content-type') || 'application/json',
-        },
-        body: request.body,
-      }));
-    }
+        try {
+          const result = await runAgentTask(runtimeEnv, workspaceId, agentId, content);
+          return new Response(JSON.stringify({ ok: true, result }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (error) {
+          return new Response(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : "Unable to run agent task.",
+            }),
+            { status: 409, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
 
-    const runtimeBootstrapMatch = url.pathname.match(/^\/internal\/runtime\/sessions\/([^/]+)\/nodes\/([^/]+)\/bootstrap$/);
-    if (runtimeBootstrapMatch && request.method === "POST") {
-      const [, sessionId, nodeId] = runtimeBootstrapMatch;
-      const runtime = await getAgentByName(env.ChatAgent as never, sessionId);
-      await (runtime as unknown as { ensureNodeRuntime: (id: string) => Promise<unknown> }).ensureNodeRuntime(nodeId);
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+      const cancelMatch = suffix.match(/^\/agents\/([^/]+)\/cancel$/);
+      if (request.method === "POST" && cancelMatch) {
+        const agentId = cancelMatch[1];
+        const cancelled = await cancelAgentTask(runtimeEnv, agentId);
+        return new Response(JSON.stringify({ ok: true, cancelled }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
-    const runtimeDeleteMatch = url.pathname.match(/^\/internal\/runtime\/sessions\/([^/]+)\/nodes\/([^/]+)$/);
-    if (runtimeDeleteMatch && request.method === "DELETE") {
-      const [, sessionId, nodeId] = runtimeDeleteMatch;
-      const runtime = await getAgentByName(env.ChatAgent as never, sessionId);
-      await (runtime as unknown as { deleteNodeRuntime: (id: string) => Promise<unknown> }).deleteNodeRuntime(nodeId);
-      return new Response(JSON.stringify({ ok: true }), {
+      const agentMatch = suffix.match(/^\/agents\/([^/]+)$/);
+      if (request.method === "GET" && agentMatch) {
+        const agentId = agentMatch[1];
+        try {
+          const runtime = await getAgentRuntimeSnapshot(runtimeEnv, workspaceId, agentId);
+          return new Response(JSON.stringify({ ok: true, runtime }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (error) {
+          return new Response(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : "Unable to load agent runtime.",
+            }),
+            { status: 404, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
+
+      if (request.method === "DELETE" && agentMatch) {
+        const agentId = agentMatch[1];
+        await deleteAgentRuntime(runtimeEnv, agentId);
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: "Not found" }), {
+        status: 404,
         headers: { "Content-Type": "application/json" },
       });
     }

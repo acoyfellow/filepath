@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { AgentHarness } from "$lib/types/session";
+  import type { AgentHarness } from "$lib/types/workspace";
 
   interface HarnessEditor {
     id: string;
@@ -289,7 +289,7 @@
               {mode === "create" ? "Create harness" : "Edit harness"}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-neutral-500">
-              Harness IDs are what session spawn requests reference.
+              Harness IDs are what agent creation requests reference.
             </p>
           </div>
           {#if mode === "edit"}

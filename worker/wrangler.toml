@@ -17,10 +17,6 @@ database_id = "11c62299-1d8c-418f-b250-ff2598c699c6"
 database_name = "filepath-db"
 
 [[durable_objects.bindings]]
-name = "TaskAgent"
-class_name = "TaskAgent"
-
-[[durable_objects.bindings]]
 name = "Sandbox"
 class_name = "Sandbox"
 

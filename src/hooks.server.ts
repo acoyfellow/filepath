@@ -7,6 +7,12 @@ import type { Handle } from "@sveltejs/kit";
 
 export const handle: Handle = async ({ event, resolve }) => {
   try {
+    if (building) {
+      event.locals.user = null;
+      event.locals.session = null;
+      return resolve(event);
+    }
+
     // Handle API reference path - Better Auth Scalar UI has issues in dev
     if (event.url.pathname === '/api/auth/reference' || event.url.pathname === '/api/auth/reference/') {
       return new Response(`

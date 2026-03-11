@@ -17,13 +17,15 @@ declare global {
     }
 		// interface PageData {}
 		// interface PageState {}
-		interface Platform {
+	interface Platform {
       env: {
-        SESSION_DO: DurableObjectNamespace;
         WORKER: Fetcher;
+        Sandbox: DurableObjectNamespace;
         DB: D1Database;
         API_WS_HOST?: string;
         API_WS_ORIGIN?: string;
+        BETTER_AUTH_SECRET?: string;
+        BETTER_AUTH_URL?: string;
 				};
 		}
 	}

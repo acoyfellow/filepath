@@ -20,23 +20,13 @@ for (;;) {
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/api/config`);
-    if (!response.ok) {
-      throw new Error(`/api/config returned ${response.status}`);
+    const response = await fetch(`${BASE_URL}/dashboard`, { redirect: "manual" });
+    if (!response.ok && response.status !== 302) {
+      throw new Error(`/dashboard returned ${response.status}`);
     }
 
-    const payload = await response.json();
-    const workerUrl = typeof payload.workerUrl === "string" ? payload.workerUrl : "";
-    const worker = workerUrl ? new URL(workerUrl) : null;
-
-    if (
-      worker &&
-      worker.hostname === "localhost" &&
-      worker.port === EXPECTED_WORKER_PORT &&
-      portListening("5173") &&
-      portListening(EXPECTED_WORKER_PORT)
-    ) {
-      console.log(`Local dev ready: app=${BASE_URL} worker=${workerUrl}`);
+    if (portListening("5173") && portListening(EXPECTED_WORKER_PORT)) {
+      console.log(`Local dev ready: app=${BASE_URL} worker=http://localhost:${EXPECTED_WORKER_PORT}`);
       process.exit(0);
     }
   } catch {

@@ -7,8 +7,9 @@ import { emailOTP } from 'better-auth/plugins/email-otp';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/d1';
 import { user, session, account, verification, apikey, passkey as passkeyTable } from './schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { resolveBetterAuthSecret } from './better-auth-secret';
+import { parse as parseCookie } from 'cookie';
 // Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
 import type { D1Database } from '@cloudflare/workers-types';
@@ -65,6 +66,22 @@ function getApiKeyFromHeaders(headers: Headers): string | null {
   }
 
   return authorization.trim() || null;
+}
+
+function getSessionTokenFromHeaders(headers: Headers): string | null {
+  const rawCookie = headers.get('cookie');
+  if (!rawCookie) {
+    return null;
+  }
+
+  const cookies = parseCookie(rawCookie);
+  const rawToken = cookies['better-auth.session_token'];
+  if (!rawToken) {
+    return null;
+  }
+
+  const token = rawToken.split('.', 1)[0]?.trim();
+  return token || null;
 }
 
 export function initAuth(
@@ -128,6 +145,16 @@ export function initAuth(
       sendVerificationOTP: async ({ email, otp, type }) => {
         const mgKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
         const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
+        const isLocal =
+          baseURL.includes("localhost") ||
+          baseURL.includes("127.0.0.1") ||
+          !mgKey ||
+          !domain;
+
+        if (isLocal) {
+          console.log(`[better-auth] skipping email delivery for ${type} to ${email} in local dev`);
+          return;
+        }
 
         const sendMail = async (subject: string, text: string, html: string) => {
           const form = new FormData();
@@ -239,23 +266,70 @@ export async function resolveRequestAuth(options: {
 }): Promise<ResolvedRequestAuth> {
   const auth = initAuth(options.db, options.env, options.baseURL);
 
-  const session = await auth.api.getSession({
+  const resolvedSession = await auth.api.getSession({
     headers: options.headers,
   });
-  if (session?.user) {
+  if (resolvedSession?.user) {
     return {
       user: {
-        id: session.user.id,
-        createdAt: session.user.createdAt,
-        updatedAt: session.user.updatedAt,
-        email: session.user.email,
-        emailVerified: session.user.emailVerified,
-        name: session.user.name,
-        image: session.user.image,
-        role: (session.user as { role?: string | null }).role ?? null,
+        id: resolvedSession.user.id,
+        createdAt: resolvedSession.user.createdAt,
+        updatedAt: resolvedSession.user.updatedAt,
+        email: resolvedSession.user.email,
+        emailVerified: resolvedSession.user.emailVerified,
+        name: resolvedSession.user.name,
+        image: resolvedSession.user.image,
+        role: (resolvedSession.user as { role?: string | null }).role ?? null,
       },
-      session: session.session,
+      session: resolvedSession.session,
     };
+  }
+
+  const sessionToken = getSessionTokenFromHeaders(options.headers);
+  if (sessionToken) {
+    const dbHandle = getDrizzle();
+    const rows = await dbHandle
+      .select({
+        sessionId: session.id,
+        expiresAt: session.expiresAt,
+        token: session.token,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        userId: session.userId,
+        user: user,
+      })
+      .from(session)
+      .innerJoin(user, eq(session.userId, user.id))
+      .where(and(eq(session.token, sessionToken), gt(session.expiresAt, new Date())))
+      .limit(1);
+
+    const resolved = rows[0];
+    if (resolved) {
+      return {
+        user: {
+          id: resolved.user.id,
+          createdAt: resolved.user.createdAt,
+          updatedAt: resolved.user.updatedAt,
+          email: resolved.user.email,
+          emailVerified: resolved.user.emailVerified,
+          name: resolved.user.name ?? resolved.user.email,
+          image: resolved.user.image ?? undefined,
+          role: resolved.user.role ?? null,
+        },
+        session: {
+          id: resolved.sessionId,
+          token: resolved.token,
+          expiresAt: resolved.expiresAt,
+          createdAt: resolved.createdAt,
+          updatedAt: resolved.updatedAt,
+          ipAddress: resolved.ipAddress,
+          userAgent: resolved.userAgent,
+          userId: resolved.userId,
+        },
+      };
+    }
   }
 
   const apiKey = options.apiKeyOverride ?? getApiKeyFromHeaders(options.headers);

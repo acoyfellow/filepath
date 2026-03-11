@@ -3,14 +3,11 @@ import alchemy from "alchemy";
 import {
   SvelteKit,
   Worker,
-  DurableObjectNamespace,
   Container,
   D1Database,
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
-
-import type { ChatAgent } from "./src/agent/chat-agent.ts";
 
 for (const envFile of [".env", ".env.local"]) {
   try {
@@ -42,19 +39,6 @@ const prefix = isProd ? projectName : `${app.stage}-${projectName}`;
 const dbName = isProd ? `${projectName}-db` : `${prefix}-db`;
 
 console.log(`Stage: ${app.stage}, isProd: ${isProd}, prefix: ${prefix}`);
-
-// Chat Agent Durable Object (relay between frontend and container)
-const CHAT_AGENT_DO = DurableObjectNamespace<ChatAgent>(`${projectName}-chat-agent`, {
-  className: "ChatAgent",
-  scriptName: `${prefix}-worker`,
-  sqlite: true
-});
-
-// Session DO (session event fan-out)
-const SESSION_DO = DurableObjectNamespace(`${projectName}-session-do`, {
-  className: "SessionEventBusV2",
-  scriptName: `${prefix}-worker`,
-});
 
 // D1 database for auth + metadata.
 // Local dev uses a local D1 file. CI previews get isolated disposable DBs.
@@ -89,8 +73,6 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   bundle: {
   },
   bindings: {
-    ChatAgent: CHAT_AGENT_DO,
-    SESSION_DO,
     Sandbox,
     DB,
 
@@ -111,17 +93,13 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
 });
 
-const workerUrl = isProd ? "https://api.myfilepath.com" : WORKER.url;
-
-// SvelteKit app with custom routing for agent and session websockets
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${prefix}-app`,
   domains: isProd ? ["myfilepath.com"] : [],
   bindings: {
     WORKER,
-    ChatAgent: CHAT_AGENT_DO,
+    Sandbox,
     DB,
-    SESSION_DO,
   },
   url: true,
   adopt: true,
@@ -132,7 +110,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_URL: isProd 
       ? "https://myfilepath.com" 
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
-    API_WS_ORIGIN: workerUrl,
     MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
     MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },
@@ -141,16 +118,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     
     export default {
       async fetch(request, env, ctx) {
-        const url = new URL(request.url);
-
-        if (url.pathname.startsWith('/agents/')) {
-          return env.WORKER.fetch(request);
-        }
-
-        if (url.pathname.startsWith('/session-events/')) {
-          return env.WORKER.fetch(request);
-        }
-
         return svelteKitHandler.fetch(request, env, ctx);
       }
     };

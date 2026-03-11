@@ -2,7 +2,7 @@
  * filepath Agent Protocol (FAP) -- Event Types
  *
  * These Zod schemas define every structured event an agent can emit via stdout.
- * They are the single source of truth for the protocol. The ChatAgent DO validates
+ * They are the single source of truth for the protocol. The runtime validates
  * incoming events against these schemas. The frontend renders based on the `type`
  * discriminator.
  *
@@ -89,17 +89,17 @@ export const SpawnEvent = z.object({
 });
 export type SpawnEvent = z.infer<typeof SpawnEvent>;
 
-/** Agent reports status of its children */
-export const WorkersEvent = z.object({
-  type: z.literal("workers"),
-  workers: z.array(
+/** Agent reports status of related agents */
+export const AgentsEvent = z.object({
+  type: z.literal("agents"),
+  agents: z.array(
     z.object({
       name: z.string(),
       status: AgentStatus,
     }),
   ),
 });
-export type WorkersEvent = z.infer<typeof WorkersEvent>;
+export type AgentsEvent = z.infer<typeof AgentsEvent>;
 
 /** Agent reports its own status (context usage, state change) */
 export const StatusEvent = z.object({
@@ -130,7 +130,7 @@ export const AgentEvent = z.discriminatedUnion("type", [
   CommandEvent,
   CommitEvent,
   SpawnEvent,
-  WorkersEvent,
+  AgentsEvent,
   StatusEvent,
   HandoffEvent,
   DoneEvent,

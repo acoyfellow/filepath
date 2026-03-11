@@ -2,27 +2,27 @@
   import { onMount } from "svelte";
   import { alert, confirm } from "$lib/components/alert";
   import TreeNode from "./TreeNode.svelte";
-  import type { AgentNode } from "$lib/types/session";
+  import type { AgentRecord } from "$lib/types/workspace";
   import * as Dialog from "$lib/components/ui/dialog";
   import Button from "$lib/components/ui/button/button.svelte";
 
   interface Props {
-    root: AgentNode | null;
+    agents: AgentRecord[];
     selectedId: string | null;
+    isRefreshing?: boolean;
     width?: number;
     onselect: (id: string) => void;
-    onmove: (payload: { nodeId: string; parentId: string | null; sortOrder: number }) => Promise<void>;
-    onrename: (payload: { nodeId: string; name: string }) => Promise<void>;
-    ondelete: (nodeId: string) => Promise<void>;
+    onrename: (payload: { agentId: string; name: string }) => Promise<void>;
+    ondelete: (agentId: string) => Promise<void>;
     onspawn: () => void;
   }
 
   let {
-    root,
+    agents,
     selectedId,
+    isRefreshing = false,
     width = 220,
     onselect,
-    onmove,
     onrename,
     ondelete,
     onspawn,
@@ -30,10 +30,8 @@
 
   let dragging = $state(false);
   let treeWidth = $state(220);
-  let dialogNodeId = $state<string | null>(null);
-  let dialogMode = $state<"move" | "rename" | null>(null);
-  let moveTargetParentId = $state("");
-  let moveTargetSortOrder = $state("0");
+  let dialogAgentId = $state<string | null>(null);
+  let dialogMode = $state<"rename" | null>(null);
   let renameValue = $state("");
   let dialogError = $state("");
   let dialogSubmitting = $state(false);
@@ -62,92 +60,56 @@
     }
   }
 
-  function handleToggle(_id: string) {}
-
-  function flattenNodes(node: AgentNode | null): AgentNode[] {
-    if (!node) return [];
-    const collected: AgentNode[] = [];
-    const visit = (current: AgentNode) => {
-      collected.push(current);
-      for (const child of current.children) visit(child);
-    };
-    visit(node);
-    return collected;
-  }
-
-  const flatNodes = $derived(flattenNodes(root));
+  const flatNodes = $derived(
+    [...agents].sort((left, right) => right.updatedAt - left.updatedAt),
+  );
   const dialogNode = $derived(
-    dialogNodeId ? flatNodes.find((node) => node.id === dialogNodeId) ?? null : null,
+    dialogAgentId ? flatNodes.find((node) => node.id === dialogAgentId) ?? null : null,
   );
 
-  const blockedMoveParentIds = $derived.by(() => {
-    if (!dialogNode) return new Set<string>();
-    const blocked = new Set<string>([dialogNode.id]);
-    const visit = (node: AgentNode) => {
-      for (const child of node.children) {
-        blocked.add(child.id);
-        visit(child);
-      }
-    };
-    visit(dialogNode);
-    return blocked;
-  });
-
   function closeDialog() {
-    dialogNodeId = null;
+    dialogAgentId = null;
     dialogMode = null;
-    moveTargetParentId = "";
-    moveTargetSortOrder = "0";
     renameValue = "";
     dialogError = "";
     dialogSubmitting = false;
   }
 
-  function openDialog(payload: { nodeId: string; action: "move" | "rename" | "delete" }) {
+  function openDialog(payload: { agentId: string; action: "rename" | "delete" }) {
     if (payload.action === "delete") {
-      void confirmDelete(payload.nodeId);
+      void confirmDelete(payload.agentId);
       return;
     }
 
-    dialogNodeId = payload.nodeId;
-    dialogMode = payload.action;
-    moveTargetParentId = "";
-    moveTargetSortOrder = "0";
-    renameValue = flatNodes.find((node) => node.id === payload.nodeId)?.name ?? "";
+    dialogAgentId = payload.agentId;
+    dialogMode = "rename";
+    renameValue = flatNodes.find((node) => node.id === payload.agentId)?.name ?? "";
     dialogError = "";
   }
 
-  async function confirmDelete(nodeId: string) {
-    const confirmed = await confirm("Delete this + all children?");
+  async function confirmDelete(agentId: string) {
+    const confirmed = await confirm("Delete this agent?");
     if (!confirmed) return;
 
     try {
-      await ondelete(nodeId);
+      await ondelete(agentId);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to delete agent", "error");
     }
   }
 
   async function submitDialog() {
-    if (!dialogNodeId || !dialogMode) return;
+    if (!dialogAgentId || !dialogMode) return;
     dialogSubmitting = true;
     dialogError = "";
 
     try {
-      if (dialogMode === "move") {
-        const sortOrder = Number.parseInt(moveTargetSortOrder, 10);
-        await onmove({
-          nodeId: dialogNodeId,
-          parentId: moveTargetParentId || null,
-          sortOrder: Number.isFinite(sortOrder) ? Math.max(0, sortOrder) : 0,
-        });
-      } else {
-        const name = renameValue.trim();
-        if (!name) {
-          throw new Error("Name is required");
-        }
-        await onrename({ nodeId: dialogNodeId, name });
+      const name = renameValue.trim();
+      if (!name) {
+        throw new Error("Name is required");
       }
+
+      await onrename({ agentId: dialogAgentId, name });
 
       closeDialog();
     } catch (error) {
@@ -162,17 +124,22 @@
 
 <div class="tree-container">
   <div class="tree" style:width="{treeWidth}px">
-    <div class="tree-header">agents</div>
+    <div class="tree-header">
+      agents
+      {#if isRefreshing}
+        <span class="tree-header-spinner" aria-hidden="true"></span>
+      {/if}
+    </div>
     <div class="tree-scroll" role="tree">
-      {#if root}
-        <TreeNode
-          node={root}
-          {selectedId}
-          {onselect}
-          {onmove}
-          onrequestaction={openDialog}
-          ontoggle={handleToggle}
-        />
+      {#if flatNodes.length > 0}
+        {#each flatNodes as node (node.id)}
+          <TreeNode
+            {node}
+            {selectedId}
+            {onselect}
+            onrequestaction={openDialog}
+          />
+        {/each}
       {:else}
         <div class="tree-empty">No agents yet</div>
       {/if}
@@ -192,7 +159,7 @@
 </div>
 
 <Dialog.Root
-  open={Boolean(dialogNodeId && dialogMode)}
+  open={Boolean(dialogAgentId && dialogMode)}
   onOpenChange={(open) => {
     if (!open) closeDialog();
   }}
@@ -200,32 +167,16 @@
   <Dialog.Content class="dialog-shell border-border bg-background text-foreground max-w-md">
     <Dialog.Header>
       <Dialog.Title class="dialog-title">
-        {dialogMode === "move" ? "Move agent" : "Rename agent"}
+        Rename agent
       </Dialog.Title>
       <Dialog.Description class="dialog-description">
-        {#if dialogMode === "move" && dialogNode}
-          Choose where to place <strong>{dialogNode.name}</strong> in the tree.
-        {:else if dialogMode === "rename" && dialogNode}
+        {#if dialogMode === "rename" && dialogNode}
           Update the display name for <strong>{dialogNode.name}</strong>.
         {/if}
       </Dialog.Description>
     </Dialog.Header>
 
-    {#if dialogMode === "move"}
-      <label class="dialog-field">
-        <span>Destination parent</span>
-        <select bind:value={moveTargetParentId}>
-          <option value="">Root</option>
-          {#each flatNodes.filter((node) => !blockedMoveParentIds.has(node.id)) as node}
-            <option value={node.id}>{node.name}</option>
-          {/each}
-        </select>
-      </label>
-      <label class="dialog-field">
-        <span>Sort order</span>
-        <input bind:value={moveTargetSortOrder} type="number" min="0" step="1" />
-      </label>
-    {:else if dialogMode === "rename"}
+    {#if dialogMode === "rename"}
       <label class="dialog-field">
         <span>Name</span>
         <input bind:value={renameValue} type="text" maxlength="120" />
@@ -241,11 +192,7 @@
         Cancel
       </Button>
       <Button disabled={dialogSubmitting} onclick={submitDialog}>
-        {#if dialogMode === "move"}
-          {dialogSubmitting ? "Moving..." : "Move"}
-        {:else}
-          {dialogSubmitting ? "Saving..." : "Rename"}
-        {/if}
+        {dialogSubmitting ? "Saving..." : "Rename"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
@@ -272,6 +219,20 @@
     color: var(--t5);
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tree-header-spinner {
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--b2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: tree-spin 0.6s linear infinite;
+  }
+  @keyframes tree-spin {
+    to { transform: rotate(360deg); }
   }
   .tree-scroll {
     flex: 1;
@@ -343,7 +304,6 @@
     font-size: 10px;
     color: var(--t4);
   }
-  .dialog-field select,
   .dialog-field input {
     width: 100%;
     border: 1px solid var(--b1);

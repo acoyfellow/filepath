@@ -2,10 +2,10 @@
  * Container Manager - Sandbox lifecycle and agent spawning
  *
  * Handles:
- * - Session container creation/retrieval
+ * - Workspace container creation/retrieval
  * - Agent process spawning in containers
  * - Backup creation after initial setup
- * - Backup restoration on session resume
+ * - Backup restoration on workspace resume
  */
 
 import { getSandbox, type Sandbox } from '@cloudflare/sandbox';
@@ -160,7 +160,7 @@ export async function cloneRepo(
       });
     } catch (error) {
       throw new ContainerError(
-        `Failed to clone the session repository into the sandbox workspace: git checkout failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to clone the repository into the workspace: git checkout failed: ${error instanceof Error ? error.message : String(error)}`,
         error,
       );
     }
@@ -173,29 +173,29 @@ export async function cloneRepo(
       });
     } catch (error) {
       throw new ContainerError(
-        `Failed to clone the session repository into the sandbox workspace: workspace post-check listing failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to clone the repository into the workspace: post-check listing failed: ${error instanceof Error ? error.message : String(error)}`,
         error,
       );
     }
 
     if (checkoutEntries.count === 0) {
       throw new ContainerError(
-        'Failed to clone the session repository into the sandbox workspace: the checkout completed without any files.',
+        'Failed to clone the repository into the workspace: the checkout completed without any files.',
       );
     }
   } catch (error) {
     let detail =
       error instanceof Error ? error.message : `Unknown clone failure for ${repoUrl}`;
     if (
-      detail.startsWith('Failed to clone the session repository into the sandbox workspace:')
+      detail.startsWith('Failed to clone the repository into the workspace:')
     ) {
       detail = detail.slice(
-        'Failed to clone the session repository into the sandbox workspace:'.length,
+        'Failed to clone the repository into the workspace:'.length,
       ).trim();
     }
     console.error(`[Container] Clone failed: ${detail}`);
     throw new ContainerError(
-      `Failed to clone the session repository into the sandbox workspace: ${detail}`,
+      `Failed to clone the repository into the workspace: ${detail}`,
       error,
     );
   }

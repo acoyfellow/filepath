@@ -1,99 +1,288 @@
 # filepath
 
-> Durable agent sessions, organized as trees, running through a session-root ChatAgent and Cloudflare sandboxes.
+> filepath is a personal Cloudflare-hosted development environment for spawning bounded background agents against a sandboxed git clone.
 
-filepath is a chat-first orchestration layer for AI agents. The main product surface is:
+[Deploy to Cloudflare](https://github.com/acoyfellow/filepath) · [OpenAPI](./src/routes/api/openapi.json/+server.ts)
 
-- a durable session
-- a tree of agent nodes
-- a chat and event timeline per node
-- isolated execution in Cloudflare sandboxes
+## Tutorial
 
-The system stays thin around the real primitives: harness, model, sandbox, and router keys.
+### 60-second quickstart
 
-## What Is True Today
+1. Deploy filepath into your Cloudflare account.
+2. Set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`.
+3. Open the app, sign in, and land on `/dashboard`.
+4. Create a workspace with an optional git repo URL.
+5. Create an agent with a harness, model, file scope, and tool permissions.
+6. Submit a task and inspect the live result stream.
 
-- Each session uses one root ChatAgent route for browser chat connections.
-- The selected node is bound in the websocket init message, not in the URL.
-- Each active node execution runs in its own sandbox workspace and process context.
-- Sessions, nodes, and tree structure persist in D1.
-- Chat history persists and reconnects cleanly across devices on the same account.
-- Chat is the only built-in control surface.
-- Provider router keys are account-level.
-- `/api/models` only returns models from routers the account has configured.
-- Exhausted agents become read-only instead of silently continuing.
-
-## Core Model
-
-- **Session**: the durable workspace
-- **Agent node**: one harness + one model inside the tree
-- **Chat/event history**: the runtime timeline for that node
-
-Every node is the same primitive. There is no special orchestrator node type in the product surface.
-
-## Quick Start
-
-1. Sign up at [myfilepath.com](https://myfilepath.com).
-2. Add a router key in Settings → Provider Router Keys.
-3. Create a session.
-4. Spawn an agent by choosing a harness and model.
-5. Send work through chat.
-6. Watch the agent stream status, tool calls, commands, commits, and handoffs into the session.
-
-## Runtime Shape
-
-```text
-Browser / API / MCP client
-        ↓
-thin SvelteKit routes
-        ↓
-shared core app operations
-        ↓
-D1
-
-Browser
-  ↕ WebSocket
-session-root ChatAgent
-  ↕ node init + message dispatch
-selected node runtime
-  ↕ sandbox exec
-Sandboxed CLI harness
-```
-
-The ChatAgent is a relay and lifecycle manager for the session-root websocket path. It does not silently fall back to a direct LLM call when the sandbox path fails.
-
-## filepath Agent Protocol
-
-Harnesses speak NDJSON over stdin/stdout.
-
-Container receives:
-- `FILEPATH_TASK`
-- `FILEPATH_AGENT_ID`
-- `FILEPATH_SESSION_ID`
-- router credentials via adapter-prepared env vars
-- user messages over stdin
-
-Container emits:
-- structured NDJSON events validated by the protocol schema in `src/lib/protocol/`
-
-Built-in harnesses are reference implementations. BYO means shipping a container that speaks the same protocol.
-
-## Development
+Local development:
 
 ```bash
 bun install
 bun run dev
-bash gates/health.sh
-bun run deploy
 ```
 
-## Docs
+Then open:
 
-- [NORTHSTAR.md](./NORTHSTAR.md) — current product truth and direction
-- [AGENTS.md](./AGENTS.md) — repo rules and architecture notes for coding agents
-- [docs/README.md](./docs/README.md) — surviving repo markdown docs
-- [static/llms.txt](./static/llms.txt) — compact repo context for AI tools
+- `http://localhost:5173/signup`
+- `http://localhost:5173/dashboard`
 
-## License
+### First agent
 
-See [LICENSE](./LICENSE).
+1. Create a workspace.
+2. Add an account router key in Settings.
+3. Open the workspace.
+4. Create an agent with:
+   - `harness`
+   - `model`
+   - `allowedPaths`
+   - `forbiddenPaths`
+   - `toolPermissions`
+   - `writableRoot`
+5. Send the first task from the agent panel.
+
+## How-to
+
+### Restrict an agent to one part of a repo
+
+Use:
+
+- `allowedPaths` for directories the agent may touch
+- `forbiddenPaths` for extra blocks inside that scope
+- `writableRoot` for the working directory commands should run from
+
+Example:
+
+```json
+{
+  "allowedPaths": ["apps/web", "packages/ui"],
+  "forbiddenPaths": ["apps/web/.env", "packages/ui/dist"],
+  "writableRoot": "apps/web"
+}
+```
+
+### Allow only certain tools
+
+`toolPermissions` is explicit.
+
+Available values:
+
+- `inspect`
+- `search`
+- `run`
+- `write`
+- `commit`
+- `delegate`
+
+If an agent is not allowed to write, commit, or delegate, filepath should reject that action at runtime instead of relying on prompt wording.
+
+### Switch harnesses or models
+
+Harness and model are runtime configuration, not architecture.
+
+- change `harnessId` to switch the agent harness
+- change `model` to switch the backing model
+- keep the same workspace, agent scope, and dashboard surface
+
+## Reference
+
+### What filepath is
+
+filepath v1 is:
+
+- a personal Better Auth-protected dashboard
+- backed by one Cloudflare worker gateway
+- built on stable published Cloudflare npm APIs
+- centered on flat background agents running against a sandboxed git clone
+
+filepath v1 is not:
+
+- a proof engine
+- an MCP product
+- a multi-user platform
+- a child-agent tree runtime yet
+- dependent on experimental Cloudflare features
+
+### Public concepts
+
+- `workspace`: a repo-backed sandbox environment
+- `agent`: a bounded background agent inside a workspace
+- `scope`: allowed paths, forbidden paths, tool permissions, writable root
+- `result`: structured output from an agent run
+
+### Agent scope fields
+
+- `allowedPaths`
+- `forbiddenPaths`
+- `toolPermissions`
+- `writableRoot`
+- `harnessId`
+- `model`
+
+### Structured result shape
+
+At minimum:
+
+- `status`
+- `summary`
+- `commands`
+- `filesTouched`
+- `violations`
+- `diffSummary`
+- `commit`
+- `startedAt`
+- `finishedAt`
+
+### API surface
+
+Core routes:
+
+- `GET /api/workspaces`
+- `POST /api/workspaces`
+- `GET /api/workspaces/:id`
+- `PATCH /api/workspaces/:id`
+- `DELETE /api/workspaces/:id`
+- `GET /api/workspaces/:id/agents`
+- `POST /api/workspaces/:id/agents`
+- `GET /api/workspaces/:id/agents/:agentId`
+- `PATCH /api/workspaces/:id/agents/:agentId`
+- `DELETE /api/workspaces/:id/agents/:agentId`
+- `POST /api/workspaces/:id/agents/:agentId/tasks`
+- `POST /api/workspaces/:id/agents/:agentId/cancel`
+
+Machine-readable reference:
+
+- `/api/openapi.json`
+
+### Authentication
+
+Better Auth is the only supported auth boundary in v1.
+
+- sign up and sign in through the app
+- dashboard and API both use the Better Auth session
+- no Cloudflare Access fallback
+- no public unauthenticated product surface
+
+### Current stable runtime contract
+
+- the dashboard shows a flat agent list inside a workspace
+- humans create agents directly
+- agents do not spawn child agents in v1
+- task input is agent work input, not a general product chat protocol
+
+## Explanation
+
+### Why filepath exists
+
+Models change fast. Harnesses change fast. The durable value is the runtime boundary around software work:
+
+- clone a repo into a bounded workspace
+- start background agents against that workspace
+- scope them to files and tools
+- return structured results to the human
+
+### Why Better Auth
+
+filepath is a personal product, but it still needs a real sign-in flow.
+
+Better Auth keeps the app honest:
+
+- one auth story
+- same auth for dashboard and API
+- no custom header shortcuts in the product contract
+
+### Why flat agents in v1
+
+The long-term product can support richer orchestration, but v1 should not fake a child-agent runtime before the stable Agents SDK supports it cleanly.
+
+So v1 ships:
+
+- human-created agents
+- explicit file and tool scope
+- persistent results
+- no pretend tree runtime
+
+### Why stable Cloudflare surfaces only
+
+filepath should be a real deployable product, not a lab branch.
+
+That means:
+
+- no GitHub-source dependency pins
+- no `experimental` compatibility flag
+- no dependency on unreleased child-agent APIs
+
+## Checklist
+
+### North star
+
+- personal Better Auth-protected Cloudflare development environment
+- dashboard-first, API underneath
+- sandboxed git clone as the live workspace
+- swappable models
+- swappable harnesses
+- bounded agents with explicit file and tool permissions
+
+### Stable assumptions
+
+- Better Auth only
+- one worker gateway
+- flat agents in v1
+- stable published Cloudflare surfaces only
+- README is the only canonical product document
+
+### Next build phases
+
+1. finish the flat workspace/agent dashboard
+2. make agent results more durable and inspectable
+3. tighten runtime enforcement around file and tool scope
+4. simplify the public API around workspace and agent lifecycle
+5. revisit child-agent orchestration only after stable SDK support ships
+
+### Delete aggressively
+
+- stale session/node/tree language
+- stale proof-engine language
+- stale MCP/public-surface language
+- stale gates and scripts that validate deleted routes
+- compatibility shims that keep old mental models alive
+
+### Out of bounds
+
+- child-agent runtime before stable support ships
+- proof policy inside filepath
+- one-model or one-harness lock-in
+- preserving old data or old route shapes
+
+## Engineer section
+
+### Commands
+
+```bash
+bun install
+bun run dev
+bun run check
+bun run build
+```
+
+### Key files
+
+- `src/core/app.ts`
+- `src/lib/schema.ts`
+- `src/lib/runtime/authority.ts`
+- `src/lib/runtime/agent-runtime.ts`
+- `src/routes/dashboard/+page.svelte`
+- `src/routes/workspace/[id]/+page.svelte`
+- `src/lib/components/session/SpawnModal.svelte`
+- `src/routes/api/workspaces/`
+
+### Repo rules
+
+- destructive reset is allowed
+- preserve only the current v1 workspace/agent story
+- keep auth, API, UI, and runtime aligned to the same product vocabulary
+- if a file still tells the old product story, rewrite it or delete it
+
+### Future: child agents
+
+Child-agent orchestration is out of scope for v1. Revisit only after the stable Cloudflare Agents SDK supports child agents. See Checklist → Out of bounds.

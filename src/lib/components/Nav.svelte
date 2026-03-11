@@ -2,14 +2,15 @@
   import { getContext } from 'svelte';
   import { signOut } from '$lib/auth-client';
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
 
   interface Props {
     current?: string | null;
-    variant?: 'centered' | 'dashboard' | 'session';
-    sessionId?: string | null;
+    variant?: 'centered' | 'dashboard' | 'workspace';
+    workspaceId?: string | null;
   }
 
-  let { current = null, variant = 'centered', sessionId = null }: Props = $props();
+  let { current = null, variant = 'centered', workspaceId = null }: Props = $props();
   const { toggleTheme } = getContext<{ toggleTheme: () => void }>('theme');
   let mobileOpen = $state(false);
 
@@ -28,8 +29,32 @@
 
   const logo = `M119.261 35C128.462 35.0001 137.256 38.8378 143.569 45.6083L160.108 63.3453C166.421 70.1159 175.215 73.9536 184.416 73.9536H298.583C317.039 73.9536 332 89.0902 332 107.762V270.191C332 288.863 317.039 304 298.583 304H41.417C22.9613 304 8 288.863 8 270.191V68.8087C8.0001 50.1368 22.9614 35 41.417 35H119.261ZM169.23 219.37V259.415H291.318V219.37H169.23ZM50.7361 111.182L110.398 171.838L51.027 226.311L79.9846 258.994L169.77 173.606L82.022 81.2961L50.7361 111.182Z`;
 
-  const isAuthed = $derived(variant === 'dashboard' || variant === 'session');
+  const isAuthed = $derived(variant === 'dashboard' || variant === 'workspace');
   const homeHref = $derived(isAuthed ? '/dashboard' : '/');
+  let userMenuOpen = $state(false);
+
+  function toggleUserMenu() {
+    userMenuOpen = !userMenuOpen;
+  }
+
+  function handleSignOut() {
+    userMenuOpen = false;
+    signOutUser();
+  }
+
+  // svelte-ignore non_reactive_update -- bind:this ref for click-outside
+  let userMenuEl: HTMLElement | null = null;
+
+  function handleClickOutside(e: MouseEvent) {
+    if (userMenuOpen && userMenuEl && !userMenuEl.contains(e.target as Node)) {
+      userMenuOpen = false;
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener('click', handleClickOutside, true);
+    return () => document.removeEventListener('click', handleClickOutside, true);
+  });
 </script>
 
 {#snippet logoIcon(size: number)}
@@ -86,7 +111,7 @@
   </button>
 {/snippet}
 
-<!-- Logged-out (centered) nav -->
+<!-- Public marketing nav -->
 {#if variant === 'centered'}
   <nav class="border-b border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/50 px-6 py-4 relative z-50 backdrop-blur-sm">
     <div class="flex items-center justify-between max-w-6xl mx-auto">
@@ -98,21 +123,17 @@
       <!-- Desktop links -->
       <div class="hidden md:flex items-center gap-4 text-sm">
         <a
-          href="/docs"
-          class="transition-colors {current === 'docs' ? 'text-gray-900 dark:text-neutral-100' : 'text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100'}"
-        >docs</a>
+          href="/api/openapi.json"
+          class="transition-colors text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+        >api</a>
         <a
-          href="/pricing"
-          class="transition-colors {current === 'pricing' ? 'text-gray-900 dark:text-neutral-100' : 'text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100'}"
-        >pricing</a>
+          href="https://github.com/acoyfellow/filepath"
+          class="transition-colors text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+        >github</a>
         <a
-          href="/login"
-          class="transition-colors {current === 'login' ? 'text-gray-900 dark:text-neutral-100' : 'text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100'}"
-        >login</a>
-        <a
-          href="/signup"
+          href="/dashboard"
           class="px-3 py-1 rounded text-sm font-medium transition-colors bg-neutral-900 text-white hover:bg-black dark:bg-neutral-100 dark:text-neutral-950 dark:hover:bg-white"
-        >sign up</a>
+        >dashboard</a>
         {@render themeButton()}
       </div>
 
@@ -122,10 +143,8 @@
     <!-- Mobile dropdown -->
     {#if mobileOpen}
       <div class="md:hidden absolute left-0 right-0 top-full border-b z-50 bg-white dark:bg-neutral-950 border-gray-200 dark:border-neutral-800">
-        {@render mobileLink('/docs', 'docs', current === 'docs')}
-        {@render mobileLink('/pricing', 'pricing', current === 'pricing')}
-        {@render mobileLink('/login', 'login', current === 'login')}
-        {@render mobileLink('/signup', 'sign up', current === 'signup')}
+        {@render mobileLink('/api/openapi.json', 'api', false)}
+        {@render mobileLink('/dashboard', 'dashboard', false)}
         <div class="px-4 py-3 border-t border-gray-200 dark:border-neutral-800/50">
           {@render themeButton()}
         </div>
@@ -155,10 +174,31 @@
         >account</a>
 
         {@render themeButton()}
-        <button
-          onclick={signOutUser}
-          class="transition-colors cursor-pointer text-gray-600 hover:text-gray-900 dark:text-neutral-500 dark:hover:text-neutral-100"
-        >sign out</button>
+        <div class="relative" bind:this={userMenuEl}>
+          <button
+            type="button"
+            onclick={toggleUserMenu}
+            class="transition-colors cursor-pointer text-gray-600 hover:text-gray-900 dark:text-neutral-500 dark:hover:text-neutral-100"
+            aria-expanded={userMenuOpen}
+            aria-haspopup="menu"
+          >sign out</button>
+          {#if userMenuOpen}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <div
+              class="absolute right-0 top-full mt-1 py-1 min-w-[120px] rounded border bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-700 shadow-lg z-50"
+              role="menu"
+              tabindex="-1"
+              onmouseleave={() => (userMenuOpen = false)}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onclick={handleSignOut}
+                class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
+              >Sign out</button>
+            </div>
+          {/if}
+        </div>
       </div>
 
       {@render hamburger()}
@@ -167,7 +207,7 @@
     <!-- Mobile dropdown -->
     {#if mobileOpen}
       <div class="md:hidden absolute left-0 right-0 top-full border-b z-50 bg-white dark:bg-neutral-950 border-gray-200 dark:border-neutral-800">
-        {@render mobileLink('/dashboard', 'sessions', current === 'sessions')}
+        {@render mobileLink('/dashboard', 'workspaces', current === 'dashboard')}
         {@render mobileLink('/settings/api-keys', 'api keys', current === 'api-keys')}
 
         {@render mobileLink('/settings/account', 'account', current === 'account')}
@@ -176,15 +216,16 @@
           {@render themeButton()}
         </div>
         <button
-          onclick={() => { closeMobile(); signOutUser(); }}
+          type="button"
+          onclick={() => { closeMobile(); handleSignOut(); }}
           class="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer border-t text-gray-600 hover:text-red-500 hover:bg-gray-100 dark:text-neutral-500 dark:hover:text-red-400 dark:hover:bg-neutral-800/30 border-gray-200 dark:border-neutral-800/50"
         >sign out</button>
       </div>
     {/if}
   </nav>
 
-<!-- Session nav -->
-{:else if variant === 'session'}
+<!-- Workspace nav -->
+{:else if variant === 'workspace'}
   <header class="flex items-center justify-between px-4 py-2 border-b backdrop-blur-sm relative z-50 border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80">
     <div class="flex items-center gap-3 min-w-0">
       <a href="/dashboard" class="flex items-center gap-2 transition-colors text-sm shrink-0 text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100">
@@ -201,10 +242,31 @@
       <a href="/settings/account" class="transition-colors text-gray-600 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-neutral-100">account</a>
 
       {@render themeButton()}
-      <button
-        onclick={signOutUser}
-        class="transition-colors cursor-pointer text-gray-600 hover:text-gray-900 dark:text-neutral-500 dark:hover:text-neutral-100"
-      >sign out</button>
+      <div class="relative" bind:this={userMenuEl}>
+        <button
+          type="button"
+          onclick={toggleUserMenu}
+          class="transition-colors cursor-pointer text-gray-600 hover:text-gray-900 dark:text-neutral-500 dark:hover:text-neutral-100"
+          aria-expanded={userMenuOpen}
+          aria-haspopup="menu"
+        >sign out</button>
+        {#if userMenuOpen}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div
+            class="absolute right-0 top-full mt-1 py-1 min-w-[120px] rounded border bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-700 shadow-lg z-50"
+            role="menu"
+            tabindex="-1"
+            onmouseleave={() => (userMenuOpen = false)}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onclick={handleSignOut}
+              class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
+            >Sign out</button>
+          </div>
+        {/if}
+      </div>
     </div>
 
     {@render hamburger()}
@@ -212,10 +274,10 @@
     <!-- Mobile dropdown -->
     {#if mobileOpen}
       <div class="md:hidden absolute left-0 right-0 top-full border-b z-50 bg-white dark:bg-neutral-950 border-gray-200 dark:border-neutral-800">
-        {#if sessionId}
-          <div class="px-4 py-2 text-xs truncate text-gray-500 dark:text-neutral-600">{sessionId}</div>
+        {#if workspaceId}
+          <div class="px-4 py-2 text-xs truncate text-gray-500 dark:text-neutral-600">{workspaceId}</div>
         {/if}
-        {@render mobileLink('/dashboard', 'sessions', false)}
+        {@render mobileLink('/dashboard', 'workspaces', false)}
         {@render mobileLink('/settings/api-keys', 'api keys', false)}
 
         {@render mobileLink('/settings/account', 'account', false)}
@@ -224,7 +286,8 @@
           {@render themeButton()}
         </div>
         <button
-          onclick={() => { closeMobile(); signOutUser(); }}
+          type="button"
+          onclick={() => { closeMobile(); handleSignOut(); }}
           class="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer border-t text-gray-600 hover:text-red-500 hover:bg-gray-100 dark:text-neutral-500 dark:hover:text-red-400 dark:hover:bg-neutral-800/30 border-gray-200 dark:border-neutral-800/50"
         >sign out</button>
       </div>

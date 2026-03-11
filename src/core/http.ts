@@ -4,27 +4,6 @@ import { getDrizzle } from "$lib/auth";
 import type { User } from "better-auth";
 import type { AppContext, AppError } from "./app";
 
-function sessionEventPublisher(
-  platform: RequestEvent["platform"],
-): AppContext["publishSessionEvent"] {
-  if (!(platform?.env && "SESSION_DO" in platform.env)) {
-    return undefined;
-  }
-
-  return async (sessionId: string, payload: Record<string, unknown>) => {
-    const sessionNamespace = platform.env.SESSION_DO as unknown as {
-      get(id: unknown): { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<unknown> };
-      idFromName(name: string): unknown;
-    };
-    const stub = sessionNamespace.get(sessionNamespace.idFromName(sessionId));
-    await stub.fetch("https://session/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  };
-}
-
 export function createUserContextFromParts(user: User | null, platform?: RequestEvent["platform"]): AppContext {
   if (!user) {
     throw error(401, "Unauthorized");
@@ -33,7 +12,6 @@ export function createUserContextFromParts(user: User | null, platform?: Request
     db: getDrizzle(),
     userId: user.id,
     role: (user as { role?: string }).role ?? null,
-    publishSessionEvent: sessionEventPublisher(platform),
   };
 }
 
