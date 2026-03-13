@@ -139,4 +139,14 @@
     display: flex;
     flex-direction: column;
   }
+
+  @media (max-width: 640px) {
+    .task-transcript {
+      padding: 14px 12px 18px;
+    }
+
+    .task-transcript-empty {
+      padding-top: 64px;
+    }
+  }
 </style>

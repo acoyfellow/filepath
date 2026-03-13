@@ -131,6 +131,19 @@
       writableRoot: writableRootInput || null,
     }),
   );
+  let scopePreview = $derived.by(() => ({
+    allowed:
+      runtimePolicy.allowedPaths.length === 1 &&
+      (runtimePolicy.allowedPaths[0] === "." || runtimePolicy.allowedPaths[0] === "./")
+        ? "repo root"
+        : runtimePolicy.allowedPaths.join(", "),
+    forbidden:
+      runtimePolicy.forbiddenPaths.length > 0 ? runtimePolicy.forbiddenPaths.join(", ") : "none",
+    writableRoot:
+      !runtimePolicy.writableRoot || runtimePolicy.writableRoot === "." || runtimePolicy.writableRoot === "./"
+        ? "repo root"
+        : runtimePolicy.writableRoot,
+  }));
 
   let selectedModelEntry = $derived(availableModels.find((entry) => entry.id === model) ?? null);
 
@@ -497,10 +510,10 @@
 
       <div class="modal-policy-preview">
         <div><strong>agent</strong> scope</div>
-        <div>Allowed: {runtimePolicy.allowedPaths.join(", ")}</div>
-        <div>Forbidden: {runtimePolicy.forbiddenPaths.length > 0 ? runtimePolicy.forbiddenPaths.join(", ") : "none"}</div>
+        <div>Allowed: {scopePreview.allowed}</div>
+        <div>Forbidden: {scopePreview.forbidden}</div>
         <div>Tools: {runtimePolicy.toolPermissions.join(", ")}</div>
-        <div>Writable root: {runtimePolicy.writableRoot ?? "read-only"}</div>
+        <div>Writable root: {scopePreview.writableRoot ?? "read-only"}</div>
       </div>
 
       {#if spawnError}
@@ -710,6 +723,38 @@
     cursor: not-allowed;
   }
   @media (max-width: 720px) {
+    .modal-bg {
+      align-items: flex-start;
+      padding: 8px;
+    }
+
+    .modal {
+      width: 100%;
+      max-height: calc(100vh - 16px);
+      border-radius: 14px;
+    }
+
+    .modal-title {
+      padding: 16px 16px 0;
+      font-size: 18px;
+    }
+
+    .modal-body {
+      padding: 14px 16px 18px;
+    }
+
+    .modal-actions {
+      padding: 12px 16px 16px;
+      position: sticky;
+      bottom: 0;
+      background: var(--bg);
+    }
+
+    .modal-name-row,
+    .modal-inline-key {
+      grid-template-columns: 1fr;
+    }
+
     .tool-grid {
       grid-template-columns: 1fr;
     }

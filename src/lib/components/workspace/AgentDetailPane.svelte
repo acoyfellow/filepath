@@ -36,6 +36,11 @@
   let isExhausted = $derived(agent?.status === "exhausted");
   let isBusy = $derived(agent?.status === "thinking" || agent?.status === "running");
   let canCancel = $derived(Boolean(agent?.activeProcessId && oncancel));
+  let scopeLabel = $derived.by(() => {
+    const raw = agent?.writableRoot ?? ".";
+    if (!raw || raw === "." || raw === "./") return "repo root";
+    return raw;
+  });
   let composerDisabled = $derived(Boolean(isExhausted || notice?.blocking));
   let composerPlaceholder = $derived.by(() => {
     if (notice?.blocking) return notice.title;
@@ -58,7 +63,7 @@
       <div class="agent-detail-header-right">
         <span class="agent-detail-tag">{agent.harnessId}</span>
         <span class="agent-detail-tag">{agent.model}</span>
-        <span class="agent-detail-tag">scope {agent.writableRoot ?? "."}</span>
+        <span class="agent-detail-tag">scope {scopeLabel}</span>
         {#if agent.tokens > 0}
           <span class="agent-detail-tokens">{agent.tokens.toLocaleString()}t</span>
         {/if}
@@ -179,6 +184,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .agent-detail-name {
@@ -350,5 +357,48 @@
   .agent-result-exit {
     margin-left: 8px;
     color: var(--t5);
+  }
+
+  @media (max-width: 900px) {
+    .agent-detail-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+    }
+
+    .agent-detail-header-left,
+    .agent-detail-header-right {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .agent-detail-header-right {
+      justify-content: flex-start;
+    }
+
+    .agent-detail-notice,
+    .agent-result-card {
+      margin-left: 12px;
+      margin-right: 12px;
+    }
+
+    .agent-detail-readonly {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .agent-detail-name {
+      font-size: 12px;
+    }
+
+    .agent-detail-tag,
+    .agent-detail-tokens,
+    .agent-detail-status,
+    .agent-detail-cancel {
+      font-size: 10px;
+    }
   }
 </style>

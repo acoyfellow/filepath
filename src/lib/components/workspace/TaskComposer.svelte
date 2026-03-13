@@ -102,4 +102,22 @@
     opacity: 0.4;
     cursor: default;
   }
+
+  @media (max-width: 640px) {
+    .task-composer {
+      padding: 10px 12px 12px;
+      gap: 10px;
+    }
+
+    .task-composer-input {
+      min-height: 42px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .task-composer-submit {
+      width: 42px;
+      height: 42px;
+    }
+  }
 </style>

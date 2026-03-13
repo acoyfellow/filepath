@@ -159,10 +159,11 @@
   .agent-list-pane {
     display: flex;
     flex-shrink: 0;
-    width: 240px;
+    width: 260px;
     flex-direction: column;
     border-right: 1px solid var(--b1);
     background: var(--bg);
+    min-height: 0;
   }
 
   .agent-list-header {
@@ -197,6 +198,7 @@
     flex: 1;
     overflow: auto;
     padding: 2px 0;
+    min-height: 0;
   }
 
   .agent-list-empty {
@@ -229,5 +231,34 @@
   .agent-create-button:hover {
     border-color: var(--t5);
     color: var(--t3);
+  }
+
+  @media (max-width: 900px) {
+    .agent-list-pane {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--b1);
+      max-height: 34vh;
+    }
+
+    .agent-list-scroll {
+      max-height: 26vh;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .agent-list-header {
+      padding: 8px 12px;
+      font-size: 10px;
+    }
+
+    .agent-list-footer {
+      padding: 8px 12px 10px;
+    }
+
+    .agent-create-button {
+      min-height: 38px;
+      font-size: 11px;
+    }
   }
 </style>

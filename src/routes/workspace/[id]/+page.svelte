@@ -434,8 +434,8 @@
   });
 </script>
 
-<div class="workspace-root flex h-[calc(100vh-48px)] flex-1 flex-col overflow-hidden bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300">
-  <div class="workspace-container @container flex h-full flex-1 overflow-hidden">
+<div class="workspace-root">
+  <div class="workspace-container @container">
     {#if agents.length > 0}
       <AgentListPane
         isRefreshing={isRefreshing}
@@ -449,7 +449,7 @@
         }}
       />
 
-      <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div class="workspace-detail-column">
         <AgentDetailPane
           agent={selectedAgent}
           messages={currentMessages}
@@ -464,16 +464,16 @@
         />
       </div>
     {:else}
-      <div class="flex flex-1 flex-col items-center justify-center gap-4 bg-gray-50 pt-8 dark:bg-neutral-950">
-        <p class="text-sm text-gray-600 dark:text-neutral-300">{data.workspace.name}</p>
-        <p class="text-xs text-gray-500 dark:text-neutral-500">
+      <div class="workspace-empty-state">
+        <p class="workspace-empty-title">{data.workspace.name}</p>
+        <p class="workspace-empty-copy">
           No agents yet. Create a scoped background agent to start using this workspace.
         </p>
         <button
           onclick={() => {
             showSpawn = true;
           }}
-          class="cursor-pointer rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          class="workspace-empty-button"
         >
           + new agent
         </button>
@@ -498,3 +498,105 @@
     accountKeysError={accountKeysError}
   />
 {/if}
+
+<style>
+  .workspace-root {
+    display: flex;
+    min-height: calc(100dvh - 48px);
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    background: rgb(249 250 251);
+    color: rgb(55 65 81);
+  }
+
+  .workspace-container {
+    display: flex;
+    height: 100%;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .workspace-detail-column {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .workspace-empty-state {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 32px 16px;
+    text-align: center;
+  }
+
+  .workspace-empty-title {
+    font-size: 14px;
+    color: rgb(75 85 99);
+  }
+
+  .workspace-empty-copy {
+    max-width: 28rem;
+    font-size: 12px;
+    color: rgb(107 114 128);
+  }
+
+  .workspace-empty-button {
+    cursor: pointer;
+    border-radius: 10px;
+    background: rgb(37 99 235);
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    transition: background 0.15s ease;
+  }
+
+  .workspace-empty-button:hover {
+    background: rgb(59 130 246);
+  }
+
+  :global(.dark) .workspace-root {
+    background: rgb(10 10 10);
+    color: rgb(212 212 212);
+  }
+
+  :global(.dark) .workspace-empty-title {
+    color: rgb(212 212 212);
+  }
+
+  :global(.dark) .workspace-empty-copy {
+    color: rgb(115 115 115);
+  }
+
+  :global(.dark) .workspace-empty-button {
+    background: rgb(99 102 241);
+  }
+
+  :global(.dark) .workspace-empty-button:hover {
+    background: rgb(129 140 248);
+  }
+
+  @media (max-width: 900px) {
+    .workspace-root {
+      min-height: calc(100dvh - 48px);
+      overflow: auto;
+    }
+
+    .workspace-container {
+      flex-direction: column;
+      overflow: auto;
+    }
+
+    .workspace-detail-column {
+      min-height: 0;
+      flex: 1 1 auto;
+    }
+  }
+</style>
