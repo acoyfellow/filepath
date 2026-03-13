@@ -35,12 +35,30 @@ function extractTextContent(value) {
   return "";
 }
 
+function parseLocalVerifyDirective(task) {
+  const match = task.trim().match(/^__filepath_local_wait__:(\d+)(?::([\s\S]+))?$/);
+  if (!match) return null;
+
+  const delayMs = Math.min(Math.max(Number.parseInt(match[1], 10), 250), 60_000);
+  const reply = match[2]?.trim() || `Waited ${delayMs}ms`;
+  return { delayMs, reply };
+}
+
 export async function runAdapter({ harnessId, systemPrompt }) {
   const task = readRequiredEnv("FILEPATH_TASK");
   const apiKey = readRequiredEnv("FILEPATH_API_KEY");
   const model = readRequiredEnv("FILEPATH_MODEL");
+  const localVerify = parseLocalVerifyDirective(task);
 
   emit({ type: "status", state: "thinking" });
+
+  if (localVerify) {
+    emit({ type: "status", state: "running" });
+    await new Promise((resolve) => setTimeout(resolve, localVerify.delayMs));
+    emit({ type: "text", content: localVerify.reply });
+    emit({ type: "done", summary: "Agent completed the local verification task." });
+    return;
+  }
 
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",

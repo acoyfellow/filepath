@@ -2,9 +2,9 @@
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import { STATUS_COLORS, STATUS_LABELS } from "$lib/protocol";
   import type { AgentRecord, AgentResult } from "$lib/types/workspace";
-  import ChatInput from "./ChatInput.svelte";
-  import type { ChatMsg } from "./ChatView.svelte";
-  import ChatView from "./ChatView.svelte";
+  import TaskComposer from "./TaskComposer.svelte";
+  import type { TaskMessage } from "./TaskTranscript.svelte";
+  import TaskTranscript from "./TaskTranscript.svelte";
 
   type AgentNotice = {
     tone: "info" | "warning" | "error" | "success";
@@ -15,7 +15,7 @@
 
   interface Props {
     agent: AgentRecord | null;
-    messages: ChatMsg[];
+    messages: TaskMessage[];
     result?: AgentResult | null;
     notice?: AgentNotice | null;
     onsend: (message: string) => void;
@@ -23,10 +23,19 @@
     onnavigate?: (name: string) => void;
   }
 
-  let { agent, messages, result = null, notice = null, onsend, oncancel, onnavigate }: Props = $props();
+  let {
+    agent,
+    messages,
+    result = null,
+    notice = null,
+    onsend,
+    oncancel,
+    onnavigate,
+  }: Props = $props();
 
   let isExhausted = $derived(agent?.status === "exhausted");
   let isBusy = $derived(agent?.status === "thinking" || agent?.status === "running");
+  let canCancel = $derived(Boolean(agent?.activeProcessId && oncancel));
   let composerDisabled = $derived(Boolean(isExhausted || notice?.blocking));
   let composerPlaceholder = $derived.by(() => {
     if (notice?.blocking) return notice.title;
@@ -37,248 +46,258 @@
 </script>
 
 {#if agent}
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-left">
+  <div class="agent-detail-pane">
+    <div class="agent-detail-header">
+      <div class="agent-detail-header-left">
         <StatusDot status={agent.status} size={7} />
-        <span class="panel-name">{agent.name}</span>
-        <span class="panel-status" style:color={STATUS_COLORS[agent.status]}>
+        <span class="agent-detail-name">{agent.name}</span>
+        <span class="agent-detail-status" style:color={STATUS_COLORS[agent.status]}>
           {STATUS_LABELS[agent.status]}
         </span>
       </div>
-      <div class="panel-right">
-        <span class="panel-tag">{agent.harnessId}</span>
-        <span class="panel-tag">{agent.model}</span>
-        <span class="panel-tag">scope {agent.writableRoot ?? "."}</span>
+      <div class="agent-detail-header-right">
+        <span class="agent-detail-tag">{agent.harnessId}</span>
+        <span class="agent-detail-tag">{agent.model}</span>
+        <span class="agent-detail-tag">scope {agent.writableRoot ?? "."}</span>
         {#if agent.tokens > 0}
-          <span class="panel-tokens">{agent.tokens.toLocaleString()}t</span>
+          <span class="agent-detail-tokens">{agent.tokens.toLocaleString()}t</span>
         {/if}
-        {#if isBusy && oncancel}
-          <button class="panel-cancel" onclick={oncancel}>cancel</button>
+        {#if canCancel}
+          <button class="agent-detail-cancel" onclick={oncancel}>cancel</button>
         {/if}
       </div>
     </div>
 
-    <div class="panel-body">
+    <div class="agent-detail-body">
       {#if notice}
-        <div class={`panel-notice panel-notice-${notice.tone}`}>
-          <div class="panel-notice-title">{notice.title}</div>
+        <div class={`agent-detail-notice agent-detail-notice-${notice.tone}`}>
+          <div class="agent-detail-notice-title">{notice.title}</div>
           <div>{notice.message}</div>
         </div>
       {:else if agent.status === "idle" && messages.length === 0}
-        <div class="panel-notice panel-notice-info">
-          <div class="panel-notice-title">Ready</div>
+        <div class="agent-detail-notice agent-detail-notice-info">
+          <div class="agent-detail-notice-title">Ready</div>
           <div>This agent is ready for its first task.</div>
         </div>
       {/if}
+
       {#if isExhausted}
-        <div class="readonly-banner">
+        <div class="agent-detail-readonly">
           This agent is exhausted. Its history remains visible, but it is read-only for now.
         </div>
       {/if}
+
       {#if result}
-        <div class="result-card">
-          <div class="result-header">
-            <span class="result-title">latest result</span>
-            <span class={`result-status result-status-${result.status}`}>{result.status}</span>
+        <div class="agent-result-card">
+          <div class="agent-result-header">
+            <span class="agent-result-title">latest result</span>
+            <span class={`agent-result-status agent-result-status-${result.status}`}>{result.status}</span>
           </div>
-          <div class="result-summary">{result.summary}</div>
+
+          <div class="agent-result-summary">{result.summary}</div>
+
           {#if result.commands.length > 0}
-            <div class="result-meta">
+            <div class="agent-result-meta">
               <strong>commands</strong>
-              <ol class="result-command-list">
-                {#each result.commands as cmd}
+              <ol class="agent-result-command-list">
+                {#each result.commands as command}
                   <li>
-                    <code>{cmd.command}</code>
-                    {#if cmd.exitCode !== null}
-                      <span class="result-exit">exit {cmd.exitCode}</span>
+                    <code>{command.command}</code>
+                    {#if command.exitCode !== null}
+                      <span class="agent-result-exit">exit {command.exitCode}</span>
                     {/if}
                   </li>
                 {/each}
               </ol>
             </div>
           {/if}
+
           {#if result.filesTouched.length > 0}
-            <div class="result-meta">
+            <div class="agent-result-meta">
               <strong>files</strong>
               <span>{result.filesTouched.join(", ")}</span>
             </div>
           {/if}
+
           {#if result.violations.length > 0}
-            <div class="result-meta">
+            <div class="agent-result-meta">
               <strong>violations</strong>
               <span>{result.violations.join(", ")}</span>
             </div>
           {/if}
+
           {#if result.diffSummary}
-            <div class="result-meta">
+            <div class="agent-result-meta">
               <strong>diff</strong>
               <span>{result.diffSummary}</span>
             </div>
           {/if}
+
           {#if result.commit}
-            <div class="result-meta">
+            <div class="agent-result-meta">
               <strong>commit</strong>
               <span>{result.commit.sha} · {result.commit.message}</span>
             </div>
           {/if}
         </div>
       {/if}
-      <ChatView
-        {messages}
-        status={agent.status}
-        {onnavigate}
-      />
+
+      <TaskTranscript {messages} status={agent.status} {onnavigate} />
     </div>
 
-    <ChatInput {onsend} disabled={composerDisabled} placeholder={composerPlaceholder} actionLabel="Send task" />
+    <TaskComposer
+      {onsend}
+      disabled={composerDisabled}
+      placeholder={composerPlaceholder}
+      actionLabel="Run task"
+    />
   </div>
 {:else}
-  <div class="panel-empty">
+  <div class="agent-detail-empty">
     <span>Select an agent</span>
   </div>
 {/if}
 
 <style>
-  .panel {
+  .agent-detail-pane {
     display: flex;
     flex-direction: column;
     height: 100%;
   }
 
-  .panel-header {
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--b1);
+  .agent-detail-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--b1);
   }
 
-  .panel-left,
-  .panel-right {
+  .agent-detail-header-left,
+  .agent-detail-header-right {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .panel-name {
+  .agent-detail-name {
     font-family: var(--m);
     font-size: 13px;
     font-weight: 600;
     color: var(--t1);
   }
 
-  .panel-status {
+  .agent-detail-status {
     font-family: var(--m);
     font-size: 10px;
   }
 
-  .panel-tag {
+  .agent-detail-tag {
+    border: 1px solid var(--b1);
+    border-radius: 3px;
+    background: var(--bg3);
+    padding: 2px 7px;
     font-family: var(--m);
     font-size: 9px;
     color: var(--t5);
-    background: var(--bg3);
-    padding: 2px 7px;
-    border-radius: 3px;
-    border: 1px solid var(--b1);
   }
 
-  .panel-tokens {
+  .agent-detail-tokens {
     font-family: var(--m);
     font-size: 9px;
     color: var(--t6);
   }
 
-  .panel-cancel {
+  .agent-detail-cancel {
     border: 1px solid color-mix(in srgb, #ef4444 35%, var(--b1));
-    background: color-mix(in srgb, #ef4444 10%, transparent);
-    color: #dc2626;
     border-radius: 999px;
+    background: color-mix(in srgb, #ef4444 10%, transparent);
     padding: 3px 8px;
     font-family: var(--m);
     font-size: 10px;
+    color: #dc2626;
     cursor: pointer;
   }
 
-  .panel-cancel:hover {
+  .agent-detail-cancel:hover {
     background: color-mix(in srgb, #ef4444 16%, transparent);
   }
 
-  .panel-body {
+  .agent-detail-body {
+    display: flex;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
-    display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 
-  .panel-empty {
-    height: 100%;
+  .agent-detail-empty {
     display: flex;
+    height: 100%;
     align-items: center;
     justify-content: center;
-    color: var(--t6);
     font-family: var(--m);
     font-size: 12px;
+    color: var(--t6);
   }
 
-  .readonly-banner {
+  .agent-detail-readonly {
     padding: 10px 16px;
     border-bottom: 1px solid var(--b1);
+    background: color-mix(in srgb, #fb923c 10%, transparent);
     font-family: var(--m);
     font-size: 11px;
     color: #fb923c;
-    background: color-mix(in srgb, #fb923c 10%, transparent);
   }
 
-  .panel-notice {
+  .agent-detail-notice {
     margin: 12px 16px 0;
-    padding: 10px 12px;
-    border-radius: 10px;
     border: 1px solid var(--b1);
+    border-radius: 10px;
+    padding: 10px 12px;
     font-family: var(--m);
     font-size: 11px;
     line-height: 1.5;
   }
 
-  .panel-notice-title {
-    font-weight: 600;
+  .agent-detail-notice-title {
     margin-bottom: 4px;
+    font-weight: 600;
   }
 
-  .panel-notice-info {
+  .agent-detail-notice-info {
     color: var(--t3);
     background: color-mix(in srgb, var(--accent) 7%, transparent);
   }
 
-  .panel-notice-warning {
+  .agent-detail-notice-warning {
     color: #b45309;
     background: color-mix(in srgb, #f59e0b 12%, transparent);
   }
 
-  .panel-notice-error {
+  .agent-detail-notice-error {
     color: #dc2626;
     background: color-mix(in srgb, #ef4444 10%, transparent);
   }
 
-  .panel-notice-success {
+  .agent-detail-notice-success {
     color: #15803d;
     background: color-mix(in srgb, #22c55e 10%, transparent);
   }
 
-  .result-card {
+  .agent-result-card {
     margin: 12px 16px 0;
-    padding: 10px 12px;
-    border-radius: 10px;
     border: 1px solid var(--b1);
+    border-radius: 10px;
     background: var(--bg2);
+    padding: 10px 12px;
     font-family: var(--m);
     font-size: 11px;
     line-height: 1.5;
   }
 
-  .result-header {
+  .agent-result-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -286,60 +305,50 @@
     margin-bottom: 6px;
   }
 
-  .result-title {
+  .agent-result-title {
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--t5);
   }
 
-  .result-status {
+  .agent-result-status {
     font-size: 10px;
     font-weight: 600;
   }
 
-  .result-status-success {
+  .agent-result-status-success {
     color: #15803d;
   }
 
-  .result-status-error,
-  .result-status-policy_error {
+  .agent-result-status-error,
+  .agent-result-status-policy_error {
     color: #dc2626;
   }
 
-  .result-status-aborted {
+  .agent-result-status-aborted {
     color: #b45309;
   }
 
-  .result-summary {
+  .agent-result-summary {
     color: var(--t2);
   }
 
-  .result-meta {
+  .agent-result-meta {
     display: grid;
     gap: 2px;
     margin-top: 8px;
-    color: var(--t4);
   }
 
-  .result-command-list {
-    margin: 4px 0 0;
+  .agent-result-command-list {
+    display: grid;
+    gap: 3px;
     padding-left: 16px;
-    list-style: decimal;
-    font-family: var(--m);
-    font-size: 10px;
+    margin: 0;
   }
 
-  .result-command-list code {
-    font-size: 10px;
-    background: var(--bg3);
-    padding: 2px 4px;
-    border-radius: 3px;
-  }
-
-  .result-exit {
-    margin-left: 6px;
+  .agent-result-exit {
+    margin-left: 8px;
     color: var(--t5);
-    font-size: 9px;
   }
 </style>

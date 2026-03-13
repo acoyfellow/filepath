@@ -1,4 +1,4 @@
-import type { NodeAuthority, ToolPermission } from "$lib/runtime/authority";
+import type { ToolPermission } from "$lib/runtime/authority";
 
 /**
  * Agent Adapter Interfaces
@@ -22,8 +22,6 @@ export interface AdapterConfig {
   task?: string;
   /** Workspace path (cloned repo) */
   workspacePath: string;
-  /** Runtime authority */
-  authority: NodeAuthority;
   /** Allowed repo paths */
   allowedPaths: string[];
   /** Forbidden repo paths */
@@ -46,7 +44,6 @@ export function buildAgentEnv(config: AdapterConfig): Record<string, string> {
     FILEPATH_MODEL: config.model,
     FILEPATH_HARNESS_ID: config.harnessId,
     FILEPATH_AGENT_TYPE: config.harnessId,
-    FILEPATH_AUTHORITY: config.authority,
     FILEPATH_WORKSPACE: config.workspacePath,
     FILEPATH_ALLOWED_PATHS: JSON.stringify(config.allowedPaths),
     FILEPATH_FORBIDDEN_PATHS: JSON.stringify(config.forbiddenPaths),

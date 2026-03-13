@@ -1,5 +1,5 @@
 import type { AgentStatus as AgentStatusType } from "$lib/protocol";
-import type { NodeRuntimePolicy, ToolPermission } from "$lib/runtime/authority";
+import type { AgentScope, ToolPermission } from "$lib/runtime/authority";
 
 export type HarnessId = string;
 
@@ -31,6 +31,7 @@ export interface AgentRecord {
   toolPermissions: ToolPermission[];
   writableRoot: string | null;
   containerId?: string;
+  activeProcessId?: string | null;
   tokens: number;
   createdAt: number;
   updatedAt: number;
@@ -63,10 +64,10 @@ export interface AgentCreateRequest {
   name: string;
   harnessId: HarnessId;
   model: string;
-  allowedPaths: NodeRuntimePolicy["allowedPaths"];
-  forbiddenPaths: NodeRuntimePolicy["forbiddenPaths"];
-  toolPermissions: NodeRuntimePolicy["toolPermissions"];
-  writableRoot: NodeRuntimePolicy["writableRoot"];
+  allowedPaths: AgentScope["allowedPaths"];
+  forbiddenPaths: AgentScope["forbiddenPaths"];
+  toolPermissions: AgentScope["toolPermissions"];
+  writableRoot: AgentScope["writableRoot"];
 }
 
 export interface AgentResult {
@@ -83,6 +84,7 @@ export interface AgentResult {
 
 export interface AgentRuntimeSnapshot {
   status: AgentStatus;
+  activeProcessId?: string | null;
   messages: Array<{
     id: string;
     role: string;

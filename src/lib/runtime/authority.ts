@@ -1,8 +1,5 @@
 import type { AgentEventType } from "$lib/protocol";
 
-export const NODE_AUTHORITIES = ["orchestrator", "agent"] as const;
-export type NodeAuthority = (typeof NODE_AUTHORITIES)[number];
-
 export const TOOL_PERMISSION_OPTIONS = [
   {
     id: "inspect",
@@ -29,23 +26,18 @@ export const TOOL_PERMISSION_OPTIONS = [
     label: "Commit",
     description: "Create git commits.",
   },
-  {
-    id: "delegate",
-    label: "Delegate",
-    description: "Spawn bounded child agents.",
-  },
 ] as const;
 
 export type ToolPermission = (typeof TOOL_PERMISSION_OPTIONS)[number]["id"];
 
-export interface NodeRuntimePolicy {
+export interface AgentScope {
   allowedPaths: string[];
   forbiddenPaths: string[];
   toolPermissions: ToolPermission[];
   writableRoot: string | null;
 }
 
-export interface NodeRuntimePolicyInput {
+export interface AgentScopeInput {
   allowedPaths?: readonly string[] | null;
   forbiddenPaths?: readonly string[] | null;
   toolPermissions?: readonly string[] | null;
@@ -56,14 +48,7 @@ const ALL_TOOL_PERMISSIONS = new Set<ToolPermission>(
   TOOL_PERMISSION_OPTIONS.map((entry) => entry.id),
 );
 
-export const ORCHESTRATOR_POLICY_PRESET: NodeRuntimePolicy = {
-  allowedPaths: ["."],
-  forbiddenPaths: [],
-  toolPermissions: ["inspect", "search", "run", "delegate"],
-  writableRoot: null,
-};
-
-export const AGENT_POLICY_PRESET: NodeRuntimePolicy = {
+export const AGENT_SCOPE_PRESET: AgentScope = {
   allowedPaths: ["."],
   forbiddenPaths: [".git", "node_modules"],
   toolPermissions: ["search", "run", "write", "commit"],
@@ -115,88 +100,70 @@ export function normalizeToolPermissions(
   values: readonly string[] | null | undefined,
   fallback: ToolPermission[],
 ): ToolPermission[] {
-  const next = [...new Set((values ?? []).filter((value): value is ToolPermission => ALL_TOOL_PERMISSIONS.has(value as ToolPermission)))];
+  const next = [
+    ...new Set(
+      (values ?? []).filter(
+        (value): value is ToolPermission => ALL_TOOL_PERMISSIONS.has(value as ToolPermission),
+      ),
+    ),
+  ];
   return next.length > 0 ? next : fallback;
 }
 
-export function getDefaultPolicy(authority: NodeAuthority): NodeRuntimePolicy {
-  return authority === "agent"
-    ? { ...AGENT_POLICY_PRESET, allowedPaths: [...AGENT_POLICY_PRESET.allowedPaths], forbiddenPaths: [...AGENT_POLICY_PRESET.forbiddenPaths], toolPermissions: [...AGENT_POLICY_PRESET.toolPermissions] }
-    : { ...ORCHESTRATOR_POLICY_PRESET, allowedPaths: [...ORCHESTRATOR_POLICY_PRESET.allowedPaths], forbiddenPaths: [...ORCHESTRATOR_POLICY_PRESET.forbiddenPaths], toolPermissions: [...ORCHESTRATOR_POLICY_PRESET.toolPermissions] };
-}
-
-export function normalizeNodeRuntimePolicy(
-  authority: NodeAuthority,
-  input?: NodeRuntimePolicyInput | null,
-): NodeRuntimePolicy {
-  const fallback = getDefaultPolicy(authority);
+export function normalizeAgentScope(input?: AgentScopeInput | null): AgentScope {
   const normalizedAllowedPaths = normalizePathList(input?.allowedPaths);
-  const allowedPaths = normalizedAllowedPaths.length > 0
-    ? normalizedAllowedPaths
-    : fallback.allowedPaths;
+  const allowedPaths =
+    normalizedAllowedPaths.length > 0
+      ? normalizedAllowedPaths
+      : [...AGENT_SCOPE_PRESET.allowedPaths];
+
   const forbiddenPaths = normalizePathList(input?.forbiddenPaths);
+  const writableRoot =
+    normalizeScopePath(input?.writableRoot) ??
+    allowedPaths[0] ??
+    AGENT_SCOPE_PRESET.writableRoot;
 
-  if (authority === "orchestrator") {
-    return {
-      allowedPaths: allowedPaths.length > 0 ? allowedPaths : fallback.allowedPaths,
-      forbiddenPaths,
-      toolPermissions: normalizeToolPermissions(
-        input?.toolPermissions?.filter((permission) => permission !== "write" && permission !== "commit"),
-        fallback.toolPermissions,
-      ),
-      writableRoot: null,
-    };
-  }
-
-  const writableRoot = normalizeScopePath(input?.writableRoot) ?? allowedPaths[0] ?? fallback.writableRoot;
   return {
-    allowedPaths: allowedPaths.length > 0 ? allowedPaths : fallback.allowedPaths,
+    allowedPaths,
     forbiddenPaths,
-    toolPermissions: normalizeToolPermissions(input?.toolPermissions, fallback.toolPermissions),
+    toolPermissions: normalizeToolPermissions(
+      input?.toolPermissions,
+      AGENT_SCOPE_PRESET.toolPermissions,
+    ),
     writableRoot,
   };
 }
 
-export function validateNodeRuntimePolicy(
-  authority: NodeAuthority,
-  policy: NodeRuntimePolicy,
-): string | null {
-  if (authority === "orchestrator") {
-    if (policy.writableRoot) {
-      return "Orchestrator cannot have a writable workspace.";
-    }
-    if (policy.toolPermissions.includes("write") || policy.toolPermissions.includes("commit")) {
-      return "Orchestrator cannot have write or commit permission.";
-    }
-    return null;
-  }
-
-  if (policy.allowedPaths.length === 0) {
+export function validateAgentScope(scope: AgentScope): string | null {
+  if (scope.allowedPaths.length === 0) {
     return "Agents need at least one allowed path.";
   }
 
-  if (!policy.writableRoot) {
+  if (!scope.writableRoot) {
     return "Agents need a writable root.";
   }
 
-  if (!isPathAllowed(policy.writableRoot, policy)) {
+  if (!isPathAllowed(scope.writableRoot, scope)) {
     return "Writable root must stay inside allowed paths and outside forbidden paths.";
   }
 
   return null;
 }
 
-export function isPathAllowed(path: string, policy: NodeRuntimePolicy): boolean {
+export function isPathAllowed(path: string, scope: AgentScope): boolean {
   const target = normalizeScopePath(path);
   if (!target) return false;
 
-  const insideAllowed = policy.allowedPaths.some((allowed) => isPathWithin(target, allowed));
+  const insideAllowed = scope.allowedPaths.some((allowed) => isPathWithin(target, allowed));
   if (!insideAllowed) return false;
 
-  return !policy.forbiddenPaths.some((forbidden) => isPathWithin(target, forbidden));
+  return !scope.forbiddenPaths.some((forbidden) => isPathWithin(target, forbidden));
 }
 
-export function resolveScopedWorkspaceRoot(workspaceRoot: string, writableRoot: string | null): string {
+export function resolveScopedWorkspaceRoot(
+  workspaceRoot: string,
+  writableRoot: string | null,
+): string {
   if (!writableRoot || writableRoot === ".") return workspaceRoot;
   const base = workspaceRoot.replace(/\/$/, "");
   return `${base}/${writableRoot}`;
@@ -220,25 +187,20 @@ function classifyToolPermission(event: AgentEventType): ToolPermission | null {
     return /write|edit|patch|create|delete|move|rename/i.test(event.name) ? "write" : "run";
   }
 
-  if (event.type === "spawn" || event.type === "agents") {
-    return "delegate";
-  }
-
   return null;
 }
 
 export function getRuntimePolicyViolation(
-  authority: NodeAuthority,
-  policy: NodeRuntimePolicy,
+  scope: AgentScope,
   events: AgentEventType[],
 ): string | null {
   for (const event of events) {
     const required = classifyToolPermission(event);
-    if (required && !policy.toolPermissions.includes(required)) {
-      return `${authority} agents are not allowed to ${required}.`;
+    if (required && !scope.toolPermissions.includes(required)) {
+      return `This agent is not allowed to ${required}.`;
     }
 
-    if (event.type === "tool" && event.path && !isPathAllowed(event.path, policy)) {
+    if (event.type === "tool" && event.path && !isPathAllowed(event.path, scope)) {
       return `This agent is not allowed to touch ${event.path}.`;
     }
   }

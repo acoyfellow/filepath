@@ -6,33 +6,44 @@
     actionLabel?: string;
   }
 
-  let { onsend, disabled = false, placeholder = "Describe the task...", actionLabel = "Send task" }: Props = $props();
+  let {
+    onsend,
+    disabled = false,
+    placeholder = "Describe the task...",
+    actionLabel = "Run task",
+  }: Props = $props();
+
   let value = $state("");
 
-  function handleSend() {
+  function handleSubmit() {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
     onsend(trimmed);
     value = "";
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleSubmit();
     }
   }
 </script>
 
-<div class="chat-bar">
+<div class="task-composer">
   <input
-    class="chat-input"
+    class="task-composer-input"
     {placeholder}
     bind:value
     onkeydown={handleKeydown}
     {disabled}
   />
-  <button class="chat-send" onclick={handleSend} disabled={disabled || !value.trim()} aria-label={actionLabel}>
+  <button
+    class="task-composer-submit"
+    onclick={handleSubmit}
+    disabled={disabled || !value.trim()}
+    aria-label={actionLabel}
+  >
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M14 2L7 9M14 2l-4 12-3-5-5-3z" />
     </svg>
@@ -40,48 +51,54 @@
 </div>
 
 <style>
-  .chat-bar {
-    padding: 10px 16px;
-    border-top: 1px solid var(--b1);
+  .task-composer {
     display: flex;
     gap: 8px;
+    border-top: 1px solid var(--b1);
+    padding: 10px 16px;
   }
-  .chat-input {
+
+  .task-composer-input {
     flex: 1;
-    background: var(--bg2);
     border: 1px solid var(--b2);
     border-radius: 10px;
+    background: var(--bg2);
     padding: 10px 14px;
-    color: var(--t1);
     font-family: var(--m);
     font-size: 13px;
+    color: var(--t1);
     outline: none;
     transition: border 0.1s;
   }
-  .chat-input:focus {
+
+  .task-composer-input:focus {
     border-color: var(--t5);
   }
-  .chat-input::placeholder {
+
+  .task-composer-input::placeholder {
     color: var(--t5);
   }
-  .chat-send {
-    background: var(--accent);
-    border: none;
-    color: #fff;
+
+  .task-composer-submit {
+    display: flex;
     width: 38px;
     height: 38px;
-    border-radius: 10px;
-    cursor: pointer;
-    display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
     transition: opacity 0.1s;
   }
-  .chat-send:hover:not(:disabled) {
+
+  .task-composer-submit:hover:not(:disabled) {
     opacity: 0.85;
   }
-  .chat-send:disabled {
+
+  .task-composer-submit:disabled {
     opacity: 0.4;
     cursor: default;
   }

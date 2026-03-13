@@ -1,9 +1,9 @@
 <script lang="ts">
   import { DEFAULT_MODEL } from "$lib/config";
   import {
-    AGENT_POLICY_PRESET,
+    AGENT_SCOPE_PRESET,
     TOOL_PERMISSION_OPTIONS,
-    normalizeNodeRuntimePolicy,
+    normalizeAgentScope,
     parseDelimitedInput,
     type ToolPermission,
   } from "$lib/runtime/authority";
@@ -27,6 +27,10 @@
   interface Props {
     onclose: () => void;
     onspawn: (req: AgentCreateRequest) => Promise<void> | void;
+    onkeyschange?: (payload: {
+      keys: Record<ProviderId, string | null>;
+      error: string | null;
+    }) => void;
     lastAgent?: HarnessId;
     lastModel?: string;
     accountKeysMasked?: Record<ProviderId, string | null>;
@@ -43,6 +47,7 @@
   let {
     onclose,
     onspawn,
+    onkeyschange = () => {},
     lastAgent = "shelley",
     lastModel = DEFAULT_MODEL,
     accountKeysMasked = EMPTY_KEYS,
@@ -77,10 +82,10 @@
   let model = $state("");
   let modelFilter = $state("");
 
-  let allowedPathsInput = $state(AGENT_POLICY_PRESET.allowedPaths.join(", "));
-  let forbiddenPathsInput = $state(AGENT_POLICY_PRESET.forbiddenPaths.join(", "));
-  let writableRootInput = $state(AGENT_POLICY_PRESET.writableRoot ?? ".");
-  let selectedToolPermissions = $state<ToolPermission[]>([...AGENT_POLICY_PRESET.toolPermissions]);
+  let allowedPathsInput = $state(AGENT_SCOPE_PRESET.allowedPaths.join(", "));
+  let forbiddenPathsInput = $state(AGENT_SCOPE_PRESET.forbiddenPaths.join(", "));
+  let writableRootInput = $state(AGENT_SCOPE_PRESET.writableRoot ?? ".");
+  let selectedToolPermissions = $state<ToolPermission[]>([...AGENT_SCOPE_PRESET.toolPermissions]);
 
   let accountKeys = $state(getInitialAccountKeys());
   let accountKeysStateError = $state(getInitialAccountKeysError());
@@ -119,7 +124,7 @@
   );
 
   let runtimePolicy = $derived(
-    normalizeNodeRuntimePolicy("agent", {
+    normalizeAgentScope({
       allowedPaths: parseDelimitedInput(allowedPathsInput),
       forbiddenPaths: parseDelimitedInput(forbiddenPathsInput),
       toolPermissions: selectedToolPermissions,
@@ -188,6 +193,34 @@
       availableHarnesses = [];
     } finally {
       harnessesLoading = false;
+    }
+  }
+
+  async function loadAccountKeys() {
+    inlineKeyError = "";
+    inlineKeySuccess = "";
+
+    try {
+      const response = await fetch("/api/user/keys");
+      const data = (await response.json().catch(() => ({}))) as {
+        keys?: Record<ProviderId, string | null>;
+        error?: string;
+        message?: string;
+      };
+
+      accountKeys = cloneMaskedKeys(data.keys ?? EMPTY_KEYS);
+      accountKeysStateError = data.error ?? data.message ?? "";
+      onkeyschange({
+        keys: cloneMaskedKeys(accountKeys),
+        error: accountKeysStateError || null,
+      });
+    } catch {
+      accountKeys = cloneMaskedKeys(EMPTY_KEYS);
+      accountKeysStateError = "Unable to load saved router keys.";
+      onkeyschange({
+        keys: cloneMaskedKeys(EMPTY_KEYS),
+        error: accountKeysStateError,
+      });
     }
   }
 
@@ -270,6 +303,10 @@
       accountKeysStateError = "";
       inlineKeyDraft = "";
       inlineKeySuccess = `${activeProviderDefinition.label} key saved`;
+      onkeyschange({
+        keys: cloneMaskedKeys(accountKeys),
+        error: null,
+      });
       await loadModels();
     } catch (error) {
       inlineKeyError = error instanceof Error ? error.message : `Failed to save ${activeProviderDefinition.label} key`;
@@ -304,6 +341,7 @@
   }
 
   onMount(async () => {
+    await loadAccountKeys();
     await loadHarnesses();
   });
 

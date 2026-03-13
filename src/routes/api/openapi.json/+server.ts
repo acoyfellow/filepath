@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ url }) => {
               type: "array",
               items: {
                 type: "string",
-                enum: ["inspect", "search", "run", "write", "commit", "delegate"],
+                enum: ["inspect", "search", "run", "write", "commit"],
               },
             },
             writableRoot: { type: ["string", "null"] },
@@ -343,48 +343,6 @@ export const GET: RequestHandler = async ({ url }) => {
           responses: {
             "200": {
               description: "Cancellation result",
-            },
-          },
-        },
-      },
-      "/api/workspaces/{id}/agents/{agentId}/results": {
-        get: {
-          tags: ["Agents"],
-          summary: "List agent task results",
-          parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
-            { name: "agentId", in: "path", required: true, schema: { type: "string" } },
-            { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
-          ],
-          responses: {
-            "200": {
-              description: "Result history",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      results: {
-                        type: "array",
-                        items: {
-                          allOf: [
-                            { $ref: "#/components/schemas/AgentResult" },
-                            {
-                              type: "object",
-                              properties: {
-                                id: { type: "string" },
-                                content: { type: "string" },
-                              },
-                              required: ["id", "content"],
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    required: ["results"],
-                  },
-                },
-              },
             },
           },
         },

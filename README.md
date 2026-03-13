@@ -20,6 +20,7 @@ Local development:
 ```bash
 bun install
 bun run dev
+bun run smoke:local
 ```
 
 Then open:
@@ -72,9 +73,8 @@ Available values:
 - `run`
 - `write`
 - `commit`
-- `delegate`
 
-If an agent is not allowed to write, commit, or delegate, filepath should reject that action at runtime instead of relying on prompt wording.
+If an agent is not allowed to write or commit, filepath should reject that action at runtime instead of relying on prompt wording.
 
 ### Switch harnesses or models
 
@@ -98,9 +98,7 @@ filepath v1 is:
 filepath v1 is not:
 
 - a proof engine
-- an MCP product
 - a multi-user platform
-- a child-agent tree runtime yet
 - dependent on experimental Cloudflare features
 
 ### Public concepts
@@ -160,8 +158,9 @@ Better Auth is the only supported auth boundary in v1.
 
 - sign up and sign in through the app
 - dashboard and API both use the Better Auth session
-- no Cloudflare Access fallback
 - no public unauthenticated product surface
+- local dev may use the placeholder secret from `.env.example`
+- production must use a random 32+ character `BETTER_AUTH_SECRET`
 
 ### Current stable runtime contract
 
@@ -193,14 +192,12 @@ Better Auth keeps the app honest:
 
 ### Why flat agents in v1
 
-The long-term product can support richer orchestration, but v1 should not fake a child-agent runtime before the stable Agents SDK supports it cleanly.
-
-So v1 ships:
+filepath v1 keeps the shipped model small and honest:
 
 - human-created agents
 - explicit file and tool scope
 - persistent results
-- no pretend tree runtime
+- no hidden hierarchy or orchestration layer
 
 ### Why stable Cloudflare surfaces only
 
@@ -237,13 +234,12 @@ That means:
 2. make agent results more durable and inspectable
 3. tighten runtime enforcement around file and tool scope
 4. simplify the public API around workspace and agent lifecycle
-5. revisit child-agent orchestration only after stable SDK support ships
+5. improve local runtime fidelity and result richness
 
 ### Delete aggressively
 
-- stale session/node/tree language
+- stale pre-v1 product language
 - stale proof-engine language
-- stale MCP/public-surface language
 - stale gates and scripts that validate deleted routes
 - compatibility shims that keep old mental models alive
 
@@ -263,6 +259,7 @@ bun install
 bun run dev
 bun run check
 bun run build
+bun run smoke:local
 ```
 
 ### CI/CD
@@ -277,7 +274,7 @@ On push (any branch): `test` runs `bun run check`, `bun run build`, and `gates/p
 - `src/lib/runtime/agent-runtime.ts`
 - `src/routes/dashboard/+page.svelte`
 - `src/routes/workspace/[id]/+page.svelte`
-- `src/lib/components/session/SpawnModal.svelte`
+- `src/lib/components/workspace/CreateAgentModal.svelte`
 - `src/routes/api/workspaces/`
 
 ### Repo rules
@@ -287,6 +284,6 @@ On push (any branch): `test` runs `bun run check`, `bun run build`, and `gates/p
 - keep auth, API, UI, and runtime aligned to the same product vocabulary
 - if a file still tells the old product story, rewrite it or delete it
 
-### Future: child agents
+### Future
 
-Child-agent orchestration is out of scope for v1. Revisit only after the stable Cloudflare Agents SDK supports child agents. See Checklist → Out of bounds.
+filepath may grow into richer orchestration later, but v1 should stay focused on workspaces, flat agents, and bounded task execution.

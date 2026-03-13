@@ -2,10 +2,10 @@
   import "$lib/styles/theme.css";
   import { onDestroy, onMount } from "svelte";
   import { page } from "$app/state";
-  import AgentPanel from "$lib/components/session/AgentPanel.svelte";
-  import AgentTree from "$lib/components/session/AgentTree.svelte";
-  import type { ChatMsg } from "$lib/components/session/ChatView.svelte";
-  import SpawnModal from "$lib/components/session/SpawnModal.svelte";
+  import AgentDetailPane from "$lib/components/workspace/AgentDetailPane.svelte";
+  import AgentListPane from "$lib/components/workspace/AgentListPane.svelte";
+  import type { TaskMessage } from "$lib/components/workspace/TaskTranscript.svelte";
+  import CreateAgentModal from "$lib/components/workspace/CreateAgentModal.svelte";
   import type {
     AgentConfig,
     AgentCreateRequest,
@@ -29,6 +29,7 @@
     toolPermissions: string | ToolPermission[] | null;
     writableRoot: string | null;
     containerId: string | null;
+    activeProcessId?: string | null;
     tokens: number;
     createdAt: string | number | Date;
     updatedAt: string | number | Date;
@@ -45,7 +46,12 @@
 
   const workspaceId = $derived(page.params.id ?? "");
   let showSpawn = $state(false);
-  let messagesByAgent = $state<Record<string, ChatMsg[]>>({});
+  let accountKeysMasked = $state<{ openrouter: string | null; zen: string | null }>({
+    openrouter: null,
+    zen: null,
+  });
+  let accountKeysError = $state<string | null>(null);
+  let taskMessagesByAgent = $state<Record<string, TaskMessage[]>>({});
   let resultsByAgent = $state<Record<string, AgentResult | null>>({});
   let agentNotices = $state<Record<string, AgentNotice | null>>({});
   let selectedId = $state<string | null>(null);
@@ -89,6 +95,7 @@
       toolPermissions: parseJsonList(row.toolPermissions) as ToolPermission[],
       writableRoot: row.writableRoot,
       containerId: row.containerId ?? undefined,
+      activeProcessId: row.activeProcessId ?? null,
       tokens: Number(row.tokens ?? 0),
       createdAt: normalizeTimestamp(row.createdAt),
       updatedAt: normalizeTimestamp(row.updatedAt),
@@ -99,6 +106,11 @@
 
   $effect(() => {
     agents = (data.agents as AgentRow[]).map(toAgent);
+  });
+
+  $effect(() => {
+    accountKeysMasked = data.accountKeysMasked;
+    accountKeysError = data.accountKeysError;
   });
 
   $effect(() => {
@@ -113,7 +125,7 @@
     selectedId ? agents.find((entry) => entry.id === selectedId) ?? null : null,
   );
   let currentMessages = $derived(
-    selectedAgent ? (messagesByAgent[selectedAgent.id] ?? []) : [],
+    selectedAgent ? (taskMessagesByAgent[selectedAgent.id] ?? []) : [],
   );
   let selectedNotice = $derived(
     selectedAgent ? (agentNotices[selectedAgent.id] ?? null) : null,
@@ -140,9 +152,9 @@
   }
 
   function dropAgentState(agentId: string) {
-    const nextMessages = { ...messagesByAgent };
+    const nextMessages = { ...taskMessagesByAgent };
     delete nextMessages[agentId];
-    messagesByAgent = nextMessages;
+    taskMessagesByAgent = nextMessages;
 
     const nextResults = { ...resultsByAgent };
     delete nextResults[agentId];
@@ -153,9 +165,18 @@
   function applyRuntimeSnapshot(agentId: string, runtime: AgentRuntimeSnapshot | null) {
     if (!runtime) return;
 
-    setAgentStatus(agentId, runtime.status as AgentRecord["status"]);
-    messagesByAgent = {
-      ...messagesByAgent,
+    agents = agents.map((entry) =>
+      entry.id === agentId
+        ? {
+            ...entry,
+            status: runtime.status as AgentRecord["status"],
+            activeProcessId: runtime.activeProcessId ?? null,
+            updatedAt: Date.now(),
+          }
+        : entry,
+    );
+    taskMessagesByAgent = {
+      ...taskMessagesByAgent,
       [agentId]: runtime.messages.map((entry) => ({
         from: entry.role === "user" ? "u" : "a",
         event: { type: "text", content: entry.content },
@@ -322,10 +343,10 @@
 
     const agentId = selectedAgent.id;
     clearAgentNotice(agentId);
-    messagesByAgent = {
-      ...messagesByAgent,
+    taskMessagesByAgent = {
+      ...taskMessagesByAgent,
       [agentId]: [
-        ...(messagesByAgent[agentId] ?? []),
+        ...(taskMessagesByAgent[agentId] ?? []),
         { from: "u", event: { type: "text", content } },
       ],
     };
@@ -416,20 +437,20 @@
 <div class="workspace-root flex h-[calc(100vh-48px)] flex-1 flex-col overflow-hidden bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300">
   <div class="workspace-container @container flex h-full flex-1 overflow-hidden">
     {#if agents.length > 0}
-      <AgentTree
+      <AgentListPane
         isRefreshing={isRefreshing}
         agents={agents}
         {selectedId}
         onselect={handleSelect}
         onrename={handleRenameAgent}
         ondelete={handleDeleteAgent}
-        onspawn={() => {
+        oncreate={() => {
           showSpawn = true;
         }}
       />
 
       <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <AgentPanel
+        <AgentDetailPane
           agent={selectedAgent}
           messages={currentMessages}
           result={selectedResult}
@@ -462,14 +483,18 @@
 </div>
 
 {#if showSpawn}
-  <SpawnModal
+  <CreateAgentModal
     onclose={() => {
       showSpawn = false;
     }}
     onspawn={handleCreateAgent}
+    onkeyschange={({ keys, error }) => {
+      accountKeysMasked = keys;
+      accountKeysError = error;
+    }}
     lastAgent={selectedAgent?.harnessId}
     lastModel={selectedAgent?.model}
-    accountKeysMasked={data.accountKeysMasked}
-    accountKeysError={data.accountKeysError}
+    {accountKeysMasked}
+    accountKeysError={accountKeysError}
   />
 {/if}

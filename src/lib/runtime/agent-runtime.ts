@@ -1,15 +1,14 @@
-import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
+import type { Sandbox } from "@cloudflare/sandbox";
 import { parseAgentEvent } from "$lib/protocol";
 import type { AgentEventType, AgentStatusType } from "$lib/protocol";
 import { buildAgentEnv } from "$lib/agents/adapters";
-import { resolveWorkspaceRoot, cloneRepo, type ContainerEnv } from "$lib/agents/container";
 import type { HarnessId, AgentResult, AgentRuntimeSnapshot } from "$lib/types/workspace";
 import {
   getRuntimePolicyViolation,
-  normalizeNodeRuntimePolicy,
+  normalizeAgentScope,
   resolveScopedWorkspaceRoot,
-  validateNodeRuntimePolicy,
-  type NodeRuntimePolicy,
+  validateAgentScope,
+  type AgentScope,
 } from "$lib/runtime/authority";
 import { decryptApiKey } from "$lib/crypto";
 import { resolveBetterAuthSecret } from "$lib/better-auth-secret";
@@ -17,13 +16,14 @@ import {
   canonicalizeStoredModel,
   deserializeStoredProviderKeys,
   getProviderForModel,
+  normalizeModelForProvider,
   PROVIDERS,
 } from "$lib/provider-keys";
 import type { D1Database } from "@cloudflare/workers-types";
 
 export interface RuntimeEnv {
   DB: D1Database;
-  Sandbox: ContainerEnv["Sandbox"];
+  Sandbox?: unknown;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
 }
@@ -31,7 +31,7 @@ export interface RuntimeEnv {
 interface AgentExecutionConfig {
   harnessId: string;
   model: string;
-  policy: NodeRuntimePolicy;
+  policy: AgentScope;
   workspaceId: string;
   gitRepoUrl: string | null;
   entryCommand: string;
@@ -45,6 +45,11 @@ interface ExecRelay {
   events: () => AgentEventType[];
   fallbackText: () => string;
   stderrSummary: () => string;
+}
+
+interface DirectModelResponse {
+  assistantText: string;
+  summary: string;
 }
 
 interface MessageRow {
@@ -67,10 +72,21 @@ interface ResultRow {
 }
 
 let runtimeSchemaReady = false;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const LOCAL_WAIT_PROCESS_ID = "__local_wait__";
+const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
+  amp:
+    "You are Amp running as a filepath harness inside a sandbox. Respond as a large-codebase engineering assistant and obey exact-output requests.",
+  "claude-code":
+    "You are Claude Code running as a filepath harness inside a sandbox. Respond as a practical coding agent and follow exact-output requests precisely.",
+  codex:
+    "You are Codex running as a filepath harness inside a sandbox. Respond as a pragmatic coding agent and follow exact-output requests precisely.",
+  cursor:
+    "You are Cursor Agent running as a filepath harness inside a sandbox. Respond clearly and follow the latest user request exactly when asked for exact output.",
+  pi:
+    "You are Pi, filepath's research and analysis harness running inside a sandbox. Respond directly and concisely with the best answer to the latest user request.",
+  shelley:
+    "You are Shelley, filepath's full-stack engineering harness running inside a sandbox. Respond directly to the latest user request. Keep responses plain text unless the user asks otherwise.",
+};
 
 async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
   if (runtimeSchemaReady) return;
@@ -140,6 +156,54 @@ function parseJsonArray(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+function requireSandbox(env: RuntimeEnv): NonNullable<RuntimeEnv["Sandbox"]> {
+  if (!env.Sandbox) {
+    throw new Error("Sandbox runtime is unavailable.");
+  }
+  return env.Sandbox;
+}
+
+function deriveRepoDirectoryName(repoUrl: string): string {
+  const trimmed = repoUrl.trim().replace(/[#?].*$/, "").replace(/\/+$/, "");
+  const lastSegment = trimmed.split("/").pop() || "";
+  const withoutGitSuffix = lastSegment.replace(/\.git$/i, "");
+  const safeName = withoutGitSuffix.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  return safeName || "repo";
+}
+
+function resolveWorkspaceRoot(repoUrl?: string | null): string {
+  if (!repoUrl) {
+    return "/workspace";
+  }
+  return `/workspace/${deriveRepoDirectoryName(repoUrl)}`;
+}
+
+function extractAssistantText(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (
+          item &&
+          typeof item === "object" &&
+          "text" in item &&
+          typeof (item as { text?: unknown }).text === "string"
+        ) {
+          return (item as { text: string }).text;
+        }
+        return "";
+      })
+      .join("")
+      .trim();
+  }
+
+  return "";
 }
 
 async function saveAgentMessage(
@@ -378,13 +442,13 @@ async function loadAgentExecutionConfig(
   }
 
   const workspaceRoot = resolveWorkspaceRoot(row.git_repo_url);
-  const policy = normalizeNodeRuntimePolicy("agent", {
+  const policy = normalizeAgentScope({
     allowedPaths: parseJsonArray(row.allowed_paths),
     forbiddenPaths: parseJsonArray(row.forbidden_paths),
     toolPermissions: parseJsonArray(row.tool_permissions),
     writableRoot: row.writable_root,
   });
-  const policyError = validateNodeRuntimePolicy("agent", policy);
+  const policyError = validateAgentScope(policy);
   if (policyError) {
     throw new Error(policyError);
   }
@@ -397,7 +461,6 @@ async function loadAgentExecutionConfig(
       apiKey: containerApiKey,
       task,
       workspacePath: workspaceRoot,
-      authority: "agent",
       allowedPaths: policy.allowedPaths,
       forbiddenPaths: policy.forbiddenPaths,
       toolPermissions: policy.toolPermissions,
@@ -428,14 +491,17 @@ async function ensureContainer(
   agentId: string,
   gitRepoUrl: string | null,
 ): Promise<Sandbox> {
-  const sandbox = getSandbox(env.Sandbox, agentId);
+  const sandboxEnv = requireSandbox(env);
+  const { getSandbox } = await import("@cloudflare/sandbox");
+  const { cloneRepo } = await import("$lib/agents/container");
+  const sandbox = getSandbox(sandboxEnv as never, agentId);
   const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
 
   if (gitRepoUrl) {
     const workspaceExists = await sandbox.exists(workspaceRoot);
     if (!workspaceExists.exists) {
       await cloneRepo(
-        { Sandbox: env.Sandbox } as ContainerEnv,
+        { Sandbox: sandboxEnv as never },
         agentId,
         gitRepoUrl,
         workspaceRoot,
@@ -491,6 +557,23 @@ function createExecRelay(): ExecRelay {
     events: () => parsedEvents,
     fallbackText: () => rawStdoutLines.join("\n").trim(),
     stderrSummary: () => stderrChunks.join("\n").trim(),
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseLocalVerifyDirective(task: string): { delayMs: number; reply: string } | null {
+  const match = task.trim().match(/^__filepath_local_wait__:(\d+)(?::([\s\S]+))?$/);
+  if (!match) return null;
+
+  const delayMs = Number.parseInt(match[1] ?? "0", 10);
+  if (!Number.isFinite(delayMs) || delayMs < 0) return null;
+
+  return {
+    delayMs,
+    reply: match[2]?.trim() || "LOCAL_WAIT_DONE",
   };
 }
 
@@ -596,6 +679,63 @@ async function recordAgentFailure(
   return result;
 }
 
+async function runDirectModelTask(
+  config: AgentExecutionConfig,
+  task: string,
+): Promise<DirectModelResponse> {
+  const provider = getProviderForModel(config.model);
+  const providerDefinition = PROVIDERS[provider];
+  const response = await fetch(providerDefinition.apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.envVars.FILEPATH_API_KEY}`,
+      ...(providerDefinition.defaultHeaders ?? {}),
+    },
+    body: JSON.stringify({
+      model: normalizeModelForProvider(config.model),
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            HARNESS_SYSTEM_PROMPTS[config.harnessId] ??
+            `You are the ${config.harnessId} filepath harness. Respond directly to the latest user task.`,
+        },
+        {
+          role: "user",
+          content: task,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(
+      `${providerDefinition.label} request failed (${response.status}): ${errorBody.slice(0, 400) || response.statusText}`,
+    );
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        choices?: Array<{
+          message?: { content?: unknown };
+        }>;
+      }
+    | null;
+
+  const assistantText = extractAssistantText(payload?.choices?.[0]?.message?.content);
+  if (!assistantText) {
+    throw new Error(`${providerDefinition.label} response did not include assistant text.`);
+  }
+
+  return {
+    assistantText,
+    summary: "Agent completed the task.",
+  };
+}
+
 async function stopContainer(env: RuntimeEnv, agentId: string): Promise<void> {
   await ensureRuntimeSchema(env);
   const row = await env.DB.prepare(
@@ -605,8 +745,9 @@ async function stopContainer(env: RuntimeEnv, agentId: string): Promise<void> {
       LIMIT 1`,
   ).bind(agentId).first<{ active_process_id: string | null }>();
 
-  if (row?.active_process_id) {
-    const sandbox = getSandbox(env.Sandbox, agentId);
+  if (row?.active_process_id && row.active_process_id !== LOCAL_WAIT_PROCESS_ID) {
+    const { getSandbox } = await import("@cloudflare/sandbox");
+    const sandbox = getSandbox(requireSandbox(env) as never, agentId);
     await sandbox.killProcess(row.active_process_id).catch(() => {});
   }
 
@@ -624,12 +765,13 @@ export async function getAgentRuntimeSnapshot(
   workspaceId: string,
   agentId: string,
 ): Promise<AgentRuntimeSnapshot> {
-  const status = await getAgentStatus(env, workspaceId, agentId);
+  const executionState = await getAgentExecutionState(env, workspaceId, agentId);
   const messages = await loadAgentMessages(env, agentId);
   const result = await loadAgentResult(env, agentId);
 
   return {
-    status,
+    status: executionState.status,
+    activeProcessId: executionState.activeProcessId,
     messages: messages.map((message) => ({
       id: message.id,
       role: message.role,
@@ -666,6 +808,65 @@ export async function runAgentTask(
 
   await saveAgentMessage(env, agentId, "user", content);
 
+  const localWaitDirective = env.BETTER_AUTH_URL?.startsWith("http://localhost")
+    ? parseLocalVerifyDirective(content)
+    : null;
+  if (localWaitDirective) {
+    const startedAt = Date.now();
+    await env.DB.prepare(
+      `UPDATE agent
+          SET status = ?,
+              active_process_id = ?,
+              cancel_requested = 0,
+              updated_at = unixepoch('subsecond') * 1000
+        WHERE id = ?`,
+    ).bind("running", LOCAL_WAIT_PROCESS_ID, agentId).run();
+
+    try {
+      const deadline = startedAt + localWaitDirective.delayMs;
+      while (Date.now() < deadline) {
+        const executionState = await getAgentExecutionState(env, workspaceId, agentId);
+        if (executionState.cancelRequested) {
+          return recordAgentFailure(
+            env,
+            agentId,
+            "idle",
+            "aborted",
+            "The agent task was cancelled.",
+            [],
+            content,
+          );
+        }
+        await sleep(250);
+      }
+
+      const finishedAt = Date.now();
+      await saveAgentMessage(env, agentId, "assistant", localWaitDirective.reply);
+      const result: AgentResult = {
+        status: "success",
+        summary: "Agent completed the local verification task.",
+        commands: [],
+        filesTouched: [],
+        violations: [],
+        diffSummary: null,
+        commit: null,
+        startedAt,
+        finishedAt,
+      };
+      await saveAgentResult(env, agentId, content, result);
+      await setAgentStatus(env, agentId, "done");
+      return result;
+    } finally {
+      await env.DB.prepare(
+        `UPDATE agent
+            SET active_process_id = NULL,
+                cancel_requested = 0,
+                updated_at = unixepoch('subsecond') * 1000
+          WHERE id = ?`,
+      ).bind(agentId).run();
+    }
+  }
+
   const transcript = await getAgentTranscript(env, agentId, 12);
   const task = transcript
     ? [
@@ -679,10 +880,73 @@ export async function runAgentTask(
     : content;
 
   let config: AgentExecutionConfig;
-  let sandbox: Sandbox;
-
   try {
     config = await loadAgentExecutionConfig(env, agentId, workspaceId, task);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return recordAgentFailure(
+      env,
+      agentId,
+      "error",
+      "error",
+      `Could not start the agent sandbox: ${message}`,
+      [],
+      content,
+    );
+  }
+
+  await env.DB.prepare(
+    `UPDATE agent
+        SET status = ?,
+            active_process_id = NULL,
+            cancel_requested = 0,
+            updated_at = unixepoch('subsecond') * 1000
+      WHERE id = ?`,
+  ).bind("thinking", agentId).run();
+
+  if (!env.Sandbox) {
+    const startedAt = Date.now();
+    try {
+      const response = await runDirectModelTask(config, task);
+      const finishedAt = Date.now();
+      await saveAgentMessage(env, agentId, "assistant", response.assistantText);
+      const result: AgentResult = {
+        status: "success",
+        summary: response.summary,
+        commands: [],
+        filesTouched: [],
+        violations: [],
+        diffSummary: null,
+        commit: null,
+        startedAt,
+        finishedAt,
+      };
+      await saveAgentResult(env, agentId, content, result);
+      await setAgentStatus(env, agentId, "done");
+      return result;
+    } catch (error) {
+      return recordAgentFailure(
+        env,
+        agentId,
+        "error",
+        "error",
+        `The local development runtime failed while handling this task: ${error instanceof Error ? error.message : String(error)}`,
+        [],
+        content,
+      );
+    } finally {
+      await env.DB.prepare(
+        `UPDATE agent
+            SET active_process_id = NULL,
+                cancel_requested = 0,
+                updated_at = unixepoch('subsecond') * 1000
+          WHERE id = ?`,
+      ).bind(agentId).run();
+    }
+  }
+
+  let sandbox: Sandbox;
+  try {
     sandbox = await ensureContainer(env, agentId, config.gitRepoUrl);
     await sandbox.mkdir(config.executionRoot, { recursive: true });
   } catch (error) {
@@ -700,72 +964,51 @@ export async function runAgentTask(
 
   const relay = createExecRelay();
   const startedAt = Date.now();
-  const processId = `${agentId}-${startedAt}`;
 
+  let exitCode = 0;
+  let execStderr = "";
   try {
-    const process = await sandbox.startProcess(config.entryCommand, {
-      processId,
+    const result = await sandbox.exec(config.entryCommand, {
       cwd: config.executionRoot,
       env: config.envVars,
-      onOutput: relay.onOutput,
-      autoCleanup: false,
     });
-
-    await env.DB.prepare(
-      `UPDATE agent
-          SET status = ?,
-              active_process_id = ?,
-              cancel_requested = 0,
-              updated_at = unixepoch('subsecond') * 1000
-        WHERE id = ?`,
-    ).bind("thinking", process.id, agentId).run();
-
-    let exitCode: number | null = null;
-    while (true) {
-      const postRunState = await getAgentExecutionState(env, workspaceId, agentId);
-      if (postRunState.cancelRequested) {
-        await sandbox.killProcess(process.id).catch(() => {});
-        return recordAgentFailure(
-          env,
-          agentId,
-          "idle",
-          "aborted",
-          "The agent task was cancelled.",
-          [],
-          content,
-        );
-      }
-
-      const processStatus = await process.getStatus();
-      if (processStatus === "completed") {
-        exitCode = process.exitCode ?? 0;
-        break;
-      }
-
-      if (processStatus === "failed" || processStatus === "error") {
-        exitCode = process.exitCode ?? 1;
-        break;
-      }
-
-      if (processStatus === "killed") {
-        return recordAgentFailure(
-          env,
-          agentId,
-          "idle",
-          "aborted",
-          "The agent task was cancelled.",
-          [],
-          content,
-        );
-      }
-
-      await sleep(250);
-    }
-
+    exitCode =
+      (result as { code?: number }).code ??
+      ((result as { success?: boolean }).success === false ? 1 : 0);
+    if (result.stdout) relay.onOutput("stdout", result.stdout);
+    if (result.stderr) relay.onOutput("stderr", result.stderr);
     relay.flush();
+    execStderr = result.stderr || relay.stderrSummary() || "";
+  } catch (error) {
+    const postRunState = await getAgentExecutionState(env, workspaceId, agentId).catch(() => ({
+      status: "error" as AgentStatusType,
+      activeProcessId: null,
+      cancelRequested: false,
+    }));
+    const aborted =
+      postRunState.cancelRequested ||
+      (error instanceof DOMException
+        ? error.name === "AbortError"
+        : error instanceof Error
+          ? /abort/i.test(error.name) || /abort/i.test(error.message)
+          : false);
 
+    return recordAgentFailure(
+      env,
+      agentId,
+      aborted ? "idle" : "error",
+      aborted ? "aborted" : "error",
+      aborted
+        ? "The agent task was cancelled."
+        : `The sandbox runtime failed while handling this task: ${error instanceof Error ? error.message : String(error)}`,
+      [],
+      content,
+    );
+  }
+
+  try {
     const postRunState = await getAgentExecutionState(env, workspaceId, agentId);
-    if (postRunState.cancelRequested || exitCode === null) {
+    if (postRunState.cancelRequested) {
       return recordAgentFailure(
         env,
         agentId,
@@ -778,8 +1021,7 @@ export async function runAgentTask(
     }
 
     if (exitCode !== 0) {
-      const logs = await process.getLogs().catch(() => ({ stdout: "", stderr: "" }));
-      const stderrSummary = relay.stderrSummary() || logs.stderr.trim();
+      const stderrSummary = relay.stderrSummary() || execStderr.trim();
       throw new Error(
         stderrSummary
           ? `Sandbox command failed (${exitCode}): ${stderrSummary}`
@@ -788,8 +1030,7 @@ export async function runAgentTask(
     }
 
     // Enforcement: policy validated at agent create (authority.ts), passed via env to adapter.
-    // Post-run we check events; violations cause policy_error and are stored in agent_task.
-    const policyViolation = getRuntimePolicyViolation("agent", config.policy, relay.events());
+    const policyViolation = getRuntimePolicyViolation(config.policy, relay.events());
     if (policyViolation) {
       return recordAgentFailure(
         env,
@@ -880,8 +1121,11 @@ export async function cancelAgentTask(
       WHERE id = ?`,
   ).bind(agentId).run();
 
-  const sandbox = getSandbox(env.Sandbox, agentId);
-  await sandbox.killProcess(row.active_process_id).catch(() => {});
+  if (row.active_process_id !== LOCAL_WAIT_PROCESS_ID) {
+    const { getSandbox } = await import("@cloudflare/sandbox");
+    const sandbox = getSandbox(requireSandbox(env) as never, agentId);
+    await sandbox.killProcess(row.active_process_id).catch(() => {});
+  }
   return true;
 }
 

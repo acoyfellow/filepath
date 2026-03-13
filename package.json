@@ -65,6 +65,7 @@
     "dev": "node ./scripts/dev-preflight.mjs && alchemy dev",
     "dev:stop": "node ./scripts/dev-stop.mjs",
     "dev:wait": "node ./scripts/wait-for-local-dev.mjs",
+    "smoke:local": "node ./scripts/local-smoke.mjs",
     "deploy": "NODE_ENV=production alchemy deploy --stage prod",
     "deploy:preview": "alchemy deploy",
     "destroy": "alchemy destroy",

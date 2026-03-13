@@ -1,11 +1,7 @@
 import { getDrizzle } from "$lib/auth";
-import {
-  NODE_AUTHORITIES,
-  normalizeNodeRuntimePolicy,
-  validateNodeRuntimePolicy,
-} from "$lib/runtime/authority";
+import { normalizeAgentScope, validateAgentScope } from "$lib/runtime/authority";
 import { getBuiltinHarnessRows } from "$lib/agents/harnesses";
-import { agent, agentTask, harness, workspace } from "$lib/schema";
+import { agent, harness, workspace } from "$lib/schema";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { Data, Effect, Schema } from "effect";
 
@@ -141,12 +137,9 @@ function decodePolicy(input: {
   forbiddenPaths?: readonly string[];
   toolPermissions?: readonly string[];
   writableRoot?: string | null;
-}): Effect.Effect<
-  ReturnType<typeof normalizeNodeRuntimePolicy>,
-  BadRequest
-> {
-  const policy = normalizeNodeRuntimePolicy("agent", input);
-  const policyError = validateNodeRuntimePolicy("agent", policy);
+}): Effect.Effect<ReturnType<typeof normalizeAgentScope>, BadRequest> {
+  const policy = normalizeAgentScope(input);
+  const policyError = validateAgentScope(policy);
   return policyError
     ? Effect.fail(new BadRequest({ message: policyError }))
     : Effect.succeed(policy);
@@ -655,55 +648,5 @@ export function deleteAgent(ctx: AppContext, workspaceId: string, agentId: strin
       ),
     ),
     Effect.as({ ok: true as const }),
-  );
-}
-
-export function listAgentResults(
-  ctx: AppContext,
-  workspaceId: string,
-  agentId: string,
-  limit = 20,
-) {
-  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
-    Effect.flatMap(() =>
-      fromPromise(
-        () =>
-          ctx.db
-            .select({
-              id: agentTask.id,
-              content: agentTask.content,
-              status: agentTask.status,
-              summary: agentTask.summary,
-              commands: agentTask.commands,
-              filesTouched: agentTask.filesTouched,
-              violations: agentTask.violations,
-              diffSummary: agentTask.diffSummary,
-              commitJson: agentTask.commitJson,
-              startedAt: agentTask.startedAt,
-              finishedAt: agentTask.finishedAt,
-            })
-            .from(agentTask)
-            .innerJoin(agent, eq(agentTask.agentId, agent.id))
-            .where(and(eq(agentTask.agentId, agentId), eq(agent.workspaceId, workspaceId)))
-            .orderBy(desc(agentTask.finishedAt))
-            .limit(limit),
-        "Failed to list agent results",
-      ),
-    ),
-    Effect.map((rows) => ({
-      results: rows.map((row) => ({
-        id: row.id,
-        content: row.content,
-        status: row.status,
-        summary: row.summary,
-        commands: JSON.parse(row.commands) as Array<{ command: string; exitCode: number | null }>,
-        filesTouched: JSON.parse(row.filesTouched) as string[],
-        violations: JSON.parse(row.violations) as string[],
-        diffSummary: row.diffSummary,
-        commit: row.commitJson ? (JSON.parse(row.commitJson) as { sha: string; message: string }) : null,
-        startedAt: row.startedAt,
-        finishedAt: row.finishedAt,
-      })),
-    })),
   );
 }
