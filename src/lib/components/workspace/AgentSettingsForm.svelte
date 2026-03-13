@@ -1,0 +1,609 @@
+<script lang="ts">
+  import DicesIcon from "@lucide/svelte/icons/dices";
+  import Button from "$lib/components/ui/button/button.svelte";
+  import { DEFAULT_MODEL } from "$lib/config";
+  import {
+    AGENT_SCOPE_PRESET,
+    TOOL_PERMISSION_OPTIONS,
+    normalizeAgentScope,
+    parseDelimitedInput,
+    type ToolPermission,
+  } from "$lib/runtime/authority";
+  import {
+    PROVIDERS,
+    canonicalizeStoredModel,
+    getProviderForModel,
+    type ProviderId,
+  } from "$lib/provider-keys";
+  import { onMount } from "svelte";
+  import type { AgentHarness, HarnessId } from "$lib/types/workspace";
+
+  interface ModelEntry {
+    id: string;
+    name: string;
+    provider: string;
+    router: ProviderId;
+  }
+
+  export interface AgentSettingsSubmitPayload {
+    name?: string;
+    harnessId: HarnessId;
+    model: string;
+    allowedPaths: string[];
+    forbiddenPaths: string[];
+    toolPermissions: ToolPermission[];
+    writableRoot: string | null;
+  }
+
+  interface Props {
+    mode: "create" | "edit";
+    showNameField?: boolean;
+    submitLabel: string;
+    submitBusyLabel?: string;
+    onsubmit: (payload: AgentSettingsSubmitPayload) => Promise<void> | void;
+    oncancel?: () => void;
+    onkeyschange?: (payload: {
+      keys: Record<ProviderId, string | null>;
+      error: string | null;
+    }) => void;
+    initialName?: string;
+    initialHarnessId?: HarnessId;
+    initialModel?: string;
+    initialAllowedPaths?: string[];
+    initialForbiddenPaths?: string[];
+    initialToolPermissions?: ToolPermission[];
+    initialWritableRoot?: string | null;
+    accountKeysMasked?: Record<ProviderId, string | null>;
+    accountKeysError?: string | null;
+    topNotice?: {
+      tone: "info" | "warning" | "success";
+      title: string;
+      message: string;
+    } | null;
+  }
+
+  const EMPTY_KEYS: Record<ProviderId, string | null> = {
+    openrouter: null,
+    zen: null,
+  };
+
+  const NAME_POOL = ["atlas", "bolt", "cipher", "drift", "echo", "helix", "orbit", "relay", "trace", "vortex"];
+
+  let {
+    mode,
+    showNameField = false,
+    submitLabel,
+    submitBusyLabel = "saving...",
+    onsubmit,
+    oncancel = () => {},
+    onkeyschange = () => {},
+    initialName = "",
+    initialHarnessId = "shelley",
+    initialModel = DEFAULT_MODEL,
+    initialAllowedPaths = AGENT_SCOPE_PRESET.allowedPaths,
+    initialForbiddenPaths = AGENT_SCOPE_PRESET.forbiddenPaths,
+    initialToolPermissions = AGENT_SCOPE_PRESET.toolPermissions,
+    initialWritableRoot = AGENT_SCOPE_PRESET.writableRoot ?? ".",
+    accountKeysMasked = EMPTY_KEYS,
+    accountKeysError = null,
+    topNotice = null,
+  }: Props = $props();
+
+  function pickName(): string {
+    return `${NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)]}-${Math.floor(Math.random() * 99)}`;
+  }
+
+  function cloneMaskedKeys(source: Record<ProviderId, string | null>): Record<ProviderId, string | null> {
+    return {
+      openrouter: source.openrouter ?? null,
+      zen: source.zen ?? null,
+    };
+  }
+
+  const getInitialNameValue = () => initialName || (mode === "create" ? pickName() : "");
+  const getInitialHarnessValue = () => initialHarnessId;
+  const getInitialModelValue = () => initialModel;
+  const getInitialAllowedPathsValue = () => initialAllowedPaths;
+  const getInitialForbiddenPathsValue = () => initialForbiddenPaths;
+  const getInitialWritableRootValue = () => initialWritableRoot;
+  const getInitialToolPermissionsValue = () => initialToolPermissions;
+  const getInitialAccountKeysValue = () => cloneMaskedKeys(accountKeysMasked);
+  const getInitialAccountKeysErrorValue = () => accountKeysError ?? "";
+
+  let name = $state(getInitialNameValue());
+  let harnessId = $state<HarnessId>(getInitialHarnessValue());
+  let model = $state(getInitialModelValue());
+  let modelFilter = $state("");
+
+  let allowedPathsInput = $state(getInitialAllowedPathsValue().join(", "));
+  let forbiddenPathsInput = $state(getInitialForbiddenPathsValue().join(", "));
+  let writableRootInput = $state(getInitialWritableRootValue() ?? ".");
+  let selectedToolPermissions = $state<ToolPermission[]>([...getInitialToolPermissionsValue()]);
+
+  let accountKeys = $state(getInitialAccountKeysValue());
+  let accountKeysStateError = $state(getInitialAccountKeysErrorValue());
+  let availableModels = $state<ModelEntry[]>([]);
+  let availableHarnesses = $state<AgentHarness[]>([]);
+
+  let harnessesLoading = $state(true);
+  let harnessesError = $state("");
+  let modelsLoading = $state(false);
+  let modelsError = $state("");
+  let modelWarnings = $state<string[]>([]);
+  let inlineKeyDraft = $state("");
+  let inlineKeySaving = $state(false);
+  let inlineKeyError = $state("");
+  let inlineKeySuccess = $state("");
+  let submitError = $state("");
+  let submitting = $state(false);
+
+  let hasAnyAccountKey = $derived(Object.values(accountKeys).some(Boolean));
+  let selectedHarness = $derived(availableHarnesses.find((entry) => entry.id === harnessId) ?? null);
+  let activeProvider = $derived.by<ProviderId>(() => {
+    if (model) return getProviderForModel(model);
+    if (accountKeys.zen) return "zen";
+    return "openrouter";
+  });
+  let activeProviderDefinition = $derived(PROVIDERS[activeProvider]);
+  let hasSelectedProviderKey = $derived(Boolean(accountKeys[activeProvider]));
+
+  let filteredModels = $derived(
+    modelFilter.trim()
+      ? availableModels.filter((entry) =>
+          `${entry.id} ${entry.name} ${entry.provider} ${entry.router}`
+            .toLowerCase()
+            .includes(modelFilter.trim().toLowerCase()),
+        )
+      : availableModels,
+  );
+  let modelOptions = $derived.by(() => {
+    if (!model) return filteredModels;
+    if (filteredModels.some((entry) => entry.id === model)) return filteredModels;
+    return [
+      {
+        id: model,
+        name: model,
+        provider: PROVIDERS[getProviderForModel(model)].label,
+        router: getProviderForModel(model),
+      },
+      ...filteredModels,
+    ];
+  });
+
+  let runtimePolicy = $derived(
+    normalizeAgentScope({
+      allowedPaths: parseDelimitedInput(allowedPathsInput),
+      forbiddenPaths: parseDelimitedInput(forbiddenPathsInput),
+      toolPermissions: selectedToolPermissions,
+      writableRoot: writableRootInput || null,
+    }),
+  );
+  let scopePreview = $derived.by(() => ({
+    allowed:
+      runtimePolicy.allowedPaths.length === 1 &&
+      (runtimePolicy.allowedPaths[0] === "." || runtimePolicy.allowedPaths[0] === "./")
+        ? "repo root"
+        : runtimePolicy.allowedPaths.join(", "),
+    forbidden:
+      runtimePolicy.forbiddenPaths.length > 0 ? runtimePolicy.forbiddenPaths.join(", ") : "none",
+    writableRoot:
+      !runtimePolicy.writableRoot || runtimePolicy.writableRoot === "." || runtimePolicy.writableRoot === "./"
+        ? "repo root"
+        : runtimePolicy.writableRoot,
+  }));
+
+  let selectedModelEntry = $derived(
+    modelOptions.find((entry) => entry.id === model) ?? null,
+  );
+
+  let setupSummary = $derived.by(() => {
+    if (accountKeysStateError) {
+      return "Re-save your router key to unlock live models and agent execution.";
+    }
+    if (!hasSelectedProviderKey) {
+      return `Save a ${activeProviderDefinition.label} key, then choose a model and confirm the scope.`;
+    }
+    if (!model) {
+      return "Choose a model, then confirm the agent scope before saving.";
+    }
+    return "This agent runs with explicit path and tool boundaries.";
+  });
+
+  let submitBlocker = $derived.by(() => {
+    if (showNameField && !name.trim()) return "Name is required";
+    if (harnessesLoading) return "Loading harnesses...";
+    if (harnessesError) return harnessesError;
+    if (!harnessId) return "Choose a harness";
+    if (accountKeysStateError) return "Re-save your router key before continuing";
+    if (!hasSelectedProviderKey) return `Add a ${activeProviderDefinition.label} key to continue`;
+    if (modelsLoading) return "Loading live models...";
+    if (modelsError) return modelsError;
+    if (!model) return "Choose a model";
+    if (runtimePolicy.allowedPaths.length === 0) return "Agent needs at least one allowed path";
+    if (!runtimePolicy.writableRoot) return "Agent needs a writable root";
+    if (!runtimePolicy.toolPermissions.includes("write")) return "Agent needs write permission";
+    return null;
+  });
+
+  const labelClass =
+    "mt-1 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--t5)]";
+  const inputClass =
+    "w-full rounded-xl border border-[var(--b1)] bg-[var(--bg2)] px-4 py-3 text-sm text-[var(--t1)] outline-none transition placeholder:text-[var(--t5)] focus:border-[var(--accent)] focus:ring-0";
+  const cardClass =
+    "rounded-xl border border-[var(--b1)] px-3.5 py-3 text-xs leading-6";
+  const metaClass = "text-[11px] leading-5 text-[var(--t5)]";
+  const optionBaseClass =
+    "rounded-xl border border-[var(--b1)] bg-[var(--bg2)] p-3 text-left font-[var(--f)] text-sm text-[var(--t2)] transition hover:border-[var(--b2)] hover:text-[var(--t1)]";
+  const bannerClass = (tone: "info" | "warning" | "success") =>
+    tone === "warning"
+      ? `${cardClass} border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300`
+      : tone === "success"
+        ? `${cardClass} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300`
+        : `${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-[var(--t2)]`;
+
+  function toggleToolPermission(permission: ToolPermission) {
+    if (selectedToolPermissions.includes(permission)) {
+      selectedToolPermissions = selectedToolPermissions.filter((entry) => entry !== permission);
+      return;
+    }
+    selectedToolPermissions = [...selectedToolPermissions, permission];
+  }
+
+  async function loadHarnesses() {
+    harnessesLoading = true;
+    harnessesError = "";
+    try {
+      const response = await fetch("/api/harnesses");
+      const data = (await response.json().catch(() => ({}))) as { harnesses?: AgentHarness[]; error?: string };
+      if (!response.ok) {
+        harnessesError = data.error ?? "Harness catalog unavailable";
+        availableHarnesses = [];
+        return;
+      }
+
+      availableHarnesses = (data.harnesses ?? []).filter((entry) => entry.enabled);
+      if (!availableHarnesses.some((entry) => entry.id === harnessId) && availableHarnesses[0]) {
+        harnessId = availableHarnesses[0].id;
+      }
+    } catch {
+      harnessesError = "Harness catalog unavailable";
+      availableHarnesses = [];
+    } finally {
+      harnessesLoading = false;
+    }
+  }
+
+  async function loadAccountKeys() {
+    inlineKeyError = "";
+    inlineKeySuccess = "";
+
+    try {
+      const response = await fetch("/api/user/keys");
+      const data = (await response.json().catch(() => ({}))) as {
+        keys?: Record<ProviderId, string | null>;
+        error?: string;
+        message?: string;
+      };
+
+      accountKeys = cloneMaskedKeys(data.keys ?? EMPTY_KEYS);
+      accountKeysStateError = data.error ?? data.message ?? "";
+      onkeyschange({
+        keys: cloneMaskedKeys(accountKeys),
+        error: accountKeysStateError || null,
+      });
+    } catch {
+      accountKeys = cloneMaskedKeys(EMPTY_KEYS);
+      accountKeysStateError = "Unable to load saved router keys.";
+      onkeyschange({
+        keys: cloneMaskedKeys(EMPTY_KEYS),
+        error: accountKeysStateError,
+      });
+    }
+  }
+
+  async function loadModels() {
+    if (!hasAnyAccountKey) {
+      availableModels = [];
+      model = "";
+      modelsError = "";
+      modelsLoading = false;
+      return;
+    }
+
+    modelsLoading = true;
+    modelsError = "";
+    modelWarnings = [];
+
+    try {
+      const response = await fetch("/api/models");
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        warnings?: string[];
+        models?: ModelEntry[];
+      };
+
+      modelWarnings = data.warnings ?? [];
+      if (!response.ok) {
+        modelsError = data.error ?? data.message ?? "Model catalog unavailable";
+        availableModels = [];
+        model = "";
+        return;
+      }
+
+      const nextModels = Array.from(new Map((data.models ?? []).map((entry) => [entry.id, entry])).values());
+      availableModels = nextModels;
+
+      if (model && nextModels.some((entry) => entry.id === model)) return;
+
+      const harnessDefault = selectedHarness?.defaultModel
+        ? canonicalizeStoredModel(selectedHarness.defaultModel)
+        : canonicalizeStoredModel(initialModel);
+
+      model = nextModels.some((entry) => entry.id === harnessDefault) ? harnessDefault : "";
+    } catch {
+      modelsError = "Model catalog unavailable";
+      availableModels = [];
+      model = "";
+    } finally {
+      modelsLoading = false;
+    }
+  }
+
+  async function saveInlineKey() {
+    if (inlineKeySaving || !inlineKeyDraft.trim()) return;
+
+    inlineKeySaving = true;
+    inlineKeyError = "";
+    inlineKeySuccess = "";
+
+    try {
+      const response = await fetch("/api/user/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: activeProvider,
+          key: inlineKeyDraft.trim(),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        keys?: Record<ProviderId, string | null>;
+      };
+
+      if (!response.ok) {
+        inlineKeyError = data.message ?? `Failed to save ${activeProviderDefinition.label} key`;
+        return;
+      }
+
+      accountKeys = cloneMaskedKeys(data.keys ?? EMPTY_KEYS);
+      accountKeysStateError = "";
+      inlineKeyDraft = "";
+      inlineKeySuccess = `${activeProviderDefinition.label} key saved`;
+      onkeyschange({
+        keys: cloneMaskedKeys(accountKeys),
+        error: null,
+      });
+      await loadModels();
+    } catch (error) {
+      inlineKeyError = error instanceof Error ? error.message : `Failed to save ${activeProviderDefinition.label} key`;
+    } finally {
+      inlineKeySaving = false;
+    }
+  }
+
+  async function handleSubmit() {
+    submitError = "";
+    if (submitBlocker) {
+      submitError = submitBlocker;
+      return;
+    }
+
+    submitting = true;
+    try {
+      await Promise.resolve(
+        onsubmit({
+          name: showNameField ? name.trim() : undefined,
+          harnessId,
+          model,
+          allowedPaths: runtimePolicy.allowedPaths,
+          forbiddenPaths: runtimePolicy.forbiddenPaths,
+          toolPermissions: runtimePolicy.toolPermissions,
+          writableRoot: runtimePolicy.writableRoot,
+        }),
+      );
+    } catch (error) {
+      submitError = error instanceof Error ? error.message : "Failed to save agent";
+    } finally {
+      submitting = false;
+    }
+  }
+
+  onMount(async () => {
+    await loadAccountKeys();
+    await loadHarnesses();
+  });
+
+  $effect(() => {
+    harnessId;
+    accountKeys.openrouter;
+    accountKeys.zen;
+    void loadModels();
+  });
+</script>
+
+<div class="flex flex-col gap-3">
+  {#if topNotice}
+    <div class={bannerClass(topNotice.tone)}>
+      <div class="mb-1 font-semibold">{topNotice.title}</div>
+      <div>{topNotice.message}</div>
+    </div>
+  {/if}
+
+  <div class={`${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-[var(--t2)]`}>{setupSummary}</div>
+
+  {#if showNameField}
+    <label class={labelClass} for="agent-name-field">name</label>
+    <div class="grid grid-cols-[1fr_auto] gap-2.5 max-[720px]:grid-cols-1">
+      <input id="agent-name-field" bind:value={name} class={inputClass} />
+      <Button
+        variant="outline"
+        size="icon"
+        class="size-[46px] rounded-xl border-[var(--b1)] bg-[var(--bg2)] text-[var(--t3)] shadow-none hover:border-[var(--t4)] hover:bg-[var(--bg3)] hover:text-[var(--t1)]"
+        onclick={() => { name = pickName(); }}
+        aria-label="Generate name"
+      >
+        <DicesIcon size={14} />
+      </Button>
+    </div>
+  {/if}
+
+  <div class={labelClass}>harness</div>
+  {#if harnessesError}
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{harnessesError}</div>
+  {/if}
+  <div class="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(110px,1fr))]">
+    {#if harnessesLoading}
+      <div class="rounded-xl border border-dashed border-[var(--b1)] px-3 py-3 text-xs text-[var(--t5)]">Loading harnesses...</div>
+    {:else}
+      {#each availableHarnesses as harness}
+        <button
+          class={`${optionBaseClass} ${harnessId === harness.id ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-[var(--t1)]" : ""}`}
+          data-harness-id={harness.id}
+          data-selected={harnessId === harness.id ? "true" : "false"}
+          aria-pressed={harnessId === harness.id}
+          onclick={() => {
+            harnessId = harness.id;
+            const fallbackModel = canonicalizeStoredModel(harness.defaultModel);
+            if (availableModels.some((entry) => entry.id === fallbackModel)) {
+              model = fallbackModel;
+            }
+          }}
+        >
+          {harness.name}
+        </button>
+      {/each}
+    {/if}
+  </div>
+  {#if selectedHarness}
+    <div class={metaClass}>{selectedHarness.description}</div>
+  {/if}
+
+  <div class={labelClass}>router access</div>
+  {#if accountKeysStateError}
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{accountKeysStateError}</div>
+  {/if}
+  {#if hasSelectedProviderKey}
+    <div class={`${cardClass} border-emerald-500/30 bg-emerald-500/10`}>
+      <div class="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Model access is ready</div>
+      <div class="text-[11px] leading-5 text-[var(--t4)]">Using saved {activeProviderDefinition.label} access for this agent.</div>
+    </div>
+  {:else}
+    <div class={cardClass}>
+      <div class="mb-1 font-semibold text-[var(--t2)]">Add {activeProviderDefinition.label} access inline</div>
+      <div class="text-[11px] leading-5 text-[var(--t4)]">
+        filepath does not save agents into a known-bad missing-key state. Save the account key here and keep going.
+      </div>
+      <div class="mt-3 grid grid-cols-[1fr_auto] gap-2.5 max-[720px]:grid-cols-1">
+        <input
+          bind:value={inlineKeyDraft}
+          class={inputClass}
+          type="password"
+          placeholder={`${activeProviderDefinition.label} key`}
+          aria-label={`${activeProviderDefinition.label} key`}
+        />
+        <Button
+          variant="outline"
+          class="rounded-xl border-[var(--b1)] bg-[var(--bg2)] px-4 text-[var(--t2)] shadow-none hover:border-[var(--t4)] hover:bg-[var(--bg3)] hover:text-[var(--t1)]"
+          onclick={saveInlineKey}
+          disabled={inlineKeySaving || !inlineKeyDraft.trim()}
+        >
+          {inlineKeySaving ? "saving..." : "save key"}
+        </Button>
+      </div>
+      {#if inlineKeyError}
+        <div class="mt-2 text-[11px] leading-5 text-red-700 dark:text-red-300">{inlineKeyError}</div>
+      {/if}
+      {#if inlineKeySuccess}
+        <div class="mt-2 text-[11px] leading-5 text-emerald-700 dark:text-emerald-300">{inlineKeySuccess}</div>
+      {/if}
+    </div>
+  {/if}
+
+  <div class={labelClass}>model</div>
+  <input bind:value={modelFilter} class={inputClass} placeholder="Search live models..." aria-label="Search models" />
+  <div class="overflow-hidden rounded-xl border border-[var(--b1)]">
+    <select
+      bind:value={model}
+      class={`${inputClass} appearance-none rounded-none border-0 bg-[var(--bg2)] pr-10`}
+      aria-label="Model"
+      disabled={!hasSelectedProviderKey || modelsLoading || Boolean(modelsError)}
+    >
+      <option value="">{modelsLoading ? "Loading live models..." : "Choose a model"}</option>
+      {#each modelOptions as entry}
+        <option value={entry.id}>{entry.id}</option>
+      {/each}
+    </select>
+  </div>
+  {#if selectedModelEntry}
+    <div class={metaClass}>Selected: {selectedModelEntry.name} via {selectedModelEntry.provider}</div>
+  {/if}
+  {#if modelsError}
+    <div class="text-[11px] leading-5 text-red-700 dark:text-red-300">{modelsError}</div>
+  {/if}
+  {#if modelWarnings.length > 0}
+    <div class={metaClass}>{modelWarnings.join(" ")}</div>
+  {/if}
+
+  <div class={labelClass}>allowed paths</div>
+  <input bind:value={allowedPathsInput} class={inputClass} placeholder="src, docs, apps/web" aria-label="Allowed paths" />
+  <div class={metaClass}>Comma or newline separated relative paths this agent can change.</div>
+
+  <div class={labelClass}>forbidden paths</div>
+  <input bind:value={forbiddenPathsInput} class={inputClass} placeholder=".git, node_modules, secrets" aria-label="Forbidden paths" />
+  <div class={metaClass}>Optional guardrails inside the allowed area.</div>
+
+  <div class={labelClass}>writable root</div>
+  <input bind:value={writableRootInput} class={inputClass} placeholder="src" aria-label="Writable root" />
+  <div class={metaClass}>Commands run from here. Keep it inside the allowed paths.</div>
+
+  <div class={labelClass}>tool permissions</div>
+  <div class="grid grid-cols-3 gap-2 max-[720px]:grid-cols-1">
+    {#each TOOL_PERMISSION_OPTIONS as option}
+      <button
+        class={`${optionBaseClass} ${selectedToolPermissions.includes(option.id) ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-[var(--t1)]" : ""}`}
+        type="button"
+        data-selected={selectedToolPermissions.includes(option.id) ? "true" : "false"}
+        aria-pressed={selectedToolPermissions.includes(option.id)}
+        onclick={() => toggleToolPermission(option.id)}
+      >
+        <span>{option.label}</span>
+        <small class="mt-1 block text-[10px] leading-5 text-[var(--t5)]">{option.description}</small>
+      </button>
+    {/each}
+  </div>
+
+  <div class="flex flex-col gap-1 rounded-xl border border-[var(--b1)] bg-[var(--bg2)] px-3.5 py-3 font-[var(--m)] text-xs leading-6 text-[var(--t3)]">
+    <div><strong>agent</strong> scope</div>
+    <div>Allowed: {scopePreview.allowed}</div>
+    <div>Forbidden: {scopePreview.forbidden}</div>
+    <div>Tools: {runtimePolicy.toolPermissions.join(", ")}</div>
+    <div>Writable root: {scopePreview.writableRoot ?? "read-only"}</div>
+  </div>
+
+  {#if submitError}
+    <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{submitError}</div>
+  {/if}
+
+  <div class="mt-1 flex justify-end gap-3 max-[720px]:sticky max-[720px]:bottom-0 max-[720px]:bg-[linear-gradient(to_top,var(--bg)_75%,transparent)] max-[720px]:pt-3">
+    <Button variant="outline" type="button" onclick={oncancel}>cancel</Button>
+    <Button
+      class="bg-[var(--accent)] text-white shadow-none hover:opacity-90"
+      type="button"
+      disabled={Boolean(submitBlocker) || submitting}
+      onclick={handleSubmit}
+    >
+      {submitting ? submitBusyLabel : submitLabel}
+    </Button>
+  </div>
+</div>

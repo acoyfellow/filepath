@@ -286,6 +286,26 @@ export const GET: RequestHandler = async ({ url }) => {
             { name: "id", in: "path", required: true, schema: { type: "string" } },
             { name: "agentId", in: "path", required: true, schema: { type: "string" } },
           ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  allOf: [
+                    { $ref: "#/components/schemas/AgentScope" },
+                    {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        harnessId: { type: "string" },
+                        model: { type: "string" },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
           responses: { "200": { description: "Agent updated" } },
         },
         delete: {

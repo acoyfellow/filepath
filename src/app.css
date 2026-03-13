@@ -5,9 +5,21 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+:root {
+  --f: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --m: 'Google Sans Code', ui-monospace, monospace;
+}
+
 body {
-  font-family: 'Google Sans Flex', -apple-system, sans-serif;
+  font-family: var(--f);
   line-height: 1.5;
   font-weight: 400;
   font-size: 14px;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }

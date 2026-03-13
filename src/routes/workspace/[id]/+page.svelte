@@ -3,6 +3,7 @@
   import { onDestroy, onMount } from "svelte";
   import { page } from "$app/state";
   import AgentDetailPane from "$lib/components/workspace/AgentDetailPane.svelte";
+  import AgentSettingsDrawer from "$lib/components/workspace/AgentSettingsDrawer.svelte";
   import AgentListPane from "$lib/components/workspace/AgentListPane.svelte";
   import type { TaskMessage } from "$lib/components/workspace/TaskTranscript.svelte";
   import CreateAgentModal from "$lib/components/workspace/CreateAgentModal.svelte";
@@ -13,6 +14,7 @@
     AgentResult,
     AgentRuntimeSnapshot,
     HarnessId,
+    AgentUpdateRequest,
   } from "$lib/types/workspace";
   import type { ToolPermission } from "$lib/runtime/authority";
 
@@ -46,6 +48,7 @@
 
   const workspaceId = $derived(page.params.id ?? "");
   let showSpawn = $state(false);
+  let showSettings = $state(false);
   let accountKeysMasked = $state<{ openrouter: string | null; zen: string | null }>({
     openrouter: null,
     zen: null,
@@ -134,6 +137,12 @@
     selectedAgent ? (resultsByAgent[selectedAgent.id] ?? null) : null,
   );
 
+  $effect(() => {
+    if (showSettings && !selectedAgent) {
+      showSettings = false;
+    }
+  });
+
   function setAgentNotice(agentId: string, notice: AgentNotice | null) {
     agentNotices = { ...agentNotices, [agentId]: notice };
   }
@@ -188,26 +197,7 @@
     };
 
     if (runtime.result) {
-      if (runtime.result.status === "success") {
-        setAgentNotice(agentId, {
-          tone: "success",
-          title: "Task complete",
-          message: runtime.result.summary,
-        });
-      } else if (runtime.result.status === "aborted") {
-        setAgentNotice(agentId, {
-          tone: "warning",
-          title: "Task cancelled",
-          message: runtime.result.summary,
-        });
-      } else {
-        setAgentNotice(agentId, {
-          tone: "error",
-          title: "Task failed",
-          message: runtime.result.summary,
-          blocking: true,
-        });
-      }
+      clearAgentNotice(agentId);
       return;
     }
 
@@ -311,7 +301,40 @@
     }
 
     dropAgentState(agentId);
+    if (selectedId === agentId) {
+      showSettings = false;
+    }
     await refreshWorkspace();
+  }
+
+  async function handleUpdateAgent(payload: AgentUpdateRequest) {
+    if (!selectedAgent) return;
+
+    const response = await fetch(`/api/workspaces/${workspaceId}/agents/${selectedAgent.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      throw new Error(data.error || data.message || "Failed to update agent");
+    }
+
+    await refreshWorkspace();
+    await refreshAgentRuntime(selectedAgent.id);
+    setAgentNotice(selectedAgent.id, {
+      tone: "success",
+      title: "Settings saved",
+      message:
+        selectedAgent.status === "running" || selectedAgent.status === "thinking"
+          ? "Saved. Changes apply to the next task."
+          : "Saved. The next task will use the updated harness, model, and scope.",
+    });
+    showSettings = false;
   }
 
   async function handleCancelAgent(agentId: string) {
@@ -434,8 +457,8 @@
   });
 </script>
 
-<div class="workspace-root">
-  <div class="workspace-container @container">
+<div class="flex min-h-[calc(100dvh-48px)] flex-1 flex-col overflow-hidden bg-[var(--bg2)] text-[var(--t2)] max-[900px]:min-h-[calc(100dvh-48px)] max-[900px]:overflow-auto">
+  <div class="@container flex h-full flex-1 overflow-hidden max-[900px]:flex-col max-[900px]:overflow-auto">
     {#if agents.length > 0}
       <AgentListPane
         isRefreshing={isRefreshing}
@@ -449,7 +472,7 @@
         }}
       />
 
-      <div class="workspace-detail-column">
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden max-[900px]:min-h-0 max-[900px]:flex-[1_1_auto]">
         <AgentDetailPane
           agent={selectedAgent}
           messages={currentMessages}
@@ -460,20 +483,24 @@
             if (!selectedAgent) return;
             void handleCancelAgent(selectedAgent.id);
           }}
+          onopensettings={() => {
+            if (!selectedAgent) return;
+            showSettings = true;
+          }}
           onnavigate={handleNavigate}
         />
       </div>
     {:else}
-      <div class="workspace-empty-state">
-        <p class="workspace-empty-title">{data.workspace.name}</p>
-        <p class="workspace-empty-copy">
+      <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8 text-center">
+        <p class="text-sm text-[var(--t2)]">{data.workspace.name}</p>
+        <p class="max-w-md text-xs leading-6 text-[var(--t4)]">
           No agents yet. Create a scoped background agent to start using this workspace.
         </p>
         <button
           onclick={() => {
             showSpawn = true;
           }}
-          class="workspace-empty-button"
+          class="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
         >
           + new agent
         </button>
@@ -499,104 +526,19 @@
   />
 {/if}
 
-<style>
-  .workspace-root {
-    display: flex;
-    min-height: calc(100dvh - 48px);
-    flex: 1;
-    flex-direction: column;
-    overflow: hidden;
-    background: rgb(249 250 251);
-    color: rgb(55 65 81);
-  }
-
-  .workspace-container {
-    display: flex;
-    height: 100%;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .workspace-detail-column {
-    display: flex;
-    min-width: 0;
-    flex: 1;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .workspace-empty-state {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 32px 16px;
-    text-align: center;
-  }
-
-  .workspace-empty-title {
-    font-size: 14px;
-    color: rgb(75 85 99);
-  }
-
-  .workspace-empty-copy {
-    max-width: 28rem;
-    font-size: 12px;
-    color: rgb(107 114 128);
-  }
-
-  .workspace-empty-button {
-    cursor: pointer;
-    border-radius: 10px;
-    background: rgb(37 99 235);
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 500;
-    color: white;
-    transition: background 0.15s ease;
-  }
-
-  .workspace-empty-button:hover {
-    background: rgb(59 130 246);
-  }
-
-  :global(.dark) .workspace-root {
-    background: rgb(10 10 10);
-    color: rgb(212 212 212);
-  }
-
-  :global(.dark) .workspace-empty-title {
-    color: rgb(212 212 212);
-  }
-
-  :global(.dark) .workspace-empty-copy {
-    color: rgb(115 115 115);
-  }
-
-  :global(.dark) .workspace-empty-button {
-    background: rgb(99 102 241);
-  }
-
-  :global(.dark) .workspace-empty-button:hover {
-    background: rgb(129 140 248);
-  }
-
-  @media (max-width: 900px) {
-    .workspace-root {
-      min-height: calc(100dvh - 48px);
-      overflow: auto;
-    }
-
-    .workspace-container {
-      flex-direction: column;
-      overflow: auto;
-    }
-
-    .workspace-detail-column {
-      min-height: 0;
-      flex: 1 1 auto;
-    }
-  }
-</style>
+{#if showSettings && selectedAgent}
+  <AgentSettingsDrawer
+    agent={selectedAgent}
+    open={showSettings}
+    onclose={() => {
+      showSettings = false;
+    }}
+    onsave={handleUpdateAgent}
+    onkeyschange={({ keys, error }) => {
+      accountKeysMasked = keys;
+      accountKeysError = error;
+    }}
+    {accountKeysMasked}
+    accountKeysError={accountKeysError}
+  />
+{/if}

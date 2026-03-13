@@ -7,11 +7,7 @@ import {
   listAgents,
   AgentCreateInputSchema,
 } from "../../../../../core/app";
-import { getDrizzle } from "$lib/auth";
-import { user } from "$lib/schema";
-import { decryptApiKey } from "$lib/crypto";
-import { deserializeStoredProviderKeys, getProviderForModel, PROVIDERS } from "$lib/provider-keys";
-import { eq } from "drizzle-orm";
+import { ensureProviderKeyForModel } from "$lib/server/provider-access";
 
 const DEFAULT_AGENT_SCOPE = {
   allowedPaths: ["."],
@@ -19,14 +15,6 @@ const DEFAULT_AGENT_SCOPE = {
   toolPermissions: ["search", "run", "write", "commit"],
   writableRoot: ".",
 };
-
-function getBetterAuthSecret(platform: RequestEvent["platform"]): string | undefined {
-  const secret =
-    platform?.env && "BETTER_AUTH_SECRET" in platform.env
-      ? platform.env.BETTER_AUTH_SECRET
-      : undefined;
-  return typeof secret === "string" ? secret : undefined;
-}
 
 export const GET: RequestHandler = async (event: RequestEvent) => {
   if (!event.locals.user) throw error(401, "Unauthorized");
@@ -45,42 +33,13 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
     }),
   );
 
-  const provider = getProviderForModel(input.model);
-  const providerDefinition = PROVIDERS[provider];
-  const db = getDrizzle();
-  const rows = await db
-    .select({ openrouterApiKey: user.openrouterApiKey })
-    .from(user)
-    .where(eq(user.id, event.locals.user.id))
-    .limit(1);
-
-  const encryptedKeys = rows[0]?.openrouterApiKey;
-  if (!encryptedKeys) {
-    return json(
-      { error: `Add a ${providerDefinition.label} key before creating this agent.` },
-      { status: 400 },
-    );
-  }
-
-  const secret = getBetterAuthSecret(event.platform);
-  if (!secret) throw error(500, "Server misconfigured");
-
-  try {
-    const decrypted = await decryptApiKey(encryptedKeys, secret);
-    const providerKeys = deserializeStoredProviderKeys(decrypted);
-    if (!providerKeys[provider]) {
-      return json(
-        { error: `Add a ${providerDefinition.label} key before creating this agent.` },
-        { status: 400 },
-      );
-    }
-  } catch {
-    return json(
-      {
-        error: "Stored account router keys are unreadable. Re-save them before creating an agent.",
-      },
-      { status: 409 },
-    );
+  const access = await ensureProviderKeyForModel({
+    userId: event.locals.user.id,
+    model: input.model,
+    platform: event.platform,
+  });
+  if (!("ok" in access)) {
+    return json({ error: access.error }, { status: access.status });
   }
 
   return json(await runOrThrow(createAgent(ctx, event.params.id!, input)), {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SendIcon from "@lucide/svelte/icons/send";
+  import Button from "$lib/components/ui/button/button.svelte";
   interface Props {
     onsend: (message: string) => void;
     disabled?: boolean;
@@ -30,94 +32,23 @@
   }
 </script>
 
-<div class="task-composer">
+<div class="flex gap-2 border-t border-[var(--b1)] px-4 py-2.5 max-[640px]:gap-2.5 max-[640px]:px-3 max-[640px]:pb-3">
   <input
-    class="task-composer-input"
+    class="min-h-[42px] flex-1 rounded-xl border border-[var(--b2)] bg-[var(--bg2)] px-3.5 py-2.5 font-[var(--f)] text-sm text-[var(--t1)] outline-none transition placeholder:text-[var(--t5)] focus:border-[var(--accent)]"
     {placeholder}
     bind:value
     onkeydown={handleKeydown}
     {disabled}
   />
-  <button
-    class="task-composer-submit"
+  <Button
+    variant="default"
+    size="icon"
+    class="size-[38px] shrink-0 rounded-xl bg-[var(--accent)] text-white hover:opacity-85 max-[640px]:size-[42px]"
     onclick={handleSubmit}
     disabled={disabled || !value.trim()}
     aria-label={actionLabel}
+    title={actionLabel}
   >
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 2L7 9M14 2l-4 12-3-5-5-3z" />
-    </svg>
-  </button>
+    <SendIcon size={15} />
+  </Button>
 </div>
-
-<style>
-  .task-composer {
-    display: flex;
-    gap: 8px;
-    border-top: 1px solid var(--b1);
-    padding: 10px 16px;
-  }
-
-  .task-composer-input {
-    flex: 1;
-    border: 1px solid var(--b2);
-    border-radius: 10px;
-    background: var(--bg2);
-    padding: 10px 14px;
-    font-family: var(--m);
-    font-size: 13px;
-    color: var(--t1);
-    outline: none;
-    transition: border 0.1s;
-  }
-
-  .task-composer-input:focus {
-    border-color: var(--t5);
-  }
-
-  .task-composer-input::placeholder {
-    color: var(--t5);
-  }
-
-  .task-composer-submit {
-    display: flex;
-    width: 38px;
-    height: 38px;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: 10px;
-    background: var(--accent);
-    color: #fff;
-    cursor: pointer;
-    transition: opacity 0.1s;
-  }
-
-  .task-composer-submit:hover:not(:disabled) {
-    opacity: 0.85;
-  }
-
-  .task-composer-submit:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  @media (max-width: 640px) {
-    .task-composer {
-      padding: 10px 12px 12px;
-      gap: 10px;
-    }
-
-    .task-composer-input {
-      min-height: 42px;
-      padding: 10px 12px;
-      font-size: 14px;
-    }
-
-    .task-composer-submit {
-      width: 42px;
-      height: 42px;
-    }
-  }
-</style>

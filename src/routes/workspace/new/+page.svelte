@@ -1,5 +1,7 @@
 <script lang="ts">
+  import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
   import { goto } from "$app/navigation";
+  import Button from "$lib/components/ui/button/button.svelte";
 
   let name = $state("");
   let gitRepoUrl = $state("");
@@ -30,56 +32,43 @@
 
 <svelte:head>
   <title>New Workspace - filepath</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
 </svelte:head>
 
-<div class="page">
-  <div class="container">
-    <button class="back-btn" onclick={() => goto("/dashboard")}>&larr; Workspaces</button>
-    <h1 class="title">New workspace</h1>
-    <p class="subtitle">Create a sandboxed git workspace for bounded background agents</p>
+<div class="flex min-h-screen items-center justify-center bg-[var(--bg2)] px-4 py-10 font-[var(--f)] text-[var(--t2)]">
+  <div class="w-full max-w-md">
+    <Button
+      variant="ghost"
+      class="mb-6 gap-2 px-0 text-[13px] text-[var(--t4)] shadow-none hover:bg-transparent hover:text-[var(--t2)]"
+      onclick={() => goto("/dashboard")}
+      aria-label="Back to dashboard"
+      title="Back to dashboard"
+    >
+      <ArrowLeftIcon size={15} />
+      <span>Workspaces</span>
+    </Button>
+    <h1 class="text-[28px] font-[650] tracking-[-0.03em] text-[var(--t1)]">New workspace</h1>
+    <p class="mb-8 mt-1 text-sm leading-7 text-[var(--t4)]">
+      Create a sandboxed git workspace for bounded background agents
+    </p>
 
-    <label class="field">
+    <label class="mb-4 block text-xs font-medium uppercase tracking-[0.14em] text-[var(--t5)]">
       Workspace name
-      <input type="text" class="input" placeholder="my-project" bind:value={name} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
+      <input type="text" class="mt-2 block w-full rounded-xl border border-[var(--b1)] bg-[var(--bg)] px-4 py-3 text-sm normal-case tracking-normal text-[var(--t1)] outline-none focus:border-[var(--accent)]" placeholder="my-project" bind:value={name} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
     </label>
 
-    <label class="field">
-      Git repo URL <span class="optional">(optional)</span>
-      <input type="text" class="input" placeholder="https://github.com/user/repo" bind:value={gitRepoUrl} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
+    <label class="mb-4 block text-xs font-medium uppercase tracking-[0.14em] text-[var(--t5)]">
+      Git repo URL <span class="text-[var(--t6)]">(optional)</span>
+      <input type="text" class="mt-2 block w-full rounded-xl border border-[var(--b1)] bg-[var(--bg)] px-4 py-3 text-sm normal-case tracking-normal text-[var(--t1)] outline-none focus:border-[var(--accent)]" placeholder="https://github.com/user/repo" bind:value={gitRepoUrl} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
     </label>
 
     {#if errorMsg}
-      <div class="error">{errorMsg}</div>
+      <div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs normal-case tracking-normal text-red-700 dark:text-red-300">
+        {errorMsg}
+      </div>
     {/if}
 
-    <button class="btn-primary" disabled={isCreating} onclick={create}>
+    <Button class="h-11 w-full rounded-xl bg-[var(--accent)] text-white shadow-none hover:opacity-90" disabled={isCreating} onclick={create}>
       {isCreating ? "Creating..." : "Create workspace"}
-    </button>
+    </Button>
   </div>
 </div>
-
-<style>
-  .page {
-    --bg: #09090b; --bg3: #111114; --b1: #1a1a1e;
-    --t1: #e4e4e7; --t2: #a1a1aa; --t3: #71717a; --t4: #52525b;
-    --accent: #818cf8;
-    --mono: "JetBrains Mono", monospace; --sans: "Outfit", sans-serif;
-    min-height: 100vh; background: var(--bg); color: var(--t2); font-family: var(--mono);
-    display: flex; align-items: center; justify-content: center;
-  }
-  .container { width: 400px; max-width: 90vw; }
-  .back-btn { font-size: 12px; font-family: var(--mono); color: var(--t3); background: none; border: none; cursor: pointer; margin-bottom: 24px; padding: 0; }
-  .back-btn:hover { color: var(--t2); }
-  .title { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--t1); margin: 0 0 4px; }
-  .subtitle { font-size: 12px; color: var(--t3); margin: 0 0 32px; }
-  .field { display: block; font-size: 11px; color: var(--t3); margin-bottom: 16px; }
-  .optional { color: var(--t4); }
-  .input { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font-size: 13px; font-family: var(--mono); background: var(--bg3); color: var(--t1); border: 1px solid var(--b1); border-radius: 6px; outline: none; box-sizing: border-box; }
-  .input:focus { border-color: var(--accent); }
-  .error { padding: 10px; font-size: 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; color: #f87171; margin-bottom: 16px; }
-  .btn-primary { width: 100%; padding: 10px; font-size: 13px; font-family: var(--mono); background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-  .btn-primary:hover { filter: brightness(1.1); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-</style>

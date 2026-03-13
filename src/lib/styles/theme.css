@@ -1,11 +1,9 @@
 /* filepath theme -- CSS custom properties */
 /* Light mode default, dark mode via .dark class */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap');
-
 :root {
-  --m: 'JetBrains Mono', monospace;
-  --f: Outfit, -apple-system, sans-serif;
+  --m: 'Google Sans Code', ui-monospace, monospace;
+  --f: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --accent: #818cf8;
 
   /* Light (default) */
@@ -35,26 +33,26 @@
 
 /* Dark */
 .dark {
-  --bg: #09090b;
-  --bg2: #0a0a0d;
-  --bg3: #0c0c0f;
-  --bg4: #0f0f12;
-  --b1: #141417;
-  --b2: #1a1a1e;
-  --t1: #e4e4e7;
-  --t2: #a1a1aa;
-  --t3: #71717a;
-  --t4: #3f3f46;
-  --t5: #27272a;
-  --t6: #1e1e22;
-  --bubble-u: color-mix(in srgb, var(--accent) 5%, transparent);
-  --bubble-ub: color-mix(in srgb, var(--accent) 8%, transparent);
-  --block-bg: #0a0a0d;
-  --block-bg2: #08080b;
-  --block-b: #1a1a1e;
-  --code-bg: #18181b;
-  --top-bg: #0a0a0d;
-  --modal-bg: #111114;
+  --bg: #07090d;
+  --bg2: #0d1118;
+  --bg3: #131924;
+  --bg4: #1a2230;
+  --b1: #232d3f;
+  --b2: #334058;
+  --t1: #f5f7fb;
+  --t2: #dde4ef;
+  --t3: #c2ccdc;
+  --t4: #a5b2c8;
+  --t5: #7e8aa1;
+  --t6: #556076;
+  --bubble-u: color-mix(in srgb, var(--accent) 16%, var(--bg3));
+  --bubble-ub: color-mix(in srgb, var(--accent) 30%, transparent);
+  --block-bg: #0f141c;
+  --block-bg2: #0b1017;
+  --block-b: #253045;
+  --code-bg: #101722;
+  --top-bg: #0b0f16;
+  --modal-bg: #121823;
   --overlay: rgba(0, 0, 0, 0.6);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
 }

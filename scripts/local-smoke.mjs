@@ -49,7 +49,7 @@ async function waitForText(page, text, timeoutMs = 30_000) {
 }
 
 async function createWorkspace(page, name) {
-  await page.getByRole("button", { name: /\+ New workspace/i }).click();
+  await page.getByRole("button", { name: /new workspace/i }).click();
   await page.getByRole("textbox", { name: "Name" }).fill(name);
   await page.getByRole("button", { name: "Create workspace" }).click();
   await page.waitForURL(/\/workspace\//, { timeout: 20_000 });
@@ -59,6 +59,90 @@ async function openCreateAgentModal(page) {
   const createButtons = page.getByRole("button", { name: /new agent/i });
   await createButtons.first().click();
   await page.getByRole("dialog", { name: /new agent/i }).waitFor({ state: "visible" });
+}
+
+async function openAgentSettings(page) {
+  await page.getByTestId("open-agent-settings").click();
+  await page.getByTestId("agent-settings-drawer").waitFor({ state: "visible" });
+}
+
+async function waitForModelValue(page, timeoutMs = 20_000) {
+  const select = page.locator('[data-testid="agent-settings-drawer"] select[aria-label="Model"]');
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const value = await select.inputValue();
+    if (value) return value;
+    await page.waitForTimeout(250);
+  }
+  throw new Error("Timed out waiting for model selection");
+}
+
+async function pickAlternateModel(page) {
+  const select = page.locator('[data-testid="agent-settings-drawer"] select[aria-label="Model"]');
+  await waitForEnabled(select, 20_000);
+  await waitForModelValue(page, 20_000);
+  const selection = await select.evaluate((element) => {
+    const current = element.value;
+    const alternate = Array.from(element.options)
+      .map((option) => option.value)
+      .find((value) => value && value !== current);
+    return { current, alternate: alternate ?? null };
+  });
+
+  if (!selection.alternate) {
+    throw new Error("No alternate model available for settings test");
+  }
+
+  await select.selectOption(selection.alternate);
+  return selection.alternate;
+}
+
+async function pickAlternateHarness(page) {
+  const selectedHarnessId = await page
+    .locator('[data-testid="agent-settings-drawer"] [data-harness-id][data-selected="true"]')
+    .getAttribute("data-harness-id");
+  const alternateHarnessId = await page
+    .locator('[data-testid="agent-settings-drawer"] [data-harness-id]')
+    .evaluateAll((elements, current) => {
+      const match = elements.find((element) => element.getAttribute("data-harness-id") !== current);
+      return match?.getAttribute("data-harness-id") ?? null;
+    }, selectedHarnessId);
+
+  if (!alternateHarnessId) {
+    throw new Error("No alternate harness available for settings test");
+  }
+
+  await page
+    .locator(`[data-testid="agent-settings-drawer"] [data-harness-id="${alternateHarnessId}"]`)
+    .click();
+
+  return alternateHarnessId;
+}
+
+async function saveAgentSettings(page) {
+  await page.getByRole("button", { name: "save changes" }).click();
+}
+
+async function expectPersistedSettings(page, { model, harnessId = null }) {
+  await openAgentSettings(page);
+  await waitForModelValue(page, 20_000);
+  const currentModel = await page
+    .locator('[data-testid="agent-settings-drawer"] select[aria-label="Model"]')
+    .inputValue();
+  if (currentModel !== model) {
+    throw new Error(`Expected model ${model}, got ${currentModel}`);
+  }
+
+  if (harnessId) {
+    const currentHarnessId = await page
+      .locator('[data-testid="agent-settings-drawer"] [data-harness-id][data-selected="true"]')
+      .getAttribute("data-harness-id");
+    if (currentHarnessId !== harnessId) {
+      throw new Error(`Expected harness ${harnessId}, got ${currentHarnessId}`);
+    }
+  }
+
+  await page.getByRole("button", { name: "Close settings" }).click();
 }
 
 async function saveRouterKey(page) {
@@ -71,14 +155,14 @@ async function createAgent(page, taskName) {
   await openCreateAgentModal(page);
   const nameInput = page.getByRole("textbox", { name: "name" });
   await nameInput.fill(taskName);
-  const createButton = page.getByRole("button", { name: "create agent" });
+  const createButton = page.getByRole("button", { name: "create agent", exact: true });
   await waitForEnabled(createButton, 30_000);
   await createButton.click();
   await waitForText(page, taskName, 20_000);
 }
 
 async function deleteSelectedAgent(page) {
-  await page.locator(".agent-list-item.selected .agent-list-item-menu").click();
+  await page.locator('[data-testid="agent-list-item"][data-selected="true"] [data-testid="agent-list-item-menu"]').click();
   const deleteItem = page.locator('[data-slot="dropdown-menu-item"]', { hasText: "Delete" }).last();
   await deleteItem.waitFor({ state: "visible", timeout: 10_000 });
   await deleteItem.click({ force: true });
@@ -141,12 +225,21 @@ try {
 
   await createAgent(page, primaryAgentName);
 
+  await openAgentSettings(page);
+  await waitForText(page, "Model access is ready", 10_000);
+  const savedHarnessId = await pickAlternateHarness(page);
+  const savedModel = await pickAlternateModel(page);
+  await saveAgentSettings(page);
+  await waitForText(page, "Settings saved", 10_000);
+  await page.reload({ waitUntil: "networkidle" });
+  await waitForText(page, primaryAgentName, 20_000);
+  await expectPersistedSettings(page, { model: savedModel, harnessId: savedHarnessId });
+
   await page.getByRole("textbox", { name: /Start the first task|Describe the next task/i }).fill(
     "Reply with exactly: AGENT_SMOKE_OK",
   );
   await page.getByRole("button", { name: "Run task" }).click();
   await waitForText(page, "AGENT_SMOKE_OK", 45_000);
-  await waitForText(page, "Task complete", 10_000);
 
   await page.reload({ waitUntil: "networkidle" });
   await waitForText(page, "AGENT_SMOKE_OK", 20_000);
@@ -156,10 +249,23 @@ try {
     "__filepath_local_wait__:15000:CANCEL_SHOULD_NOT_COMPLETE",
   );
   await page.getByRole("button", { name: "Run task" }).click();
-  const cancelButton = page.locator("button.agent-detail-cancel");
+  const cancelButton = page.getByRole("button", { name: "Cancel active task" });
+  await cancelButton.waitFor({ state: "visible", timeout: 10_000 });
+
+  await openAgentSettings(page);
+  const runningSavedModel = await pickAlternateModel(page);
+  await saveAgentSettings(page);
+  await waitForText(page, "Changes apply to the next task.", 10_000);
   await cancelButton.waitFor({ state: "visible", timeout: 10_000 });
   await cancelButton.click();
-  await waitForText(page, "Task cancelled", 20_000);
+  await waitForText(page, "The agent task was cancelled.", 20_000);
+  await expectPersistedSettings(page, { model: runningSavedModel });
+
+  await page.getByRole("textbox", { name: /Start the first task|Describe the next task/i }).fill(
+    "Reply with exactly: NEXT_TASK_SETTINGS_OK",
+  );
+  await page.getByRole("button", { name: "Run task" }).click();
+  await waitForText(page, "NEXT_TASK_SETTINGS_OK", 45_000);
 
   await deleteSelectedAgent(page);
   await waitForText(page, primaryAgentName, 10_000);

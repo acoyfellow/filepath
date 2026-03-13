@@ -9,6 +9,7 @@ import {
   updateAgent,
 } from "../../../../../../core/app";
 import { fetchRuntime } from "$lib/runtime/http";
+import { ensureProviderKeyForModel } from "$lib/server/provider-access";
 
 export const GET: RequestHandler = async (event: RequestEvent) => {
   if (!event.locals.user) throw error(401, "Unauthorized");
@@ -50,6 +51,17 @@ export const PATCH: RequestHandler = async (event: RequestEvent) => {
       await event.request.json().catch(() => ({})),
     ),
   );
+
+  if (input.model) {
+    const access = await ensureProviderKeyForModel({
+      userId: event.locals.user.id,
+      model: input.model,
+      platform: event.platform,
+    });
+    if (!("ok" in access)) {
+      return json({ error: access.error }, { status: access.status });
+    }
+  }
 
   return json(
     await runOrThrow(

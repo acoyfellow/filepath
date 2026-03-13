@@ -113,6 +113,7 @@ export type AgentCreateInput = Schema.Schema.Type<
 
 export const AgentUpdateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
+  harnessId: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
@@ -581,9 +582,37 @@ export function updateAgent(
   input: AgentUpdateInput,
 ) {
   return ensureWorkspaceAccess(ctx, workspaceId).pipe(
+    Effect.flatMap(() =>
+      Effect.suspend(() => {
+        const harnessId = input.harnessId;
+        if (harnessId === undefined) {
+          return Effect.void;
+        }
+
+        return fromPromise(
+          () =>
+            ctx.db
+              .select({ id: harness.id, enabled: harness.enabled })
+              .from(harness)
+              .where(eq(harness.id, harnessId)),
+          "Failed to load harness",
+        ).pipe(
+          Effect.flatMap((rows) => {
+            if (rows.length === 0) {
+              return Effect.fail(new BadRequest({ message: "Harness not found" }));
+            }
+            if (!rows[0].enabled) {
+              return Effect.fail(new BadRequest({ message: "Harness is disabled" }));
+            }
+            return Effect.void;
+          }),
+        );
+      }),
+    ),
     Effect.flatMap((): Effect.Effect<{ ok: true }, AppError> => {
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
+      if (input.harnessId !== undefined) updates.harnessId = input.harnessId;
       if (input.model !== undefined) updates.model = input.model;
       if (input.status !== undefined) updates.status = input.status;
       if (input.config !== undefined) updates.config = JSON.stringify(input.config);

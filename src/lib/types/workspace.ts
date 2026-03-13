@@ -70,6 +70,16 @@ export interface AgentCreateRequest {
   writableRoot: AgentScope["writableRoot"];
 }
 
+export interface AgentUpdateRequest {
+  name?: string;
+  harnessId?: HarnessId;
+  model?: string;
+  allowedPaths?: AgentScope["allowedPaths"];
+  forbiddenPaths?: AgentScope["forbiddenPaths"];
+  toolPermissions?: AgentScope["toolPermissions"];
+  writableRoot?: AgentScope["writableRoot"];
+}
+
 export interface AgentResult {
   status: "success" | "error" | "aborted" | "policy_error";
   summary: string;
