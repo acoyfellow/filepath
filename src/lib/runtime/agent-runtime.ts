@@ -1,8 +1,15 @@
-import type { Sandbox } from "@cloudflare/sandbox";
+import type { Process, Sandbox } from "@cloudflare/sandbox";
 import { parseAgentEvent } from "$lib/protocol";
 import type { AgentEventType, AgentStatusType } from "$lib/protocol";
 import { buildAgentEnv } from "$lib/agents/adapters";
-import type { HarnessId, AgentResult, AgentRuntimeSnapshot } from "$lib/types/workspace";
+import type {
+  AgentResult,
+  AgentRuntimeActiveTask,
+  AgentRuntimeSnapshot,
+  AgentTaskAcceptedResponse,
+  AgentTaskState,
+  HarnessId,
+} from "$lib/types/workspace";
 import {
   getRuntimePolicyViolation,
   normalizeAgentScope,
@@ -26,6 +33,10 @@ export interface RuntimeEnv {
   Sandbox?: unknown;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+}
+
+export interface RuntimeExecutionContext {
+  waitUntil: (promise: Promise<unknown>) => void;
 }
 
 interface AgentExecutionConfig {
@@ -59,8 +70,30 @@ interface MessageRow {
   created_at: number;
 }
 
+interface TaskRow {
+  id: string;
+  agent_id: string;
+  content: string;
+  status: AgentTaskState | AgentResult["status"];
+  result_status: AgentResult["status"] | null;
+  summary: string;
+  commands: string;
+  files_touched: string;
+  violations: string;
+  diff_summary: string | null;
+  commit_json: string | null;
+  attempt: number | null;
+  request_id: string | null;
+  error_code: string | null;
+  error_detail: string | null;
+  accepted_at: number | null;
+  started_at: number;
+  heartbeat_at: number | null;
+  finished_at: number;
+}
+
 interface ResultRow {
-  status: AgentResult["status"];
+  result_status: AgentResult["status"];
   summary: string;
   commands: string;
   files_touched: string;
@@ -71,8 +104,42 @@ interface ResultRow {
   finished_at: number;
 }
 
+interface TaskLogContext {
+  requestId: string;
+  taskId: string;
+  workspaceId: string;
+  agentId: string;
+  harnessId?: string;
+  model?: string;
+  phase: string;
+  attempt?: number;
+  durationMs?: number;
+  state?: AgentTaskState;
+  processId?: string | null;
+  errorCode?: string | null;
+  errorDetail?: string | null;
+}
+
+class RuntimeTaskError extends Error {
+  readonly code: string;
+  readonly retryable: boolean;
+
+  constructor(code: string, message: string, retryable = false) {
+    super(message);
+    this.name = "RuntimeTaskError";
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
 let runtimeSchemaReady = false;
+
 const LOCAL_WAIT_PROCESS_ID = "__local_wait__";
+const ACTIVE_TASK_STATES = ["queued", "starting", "running", "retrying"] as const;
+const TERMINAL_TASK_STATES = ["succeeded", "failed", "canceled", "stalled"] as const;
+const TASK_RETRY_LIMIT = 2;
+const STARTING_STALE_MS = 60_000;
+const RUNNING_STALE_MS = 10 * 60_000;
 const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
   amp:
     "You are Amp running as a filepath harness inside a sandbox. Respond as a large-codebase engineering assistant and obey exact-output requests.",
@@ -87,6 +154,108 @@ const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
   shelley:
     "You are Shelley, filepath's full-stack engineering harness running inside a sandbox. Respond directly to the latest user request. Keep responses plain text unless the user asks otherwise.",
 };
+
+function now(): number {
+  return Date.now();
+}
+
+function isActiveTaskState(state: string): state is Extract<AgentTaskState, (typeof ACTIVE_TASK_STATES)[number]> {
+  return (ACTIVE_TASK_STATES as readonly string[]).includes(state);
+}
+
+function isTerminalTaskState(
+  state: string,
+): state is Extract<AgentTaskState, (typeof TERMINAL_TASK_STATES)[number]> {
+  return (TERMINAL_TASK_STATES as readonly string[]).includes(state);
+}
+
+function mapTaskStateToAgentStatus(state: AgentTaskState): AgentStatusType {
+  switch (state) {
+    case "queued":
+      return "queued";
+    case "starting":
+      return "starting";
+    case "running":
+      return "running";
+    case "retrying":
+      return "retrying";
+    case "succeeded":
+      return "done";
+    case "failed":
+      return "error";
+    case "canceled":
+      return "idle";
+    case "stalled":
+      return "stalled";
+  }
+}
+
+function mapResultStatusToTaskState(
+  status: AgentResult["status"],
+): Extract<AgentTaskState, "succeeded" | "failed" | "canceled"> {
+  switch (status) {
+    case "success":
+      return "succeeded";
+    case "aborted":
+      return "canceled";
+    case "error":
+    case "policy_error":
+      return "failed";
+  }
+}
+
+function serializeErrorDetail(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function logTaskEvent(
+  level: "log" | "warn" | "error",
+  context: TaskLogContext,
+): void {
+  const entry = {
+    ts: new Date().toISOString(),
+    component: "runtime",
+    ...context,
+  };
+  console[level](JSON.stringify(entry));
+}
+
+function toRuntimeTaskError(
+  error: unknown,
+  fallbackCode: string,
+  fallbackMessage: string,
+  retryable = false,
+): RuntimeTaskError {
+  if (error instanceof RuntimeTaskError) {
+    return error;
+  }
+  if (error instanceof Error) {
+    return new RuntimeTaskError(fallbackCode, error.message || fallbackMessage, retryable);
+  }
+  return new RuntimeTaskError(fallbackCode, fallbackMessage, retryable);
+}
+
+function classifySandboxStartupError(error: unknown): RuntimeTaskError {
+  const message = serializeErrorDetail(error);
+  const retryable = /timeout|tempor|reset|econn|503|502|504|429|unavailable|network/i.test(message);
+  return new RuntimeTaskError("SANDBOX_START_FAILED", message, retryable);
+}
+
+function classifyProviderError(error: unknown): RuntimeTaskError {
+  if (error instanceof RuntimeTaskError) {
+    return error;
+  }
+  return new RuntimeTaskError("PROVIDER_REQUEST_FAILED", serializeErrorDetail(error), false);
+}
+
+function retryDelayMs(attempt: number): number {
+  const base = 600 * 2 ** attempt;
+  const jitter = Math.floor(Math.random() * 250);
+  return base + jitter;
+}
 
 async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
   if (runtimeSchemaReady) return;
@@ -122,18 +291,34 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
       agent_id TEXT NOT NULL,
       content TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      commands TEXT NOT NULL,
-      files_touched TEXT NOT NULL,
-      violations TEXT NOT NULL,
+      result_status TEXT,
+      summary TEXT NOT NULL DEFAULT '',
+      commands TEXT NOT NULL DEFAULT '[]',
+      files_touched TEXT NOT NULL DEFAULT '[]',
+      violations TEXT NOT NULL DEFAULT '[]',
       diff_summary TEXT,
       commit_json TEXT,
+      attempt INTEGER NOT NULL DEFAULT 0,
+      request_id TEXT,
+      error_code TEXT,
+      error_detail TEXT,
+      accepted_at INTEGER NOT NULL,
       started_at INTEGER NOT NULL,
+      heartbeat_at INTEGER,
       finished_at INTEGER NOT NULL
     )
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS agent_task_agent_id_idx ON agent_task (agent_id)`).run().catch(() => {});
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS agent_task_finished_at_idx ON agent_task (finished_at)`).run().catch(() => {});
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS agent_task_status_idx ON agent_task (status)`).run().catch(() => {});
+
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN result_status TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN request_id TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN error_code TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN error_detail TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN accepted_at INTEGER`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN heartbeat_at INTEGER`).run().catch(() => {});
 
   await env.DB.prepare(`ALTER TABLE agent ADD COLUMN active_process_id TEXT`).run().catch(() => {});
   await env.DB.prepare(
@@ -160,7 +345,7 @@ function parseJsonArray(value: string): string[] {
 
 function requireSandbox(env: RuntimeEnv): NonNullable<RuntimeEnv["Sandbox"]> {
   if (!env.Sandbox) {
-    throw new Error("Sandbox runtime is unavailable.");
+    throw new RuntimeTaskError("SANDBOX_UNAVAILABLE", "Sandbox runtime is unavailable.");
   }
   return env.Sandbox;
 }
@@ -214,11 +399,10 @@ async function saveAgentMessage(
 ): Promise<string> {
   await ensureRuntimeSchema(env);
   const id = crypto.randomUUID();
-  const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO agent_message (id, agent_id, role, content, created_at)
      VALUES (?, ?, ?, ?, ?)`,
-  ).bind(id, agentId, role, content, now).run();
+  ).bind(id, agentId, role, content, now()).run();
   return id;
 }
 
@@ -233,22 +417,27 @@ async function loadAgentMessages(env: RuntimeEnv, agentId: string): Promise<Mess
   return rows.results ?? [];
 }
 
-async function saveAgentResult(
+async function upsertAgentResultProjection(
   env: RuntimeEnv,
   agentId: string,
-  content: string,
   result: AgentResult,
 ): Promise<void> {
-  await ensureRuntimeSchema(env);
-  const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO agent_task
-      (id, agent_id, content, status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO agent_result
+      (agent_id, status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(agent_id) DO UPDATE SET
+      status = excluded.status,
+      summary = excluded.summary,
+      commands = excluded.commands,
+      files_touched = excluded.files_touched,
+      violations = excluded.violations,
+      diff_summary = excluded.diff_summary,
+      commit_json = excluded.commit_json,
+      started_at = excluded.started_at,
+      finished_at = excluded.finished_at`,
   ).bind(
-    id,
     agentId,
-    content,
     result.status,
     result.summary,
     JSON.stringify(result.commands),
@@ -266,40 +455,30 @@ async function loadAgentResult(
   agentId: string,
 ): Promise<AgentResult | null> {
   await ensureRuntimeSchema(env);
-  const row = await env.DB.prepare(
-    `SELECT status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at
-       FROM agent_task
+
+  const projectionRow = await env.DB.prepare(
+    `SELECT status as result_status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at
+       FROM agent_result
       WHERE agent_id = ?
-      ORDER BY finished_at DESC
       LIMIT 1`,
   ).bind(agentId).first<ResultRow>();
 
-  if (!row) {
-    const legacyRow = await env.DB.prepare(
-      `SELECT status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at
-         FROM agent_result
+  const row =
+    projectionRow ??
+    (await env.DB.prepare(
+      `SELECT COALESCE(result_status, status) as result_status,
+              summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at
+         FROM agent_task
         WHERE agent_id = ?
+          AND (result_status IS NOT NULL OR status IN ('success', 'error', 'aborted', 'policy_error'))
+        ORDER BY finished_at DESC
         LIMIT 1`,
-    ).bind(agentId).first<ResultRow>();
-    if (!legacyRow) return null;
+    ).bind(agentId).first<ResultRow>());
 
-    return {
-      status: legacyRow.status,
-      summary: legacyRow.summary,
-      commands: JSON.parse(legacyRow.commands) as AgentResult["commands"],
-      filesTouched: JSON.parse(legacyRow.files_touched) as string[],
-      violations: JSON.parse(legacyRow.violations) as string[],
-      diffSummary: legacyRow.diff_summary,
-      commit: legacyRow.commit_json
-        ? (JSON.parse(legacyRow.commit_json) as NonNullable<AgentResult["commit"]>)
-        : null,
-      startedAt: legacyRow.started_at,
-      finishedAt: legacyRow.finished_at,
-    };
-  }
+  if (!row) return null;
 
   return {
-    status: row.status,
+    status: row.result_status,
     summary: row.summary,
     commands: JSON.parse(row.commands) as AgentResult["commands"],
     filesTouched: JSON.parse(row.files_touched) as string[],
@@ -325,23 +504,37 @@ async function setAgentStatus(
   ).bind(status, agentId).run();
 }
 
-async function getAgentStatus(
+async function updateAgentExecutionState(
   env: RuntimeEnv,
-  workspaceId: string,
   agentId: string,
-): Promise<AgentStatusType> {
-  const row = await env.DB.prepare(
-    `SELECT status
-       FROM agent
-      WHERE id = ? AND workspace_id = ?
-      LIMIT 1`,
-  ).bind(agentId, workspaceId).first<{ status: AgentStatusType }>();
+  updates: {
+    status?: AgentStatusType;
+    activeProcessId?: string | null;
+    cancelRequested?: boolean;
+  },
+): Promise<void> {
+  const clauses: string[] = [];
+  const values: Array<string | number | null> = [];
 
-  if (!row) {
-    throw new Error(`Agent ${agentId} not found.`);
+  if (updates.status !== undefined) {
+    clauses.push("status = ?");
+    values.push(updates.status);
+  }
+  if (updates.activeProcessId !== undefined) {
+    clauses.push("active_process_id = ?");
+    values.push(updates.activeProcessId);
+  }
+  if (updates.cancelRequested !== undefined) {
+    clauses.push("cancel_requested = ?");
+    values.push(updates.cancelRequested ? 1 : 0);
   }
 
-  return row.status;
+  clauses.push("updated_at = unixepoch('subsecond') * 1000");
+  values.push(agentId);
+
+  await env.DB.prepare(
+    `UPDATE agent SET ${clauses.join(", ")} WHERE id = ?`,
+  ).bind(...values).run();
 }
 
 async function getAgentExecutionState(
@@ -366,7 +559,7 @@ async function getAgentExecutionState(
   }>();
 
   if (!row) {
-    throw new Error(`Agent ${agentId} not found.`);
+    throw new RuntimeTaskError("AGENT_NOT_FOUND", `Agent ${agentId} not found.`);
   }
 
   return {
@@ -389,6 +582,24 @@ async function getAgentTranscript(
     .join("\n\n");
 }
 
+async function buildTaskPrompt(
+  env: RuntimeEnv,
+  agentId: string,
+  content: string,
+): Promise<string> {
+  const transcript = await getAgentTranscript(env, agentId, 12);
+  return transcript
+    ? [
+        "Continue this filepath agent task from the transcript below.",
+        "Reply only as the selected harness running in the sandbox.",
+        "",
+        transcript,
+        "",
+        "Respond to the latest human task in context.",
+      ].join("\n")
+    : content;
+}
+
 async function loadAgentExecutionConfig(
   env: RuntimeEnv,
   agentId: string,
@@ -396,14 +607,14 @@ async function loadAgentExecutionConfig(
   task: string,
 ): Promise<AgentExecutionConfig> {
   const row = await env.DB.prepare(
-    `SELECT w.harness_id, w.model, w.allowed_paths, w.forbidden_paths,
-            w.tool_permissions, w.writable_root, s.id as workspace_id, s.git_repo_url,
+    `SELECT a.harness_id, a.model, a.allowed_paths, a.forbidden_paths,
+            a.tool_permissions, a.writable_root, w.id as workspace_id, w.git_repo_url,
             u.openrouter_api_key as user_key, h.entry_command as entry_command
-       FROM agent w
-       JOIN workspace s ON w.workspace_id = s.id
-       JOIN user u ON s.user_id = u.id
-       JOIN harness h ON h.id = w.harness_id
-      WHERE w.id = ? AND w.workspace_id = ?`,
+       FROM agent a
+       JOIN workspace w ON a.workspace_id = w.id
+       JOIN user u ON w.user_id = u.id
+       JOIN harness h ON h.id = a.harness_id
+      WHERE a.id = ? AND a.workspace_id = ?`,
   ).bind(agentId, workspaceId).first<{
     harness_id: string;
     model: string;
@@ -418,7 +629,7 @@ async function loadAgentExecutionConfig(
   }>();
 
   if (!row) {
-    throw new Error(`Agent ${agentId} not found.`);
+    throw new RuntimeTaskError("AGENT_NOT_FOUND", `Agent ${agentId} not found.`);
   }
 
   const provider = getProviderForModel(row.model);
@@ -431,14 +642,18 @@ async function loadAgentExecutionConfig(
       const decrypted = await decryptApiKey(row.user_key, secret);
       containerApiKey = deserializeStoredProviderKeys(decrypted)[provider] || "";
     } catch {
-      throw new Error(
+      throw new RuntimeTaskError(
+        "PROVIDER_KEY_UNREADABLE",
         "Stored account router keys are unreadable. Re-save your account keys and try again.",
       );
     }
   }
 
   if (!containerApiKey) {
-    throw new Error(`No valid API key available for the ${providerDefinition.label} router.`);
+    throw new RuntimeTaskError(
+      "PROVIDER_KEY_MISSING",
+      `No valid API key available for the ${providerDefinition.label} router.`,
+    );
   }
 
   const workspaceRoot = resolveWorkspaceRoot(row.git_repo_url);
@@ -450,7 +665,7 @@ async function loadAgentExecutionConfig(
   });
   const policyError = validateAgentScope(policy);
   if (policyError) {
-    throw new Error(policyError);
+    throw new RuntimeTaskError("POLICY_INVALID", policyError);
   }
 
   const executionRoot = resolveScopedWorkspaceRoot(workspaceRoot, policy.writableRoot);
@@ -471,7 +686,7 @@ async function loadAgentExecutionConfig(
   };
 
   if (!row.entry_command) {
-    throw new Error(`Harness ${row.harness_id} has no entry command.`);
+    throw new RuntimeTaskError("HARNESS_ENTRY_COMMAND_MISSING", `Harness ${row.harness_id} has no entry command.`);
   }
 
   return {
@@ -651,91 +866,6 @@ async function persistAssistantText(
   }
 }
 
-async function recordAgentFailure(
-  env: RuntimeEnv,
-  agentId: string,
-  runtimeStatus: AgentStatusType,
-  resultStatus: AgentResult["status"],
-  summary: string,
-  violations: string[] = [],
-  content = "",
-): Promise<AgentResult> {
-  await saveAgentMessage(env, agentId, "assistant", summary);
-  await setAgentStatus(env, agentId, runtimeStatus);
-
-  const now = Date.now();
-  const result: AgentResult = {
-    status: resultStatus,
-    summary,
-    commands: [],
-    filesTouched: [],
-    violations,
-    diffSummary: null,
-    commit: null,
-    startedAt: now,
-    finishedAt: now,
-  };
-  await saveAgentResult(env, agentId, content, result);
-  return result;
-}
-
-async function runDirectModelTask(
-  config: AgentExecutionConfig,
-  task: string,
-): Promise<DirectModelResponse> {
-  const provider = getProviderForModel(config.model);
-  const providerDefinition = PROVIDERS[provider];
-  const response = await fetch(providerDefinition.apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.envVars.FILEPATH_API_KEY}`,
-      ...(providerDefinition.defaultHeaders ?? {}),
-    },
-    body: JSON.stringify({
-      model: normalizeModelForProvider(config.model),
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            HARNESS_SYSTEM_PROMPTS[config.harnessId] ??
-            `You are the ${config.harnessId} filepath harness. Respond directly to the latest user task.`,
-        },
-        {
-          role: "user",
-          content: task,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(
-      `${providerDefinition.label} request failed (${response.status}): ${errorBody.slice(0, 400) || response.statusText}`,
-    );
-  }
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{
-          message?: { content?: unknown };
-        }>;
-      }
-    | null;
-
-  const assistantText = extractAssistantText(payload?.choices?.[0]?.message?.content);
-  if (!assistantText) {
-    throw new Error(`${providerDefinition.label} response did not include assistant text.`);
-  }
-
-  return {
-    assistantText,
-    summary: "Agent completed the task.",
-  };
-}
-
 async function stopContainer(env: RuntimeEnv, agentId: string): Promise<void> {
   await ensureRuntimeSchema(env);
   const row = await env.DB.prepare(
@@ -751,164 +881,551 @@ async function stopContainer(env: RuntimeEnv, agentId: string): Promise<void> {
     await sandbox.killProcess(row.active_process_id).catch(() => {});
   }
 
-  await env.DB.prepare(
-    `UPDATE agent
-        SET active_process_id = NULL,
-            cancel_requested = 0,
-            updated_at = unixepoch('subsecond') * 1000
-      WHERE id = ?`,
-  ).bind(agentId).run();
+  await updateAgentExecutionState(env, agentId, {
+    activeProcessId: null,
+    cancelRequested: false,
+  });
 }
 
-export async function getAgentRuntimeSnapshot(
+async function insertQueuedTask(
   env: RuntimeEnv,
-  workspaceId: string,
   agentId: string,
-): Promise<AgentRuntimeSnapshot> {
-  const executionState = await getAgentExecutionState(env, workspaceId, agentId);
-  const messages = await loadAgentMessages(env, agentId);
-  const result = await loadAgentResult(env, agentId);
+  content: string,
+  requestId: string,
+): Promise<AgentRuntimeActiveTask> {
+  const taskId = crypto.randomUUID();
+  const acceptedAt = now();
+  await env.DB.prepare(
+    `INSERT INTO agent_task
+      (id, agent_id, content, status, result_status, summary, commands, files_touched, violations, diff_summary, commit_json, attempt, request_id, error_code, error_detail, accepted_at, started_at, heartbeat_at, finished_at)
+     VALUES (?, ?, ?, ?, NULL, '', '[]', '[]', '[]', NULL, NULL, 0, ?, NULL, NULL, ?, ?, ?, ?)`,
+  ).bind(
+    taskId,
+    agentId,
+    content,
+    "queued",
+    requestId,
+    acceptedAt,
+    acceptedAt,
+    acceptedAt,
+    acceptedAt,
+  ).run();
 
   return {
-    status: executionState.status,
-    activeProcessId: executionState.activeProcessId,
-    messages: messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      createdAt: message.created_at,
-    })),
-    result,
+    id: taskId,
+    state: "queued",
+    attempt: 0,
+    requestId,
+    acceptedAt,
+    startedAt: null,
+    heartbeatAt: acceptedAt,
+    finishedAt: null,
+    errorCode: null,
+    errorDetail: null,
   };
 }
 
-export async function runAgentTask(
+async function patchTaskRow(
+  env: RuntimeEnv,
+  taskId: string,
+  patch: {
+    status?: AgentTaskState;
+    resultStatus?: AgentResult["status"] | null;
+    summary?: string;
+    commands?: AgentResult["commands"];
+    filesTouched?: string[];
+    violations?: string[];
+    diffSummary?: string | null;
+    commit?: AgentResult["commit"];
+    attempt?: number;
+    errorCode?: string | null;
+    errorDetail?: string | null;
+    acceptedAt?: number;
+    startedAt?: number;
+    heartbeatAt?: number | null;
+    finishedAt?: number;
+  },
+): Promise<void> {
+  const clauses: string[] = [];
+  const values: Array<string | number | null> = [];
+
+  if (patch.status !== undefined) {
+    clauses.push("status = ?");
+    values.push(patch.status);
+  }
+  if (patch.resultStatus !== undefined) {
+    clauses.push("result_status = ?");
+    values.push(patch.resultStatus);
+  }
+  if (patch.summary !== undefined) {
+    clauses.push("summary = ?");
+    values.push(patch.summary);
+  }
+  if (patch.commands !== undefined) {
+    clauses.push("commands = ?");
+    values.push(JSON.stringify(patch.commands));
+  }
+  if (patch.filesTouched !== undefined) {
+    clauses.push("files_touched = ?");
+    values.push(JSON.stringify(patch.filesTouched));
+  }
+  if (patch.violations !== undefined) {
+    clauses.push("violations = ?");
+    values.push(JSON.stringify(patch.violations));
+  }
+  if (patch.diffSummary !== undefined) {
+    clauses.push("diff_summary = ?");
+    values.push(patch.diffSummary);
+  }
+  if (patch.commit !== undefined) {
+    clauses.push("commit_json = ?");
+    values.push(patch.commit ? JSON.stringify(patch.commit) : null);
+  }
+  if (patch.attempt !== undefined) {
+    clauses.push("attempt = ?");
+    values.push(patch.attempt);
+  }
+  if (patch.errorCode !== undefined) {
+    clauses.push("error_code = ?");
+    values.push(patch.errorCode);
+  }
+  if (patch.errorDetail !== undefined) {
+    clauses.push("error_detail = ?");
+    values.push(patch.errorDetail);
+  }
+  if (patch.acceptedAt !== undefined) {
+    clauses.push("accepted_at = ?");
+    values.push(patch.acceptedAt);
+  }
+  if (patch.startedAt !== undefined) {
+    clauses.push("started_at = ?");
+    values.push(patch.startedAt);
+  }
+  if (patch.heartbeatAt !== undefined) {
+    clauses.push("heartbeat_at = ?");
+    values.push(patch.heartbeatAt);
+  }
+  if (patch.finishedAt !== undefined) {
+    clauses.push("finished_at = ?");
+    values.push(patch.finishedAt);
+  }
+
+  if (clauses.length === 0) return;
+
+  values.push(taskId);
+  await env.DB.prepare(
+    `UPDATE agent_task SET ${clauses.join(", ")} WHERE id = ?`,
+  ).bind(...values).run();
+}
+
+async function loadTaskRow(
+  env: RuntimeEnv,
+  taskId: string,
+): Promise<TaskRow | null> {
+  await ensureRuntimeSchema(env);
+  return env.DB.prepare(
+    `SELECT id, agent_id, content, status, result_status, summary, commands, files_touched, violations,
+            diff_summary, commit_json, attempt, request_id, error_code, error_detail,
+            accepted_at, started_at, heartbeat_at, finished_at
+       FROM agent_task
+      WHERE id = ?
+      LIMIT 1`,
+  ).bind(taskId).first<TaskRow>();
+}
+
+async function loadLatestActiveTaskRow(
+  env: RuntimeEnv,
+  agentId: string,
+): Promise<TaskRow | null> {
+  await ensureRuntimeSchema(env);
+  return env.DB.prepare(
+    `SELECT id, agent_id, content, status, result_status, summary, commands, files_touched, violations,
+            diff_summary, commit_json, attempt, request_id, error_code, error_detail,
+            accepted_at, started_at, heartbeat_at, finished_at
+       FROM agent_task
+      WHERE agent_id = ?
+        AND status IN ('queued', 'starting', 'running', 'retrying')
+      ORDER BY COALESCE(accepted_at, started_at, finished_at) DESC
+      LIMIT 1`,
+  ).bind(agentId).first<TaskRow>();
+}
+
+function hydrateActiveTask(row: TaskRow): AgentRuntimeActiveTask {
+  const state = isActiveTaskState(row.status) ? row.status : "running";
+  return {
+    id: row.id,
+    state,
+    attempt: row.attempt ?? 0,
+    requestId: row.request_id ?? "",
+    acceptedAt: row.accepted_at ?? row.started_at,
+    startedAt: row.started_at || null,
+    heartbeatAt: row.heartbeat_at ?? row.started_at ?? null,
+    finishedAt: isTerminalTaskState(state) ? row.finished_at : null,
+    errorCode: row.error_code,
+    errorDetail: row.error_detail,
+  };
+}
+
+async function heartbeatTask(
+  env: RuntimeEnv,
+  taskId: string,
+  heartbeatAt = now(),
+): Promise<void> {
+  await patchTaskRow(env, taskId, { heartbeatAt });
+}
+
+async function buildFailureResult(
+  summary: string,
+  resultStatus: AgentResult["status"],
+  startedAt: number,
+  finishedAt: number,
+  violations: string[] = [],
+): Promise<AgentResult> {
+  return {
+    status: resultStatus,
+    summary,
+    commands: [],
+    filesTouched: [],
+    violations,
+    diffSummary: null,
+    commit: null,
+    startedAt,
+    finishedAt,
+  };
+}
+
+async function finalizeTaskOutcome(
+  env: RuntimeEnv,
+  params: {
+    taskId: string;
+    agentId: string;
+    content: string;
+    taskState: Extract<AgentTaskState, "succeeded" | "failed" | "canceled" | "stalled">;
+    agentStatus: AgentStatusType;
+    result: AgentResult;
+    errorCode?: string | null;
+    errorDetail?: string | null;
+    persistAssistantSummary?: boolean;
+  },
+): Promise<AgentResult> {
+  if (params.persistAssistantSummary) {
+    await saveAgentMessage(env, params.agentId, "assistant", params.result.summary);
+  }
+
+  await patchTaskRow(env, params.taskId, {
+    status: params.taskState,
+    resultStatus: params.result.status,
+    summary: params.result.summary,
+    commands: params.result.commands,
+    filesTouched: params.result.filesTouched,
+    violations: params.result.violations,
+    diffSummary: params.result.diffSummary ?? null,
+    commit: params.result.commit ?? null,
+    errorCode: params.errorCode ?? null,
+    errorDetail: params.errorDetail ?? null,
+    heartbeatAt: params.result.finishedAt,
+    finishedAt: params.result.finishedAt,
+  });
+  await upsertAgentResultProjection(env, params.agentId, params.result);
+  await updateAgentExecutionState(env, params.agentId, {
+    status: params.agentStatus,
+    activeProcessId: null,
+    cancelRequested: false,
+  });
+  return params.result;
+}
+
+async function finalizeTaskFailure(
+  env: RuntimeEnv,
+  params: {
+    taskId: string;
+    agentId: string;
+    content: string;
+    taskState: Extract<AgentTaskState, "failed" | "canceled" | "stalled">;
+    runtimeStatus: AgentStatusType;
+    resultStatus: AgentResult["status"];
+    summary: string;
+    errorCode: string;
+    errorDetail?: string | null;
+    startedAt?: number;
+    violations?: string[];
+  },
+): Promise<AgentResult> {
+  const startedAt = params.startedAt ?? (await loadTaskRow(env, params.taskId))?.started_at ?? now();
+  const finishedAt = now();
+  const result = await buildFailureResult(
+    params.summary,
+    params.resultStatus,
+    startedAt,
+    finishedAt,
+    params.violations ?? [],
+  );
+
+  return finalizeTaskOutcome(env, {
+    taskId: params.taskId,
+    agentId: params.agentId,
+    content: params.content,
+    taskState: params.taskState,
+    agentStatus: params.runtimeStatus,
+    result,
+    errorCode: params.errorCode,
+    errorDetail: params.errorDetail ?? params.summary,
+    persistAssistantSummary: true,
+  });
+}
+
+async function setTaskState(
+  env: RuntimeEnv,
+  params: {
+    taskId: string;
+    agentId: string;
+    state: Extract<AgentTaskState, "queued" | "starting" | "running" | "retrying">;
+    attempt?: number;
+    heartbeatAt?: number;
+    startedAt?: number;
+    processId?: string | null;
+  },
+): Promise<void> {
+  const time = params.heartbeatAt ?? now();
+  await patchTaskRow(env, params.taskId, {
+    status: params.state,
+    attempt: params.attempt,
+    heartbeatAt: time,
+    startedAt: params.startedAt,
+    finishedAt: time,
+  });
+  await updateAgentExecutionState(env, params.agentId, {
+    status: mapTaskStateToAgentStatus(params.state),
+    activeProcessId: params.processId,
+  });
+}
+
+async function ensureNotCancelled(
   env: RuntimeEnv,
   workspaceId: string,
   agentId: string,
-  content: string,
-): Promise<AgentResult> {
-  await ensureRuntimeSchema(env);
-  const currentState = await getAgentExecutionState(env, workspaceId, agentId);
-  if (currentState.status === "exhausted") {
-    return recordAgentFailure(
-      env,
-      agentId,
-      "exhausted",
-      "policy_error",
-      "This agent is exhausted and read-only.",
-      ["Agent is exhausted."],
-      content,
-    );
+): Promise<void> {
+  const executionState = await getAgentExecutionState(env, workspaceId, agentId);
+  if (executionState.cancelRequested) {
+    throw new RuntimeTaskError("TASK_CANCELED", "The agent task was cancelled.");
   }
+}
 
-  if (currentState.activeProcessId || currentState.status === "thinking") {
-    throw new Error("This agent is already processing a task. Wait for it to finish.");
-  }
+async function maybeMarkStalledTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+): Promise<void> {
+  const activeTask = await loadLatestActiveTaskRow(env, agentId);
+  if (!activeTask || !isActiveTaskState(activeTask.status)) return;
 
-  await saveAgentMessage(env, agentId, "user", content);
+  const heartbeatAt = activeTask.heartbeat_at ?? activeTask.started_at ?? activeTask.accepted_at ?? now();
+  const staleThreshold = activeTask.status === "starting" ? STARTING_STALE_MS : RUNNING_STALE_MS;
 
-  const localWaitDirective = env.BETTER_AUTH_URL?.startsWith("http://localhost")
-    ? parseLocalVerifyDirective(content)
-    : null;
-  if (localWaitDirective) {
-    const startedAt = Date.now();
-    await env.DB.prepare(
-      `UPDATE agent
-          SET status = ?,
-              active_process_id = ?,
-              cancel_requested = 0,
-              updated_at = unixepoch('subsecond') * 1000
-        WHERE id = ?`,
-    ).bind("running", LOCAL_WAIT_PROCESS_ID, agentId).run();
+  if (now() - heartbeatAt <= staleThreshold) return;
 
-    try {
-      const deadline = startedAt + localWaitDirective.delayMs;
-      while (Date.now() < deadline) {
-        const executionState = await getAgentExecutionState(env, workspaceId, agentId);
-        if (executionState.cancelRequested) {
-          return recordAgentFailure(
-            env,
-            agentId,
-            "idle",
-            "aborted",
-            "The agent task was cancelled.",
-            [],
-            content,
-          );
-        }
-        await sleep(250);
-      }
+  await finalizeTaskFailure(env, {
+    taskId: activeTask.id,
+    agentId,
+    content: activeTask.content,
+    taskState: "stalled",
+    runtimeStatus: "stalled",
+    resultStatus: "error",
+    summary: "The agent task stalled before it finished.",
+    errorCode: "TASK_STALLED",
+    errorDetail: `No heartbeat recorded since ${heartbeatAt}.`,
+    startedAt: activeTask.started_at,
+  });
+}
 
-      const finishedAt = Date.now();
-      await saveAgentMessage(env, agentId, "assistant", localWaitDirective.reply);
-      const result: AgentResult = {
-        status: "success",
-        summary: "Agent completed the local verification task.",
-        commands: [],
-        filesTouched: [],
-        violations: [],
-        diffSummary: null,
-        commit: null,
-        startedAt,
-        finishedAt,
-      };
-      await saveAgentResult(env, agentId, content, result);
-      await setAgentStatus(env, agentId, "done");
-      return result;
-    } finally {
-      await env.DB.prepare(
-        `UPDATE agent
-            SET active_process_id = NULL,
-                cancel_requested = 0,
-                updated_at = unixepoch('subsecond') * 1000
-          WHERE id = ?`,
-      ).bind(agentId).run();
-    }
-  }
+async function getActiveTaskSnapshot(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+): Promise<AgentRuntimeActiveTask | null> {
+  await maybeMarkStalledTask(env, workspaceId, agentId);
+  const row = await loadLatestActiveTaskRow(env, agentId);
+  if (!row || !isActiveTaskState(row.status)) return null;
+  return hydrateActiveTask(row);
+}
 
-  const transcript = await getAgentTranscript(env, agentId, 12);
-  const task = transcript
-    ? [
-        "Continue this filepath agent task from the transcript below.",
-        "Reply only as the selected harness running in the sandbox.",
-        "",
-        transcript,
-        "",
-        "Respond to the latest human task in context.",
-      ].join("\n")
-    : content;
+async function runDirectModelTask(
+  config: AgentExecutionConfig,
+  task: string,
+): Promise<DirectModelResponse> {
+  const provider = getProviderForModel(config.model);
+  const providerDefinition = PROVIDERS[provider];
 
-  let config: AgentExecutionConfig;
+  let response: Response;
   try {
-    config = await loadAgentExecutionConfig(env, agentId, workspaceId, task);
+    response = await fetch(providerDefinition.apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.envVars.FILEPATH_API_KEY}`,
+        ...(providerDefinition.defaultHeaders ?? {}),
+      },
+      body: JSON.stringify({
+        model: normalizeModelForProvider(config.model),
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              HARNESS_SYSTEM_PROMPTS[config.harnessId] ??
+              `You are the ${config.harnessId} filepath harness. Respond directly to the latest user task.`,
+          },
+          {
+            role: "user",
+            content: task,
+          },
+        ],
+      }),
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return recordAgentFailure(
-      env,
-      agentId,
-      "error",
-      "error",
-      `Could not start the agent sandbox: ${message}`,
-      [],
-      content,
+    throw new RuntimeTaskError(
+      "PROVIDER_NETWORK_ERROR",
+      `${providerDefinition.label} request failed: ${serializeErrorDetail(error)}`,
+      true,
     );
   }
 
-  await env.DB.prepare(
-    `UPDATE agent
-        SET status = ?,
-            active_process_id = NULL,
-            cancel_requested = 0,
-            updated_at = unixepoch('subsecond') * 1000
-      WHERE id = ?`,
-  ).bind("thinking", agentId).run();
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    const retryable = response.status === 429 || response.status >= 500;
+    throw new RuntimeTaskError(
+      retryable ? "PROVIDER_RETRYABLE" : "PROVIDER_REQUEST_FAILED",
+      `${providerDefinition.label} request failed (${response.status}): ${errorBody.slice(0, 400) || response.statusText}`,
+      retryable,
+    );
+  }
 
-  if (!env.Sandbox) {
-    const startedAt = Date.now();
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        choices?: Array<{
+          message?: { content?: unknown };
+        }>;
+      }
+    | null;
+
+  const assistantText = extractAssistantText(payload?.choices?.[0]?.message?.content);
+  if (!assistantText) {
+    throw new RuntimeTaskError(
+      "PROVIDER_EMPTY_RESPONSE",
+      `${providerDefinition.label} response did not include assistant text.`,
+    );
+  }
+
+  return {
+    assistantText,
+    summary: "Agent completed the task.",
+  };
+}
+
+async function runLocalWaitTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  taskId: string,
+  agentId: string,
+  content: string,
+  directive: { delayMs: number; reply: string },
+  logContext: Omit<TaskLogContext, "phase">,
+): Promise<AgentResult> {
+  const startedAt = now();
+  await setTaskState(env, {
+    taskId,
+    agentId,
+    state: "running",
+    startedAt,
+    heartbeatAt: startedAt,
+    processId: LOCAL_WAIT_PROCESS_ID,
+  });
+
+  const deadline = startedAt + directive.delayMs;
+  let lastHeartbeat = startedAt;
+  while (now() < deadline) {
+    await ensureNotCancelled(env, workspaceId, agentId);
+    if (now() - lastHeartbeat >= 1_000) {
+      lastHeartbeat = now();
+      await heartbeatTask(env, taskId, lastHeartbeat);
+    }
+    await sleep(250);
+  }
+
+  const finishedAt = now();
+  await saveAgentMessage(env, agentId, "assistant", directive.reply);
+  const result: AgentResult = {
+    status: "success",
+    summary: "Agent completed the local verification task.",
+    commands: [],
+    filesTouched: [],
+    violations: [],
+    diffSummary: null,
+    commit: null,
+    startedAt,
+    finishedAt,
+  };
+  await finalizeTaskOutcome(env, {
+    taskId,
+    agentId,
+    content,
+    taskState: "succeeded",
+    agentStatus: "done",
+    result,
+  });
+  logTaskEvent("log", {
+    ...logContext,
+    phase: "task.exec_finished",
+    attempt: 0,
+    durationMs: finishedAt - startedAt,
+    state: "succeeded",
+  });
+  logTaskEvent("log", {
+    ...logContext,
+    phase: "task.result_saved",
+    attempt: 0,
+    durationMs: finishedAt - startedAt,
+    state: "succeeded",
+  });
+  return result;
+}
+
+async function runDirectExecutionTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  taskId: string,
+  agentId: string,
+  content: string,
+  taskPrompt: string,
+  config: AgentExecutionConfig,
+  logBase: Omit<TaskLogContext, "phase">,
+): Promise<AgentResult> {
+  const startedAt = now();
+  await setTaskState(env, {
+    taskId,
+    agentId,
+    state: "running",
+    attempt: 0,
+    startedAt,
+    heartbeatAt: startedAt,
+    processId: null,
+  });
+  logTaskEvent("log", {
+    ...logBase,
+    harnessId: config.harnessId,
+    model: config.model,
+    phase: "task.exec_started",
+    attempt: 0,
+    state: "running",
+  });
+
+  for (let attempt = 0; attempt <= TASK_RETRY_LIMIT; attempt += 1) {
+    await ensureNotCancelled(env, workspaceId, agentId);
+    await patchTaskRow(env, taskId, { attempt, heartbeatAt: now() });
     try {
-      const response = await runDirectModelTask(config, task);
-      const finishedAt = Date.now();
+      const response = await runDirectModelTask(config, taskPrompt);
+      await ensureNotCancelled(env, workspaceId, agentId);
+      const finishedAt = now();
       await saveAgentMessage(env, agentId, "assistant", response.assistantText);
       const result: AgentResult = {
         status: "success",
@@ -921,212 +1438,713 @@ export async function runAgentTask(
         startedAt,
         finishedAt,
       };
-      await saveAgentResult(env, agentId, content, result);
-      await setAgentStatus(env, agentId, "done");
+      await finalizeTaskOutcome(env, {
+        taskId,
+        agentId,
+        content,
+        taskState: "succeeded",
+        agentStatus: "done",
+        result,
+      });
+      logTaskEvent("log", {
+        ...logBase,
+        harnessId: config.harnessId,
+        model: config.model,
+        phase: "task.exec_finished",
+        attempt,
+        durationMs: finishedAt - startedAt,
+        state: "succeeded",
+      });
+      logTaskEvent("log", {
+        ...logBase,
+        harnessId: config.harnessId,
+        model: config.model,
+        phase: "task.result_saved",
+        attempt,
+        durationMs: finishedAt - startedAt,
+        state: "succeeded",
+      });
       return result;
     } catch (error) {
-      return recordAgentFailure(
-        env,
+      const runtimeError = classifyProviderError(error);
+      if (runtimeError.code === "TASK_CANCELED") {
+        break;
+      }
+      if (runtimeError.retryable && attempt < TASK_RETRY_LIMIT) {
+        const delayMs = retryDelayMs(attempt);
+        await setTaskState(env, {
+          taskId,
+          agentId,
+          state: "retrying",
+          attempt: attempt + 1,
+          heartbeatAt: now(),
+          processId: null,
+        });
+        logTaskEvent("warn", {
+          ...logBase,
+          harnessId: config.harnessId,
+          model: config.model,
+          phase: "task.retrying",
+          attempt: attempt + 1,
+          durationMs: delayMs,
+          state: "retrying",
+          errorCode: runtimeError.code,
+          errorDetail: runtimeError.message,
+        });
+        await sleep(delayMs);
+        await setTaskState(env, {
+          taskId,
+          agentId,
+          state: "running",
+          attempt: attempt + 1,
+          heartbeatAt: now(),
+          processId: null,
+        });
+        continue;
+      }
+
+      const failed = await finalizeTaskFailure(env, {
+        taskId,
         agentId,
-        "error",
-        "error",
-        `The local development runtime failed while handling this task: ${error instanceof Error ? error.message : String(error)}`,
-        [],
         content,
-      );
-    } finally {
-      await env.DB.prepare(
-        `UPDATE agent
-            SET active_process_id = NULL,
-                cancel_requested = 0,
-                updated_at = unixepoch('subsecond') * 1000
-          WHERE id = ?`,
-      ).bind(agentId).run();
+        taskState: "failed",
+        runtimeStatus: "error",
+        resultStatus: "error",
+        summary: `The local development runtime failed while handling this task: ${runtimeError.message}`,
+        errorCode: runtimeError.code,
+        errorDetail: runtimeError.message,
+        startedAt,
+      });
+      logTaskEvent("error", {
+        ...logBase,
+        harnessId: config.harnessId,
+        model: config.model,
+        phase: "task.failed",
+        attempt,
+        durationMs: failed.finishedAt - startedAt,
+        state: "failed",
+        errorCode: runtimeError.code,
+        errorDetail: runtimeError.message,
+      });
+      return failed;
     }
   }
 
+  const canceled = await finalizeTaskFailure(env, {
+    taskId,
+    agentId,
+    content,
+    taskState: "canceled",
+    runtimeStatus: "idle",
+    resultStatus: "aborted",
+    summary: "The agent task was cancelled.",
+    errorCode: "TASK_CANCELED",
+    startedAt,
+  });
+  logTaskEvent("warn", {
+    ...logBase,
+    harnessId: config.harnessId,
+    model: config.model,
+    phase: "task.canceled",
+    durationMs: canceled.finishedAt - startedAt,
+    state: "canceled",
+    errorCode: "TASK_CANCELED",
+    errorDetail: canceled.summary,
+  });
+  return canceled;
+}
+
+async function withSandboxStartupRetry<T>(
+  env: RuntimeEnv,
+  taskId: string,
+  agentId: string,
+  logBase: Omit<TaskLogContext, "phase">,
+  work: (attempt: number) => Promise<T>,
+): Promise<T> {
+  let lastError: RuntimeTaskError | null = null;
+
+  for (let attempt = 0; attempt <= TASK_RETRY_LIMIT; attempt += 1) {
+    try {
+      return await work(attempt);
+    } catch (error) {
+      const runtimeError = classifySandboxStartupError(error);
+      lastError = runtimeError;
+      if (!runtimeError.retryable || attempt >= TASK_RETRY_LIMIT) {
+        throw runtimeError;
+      }
+
+      const delayMs = retryDelayMs(attempt);
+      await setTaskState(env, {
+        taskId,
+        agentId,
+        state: "retrying",
+        attempt: attempt + 1,
+        heartbeatAt: now(),
+        processId: null,
+      });
+      logTaskEvent("warn", {
+        ...logBase,
+        phase: "task.retrying",
+        attempt: attempt + 1,
+        durationMs: delayMs,
+        state: "retrying",
+        errorCode: runtimeError.code,
+        errorDetail: runtimeError.message,
+      });
+      await sleep(delayMs);
+      await setTaskState(env, {
+        taskId,
+        agentId,
+        state: "starting",
+        attempt: attempt + 1,
+        heartbeatAt: now(),
+        processId: null,
+      });
+    }
+  }
+
+  throw lastError ?? new RuntimeTaskError("SANDBOX_START_FAILED", "Sandbox failed to start.");
+}
+
+async function runSandboxTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  taskId: string,
+  agentId: string,
+  content: string,
+  config: AgentExecutionConfig,
+  logBase: Omit<TaskLogContext, "phase">,
+): Promise<AgentResult> {
+  const processId = `task-${taskId}`;
+  const startedAt = now();
+  let process: Process | null = null;
   let sandbox: Sandbox;
+
+  await setTaskState(env, {
+    taskId,
+    agentId,
+    state: "starting",
+    attempt: 0,
+    startedAt,
+    heartbeatAt: startedAt,
+    processId: null,
+  });
+
   try {
-    sandbox = await ensureContainer(env, agentId, config.gitRepoUrl);
-    await sandbox.mkdir(config.executionRoot, { recursive: true });
+    sandbox = await withSandboxStartupRetry(env, taskId, agentId, {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+    }, async () => {
+      await ensureNotCancelled(env, workspaceId, agentId);
+      const nextSandbox = await ensureContainer(env, agentId, config.gitRepoUrl);
+      await nextSandbox.mkdir(config.executionRoot, { recursive: true });
+      return nextSandbox;
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return recordAgentFailure(
-      env,
+    const runtimeError = classifySandboxStartupError(error);
+    const failed = await finalizeTaskFailure(env, {
+      taskId,
       agentId,
-      "error",
-      "error",
-      `Could not start the agent sandbox: ${message}`,
-      [],
       content,
-    );
+      taskState: "failed",
+      runtimeStatus: "error",
+      resultStatus: "error",
+      summary: `Could not start the agent sandbox: ${runtimeError.message}`,
+      errorCode: runtimeError.code,
+      errorDetail: runtimeError.message,
+      startedAt,
+    });
+    logTaskEvent("error", {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: "task.failed",
+      durationMs: failed.finishedAt - startedAt,
+      state: "failed",
+      errorCode: runtimeError.code,
+      errorDetail: runtimeError.message,
+    });
+    return failed;
   }
 
   const relay = createExecRelay();
-  const startedAt = Date.now();
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
-  let exitCode = 0;
-  let execStderr = "";
   try {
-    const result = await sandbox.exec(config.entryCommand, {
+    await setTaskState(env, {
+      taskId,
+      agentId,
+      state: "running",
+      attempt: 0,
+      startedAt,
+      heartbeatAt: now(),
+      processId,
+    });
+    logTaskEvent("log", {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: "task.container_ready",
+      attempt: 0,
+      state: "running",
+    });
+
+    process = await sandbox.startProcess(config.entryCommand, {
       cwd: config.executionRoot,
       env: config.envVars,
+      processId,
+      autoCleanup: true,
+      onOutput: relay.onOutput,
     });
-    exitCode =
-      (result as { code?: number }).code ??
-      ((result as { success?: boolean }).success === false ? 1 : 0);
-    if (result.stdout) relay.onOutput("stdout", result.stdout);
-    if (result.stderr) relay.onOutput("stderr", result.stderr);
-    relay.flush();
-    execStderr = result.stderr || relay.stderrSummary() || "";
-  } catch (error) {
-    const postRunState = await getAgentExecutionState(env, workspaceId, agentId).catch(() => ({
-      status: "error" as AgentStatusType,
-      activeProcessId: null,
+
+    await updateAgentExecutionState(env, agentId, {
+      activeProcessId: process.id,
+      status: "running",
       cancelRequested: false,
-    }));
-    const aborted =
-      postRunState.cancelRequested ||
-      (error instanceof DOMException
-        ? error.name === "AbortError"
-        : error instanceof Error
-          ? /abort/i.test(error.name) || /abort/i.test(error.message)
-          : false);
+    });
 
-    return recordAgentFailure(
-      env,
-      agentId,
-      aborted ? "idle" : "error",
-      aborted ? "aborted" : "error",
-      aborted
-        ? "The agent task was cancelled."
-        : `The sandbox runtime failed while handling this task: ${error instanceof Error ? error.message : String(error)}`,
-      [],
-      content,
-    );
-  }
+    logTaskEvent("log", {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: "task.exec_started",
+      attempt: 0,
+      processId: process.id,
+      state: "running",
+    });
 
-  try {
-    const postRunState = await getAgentExecutionState(env, workspaceId, agentId);
-    if (postRunState.cancelRequested) {
-      return recordAgentFailure(
-        env,
-        agentId,
-        "idle",
-        "aborted",
-        "The agent task was cancelled.",
-        [],
-        content,
-      );
-    }
+    heartbeatTimer = setInterval(() => {
+      void heartbeatTask(env, taskId).catch(() => {});
+    }, 2_000);
+
+    const waitResult = await process.waitForExit();
+    relay.flush();
+    const exitCode = waitResult.exitCode;
+    const logs = await process.getLogs().catch(() => ({ stdout: "", stderr: "" }));
+    if (logs.stdout) relay.onOutput("stdout", logs.stdout);
+    if (logs.stderr) relay.onOutput("stderr", logs.stderr);
+    relay.flush();
+
+    await ensureNotCancelled(env, workspaceId, agentId);
 
     if (exitCode !== 0) {
-      const stderrSummary = relay.stderrSummary() || execStderr.trim();
-      throw new Error(
+      const stderrSummary = relay.stderrSummary().trim() || logs.stderr.trim();
+      throw new RuntimeTaskError(
+        "SANDBOX_EXEC_FAILED",
         stderrSummary
           ? `Sandbox command failed (${exitCode}): ${stderrSummary}`
           : `Sandbox command failed (${exitCode}).`,
       );
     }
 
-    // Enforcement: policy validated at agent create (authority.ts), passed via env to adapter.
     const policyViolation = getRuntimePolicyViolation(config.policy, relay.events());
     if (policyViolation) {
-      return recordAgentFailure(
-        env,
-        agentId,
-        "error",
-        "policy_error",
-        policyViolation,
-        [policyViolation],
-        content,
-      );
+      throw new RuntimeTaskError("POLICY_VIOLATION", policyViolation);
     }
 
     await persistAssistantText(env, agentId, relay.events(), relay.fallbackText());
-    const outcome = buildAgentResultFromEvents(
+    const finishedAt = now();
+    const result = buildAgentResultFromEvents(
       relay.events(),
       relay.fallbackText(),
       startedAt,
-      Date.now(),
+      finishedAt,
     );
-    await saveAgentResult(env, agentId, content, outcome);
-
     const terminalStatus = relay.events().some((event) => event.type === "handoff")
       ? "exhausted"
       : "done";
-    await setAgentStatus(env, agentId, terminalStatus);
 
-    if (terminalStatus === "exhausted") {
-      await stopContainer(env, agentId);
-    }
+    await finalizeTaskOutcome(env, {
+      taskId,
+      agentId,
+      content,
+      taskState: "succeeded",
+      agentStatus: terminalStatus,
+      result,
+    });
 
-    return outcome;
+    logTaskEvent("log", {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: "task.exec_finished",
+      attempt: 0,
+      durationMs: finishedAt - startedAt,
+      processId: process.id,
+      state: "succeeded",
+    });
+    logTaskEvent("log", {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: "task.result_saved",
+      attempt: 0,
+      durationMs: finishedAt - startedAt,
+      processId: process.id,
+      state: "succeeded",
+    });
+    return result;
   } catch (error) {
-    const postRunState = await getAgentExecutionState(env, workspaceId, agentId).catch(() => ({
+    const runtimeError = toRuntimeTaskError(
+      error,
+      "SANDBOX_EXEC_FAILED",
+      "The sandbox runtime failed while handling this task.",
+    );
+    const executionState = await getAgentExecutionState(env, workspaceId, agentId).catch(() => ({
       status: "error" as AgentStatusType,
       activeProcessId: null,
       cancelRequested: false,
     }));
-    const aborted =
-      postRunState.cancelRequested ||
-      (error instanceof DOMException
-        ? error.name === "AbortError"
-        : error instanceof Error
-          ? /abort/i.test(error.name) || /abort/i.test(error.message)
-          : false);
-
-    return recordAgentFailure(
-      env,
+    const canceled = runtimeError.code === "TASK_CANCELED" || executionState.cancelRequested;
+    const policy = runtimeError.code === "POLICY_VIOLATION";
+    const taskState: Extract<AgentTaskState, "failed" | "canceled"> = canceled ? "canceled" : "failed";
+    const runtimeStatus: AgentStatusType = canceled ? "idle" : "error";
+    const resultStatus: AgentResult["status"] = canceled
+      ? "aborted"
+      : policy
+        ? "policy_error"
+        : "error";
+    const summary = canceled
+      ? "The agent task was cancelled."
+      : policy
+        ? runtimeError.message
+        : `The sandbox runtime failed while handling this task: ${runtimeError.message}`;
+    const failed = await finalizeTaskFailure(env, {
+      taskId,
       agentId,
-      aborted ? "idle" : "error",
-      aborted ? "aborted" : "error",
-      aborted
-        ? "The agent task was cancelled."
-        : `The sandbox runtime failed while handling this task: ${error instanceof Error ? error.message : String(error)}`,
-      [],
       content,
-    );
+      taskState,
+      runtimeStatus,
+      resultStatus,
+      summary,
+      errorCode: runtimeError.code,
+      errorDetail: runtimeError.message,
+      startedAt,
+      violations: policy ? [runtimeError.message] : [],
+    });
+    logTaskEvent(canceled ? "warn" : "error", {
+      ...logBase,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: canceled ? "task.canceled" : "task.failed",
+      attempt: 0,
+      durationMs: failed.finishedAt - startedAt,
+      processId: process?.id ?? null,
+      state: taskState,
+      errorCode: runtimeError.code,
+      errorDetail: runtimeError.message,
+    });
+    return failed;
   } finally {
-    await env.DB.prepare(
-      `UPDATE agent
-          SET active_process_id = NULL,
-              cancel_requested = 0,
-              updated_at = unixepoch('subsecond') * 1000
-        WHERE id = ?`,
-    ).bind(agentId).run();
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+    }
+    await updateAgentExecutionState(env, agentId, {
+      activeProcessId: null,
+      cancelRequested: false,
+    });
   }
+}
+
+async function processAcceptedAgentTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+  taskId: string,
+  content: string,
+  requestId: string,
+): Promise<AgentResult> {
+  const acceptedAt = now();
+  const persistedTask = await loadTaskRow(env, taskId);
+  if (!persistedTask) {
+    throw new RuntimeTaskError("TASK_NOT_FOUND", `Task ${taskId} not found.`);
+  }
+  if (isTerminalTaskState(persistedTask.status)) {
+    return (
+      (await loadAgentResult(env, agentId)) ??
+      {
+        status: persistedTask.result_status ?? "aborted",
+        summary: persistedTask.summary || "The task is already finished.",
+        commands: [],
+        filesTouched: [],
+        violations: [],
+        diffSummary: null,
+        commit: null,
+        startedAt: persistedTask.started_at,
+        finishedAt: persistedTask.finished_at,
+      }
+    );
+  }
+
+  logTaskEvent("log", {
+    requestId,
+    taskId,
+    workspaceId,
+    agentId,
+    phase: "task.starting",
+    attempt: 0,
+    state: "starting",
+  });
+
+  const localWaitDirective = env.BETTER_AUTH_URL?.startsWith("http://localhost")
+    ? parseLocalVerifyDirective(content)
+    : null;
+
+  try {
+    await ensureNotCancelled(env, workspaceId, agentId);
+    await setTaskState(env, {
+      taskId,
+      agentId,
+      state: "starting",
+      attempt: 0,
+      startedAt: acceptedAt,
+      heartbeatAt: acceptedAt,
+      processId: localWaitDirective ? LOCAL_WAIT_PROCESS_ID : null,
+    });
+
+    if (localWaitDirective) {
+      return await runLocalWaitTask(
+        env,
+        workspaceId,
+        taskId,
+        agentId,
+        content,
+        localWaitDirective,
+        { requestId, taskId, workspaceId, agentId },
+      );
+    }
+
+    const taskPrompt = await buildTaskPrompt(env, agentId, content);
+    const config = await loadAgentExecutionConfig(env, agentId, workspaceId, taskPrompt);
+
+    logTaskEvent("log", {
+      requestId,
+      taskId,
+      workspaceId,
+      agentId,
+      harnessId: config.harnessId,
+      model: config.model,
+      phase: "task.config_loaded",
+      attempt: 0,
+      state: "starting",
+    });
+
+    if (!env.Sandbox) {
+      return await runDirectExecutionTask(
+        env,
+        workspaceId,
+        taskId,
+        agentId,
+        content,
+        taskPrompt,
+        config,
+        { requestId, taskId, workspaceId, agentId },
+      );
+    }
+
+    return await runSandboxTask(
+      env,
+      workspaceId,
+      taskId,
+      agentId,
+      content,
+      config,
+      { requestId, taskId, workspaceId, agentId },
+    );
+  } catch (error) {
+    const runtimeError = toRuntimeTaskError(
+      error,
+      "TASK_START_FAILED",
+      "Could not start the agent task.",
+    );
+    const canceled = runtimeError.code === "TASK_CANCELED";
+    const taskState: Extract<AgentTaskState, "failed" | "canceled"> = canceled ? "canceled" : "failed";
+    const runtimeStatus: AgentStatusType = canceled ? "idle" : "error";
+    const resultStatus: AgentResult["status"] = canceled ? "aborted" : "error";
+    const summary = canceled
+      ? "The agent task was cancelled."
+      : `Could not start the agent task: ${runtimeError.message}`;
+    const result = await finalizeTaskFailure(env, {
+      taskId,
+      agentId,
+      content,
+      taskState,
+      runtimeStatus,
+      resultStatus,
+      summary,
+      errorCode: runtimeError.code,
+      errorDetail: runtimeError.message,
+      startedAt: acceptedAt,
+    });
+    logTaskEvent(canceled ? "warn" : "error", {
+      requestId,
+      taskId,
+      workspaceId,
+      agentId,
+      phase: canceled ? "task.canceled" : "task.validation_failed",
+      attempt: 0,
+      durationMs: result.finishedAt - acceptedAt,
+      state: taskState,
+      errorCode: runtimeError.code,
+      errorDetail: runtimeError.message,
+    });
+    return result;
+  }
+}
+
+export async function acceptAgentTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+  content: string,
+  requestId: string = crypto.randomUUID(),
+): Promise<AgentTaskAcceptedResponse> {
+  await ensureRuntimeSchema(env);
+  await maybeMarkStalledTask(env, workspaceId, agentId);
+  const currentState = await getAgentExecutionState(env, workspaceId, agentId);
+
+  if (currentState.status === "exhausted") {
+    throw new RuntimeTaskError(
+      "AGENT_EXHAUSTED",
+      "This agent is exhausted and read-only.",
+    );
+  }
+
+  const activeTask = await loadLatestActiveTaskRow(env, agentId);
+  if (activeTask && isActiveTaskState(activeTask.status)) {
+    throw new RuntimeTaskError(
+      "TASK_ALREADY_RUNNING",
+      "This agent is already processing a task. Wait for it to finish.",
+    );
+  }
+
+  await saveAgentMessage(env, agentId, "user", content);
+  const task = await insertQueuedTask(env, agentId, content, requestId);
+  await updateAgentExecutionState(env, agentId, {
+    status: "queued",
+    activeProcessId: null,
+    cancelRequested: false,
+  });
+  logTaskEvent("log", {
+    requestId,
+    taskId: task.id,
+    workspaceId,
+    agentId,
+    phase: "task.accepted",
+    attempt: 0,
+    state: "queued",
+  });
+
+  return {
+    ok: true,
+    taskId: task.id,
+    state: "queued",
+  };
+}
+
+export function scheduleAcceptedAgentTask(
+  env: RuntimeEnv,
+  ctx: RuntimeExecutionContext | null,
+  params: {
+    workspaceId: string;
+    agentId: string;
+    taskId: string;
+    content: string;
+    requestId: string;
+  },
+): void {
+  const run = processAcceptedAgentTask(
+    env,
+    params.workspaceId,
+    params.agentId,
+    params.taskId,
+    params.content,
+    params.requestId,
+  ).catch((error) => {
+    logTaskEvent("error", {
+      requestId: params.requestId,
+      taskId: params.taskId,
+      workspaceId: params.workspaceId,
+      agentId: params.agentId,
+      phase: "task.failed",
+      errorCode: "UNHANDLED_RUNTIME_ERROR",
+      errorDetail: serializeErrorDetail(error),
+    });
+  });
+
+  if (ctx) {
+    ctx.waitUntil(run);
+    return;
+  }
+
+  void run;
+}
+
+export async function getAgentRuntimeSnapshot(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+): Promise<AgentRuntimeSnapshot> {
+  const activeTask = await getActiveTaskSnapshot(env, workspaceId, agentId);
+  const executionState = await getAgentExecutionState(env, workspaceId, agentId);
+  const messages = await loadAgentMessages(env, agentId);
+  const result = await loadAgentResult(env, agentId);
+
+  return {
+    status: executionState.status,
+    activeProcessId: executionState.activeProcessId,
+    activeTask,
+    messages: messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+    })),
+    result,
+  };
 }
 
 export async function cancelAgentTask(
   env: RuntimeEnv,
+  workspaceId: string,
   agentId: string,
-): Promise<boolean> {
+): Promise<{ cancelled: boolean; taskId: string | null }> {
   await ensureRuntimeSchema(env);
-  const row = await env.DB.prepare(
-    `SELECT active_process_id
-       FROM agent
-      WHERE id = ?
-      LIMIT 1`,
-  ).bind(agentId).first<{ active_process_id: string | null }>();
-
-  if (!row?.active_process_id) {
-    return false;
+  await maybeMarkStalledTask(env, workspaceId, agentId);
+  const activeTask = await loadLatestActiveTaskRow(env, agentId);
+  if (!activeTask || !isActiveTaskState(activeTask.status)) {
+    return { cancelled: false, taskId: null };
   }
 
-  await env.DB.prepare(
-    `UPDATE agent
-        SET cancel_requested = 1,
-            updated_at = unixepoch('subsecond') * 1000
-      WHERE id = ?`,
-  ).bind(agentId).run();
+  await updateAgentExecutionState(env, agentId, {
+    cancelRequested: true,
+  });
 
-  if (row.active_process_id !== LOCAL_WAIT_PROCESS_ID) {
+  if (activeTask.status === "queued") {
+    await finalizeTaskFailure(env, {
+      taskId: activeTask.id,
+      agentId,
+      content: activeTask.content,
+      taskState: "canceled",
+      runtimeStatus: "idle",
+      resultStatus: "aborted",
+      summary: "The agent task was cancelled.",
+      errorCode: "TASK_CANCELED",
+      startedAt: activeTask.started_at,
+    });
+    return { cancelled: true, taskId: activeTask.id };
+  }
+
+  const executionState = await getAgentExecutionState(env, workspaceId, agentId);
+  if (executionState.activeProcessId && executionState.activeProcessId !== LOCAL_WAIT_PROCESS_ID) {
     const { getSandbox } = await import("@cloudflare/sandbox");
     const sandbox = getSandbox(requireSandbox(env) as never, agentId);
-    await sandbox.killProcess(row.active_process_id).catch(() => {});
+    await sandbox.killProcess(executionState.activeProcessId).catch(() => {});
   }
-  return true;
+
+  await heartbeatTask(env, activeTask.id);
+  return { cancelled: true, taskId: activeTask.id };
 }
 
 export async function deleteAgentRuntime(

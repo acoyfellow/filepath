@@ -13,11 +13,12 @@ import { proxyToSandbox } from '@cloudflare/sandbox';
 import { Sandbox } from './index';
 import type { Env } from '../src/types';
 import {
+  acceptAgentTask,
   cancelAgentTask,
   deleteAgentRuntime,
   getAgentRuntimeSnapshot,
+  scheduleAcceptedAgentTask,
   type RuntimeEnv,
-  runAgentTask,
 } from '../src/lib/runtime/agent-runtime';
 
 function toRuntimeEnv(env: Env): RuntimeEnv {
@@ -32,7 +33,7 @@ function toRuntimeEnv(env: Env): RuntimeEnv {
 export { Sandbox };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const runtimeEnv = toRuntimeEnv(env);
 
@@ -63,6 +64,7 @@ export default {
         const agentId = taskMatch[1];
         const body = (await request.json().catch(() => ({}))) as { content?: string };
         const content = body.content?.trim();
+        const requestId = request.headers.get("x-filepath-request-id") || crypto.randomUUID();
         if (!content) {
           return new Response(JSON.stringify({ error: "Task content is required." }), {
             status: 400,
@@ -71,8 +73,27 @@ export default {
         }
 
         try {
-          const result = await runAgentTask(runtimeEnv, workspaceId, agentId, content);
-          return new Response(JSON.stringify({ ok: true, result }), {
+          const accepted = await acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId);
+          scheduleAcceptedAgentTask(runtimeEnv, ctx, {
+            workspaceId,
+            agentId,
+            taskId: accepted.taskId,
+            content,
+            requestId,
+          });
+          console.log(
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              component: "runtime-worker",
+              phase: "task.enqueued",
+              requestId,
+              taskId: accepted.taskId,
+              workspaceId,
+              agentId,
+            }),
+          );
+          return new Response(JSON.stringify(accepted), {
+            status: 202,
             headers: { "Content-Type": "application/json" },
           });
         } catch (error) {
@@ -88,8 +109,8 @@ export default {
       const cancelMatch = suffix.match(/^\/agents\/([^/]+)\/cancel$/);
       if (request.method === "POST" && cancelMatch) {
         const agentId = cancelMatch[1];
-        const cancelled = await cancelAgentTask(runtimeEnv, agentId);
-        return new Response(JSON.stringify({ ok: true, cancelled }), {
+        const cancelled = await cancelAgentTask(runtimeEnv, workspaceId, agentId);
+        return new Response(JSON.stringify({ ok: true, ...cancelled }), {
           headers: { "Content-Type": "application/json" },
         });
       }

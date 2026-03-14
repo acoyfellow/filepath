@@ -4,6 +4,15 @@ import type { AgentScope, ToolPermission } from "$lib/runtime/authority";
 export type HarnessId = string;
 
 export type AgentStatus = AgentStatusType;
+export type AgentTaskState =
+  | "queued"
+  | "starting"
+  | "running"
+  | "retrying"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+  | "stalled";
 
 export type WorkspaceStatus =
   | "draft"
@@ -92,9 +101,29 @@ export interface AgentResult {
   finishedAt: number;
 }
 
+export interface AgentRuntimeActiveTask {
+  id: string;
+  state: AgentTaskState;
+  attempt: number;
+  requestId: string;
+  acceptedAt: number;
+  startedAt: number | null;
+  heartbeatAt: number | null;
+  finishedAt: number | null;
+  errorCode: string | null;
+  errorDetail: string | null;
+}
+
+export interface AgentTaskAcceptedResponse {
+  ok: true;
+  taskId: string;
+  state: Extract<AgentTaskState, "queued" | "starting" | "running" | "retrying">;
+}
+
 export interface AgentRuntimeSnapshot {
   status: AgentStatus;
   activeProcessId?: string | null;
+  activeTask?: AgentRuntimeActiveTask | null;
   messages: Array<{
     id: string;
     role: string;

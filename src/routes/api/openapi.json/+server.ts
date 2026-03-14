@@ -92,6 +92,46 @@ export const GET: RequestHandler = async ({ url }) => {
           },
           required: ["content"],
         },
+        AgentActiveTask: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            state: {
+              type: "string",
+              enum: [
+                "queued",
+                "starting",
+                "running",
+                "retrying",
+                "succeeded",
+                "failed",
+                "canceled",
+                "stalled",
+              ],
+            },
+            attempt: { type: "integer" },
+            requestId: { type: "string" },
+            acceptedAt: { type: "integer" },
+            startedAt: { type: ["integer", "null"] },
+            heartbeatAt: { type: ["integer", "null"] },
+            finishedAt: { type: ["integer", "null"] },
+            errorCode: { type: ["string", "null"] },
+            errorDetail: { type: ["string", "null"] },
+          },
+          required: ["id", "state", "attempt", "requestId", "acceptedAt"],
+        },
+        TaskAccepted: {
+          type: "object",
+          properties: {
+            ok: { type: "boolean" },
+            taskId: { type: "string" },
+            state: {
+              type: "string",
+              enum: ["queued", "starting", "running", "retrying"],
+            },
+          },
+          required: ["ok", "taskId", "state"],
+        },
         AgentResult: {
           type: "object",
           properties: {
@@ -339,13 +379,7 @@ export const GET: RequestHandler = async ({ url }) => {
               description: "Task accepted",
               content: {
                 "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      ok: { type: "boolean" },
-                      result: { $ref: "#/components/schemas/AgentResult" },
-                    },
-                  },
+                  schema: { $ref: "#/components/schemas/TaskAccepted" },
                 },
               },
             },

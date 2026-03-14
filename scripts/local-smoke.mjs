@@ -56,8 +56,7 @@ async function createWorkspace(page, name) {
 }
 
 async function openCreateAgentModal(page) {
-  const createButtons = page.getByRole("button", { name: /new agent/i });
-  await createButtons.first().click();
+  await page.getByTestId("open-create-agent").first().click();
   await page.getByRole("dialog", { name: /new agent/i }).waitFor({ state: "visible" });
 }
 

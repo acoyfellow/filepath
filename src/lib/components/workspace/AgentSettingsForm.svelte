@@ -226,20 +226,20 @@
   });
 
   const labelClass =
-    "mt-1 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--t5)]";
+    "mt-1 text-[11px] font-medium uppercase tracking-[0.16em] text-(--t5)";
   const inputClass =
-    "w-full rounded-xl border border-[var(--b1)] bg-[var(--bg2)] px-4 py-3 text-sm text-[var(--t1)] outline-none transition placeholder:text-[var(--t5)] focus:border-[var(--accent)] focus:ring-0";
+    "w-full rounded-xl border border-(--b1) bg-(--bg2) px-4 py-3 text-sm text-(--t1) outline-none transition placeholder:text-(--t5) focus:border-(--accent) focus:ring-0";
   const cardClass =
-    "rounded-xl border border-[var(--b1)] px-3.5 py-3 text-xs leading-6";
-  const metaClass = "text-[11px] leading-5 text-[var(--t5)]";
+    "rounded-xl border border-(--b1) px-3.5 py-3 text-xs leading-6";
+  const metaClass = "text-[11px] leading-5 text-(--t5)";
   const optionBaseClass =
-    "rounded-xl border border-[var(--b1)] bg-[var(--bg2)] p-3 text-left font-[var(--f)] text-sm text-[var(--t2)] transition hover:border-[var(--b2)] hover:text-[var(--t1)]";
+    "rounded-xl border border-(--b1) bg-(--bg2) p-3 text-left font-(family-name:--f) text-sm text-(--t2) transition hover:border-(--b2) hover:text-(--t1)";
   const bannerClass = (tone: "info" | "warning" | "success") =>
     tone === "warning"
       ? `${cardClass} border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300`
       : tone === "success"
         ? `${cardClass} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300`
-        : `${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-[var(--t2)]`;
+        : `${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-(--t2)`;
 
   function toggleToolPermission(permission: ToolPermission) {
     if (selectedToolPermissions.includes(permission)) {
@@ -440,7 +440,7 @@
     </div>
   {/if}
 
-  <div class={`${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-[var(--t2)]`}>{setupSummary}</div>
+  <div class={`${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-(--t2)`}>{setupSummary}</div>
 
   {#if showNameField}
     <label class={labelClass} for="agent-name-field">name</label>
@@ -449,7 +449,7 @@
       <Button
         variant="outline"
         size="icon"
-        class="size-[46px] rounded-xl border-[var(--b1)] bg-[var(--bg2)] text-[var(--t3)] shadow-none hover:border-[var(--t4)] hover:bg-[var(--bg3)] hover:text-[var(--t1)]"
+        class="size-[46px] rounded-xl border-(--b1) bg-(--bg2) text-(--t3) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)"
         onclick={() => { name = pickName(); }}
         aria-label="Generate name"
       >
@@ -464,11 +464,11 @@
   {/if}
   <div class="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(110px,1fr))]">
     {#if harnessesLoading}
-      <div class="rounded-xl border border-dashed border-[var(--b1)] px-3 py-3 text-xs text-[var(--t5)]">Loading harnesses...</div>
+      <div class="rounded-xl border border-dashed border-(--b1) px-3 py-3 text-xs text-(--t5)">Loading harnesses...</div>
     {:else}
       {#each availableHarnesses as harness}
         <button
-          class={`${optionBaseClass} ${harnessId === harness.id ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-[var(--t1)]" : ""}`}
+          class={`${optionBaseClass} ${harnessId === harness.id ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-(--t1)" : ""}`}
           data-harness-id={harness.id}
           data-selected={harnessId === harness.id ? "true" : "false"}
           aria-pressed={harnessId === harness.id}
@@ -496,12 +496,12 @@
   {#if hasSelectedProviderKey}
     <div class={`${cardClass} border-emerald-500/30 bg-emerald-500/10`}>
       <div class="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Model access is ready</div>
-      <div class="text-[11px] leading-5 text-[var(--t4)]">Using saved {activeProviderDefinition.label} access for this agent.</div>
+      <div class="text-[11px] leading-5 text-(--t4)">Using saved {activeProviderDefinition.label} access for this agent.</div>
     </div>
   {:else}
     <div class={cardClass}>
-      <div class="mb-1 font-semibold text-[var(--t2)]">Add {activeProviderDefinition.label} access inline</div>
-      <div class="text-[11px] leading-5 text-[var(--t4)]">
+      <div class="mb-1 font-semibold text-(--t2)">Add {activeProviderDefinition.label} access inline</div>
+      <div class="text-[11px] leading-5 text-(--t4)">
         filepath does not save agents into a known-bad missing-key state. Save the account key here and keep going.
       </div>
       <div class="mt-3 grid grid-cols-[1fr_auto] gap-2.5 max-[720px]:grid-cols-1">
@@ -514,7 +514,7 @@
         />
         <Button
           variant="outline"
-          class="rounded-xl border-[var(--b1)] bg-[var(--bg2)] px-4 text-[var(--t2)] shadow-none hover:border-[var(--t4)] hover:bg-[var(--bg3)] hover:text-[var(--t1)]"
+          class="rounded-xl border-(--b1) bg-(--bg2) px-4 text-(--t2) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)"
           onclick={saveInlineKey}
           disabled={inlineKeySaving || !inlineKeyDraft.trim()}
         >
@@ -532,10 +532,10 @@
 
   <div class={labelClass}>model</div>
   <input bind:value={modelFilter} class={inputClass} placeholder="Search live models..." aria-label="Search models" />
-  <div class="overflow-hidden rounded-xl border border-[var(--b1)]">
+  <div class="overflow-hidden rounded-xl border border-(--b1)">
     <select
       bind:value={model}
-      class={`${inputClass} appearance-none rounded-none border-0 bg-[var(--bg2)] pr-10`}
+      class={`${inputClass} appearance-none rounded-none border-0 bg-(--bg2) pr-10`}
       aria-label="Model"
       disabled={!hasSelectedProviderKey || modelsLoading || Boolean(modelsError)}
     >
@@ -571,19 +571,19 @@
   <div class="grid grid-cols-3 gap-2 max-[720px]:grid-cols-1">
     {#each TOOL_PERMISSION_OPTIONS as option}
       <button
-        class={`${optionBaseClass} ${selectedToolPermissions.includes(option.id) ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-[var(--t1)]" : ""}`}
+        class={`${optionBaseClass} ${selectedToolPermissions.includes(option.id) ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-(--t1)" : ""}`}
         type="button"
         data-selected={selectedToolPermissions.includes(option.id) ? "true" : "false"}
         aria-pressed={selectedToolPermissions.includes(option.id)}
         onclick={() => toggleToolPermission(option.id)}
       >
         <span>{option.label}</span>
-        <small class="mt-1 block text-[10px] leading-5 text-[var(--t5)]">{option.description}</small>
+        <small class="mt-1 block text-[10px] leading-5 text-(--t5)">{option.description}</small>
       </button>
     {/each}
   </div>
 
-  <div class="flex flex-col gap-1 rounded-xl border border-[var(--b1)] bg-[var(--bg2)] px-3.5 py-3 font-[var(--m)] text-xs leading-6 text-[var(--t3)]">
+  <div class="flex flex-col gap-1 rounded-xl border border-(--b1) bg-(--bg2) px-3.5 py-3 font-(family-name:--m) text-xs leading-6 text-(--t3)">
     <div><strong>agent</strong> scope</div>
     <div>Allowed: {scopePreview.allowed}</div>
     <div>Forbidden: {scopePreview.forbidden}</div>
@@ -598,7 +598,7 @@
   <div class="mt-1 flex justify-end gap-3 max-[720px]:sticky max-[720px]:bottom-0 max-[720px]:bg-[linear-gradient(to_top,var(--bg)_75%,transparent)] max-[720px]:pt-3">
     <Button variant="outline" type="button" onclick={oncancel}>cancel</Button>
     <Button
-      class="bg-[var(--accent)] text-white shadow-none hover:opacity-90"
+      class="bg-(--accent) text-white shadow-none hover:opacity-90"
       type="button"
       disabled={Boolean(submitBlocker) || submitting}
       onclick={handleSubmit}

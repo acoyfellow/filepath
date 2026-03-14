@@ -15,18 +15,13 @@
 
   let { agent, selectedId, onselect, onrequestaction }: Props = $props();
   let isSelected = $derived(agent.id === selectedId);
-  let scopeLabel = $derived.by(() => {
-    const raw = agent.writableRoot ?? agent.allowedPaths[0] ?? ".";
-    if (!raw || raw === "." || raw === "./") return "repo root";
-    return raw;
-  });
 </script>
 
 <div
-  class={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-l-2 px-3 py-2 transition-colors sm:px-3 ${
+  class={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 border-l-2 px-3 py-2 transition-colors sm:px-3 ${
     isSelected
-      ? "border-l-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg))]"
-      : "border-l-transparent hover:bg-[var(--bg3)]"
+      ? "border-l-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg))]"
+      : "border-l-transparent hover:bg-(--bg3)"
   }`}
   data-testid="agent-list-item"
   data-selected={isSelected ? "true" : "false"}
@@ -41,29 +36,22 @@
     }
   }}
 >
-  <div class="row-start-1 row-end-3 self-start pt-0.5">
-    <StatusDot status={agent.status} size={5} />
-  </div>
+  <StatusDot status={agent.status} size={5} />
 
   <span
-    class="min-w-0 truncate font-[var(--f)] text-[13px] tracking-[-0.01em]"
+    class="min-w-0 truncate font-(family-name:--f) text-[13px] leading-none tracking-[-0.01em]"
     style:font-weight={isSelected ? 600 : 400}
     style:color={isSelected ? "var(--t1)" : "var(--t3)"}
   >
     {agent.name}
   </span>
 
-  <span
-    class="col-start-2 row-start-2 inline-flex max-w-full justify-self-start truncate rounded-full border border-[var(--b1)] bg-[var(--bg3)] px-1.5 py-0.5 font-[var(--m)] text-[10px] text-[var(--t4)]"
-    title={scopeLabel}
-  >
-    {scopeLabel}
-  </span>
-
   <DropdownMenu.Root>
     <DropdownMenu.Trigger
       data-testid="agent-list-item-menu"
-      class="col-start-3 row-span-2 inline-flex size-[22px] items-center justify-center self-center rounded-md bg-transparent text-[var(--t5)] opacity-90 transition-colors hover:bg-[var(--bg3)] hover:text-[var(--t2)]"
+      class={`inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent p-0 text-(--t5) transition-all hover:border-(--b1) hover:bg-(--bg3) hover:text-(--t2) ${
+        isSelected ? "opacity-100" : "opacity-70"
+      } data-[state=open]:border-(--b1) data-[state=open]:bg-(--bg3) data-[state=open]:text-(--t1)`}
       aria-label={`Agent actions for ${agent.name}`}
       onclick={(event) => {
         event.stopPropagation();
@@ -74,21 +62,26 @@
     <DropdownMenu.Content
       align="end"
       sideOffset={6}
+      class="min-w-[9.75rem] rounded-xl border border-(--b1) bg-(--bg) p-1.5 text-(--t2) shadow-(--shadow)"
       onclick={(event) => {
         event.stopPropagation();
       }}
     >
-      <DropdownMenu.Item onclick={() => onrequestaction({ agentId: agent.id, action: "rename" })}>
+      <DropdownMenu.Item
+        class="rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
+        onclick={() => onrequestaction({ agentId: agent.id, action: "rename" })}
+      >
         <PencilIcon />
         Rename
       </DropdownMenu.Item>
-      <DropdownMenu.Separator />
+      <DropdownMenu.Separator class="bg-(--b1) my-1" />
       <DropdownMenu.Item
         variant="destructive"
+        class="rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-red-500 [&_svg]:text-red-500 data-highlighted:bg-red-500/10 data-highlighted:text-red-400 data-highlighted:[&_svg]:text-red-400 dark:text-red-400"
         onclick={() => onrequestaction({ agentId: agent.id, action: "delete" })}
       >
         <Trash2Icon />
-        Delete
+        Delete agent
       </DropdownMenu.Item>
     </DropdownMenu.Content>
   </DropdownMenu.Root>

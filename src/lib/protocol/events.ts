@@ -15,9 +15,13 @@ import { z } from "zod";
 
 export const AgentStatus = z.enum([
   "idle",
+  "queued",
+  "starting",
   "thinking",
   "running",
+  "retrying",
   "done",
+  "stalled",
   "exhausted",
   "error",
 ]);
@@ -25,18 +29,26 @@ export type AgentStatus = z.infer<typeof AgentStatus>;
 
 export const STATUS_COLORS: Record<AgentStatus, string> = {
   idle: "#52525b",
+  queued: "#6366f1",
+  starting: "#8b5cf6",
   thinking: "#f59e0b",
   running: "#818cf8",
+  retrying: "#f97316",
   done: "#22c55e",
+  stalled: "#f97316",
   exhausted: "#f97316",
   error: "#ef4444",
 };
 
 export const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: "Idle",
+  queued: "Queued",
+  starting: "Starting",
   thinking: "Thinking",
   running: "Running",
+  retrying: "Retrying",
   done: "Done",
+  stalled: "Stalled",
   exhausted: "Exhausted",
   error: "Error",
 };

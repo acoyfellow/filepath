@@ -153,6 +153,7 @@ export function initAuth(
 
         if (isLocal) {
           console.log(`[better-auth] skipping email delivery for ${type} to ${email} in local dev`);
+          console.log(`[better-auth] otp: ${otp}`);
           return;
         }
 

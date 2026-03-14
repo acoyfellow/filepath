@@ -54,6 +54,10 @@ async function dispatchLocalRuntime(
     const agentId = taskMatch[1];
     const body = await readJsonBody(init);
     const content = typeof body.content === "string" ? body.content.trim() : "";
+    const requestId =
+      init?.headers instanceof Headers
+        ? init.headers.get("x-filepath-request-id") || crypto.randomUUID()
+        : crypto.randomUUID();
     if (!content) {
       return new Response(JSON.stringify({ error: "Task content is required." }), {
         status: 400,
@@ -62,8 +66,16 @@ async function dispatchLocalRuntime(
     }
 
     try {
-      const result = await runtime.runAgentTask(runtimeEnv, workspaceId, agentId, content);
-      return new Response(JSON.stringify({ ok: true, result }), {
+      const accepted = await runtime.acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId);
+      runtime.scheduleAcceptedAgentTask(runtimeEnv, null, {
+        workspaceId,
+        agentId,
+        taskId: accepted.taskId,
+        content,
+        requestId,
+      });
+      return new Response(JSON.stringify(accepted), {
+        status: 202,
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
@@ -82,8 +94,8 @@ async function dispatchLocalRuntime(
   const cancelMatch = suffix.match(/^\/agents\/([^/]+)\/cancel$/);
   if ((init?.method ?? "GET") === "POST" && cancelMatch) {
     const agentId = cancelMatch[1];
-    const cancelled = await runtime.cancelAgentTask(runtimeEnv, agentId);
-    return new Response(JSON.stringify({ ok: true, cancelled }), {
+    const cancelled = await runtime.cancelAgentTask(runtimeEnv, workspaceId, agentId);
+    return new Response(JSON.stringify({ ok: true, ...cancelled }), {
       headers: { "Content-Type": "application/json" },
     });
   }

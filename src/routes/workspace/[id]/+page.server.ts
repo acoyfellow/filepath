@@ -1,7 +1,7 @@
 import { redirect, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { workspace, agent, user } from "$lib/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import type { ServerLoadEvent } from "@sveltejs/kit";
 import { decryptApiKey } from "$lib/crypto";
 import {
@@ -39,7 +39,7 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
     .select()
     .from(agent)
     .where(eq(agent.workspaceId, params.id as string))
-    .orderBy(desc(agent.updatedAt), desc(agent.createdAt));
+    .orderBy(asc(agent.createdAt), asc(agent.id));
 
   const users = await db
     .select({ openrouterApiKey: user.openrouterApiKey })

@@ -4,7 +4,10 @@
   import AgentListItem from "./AgentListItem.svelte";
   import type { AgentRecord } from "$lib/types/workspace";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import Button from "$lib/components/ui/button/button.svelte";
+
+  const sidebar = Sidebar.useSidebar();
 
   interface Props {
     agents: AgentRecord[];
@@ -31,11 +34,8 @@
   let dialogError = $state("");
   let dialogSubmitting = $state(false);
 
-  const sortedAgents = $derived(
-    [...agents].sort((left, right) => right.updatedAt - left.updatedAt),
-  );
   const dialogAgent = $derived(
-    dialogAgentId ? sortedAgents.find((agent) => agent.id === dialogAgentId) ?? null : null,
+    dialogAgentId ? agents.find((agent) => agent.id === dialogAgentId) ?? null : null,
   );
 
   function closeDialog() {
@@ -47,7 +47,7 @@
 
   function openRename(agentId: string) {
     dialogAgentId = agentId;
-    renameValue = sortedAgents.find((agent) => agent.id === agentId)?.name ?? "";
+    renameValue = agents.find((agent) => agent.id === agentId)?.name ?? "";
     dialogError = "";
   }
 
@@ -89,43 +89,54 @@
   }
 </script>
 
-<aside class="flex min-h-0 w-[260px] shrink-0 flex-col border-r border-[var(--b1)] bg-[var(--bg)] max-[900px]:max-h-[34vh] max-[900px]:w-full max-[900px]:border-r-0 max-[900px]:border-b">
-  <div class="flex items-center gap-1.5 border-b border-[var(--b1)] px-3 py-2 font-[var(--f)] text-[10px] font-[550] uppercase tracking-[0.14em] text-[var(--t4)] sm:text-[11px]">
-    <span>agents</span>
-    {#if isRefreshing}
-      <span
-        class="size-2.5 animate-spin rounded-full border-2 border-[var(--b2)] border-t-[var(--accent)]"
-        aria-hidden="true"
-      ></span>
-    {/if}
-  </div>
-
-  <div class="min-h-0 flex-1 overflow-auto py-0.5 max-[900px]:max-h-[26vh]">
-    {#if sortedAgents.length > 0}
-      {#each sortedAgents as agent (agent.id)}
-        <AgentListItem
-          {agent}
-          {selectedId}
-          {onselect}
-          onrequestaction={handleAction}
-        />
-      {/each}
+<Sidebar.Root class="top-(--header-height)! bottom-auto! h-[calc(100svh-var(--header-height))]!">
+  <Sidebar.Header>
+    <div class="flex items-center justify-between gap-3 px-2 py-2">
+      <div class="flex items-center gap-1.5 font-(family-name:--f) text-[10px] font-[550] uppercase tracking-[0.14em] text-(--t4) sm:text-[11px]">
+        <span>agents</span>
+        {#if isRefreshing}
+          <span
+            class="size-2.5 animate-spin rounded-full border-2 border-(--b2) border-t-(--accent)"
+            aria-hidden="true"
+          ></span>
+        {/if}
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="h-7 gap-1.5 rounded-full px-2.5 font-(family-name:--f) text-[11px] font-[540] text-(--t3) shadow-none hover:bg-(--bg3) hover:text-(--t1)"
+        onclick={oncreate}
+        aria-label="Create agent"
+        title="Create agent"
+        data-testid="open-create-agent"
+      >
+        <PlusIcon size={14} />
+        <span class="max-[640px]:hidden">new agent</span>
+      </Button>
+    </div>
+  </Sidebar.Header>
+  <Sidebar.Content>
+    {#if agents.length > 0}
+      <Sidebar.Group>
+        <div class="py-0.5">
+          {#each agents as agent (agent.id)}
+            <AgentListItem
+              {agent}
+              {selectedId}
+              onselect={(id) => {
+                onselect(id);
+                sidebar.setOpenMobile(false);
+              }}
+              onrequestaction={handleAction}
+            />
+          {/each}
+        </div>
+      </Sidebar.Group>
     {:else}
-      <div class="px-3 py-4 font-[var(--f)] text-xs text-[var(--t5)]">No agents yet</div>
+      <div class="px-3 py-4 font-(family-name:--f) text-xs text-(--t5)">No agents yet</div>
     {/if}
-  </div>
-
-  <div class="border-t border-[var(--b1)] px-2 py-2 max-[640px]:px-3 max-[640px]:pb-2.5">
-    <Button
-      variant="outline"
-      class="flex w-full items-center justify-center gap-2 rounded-xl border-dashed border-[var(--b2)] bg-[color-mix(in_srgb,var(--bg2)_88%,transparent)] py-5 font-[var(--f)] text-xs font-[540] text-[var(--t3)] shadow-none hover:border-[var(--t4)] hover:bg-[color-mix(in_srgb,var(--accent)_9%,var(--bg3))] hover:text-[var(--t1)] max-[640px]:py-4"
-      onclick={oncreate}
-    >
-      <PlusIcon size={15} />
-      new agent
-    </Button>
-  </div>
-</aside>
+  </Sidebar.Content>
+</Sidebar.Root>
 
 <Dialog.Root
   open={Boolean(dialogAgentId)}
@@ -133,7 +144,7 @@
     if (!open) closeDialog();
   }}
 >
-  <Dialog.Content class="max-w-md border-border bg-background text-foreground">
+  <Dialog.Content class="max-w-md border-(--b1) bg-(--bg) text-(--t2)">
     <Dialog.Header>
       <Dialog.Title class="dialog-title">Rename agent</Dialog.Title>
       <Dialog.Description class="dialog-description">
@@ -144,12 +155,12 @@
     </Dialog.Header>
 
     <label>
-      <span class="mb-1.5 block text-sm font-medium text-[var(--t3)]">Name</span>
+      <span class="mb-1.5 block text-sm font-medium text-(--t3)">Name</span>
       <input
         bind:value={renameValue}
         type="text"
         maxlength="120"
-        class="w-full rounded-xl border border-[var(--b1)] bg-[var(--bg2)] px-3 py-2.5 text-sm text-[var(--t1)] outline-none transition focus:border-[var(--accent)]"
+        class="w-full rounded-xl border border-(--b1) bg-(--bg2) px-3 py-2.5 text-sm text-(--t1) outline-none transition focus:border-(--accent)"
       />
     </label>
 

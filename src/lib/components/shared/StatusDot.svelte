@@ -10,7 +10,12 @@
   let { status, size = 7 }: Props = $props();
 
   let color = $derived(STATUS_COLORS[status]);
-  let pulsing = $derived(status === "running" || status === "thinking");
+  let pulsing = $derived(
+    status === "starting" ||
+      status === "thinking" ||
+      status === "running" ||
+      status === "retrying",
+  );
 </script>
 
 <i

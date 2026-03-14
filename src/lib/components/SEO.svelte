@@ -1,22 +1,9 @@
 <script lang="ts">
   import { dev } from "$app/environment";
+  import { PLATFORM_NAME, PLATFORM_URL } from "$lib/config";
 
-  const baseUrl = dev ? "http://localhost:5173" : "https://myfilepath.com";
+  const baseUrl = dev ? "http://localhost:5173" : PLATFORM_URL;
   const defaultOgImage = `${baseUrl}/og.jpg`;
-
-  // PNG converter URL - Configure this to point to your deployed SVG-to-PNG Cloudflare worker
-  // See svg-to-png/+server.ts or og-image-hybrid/+server.ts for worker implementations
-  // Leave empty to use the defaultOgImage instead of dynamic OG images
-  const pngConverterUrl = ""; // Add your worker URL here when deployed
-
-  function generateOGImageUrl(title: string, description: string): string {
-    if (!pngConverterUrl) {
-      // Return default OG image if converter URL is not configured
-      return defaultOgImage;
-    }
-    const svgUrl = `${baseUrl}/api/og-image?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`;
-    return `${pngConverterUrl}/?url=${encodeURIComponent(svgUrl)}`;
-  }
 
   interface Breadcrumb {
     name: string;
@@ -79,9 +66,17 @@
     keywords?: string;
     path: string;
     type?: "article" | "website";
+    section?: string;
+    tags?: string;
+    publishedTime?: string;
+    modifiedTime?: string;
     ogImage?: string;
+    readingTime?: string;
+    wordCount?: number;
+    author?: string;
     breadcrumbs?: Breadcrumb[];
     noindex?: boolean;
+    sameAs?: string[];
   }
 
   let {
@@ -90,9 +85,20 @@
     keywords = "",
     path,
     type = "website",
+    section = "",
+    tags = "",
+    publishedTime = "2026-03-14",
+    modifiedTime = "2026-03-14",
     ogImage,
+    readingTime = "",
+    wordCount = 0,
+    author = PLATFORM_NAME,
     breadcrumbs = [],
     noindex = false,
+    sameAs = [
+      "https://github.com/acoyfellow/filepath",
+      "https://x.com/acoyfellow",
+    ],
   }: Props = $props();
 
   function generateBreadcrumbsSchema(): BreadcrumbSchema | null {
@@ -122,71 +128,106 @@
     return {
       "@context": "https://schema.org",
       "@type": "Organization",
-      name: "myfilepath.com",
+      name: PLATFORM_NAME,
       url: baseUrl,
       logo: {
         "@type": "ImageObject",
         url: `${baseUrl}/favicon.svg`,
       },
+      sameAs,
     };
   }
 
-  function safeStringify(obj: any): string {
+  function generateArticleSchema(): ArticleSchema | null {
+    if (type !== "article") return null;
+
+    return {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: title,
+      description,
+      image: ogImageUrl,
+      wordCount,
+      author: {
+        "@type": "Organization",
+        name: author,
+      },
+      publisher: {
+        "@type": "Organization",
+        name: PLATFORM_NAME,
+        logo: {
+          "@type": "ImageObject",
+          url: `${baseUrl}/favicon.svg`,
+        },
+      },
+      datePublished: publishedTime,
+      dateModified: modifiedTime,
+      mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": `${baseUrl}${path}`,
+      },
+    };
+  }
+
+  function safeStringify(value: unknown): string {
     try {
-      return JSON.stringify(obj, null, 2);
-    } catch (e) {
-      console.error("Failed to stringify schema:", e);
+      return JSON.stringify(value, null, 2);
+    } catch (error) {
+      console.error("Failed to stringify SEO schema", error);
       return "{}";
     }
   }
 
-  let breadcrumbsSchema = $derived(generateBreadcrumbsSchema());
-  let organizationSchema = $derived(generateOrganizationSchema());
-
-  let breadcrumbsJson = $derived(
-    breadcrumbsSchema ? safeStringify(breadcrumbsSchema) : ""
-  );
-  let organizationJson = $derived(safeStringify(organizationSchema));
-
-  // Generate OG image URL if not explicitly provided
-  let ogImageUrl = $derived(
-    ogImage ? ogImage : generateOGImageUrl(title, description)
-  );
+  const ogImageUrl = $derived(ogImage ?? defaultOgImage);
+  const canonicalUrl = $derived(`${baseUrl}${path}`);
+  const organizationSchema = $derived(generateOrganizationSchema());
+  const breadcrumbsSchema = $derived(generateBreadcrumbsSchema());
+  const articleSchema = $derived(generateArticleSchema());
 </script>
 
 <svelte:head>
-  <!-- Essential Meta Tags -->
   <title>{title}</title>
   <meta name="description" content={description} />
   {#if keywords}
     <meta name="keywords" content={keywords} />
   {/if}
-  <link rel="canonical" href={`${baseUrl}${path}`} />
-  
+  <link rel="canonical" href={canonicalUrl} />
+
   {#if noindex}
     <meta name="robots" content="noindex, nofollow" />
   {/if}
 
-  <!-- Open Graph -->
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:type" content={type} />
-  <meta property="og:url" content={`${baseUrl}${path}`} />
+  <meta property="og:url" content={canonicalUrl} />
   <meta property="og:image" content={ogImageUrl} />
-  <meta property="og:site_name" content="myfilepath.com" />
+  <meta property="og:site_name" content={PLATFORM_NAME} />
+  {#if section}
+    <meta property="article:section" content={section} />
+  {/if}
+  {#if tags}
+    <meta property="article:tag" content={tags} />
+  {/if}
+  {#if type === "article"}
+    <meta property="article:published_time" content={publishedTime} />
+    <meta property="article:modified_time" content={modifiedTime} />
+  {/if}
+  {#if readingTime}
+    <meta name="twitter:label1" content="Reading time" />
+    <meta name="twitter:data1" content={readingTime} />
+  {/if}
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} />
   <meta name="twitter:description" content={description} />
   <meta name="twitter:image" content={ogImageUrl} />
 
-  <!-- Schema.org Markup -->
-  <!-- Organization schema - always present -->
-  {@html `<script type="application/ld+json">${organizationJson}</script>`}
-
-  <!-- Breadcrumb schema - when breadcrumbs provided -->
-  {#if breadcrumbsJson}
-    {@html `<script type="application/ld+json">${breadcrumbsJson}</script>`}
+  {@html `<script type="application/ld+json">${safeStringify(organizationSchema)}</script>`}
+  {#if breadcrumbsSchema}
+    {@html `<script type="application/ld+json">${safeStringify(breadcrumbsSchema)}</script>`}
+  {/if}
+  {#if articleSchema}
+    {@html `<script type="application/ld+json">${safeStringify(articleSchema)}</script>`}
   {/if}
 </svelte:head>

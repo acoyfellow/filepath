@@ -200,13 +200,20 @@ CREATE TABLE `agent_task` (
 	`agent_id` text NOT NULL,
 	`content` text DEFAULT '' NOT NULL,
 	`status` text NOT NULL,
-	`summary` text NOT NULL,
-	`commands` text NOT NULL,
-	`files_touched` text NOT NULL,
-	`violations` text NOT NULL,
+	`result_status` text,
+	`summary` text DEFAULT '' NOT NULL,
+	`commands` text DEFAULT '[]' NOT NULL,
+	`files_touched` text DEFAULT '[]' NOT NULL,
+	`violations` text DEFAULT '[]' NOT NULL,
 	`diff_summary` text,
 	`commit_json` text,
+	`attempt` integer DEFAULT 0 NOT NULL,
+	`request_id` text,
+	`error_code` text,
+	`error_detail` text,
+	`accepted_at` integer,
 	`started_at` integer NOT NULL,
+	`heartbeat_at` integer,
 	`finished_at` integer NOT NULL,
 	FOREIGN KEY (`agent_id`) REFERENCES `agent`(`id`) ON UPDATE no action ON DELETE cascade
 );
@@ -214,6 +221,8 @@ CREATE TABLE `agent_task` (
 CREATE INDEX `agent_task_agent_id_idx` ON `agent_task` (`agent_id`);
 --> statement-breakpoint
 CREATE INDEX `agent_task_finished_at_idx` ON `agent_task` (`finished_at`);
+--> statement-breakpoint
+CREATE INDEX `agent_task_status_idx` ON `agent_task` (`status`);
 --> statement-breakpoint
 INSERT OR IGNORE INTO `harness` (`id`, `name`, `description`, `adapter`, `entry_command`, `default_model`, `icon`, `enabled`, `config`) VALUES
 	('shelley', 'Shelley', 'Full-stack engineering agent. filepath-native reference implementation.', 'shelley', 'node /opt/filepath/adapters/shelley/index.mjs', 'anthropic/claude-sonnet-4', 'shell', 1, '{}'),

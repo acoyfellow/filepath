@@ -28,7 +28,13 @@
     accountKeysError = null,
   }: Props = $props();
 
-  let isBusy = $derived(agent.status === "running" || agent.status === "thinking");
+  let isBusy = $derived(
+    agent.status === "queued" ||
+      agent.status === "starting" ||
+      agent.status === "running" ||
+      agent.status === "thinking" ||
+      agent.status === "retrying",
+  );
   let topNotice = $derived(
     isBusy
       ? {
@@ -49,7 +55,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-[85] flex justify-end bg-black/25 max-[720px]:items-end max-[720px]:justify-stretch" onclick={(event) => event.target === event.currentTarget && onclose()}>
     <div
-      class="flex h-dvh w-full max-w-[560px] flex-col border-l border-[var(--b1)] bg-[var(--bg)] shadow-[var(--shadow)] max-[720px]:h-[min(92dvh,780px)] max-[720px]:max-w-none max-[720px]:rounded-t-[18px] max-[720px]:border-l-0 max-[720px]:border-t"
+      class="flex h-dvh w-full max-w-[560px] flex-col border-l border-(--b1) bg-(--bg) shadow-(--shadow) max-[720px]:h-[min(92dvh,780px)] max-[720px]:max-w-none max-[720px]:rounded-t-[18px] max-[720px]:border-l-0 max-[720px]:border-t"
       data-testid="agent-settings-drawer"
       role="dialog"
       aria-modal="true"
@@ -63,12 +69,12 @@
         }
       }}
     >
-      <header class="flex items-start justify-between gap-3 border-b border-[var(--b1)] px-5 py-[18px] pb-3.5 max-[720px]:px-4 max-[720px]:py-3.5 max-[720px]:pb-3">
+      <header class="flex items-start justify-between gap-3 border-b border-(--b1) px-5 py-[18px] pb-3.5 max-[720px]:px-4 max-[720px]:py-3.5 max-[720px]:pb-3">
         <div>
-          <div class="text-lg font-[650] tracking-[-0.02em] text-[var(--t1)] max-[720px]:text-base" id="agent-settings-title">Agent settings</div>
-          <div class="mt-1 text-xs text-[var(--t5)]">{agent.name}</div>
+          <div class="text-lg font-[650] tracking-[-0.02em] text-(--t1) max-[720px]:text-base" id="agent-settings-title">Agent settings</div>
+          <div class="mt-1 text-xs text-(--t5)">{agent.name}</div>
         </div>
-        <Button variant="outline" size="icon-sm" class="size-8 rounded-full border-[var(--b1)] bg-[var(--bg2)] text-[var(--t3)] shadow-none hover:border-[var(--t4)] hover:bg-[var(--bg3)] hover:text-[var(--t1)]" type="button" onclick={onclose} aria-label="Close settings" title="Close settings">
+        <Button variant="outline" size="icon-sm" class="size-8 rounded-full border-(--b1) bg-(--bg2) text-(--t3) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)" type="button" onclick={onclose} aria-label="Close settings" title="Close settings">
           <XIcon size={15} />
         </Button>
       </header>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import SEO from "$lib/components/SEO.svelte";
   import type { AgentHarness } from "$lib/types/workspace";
 
   interface HarnessEditor {
@@ -207,6 +208,21 @@
     await loadHarnesses();
   });
 </script>
+
+<SEO
+  title="Harness registry | filepath"
+  description="Manage the harness registry and defaults used by filepath agents."
+  keywords="filepath harnesses, agent harness registry"
+  path="/settings/harnesses"
+  type="website"
+  section="Settings"
+  tags="settings,harnesses"
+  noindex
+  breadcrumbs={[
+    { name: "Dashboard", item: "/dashboard" },
+    { name: "Harness registry", item: "/settings/harnesses" },
+  ]}
+/>
 
 <div class="min-h-screen bg-gray-50 text-gray-700 transition-colors duration-200 dark:bg-neutral-950 dark:text-neutral-300">
   <main class="mx-auto max-w-6xl px-6 py-12">

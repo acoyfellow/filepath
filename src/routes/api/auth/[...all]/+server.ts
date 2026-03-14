@@ -6,7 +6,6 @@ export const GET: RequestHandler = async (event) => {
   try {
     // ALWAYS handle reference path first, before any DB checks
     const pathname = event.url.pathname;
-    console.log('pathname', pathname);
     if (pathname === '/api/auth/reference' || pathname === '/api/auth/reference/') {
       return new Response(`
         <!DOCTYPE html>
@@ -51,19 +50,8 @@ export const POST: RequestHandler = async (event) => {
       getRequestEvent,
     });
     if (!auth) throw new Error("Auth initialization failed");
-    
+
     const response = await auth.handler(event.request);
-    
-    if (response.status === 500) {
-      const cloned = response.clone();
-      try {
-        const body = await cloned.text();
-        console.error('Auth handler returned 500:', body);
-      } catch (e) {
-        console.error('Auth handler returned 500 with unreadable body');
-      }
-    }
-    
     return response;
   } catch (error) {
     console.error('Auth POST error:', error);

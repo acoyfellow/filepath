@@ -1,5 +1,6 @@
 <script lang="ts">
   import { forgetPasswordEmailOTP } from '$lib/auth-client';
+  import SEO from '$lib/components/SEO.svelte';
   import { X, Mail, ArrowLeft } from '@lucide/svelte';
   let email = $state('');
   let isLoading = $state(false);
@@ -35,10 +36,16 @@
   }
 </script>
 
-<svelte:head>
-  <title>Reset Password - myfilepath.com</title>
-  <meta name="description" content="Reset your myfilepath.com password" />
-</svelte:head>
+<SEO
+  title="Reset password | filepath"
+  description="Request a password reset code for your filepath account."
+  keywords="filepath reset password"
+  path="/forgot-password"
+  type="website"
+  section="Auth"
+  tags="auth,password reset"
+  noindex
+/>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-md mx-auto px-6 py-20">
@@ -75,7 +82,6 @@
       <div class="text-center">
         <a href="/reset-password" class="inline-flex items-center gap-2 hover:underline text-gray-900 dark:text-neutral-100">
           Enter the code
-				<span class="text-gray-500 dark:text-neutral-500">to</span>
         </a>
       </div>
     {:else}
@@ -119,6 +125,6 @@
   </main>
 
   <footer class="border-t px-6 py-6 text-center text-xs font-mono border-gray-200 text-gray-400 dark:border-neutral-800 dark:text-neutral-600">
-    myfilepath.com
+    filepath
   </footer>
 </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resetPasswordEmailOTP } from '$lib/auth-client';
+  import SEO from '$lib/components/SEO.svelte';
   import { X, ArrowLeft, Lock } from '@lucide/svelte';
   let email = $state('');
   let otp = $state('');
@@ -60,10 +61,16 @@
   }
 </script>
 
-<svelte:head>
-  <title>Create New Password - myfilepath.com</title>
-  <meta name="description" content="Create a new password for your myfilepath.com account" />
-</svelte:head>
+<SEO
+  title="Create new password | filepath"
+  description="Set a new password for your filepath account using the reset code from email."
+  keywords="filepath new password, reset password"
+  path="/reset-password"
+  type="website"
+  section="Auth"
+  tags="auth,password reset"
+  noindex
+/>
 
 <div class="min-h-screen font-sans flex flex-col bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
 
@@ -177,6 +184,6 @@
   </main>
 
   <footer class="border-t px-6 py-6 text-center text-xs font-mono border-gray-200 text-gray-400 dark:border-neutral-800 dark:text-neutral-600">
-    myfilepath.com
+    filepath
   </footer>
 </div>

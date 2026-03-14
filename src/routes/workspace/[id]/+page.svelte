@@ -1,10 +1,11 @@
 <script lang="ts">
-  import "$lib/styles/theme.css";
   import { onDestroy, onMount } from "svelte";
   import { page } from "$app/state";
+  import SEO from "$lib/components/SEO.svelte";
   import AgentDetailPane from "$lib/components/workspace/AgentDetailPane.svelte";
   import AgentSettingsDrawer from "$lib/components/workspace/AgentSettingsDrawer.svelte";
-  import AgentListPane from "$lib/components/workspace/AgentListPane.svelte";
+  import WorkspaceSidebar from "$lib/components/workspace/WorkspaceSidebar.svelte";
+  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import type { TaskMessage } from "$lib/components/workspace/TaskTranscript.svelte";
   import CreateAgentModal from "$lib/components/workspace/CreateAgentModal.svelte";
   import type {
@@ -12,7 +13,9 @@
     AgentCreateRequest,
     AgentRecord,
     AgentResult,
+    AgentRuntimeActiveTask,
     AgentRuntimeSnapshot,
+    AgentTaskAcceptedResponse,
     HarnessId,
     AgentUpdateRequest,
   } from "$lib/types/workspace";
@@ -105,10 +108,16 @@
     };
   }
 
+  function orderAgentsByCreatedAt(entries: AgentRecord[]): AgentRecord[] {
+    return [...entries].sort(
+      (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+    );
+  }
+
   let agents = $state<AgentRecord[]>([]);
 
   $effect(() => {
-    agents = (data.agents as AgentRow[]).map(toAgent);
+    agents = orderAgentsByCreatedAt((data.agents as AgentRow[]).map(toAgent));
   });
 
   $effect(() => {
@@ -135,6 +144,10 @@
   );
   let selectedResult = $derived(
     selectedAgent ? (resultsByAgent[selectedAgent.id] ?? null) : null,
+  );
+  let dataActiveTaskByAgent = $state<Record<string, AgentRuntimeActiveTask | null>>({});
+  let selectedActiveTask = $derived(
+    selectedAgent ? (dataActiveTaskByAgent[selectedAgent.id] ?? null) : null,
   );
 
   $effect(() => {
@@ -168,6 +181,10 @@
     const nextResults = { ...resultsByAgent };
     delete nextResults[agentId];
     resultsByAgent = nextResults;
+
+    const nextTasks = { ...dataActiveTaskByAgent };
+    delete nextTasks[agentId];
+    dataActiveTaskByAgent = nextTasks;
     clearAgentNotice(agentId);
   }
 
@@ -195,24 +212,37 @@
       ...resultsByAgent,
       [agentId]: runtime.result,
     };
+    dataActiveTaskByAgent = {
+      ...dataActiveTaskByAgent,
+      [agentId]: runtime.activeTask ?? null,
+    };
 
-    if (runtime.result) {
+    if (runtime.activeTask) {
       clearAgentNotice(agentId);
       return;
     }
 
-    if (runtime.status === "thinking" || runtime.status === "running") {
+    if (runtime.status === "stalled") {
       setAgentNotice(agentId, {
-        tone: "info",
-        title: "Running task",
-        message: "This agent is processing its current task.",
+        tone: "error",
+        title: "Task stalled",
+        message: runtime.result?.summary ?? "The task stopped reporting progress and was marked stalled.",
+        blocking: true,
       });
       return;
     }
 
-    if (runtime.status === "idle") {
-      clearAgentNotice(agentId);
+    if (runtime.result?.status === "error" || runtime.result?.status === "policy_error") {
+      setAgentNotice(agentId, {
+        tone: "error",
+        title: runtime.result.status === "policy_error" ? "Task blocked" : "Task failed",
+        message: runtime.result.summary || "The task failed before it could finish.",
+        blocking: true,
+      });
+      return;
     }
+
+    clearAgentNotice(agentId);
   }
 
   async function refreshWorkspace() {
@@ -222,7 +252,7 @@
       const response = await fetch(`/api/workspaces/${workspaceId}`);
       if (!response.ok) return;
       const payload = (await response.json()) as { agents: AgentRow[] };
-      agents = payload.agents.map(toAgent);
+      agents = orderAgentsByCreatedAt(payload.agents.map(toAgent));
     } finally {
       isRefreshing = false;
     }
@@ -239,9 +269,11 @@
 
     if (payload.agent) {
       const next = toAgent(payload.agent);
-      agents = agents.some((entry) => entry.id === next.id)
-        ? agents.map((entry) => (entry.id === next.id ? next : entry))
-        : [next, ...agents];
+      agents = orderAgentsByCreatedAt(
+        agents.some((entry) => entry.id === next.id)
+          ? agents.map((entry) => (entry.id === next.id ? next : entry))
+          : [...agents, next],
+      );
     }
 
     applyRuntimeSnapshot(agentId, payload.runtime ?? null);
@@ -330,7 +362,7 @@
       tone: "success",
       title: "Settings saved",
       message:
-        selectedAgent.status === "running" || selectedAgent.status === "thinking"
+        selectedActiveTask !== null
           ? "Saved. Changes apply to the next task."
           : "Saved. The next task will use the updated harness, model, and scope.",
     });
@@ -350,11 +382,7 @@
       throw new Error(data.error || data.message || "Unable to cancel agent");
     }
 
-    setAgentNotice(agentId, {
-      tone: "warning",
-      title: "Cancellation requested",
-      message: "filepath sent a cancel signal to the active agent task.",
-    });
+    await refreshAgentRuntime(agentId);
   }
 
   function handleSend(content: string) {
@@ -375,12 +403,8 @@
     };
 
     try {
-      setAgentStatus(agentId, "thinking");
-      setAgentNotice(agentId, {
-        tone: "info",
-        title: "Running task",
-        message: "filepath sent the task to this agent.",
-      });
+      setAgentStatus(agentId, "queued");
+      clearAgentNotice(agentId);
 
       const response = await fetch(`/api/workspaces/${workspaceId}/agents/${agentId}/tasks`, {
         method: "POST",
@@ -390,21 +414,15 @@
 
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
-        result?: AgentResult;
+        taskId?: string;
+        state?: AgentTaskAcceptedResponse["state"];
       };
 
       if (!response.ok) {
         throw new Error(payload.error || "Failed to run task");
       }
 
-      if (payload.result) {
-        resultsByAgent = {
-          ...resultsByAgent,
-          [agentId]: payload.result,
-        };
-      }
       await refreshAgentRuntime(agentId);
-      await refreshWorkspace();
     } catch (error) {
       const text = error instanceof Error ? error.message : "Failed to send task";
       setAgentNotice(agentId, {
@@ -457,10 +475,26 @@
   });
 </script>
 
-<div class="flex min-h-[calc(100dvh-48px)] flex-1 flex-col overflow-hidden bg-[var(--bg2)] text-[var(--t2)] max-[900px]:min-h-[calc(100dvh-48px)] max-[900px]:overflow-auto">
-  <div class="@container flex h-full flex-1 overflow-hidden max-[900px]:flex-col max-[900px]:overflow-auto">
-    {#if agents.length > 0}
-      <AgentListPane
+<SEO
+  title={selectedAgent ? `${selectedAgent.name} | ${data.workspace.name}` : `${data.workspace.name}`}
+  description={`Manage ${data.workspace.name} and its bounded background agents, tasks, results, and settings.`}
+  keywords="filepath workspace, agents, tasks, results"
+  path={`/workspace/${workspaceId}`}
+  type="website"
+  section="Workspace"
+  tags="workspace,agents,tasks"
+  noindex
+  breadcrumbs={[
+    { name: "Dashboard", item: "/dashboard" },
+    { name: data.workspace.name, item: `/workspace/${workspaceId}` },
+  ]}
+/>
+
+<div class="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2) text-(--t2) [--header-height:3.5rem]">
+  {#if agents.length > 0}
+    <Sidebar.Provider class="flex min-h-0! flex-1 flex-col">
+      <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <WorkspaceSidebar
         isRefreshing={isRefreshing}
         agents={agents}
         {selectedId}
@@ -471,10 +505,10 @@
           showSpawn = true;
         }}
       />
-
-      <div class="flex min-w-0 flex-1 flex-col overflow-hidden max-[900px]:min-h-0 max-[900px]:flex-[1_1_auto]">
+      <Sidebar.Inset class="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
         <AgentDetailPane
           agent={selectedAgent}
+          activeTask={selectedActiveTask}
           messages={currentMessages}
           result={selectedResult}
           notice={selectedNotice}
@@ -489,24 +523,26 @@
           }}
           onnavigate={handleNavigate}
         />
+      </Sidebar.Inset>
       </div>
-    {:else}
-      <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8 text-center">
-        <p class="text-sm text-[var(--t2)]">{data.workspace.name}</p>
-        <p class="max-w-md text-xs leading-6 text-[var(--t4)]">
+    </Sidebar.Provider>
+  {:else}
+    <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8 text-center">
+        <p class="text-sm text-(--t2)">{data.workspace.name}</p>
+        <p class="max-w-md text-xs leading-6 text-(--t4)">
           No agents yet. Create a scoped background agent to start using this workspace.
         </p>
         <button
           onclick={() => {
             showSpawn = true;
           }}
-          class="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+          data-testid="open-create-agent"
+          class="rounded-xl bg-(--accent) px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
         >
           + new agent
         </button>
-      </div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
 
 {#if showSpawn}

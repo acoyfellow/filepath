@@ -24,8 +24,15 @@
 
   let { messages, status, result = null, task, onnavigate }: Props = $props();
 
+  let hasActiveLifecycle = $derived(
+    status === "queued" ||
+      status === "starting" ||
+      status === "running" ||
+      status === "thinking" ||
+      status === "retrying",
+  );
   let showTyping = $derived(
-    (status === "running" || status === "thinking") && messages.length > 0,
+    hasActiveLifecycle && messages.length > 0,
   );
   let lastAssistantText = $derived.by(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -56,23 +63,54 @@
     }
     return items;
   });
+  let hasResultDetails = $derived(
+    Boolean(
+      result &&
+        (result.commands.length > 0 ||
+          result.filesTouched.length > 0 ||
+          result.violations.length > 0 ||
+          result.diffSummary ||
+          result.commit),
+    ),
+  );
   let showInlineResultSummary = $derived.by(() => {
     if (!result) return false;
     return result.summary.trim() !== lastAssistantText;
   });
-  let resultToneClass = $derived.by(() => {
+  let resultLabel = $derived.by(() => {
     if (!result) return "";
     switch (result.status) {
       case "success":
-        return "border-emerald-500/30 bg-emerald-500/8";
+        return "Completed";
+      case "error":
+        return "Failed";
+      case "policy_error":
+        return "Blocked";
+      case "aborted":
+        return "Canceled";
+      default:
+        return "Result";
+    }
+  });
+  let resultAccentClass = $derived.by(() => {
+    if (!result) return "";
+    switch (result.status) {
+      case "success":
+        return "bg-emerald-500";
       case "error":
       case "policy_error":
-        return "border-red-500/30 bg-red-500/8";
+        return "bg-red-500";
       case "aborted":
-        return "border-amber-500/30 bg-amber-500/8";
+        return "bg-amber-500";
       default:
-        return "border-[var(--b1)] bg-[var(--bg2)]";
+        return "bg-(--t4)";
     }
+  });
+  let shouldRenderResult = $derived.by(() => {
+    if (!result || hasActiveLifecycle) return false;
+    if (hasResultDetails) return true;
+    if (result.status !== "success") return true;
+    return !lastAssistantText;
   });
 
   function autoscroll(
@@ -95,15 +133,15 @@
   }
 </script>
 
-<div class="flex-1 overflow-auto px-6 py-5 max-[640px]:px-3 max-[640px]:pb-[18px] max-[640px]:pt-3.5" use:autoscroll={{ messageCount: messages.length, showTyping }}>
+<div class="min-h-0 flex-1 overflow-auto overscroll-contain px-6 py-5 max-[640px]:px-3 max-[640px]:pb-[18px] max-[640px]:pt-3.5" use:autoscroll={{ messageCount: messages.length, showTyping }}>
   {#if messages.length === 0}
-    <div class="flex flex-col items-center gap-2 pt-16 text-center font-[var(--f)] text-[13px] text-[var(--t5)] max-[640px]:pt-8">
+    <div class="flex flex-col items-center gap-2 pt-16 text-center font-(family-name:--f) text-[13px] text-(--t5) max-[640px]:pt-8">
       <div class="opacity-30">
         <MessageCircleIcon size={20} />
       </div>
       <span>Run a task to activate this agent</span>
       {#if task}
-        <span class="max-w-[280px] text-xs leading-6 text-[var(--t4)]">{task}</span>
+        <span class="max-w-[280px] text-xs leading-6 text-(--t4)">{task}</span>
       {/if}
     </div>
   {:else}
@@ -148,24 +186,44 @@
     <TypingIndicator />
   {/if}
 
-  {#if result}
-    <div class={`mt-4 rounded-xl border px-3 py-2.5 font-[var(--f)] ${resultToneClass}`}>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--t4)]">{result.status}</span>
-        {#if resultMeta.length > 0}
-          <span class="text-[10px] text-[var(--t5)]">{resultMeta.join(" · ")}</span>
+  {#if shouldRenderResult && result}
+    <div class="mt-4 flex">
+      <div class="max-w-[min(680px,100%)] rounded-2xl border border-(--b1) bg-(--bg2) px-3 py-2.5 font-(family-name:--f) shadow-[0_1px_0_color-mix(in_srgb,var(--shadow)_55%,transparent)]">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class={`size-1.5 shrink-0 rounded-full ${resultAccentClass}`}></span>
+          <span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-(--t4)">{resultLabel}</span>
+          {#if resultMeta.length > 0}
+            <span class="text-[10px] text-(--t5)">{resultMeta.join(" · ")}</span>
+          {/if}
+        </div>
+        {#if showInlineResultSummary}
+          <div class="mt-1.5 text-[13px] leading-6 text-(--t2)">{result.summary}</div>
+        {/if}
+        {#if hasResultDetails}
+          <details class="mt-2 rounded-xl border border-(--b1) bg-(--bg3)">
+            <summary class="cursor-pointer list-none px-2.5 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-(--t4)">
+              Details
+            </summary>
+            <div class="space-y-2 border-t border-(--b1) px-2.5 py-2 text-xs leading-6 text-(--t4)">
+              {#if result.commands.length > 0}
+                <div>{result.commands.map((entry) => `${entry.command}${entry.exitCode === null ? "" : ` (${entry.exitCode})`}`).join(" · ")}</div>
+              {/if}
+              {#if result.filesTouched.length > 0}
+                <div>{result.filesTouched.join(", ")}</div>
+              {/if}
+              {#if result.violations.length > 0}
+                <div>{result.violations.join(", ")}</div>
+              {/if}
+              {#if result.diffSummary}
+                <div>{result.diffSummary}</div>
+              {/if}
+              {#if result.commit}
+                <div>{result.commit.sha.slice(0, 7)} · {result.commit.message}</div>
+              {/if}
+            </div>
+          </details>
         {/if}
       </div>
-      {#if showInlineResultSummary}
-        <div class="mt-1.5 text-xs leading-6 text-[var(--t3)]">{result.summary}</div>
-      {/if}
-      {#if result.violations.length > 0}
-        <div class="mt-1.5 text-xs leading-6 text-[var(--t5)]">{result.violations.join(", ")}</div>
-      {:else if result.diffSummary}
-        <div class="mt-1.5 text-xs leading-6 text-[var(--t5)]">{result.diffSummary}</div>
-      {:else if result.commit}
-        <div class="mt-1.5 text-xs leading-6 text-[var(--t5)]">{result.commit.message}</div>
-      {/if}
     </div>
   {/if}
 </div>

@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
+  import SEO from '$lib/components/SEO.svelte';
   import { PROVIDER_IDS, PROVIDERS, type ProviderId } from '$lib/provider-keys';
   // ─── Delete account state ───
   let showDeleteDialog = $state(false);
@@ -170,6 +171,21 @@
     e.stopPropagation();
   }
 </script>
+
+<SEO
+  title="Account settings | filepath"
+  description="Manage your filepath account, provider keys, and account-level settings."
+  keywords="filepath account settings"
+  path="/settings/account"
+  type="website"
+  section="Settings"
+  tags="settings,account"
+  noindex
+  breadcrumbs={[
+    { name: "Dashboard", item: "/dashboard" },
+    { name: "Account settings", item: "/settings/account" },
+  ]}
+/>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-2xl mx-auto px-6 py-12">

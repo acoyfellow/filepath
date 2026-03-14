@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { browser } from "$app/environment";
+  import SEO from "$lib/components/SEO.svelte";
 
   let dark = $state(browser && document.documentElement.classList.contains('dark'));
 
@@ -42,10 +43,16 @@
   let errorDescription = $derived(getErrorDescription(page.status));
 </script>
 
-<svelte:head>
-  <title>{errorTitle} | filepath</title>
-  <meta name="description" content={errorDescription} />
-</svelte:head>
+<SEO
+  title={`${errorTitle} | filepath`}
+  description={errorDescription}
+  keywords="filepath error"
+  path={page.url.pathname}
+  type="website"
+  section="Error"
+  tags="error"
+  noindex
+/>
 
 <div class="min-h-screen flex items-center justify-center px-8 py-20 text-center gap-4 flex-col {dark ? 'bg-neutral-950 text-neutral-300' : 'bg-gray-50 text-gray-700'} transition-colors duration-200">
   <h1 class="text-6xl font-bold {dark ? 'text-indigo-400' : 'text-blue-600'}">{page.status}</h1>

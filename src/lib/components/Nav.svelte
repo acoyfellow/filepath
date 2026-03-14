@@ -47,9 +47,9 @@
 
   const logo = `M119.261 35C128.462 35.0001 137.256 38.8378 143.569 45.6083L160.108 63.3453C166.421 70.1159 175.215 73.9536 184.416 73.9536H298.583C317.039 73.9536 332 89.0902 332 107.762V270.191C332 288.863 317.039 304 298.583 304H41.417C22.9613 304 8 288.863 8 270.191V68.8087C8.0001 50.1368 22.9614 35 41.417 35H119.261ZM169.23 219.37V259.415H291.318V219.37H169.23ZM50.7361 111.182L110.398 171.838L51.027 226.311L79.9846 258.994L169.77 173.606L82.022 81.2961L50.7361 111.182Z`;
   const iconButtonClass =
-    "size-8 rounded-full border border-[var(--b1)] bg-[var(--bg2)]/90 text-[var(--t2)] shadow-none hover:border-[var(--t4)] hover:bg-[var(--bg3)] hover:text-[var(--t1)]";
+    "size-8 rounded-full border border-(--b1) bg-(--bg2)/90 text-(--t2) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)";
   const ghostIconButtonClass =
-    "size-8 rounded-full border border-transparent bg-transparent text-[var(--t2)] shadow-none hover:bg-[var(--bg3)] hover:text-[var(--t1)]";
+    "size-8 rounded-full border border-transparent bg-transparent text-(--t2) shadow-none hover:bg-(--bg3) hover:text-(--t1)";
 </script>
 
 {#snippet logoIcon(size: number)}
@@ -203,7 +203,7 @@
     {/if}
   </nav>
 {:else if variant === "workspace"}
-  <header class="flex items-center justify-between px-4 py-2 border-b backdrop-blur-sm relative z-50 border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80">
+  <header class="sticky top-0 z-50 flex items-center justify-between border-b border-gray-200 bg-white/80 px-4 py-2 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/80">
     <div class="flex items-center gap-2 min-w-0">
       <Button
         href="/dashboard"

@@ -32,9 +32,9 @@
   }
 </script>
 
-<div class="flex gap-2 border-t border-[var(--b1)] px-4 py-2.5 max-[640px]:gap-2.5 max-[640px]:px-3 max-[640px]:pb-3">
+<div class="flex shrink-0 gap-2 border-t border-(--b1) bg-(--bg2) px-4 py-2.5 max-[640px]:gap-2.5 max-[640px]:px-3 max-[640px]:pb-3">
   <input
-    class="min-h-[42px] flex-1 rounded-xl border border-[var(--b2)] bg-[var(--bg2)] px-3.5 py-2.5 font-[var(--f)] text-sm text-[var(--t1)] outline-none transition placeholder:text-[var(--t5)] focus:border-[var(--accent)]"
+    class="min-h-[42px] flex-1 rounded-xl border border-(--b2) bg-(--bg2) px-3.5 py-2.5 font-(family-name:--f) text-sm text-(--t1) outline-none transition placeholder:text-(--t5) focus:border-(--accent)"
     {placeholder}
     bind:value
     onkeydown={handleKeydown}
@@ -43,7 +43,7 @@
   <Button
     variant="default"
     size="icon"
-    class="size-[38px] shrink-0 rounded-xl bg-[var(--accent)] text-white hover:opacity-85 max-[640px]:size-[42px]"
+    class="size-[38px] shrink-0 rounded-xl bg-(--accent) text-white hover:opacity-85 max-[640px]:size-[42px]"
     onclick={handleSubmit}
     disabled={disabled || !value.trim()}
     aria-label={actionLabel}

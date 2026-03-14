@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { apiKeysApi } from '$lib/auth-client';
+  import SEO from '$lib/components/SEO.svelte';
   type ApiKeyData = {
     id: string;
     name: string | null;
@@ -150,9 +151,20 @@
   }
 </script>
 
-<svelte:head>
-  <title>API Keys - myfilepath.com</title>
-</svelte:head>
+<SEO
+  title="API keys | filepath"
+  description="Create and manage API keys for programmatic access to filepath."
+  keywords="filepath api keys"
+  path="/settings/api-keys"
+  type="website"
+  section="Settings"
+  tags="settings,api keys"
+  noindex
+  breadcrumbs={[
+    { name: "Dashboard", item: "/dashboard" },
+    { name: "API keys", item: "/settings/api-keys" },
+  ]}
+/>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-3xl mx-auto px-6 py-12">

@@ -26,7 +26,10 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
     `/runtime/workspaces/${event.params.id!}/agents/${event.params.agentId!}/tasks`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-filepath-request-id": crypto.randomUUID(),
+      },
       body: JSON.stringify(input),
     },
   );

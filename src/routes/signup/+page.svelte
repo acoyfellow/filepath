@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { signUp } from '$lib/auth-client';
+  import SEO from '$lib/components/SEO.svelte';
   import { X } from '@lucide/svelte';  let email = $state('');
   let password = $state('');
   let confirmPassword = $state('');
@@ -63,9 +64,16 @@
   }
 </script>
 
-<svelte:head>
-  <title>Create Account - myfilepath.com</title>
-</svelte:head>
+<SEO
+  title="Create account | filepath"
+  description="Create a filepath account to launch bounded background agents in your own workspace."
+  keywords="filepath signup, create account"
+  path="/signup"
+  type="website"
+  section="Auth"
+  tags="auth,signup"
+  noindex
+/>
 
 <div class="min-h-screen font-sans bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
   <main class="max-w-sm mx-auto px-6 py-20">
@@ -138,6 +146,6 @@
   </main>
 
   <footer class="border-t px-6 py-6 text-center text-xs font-mono border-gray-200 text-gray-400 dark:border-neutral-800 dark:text-neutral-600">
-    myfilepath.com
+    filepath
   </footer>
 </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import CodeBlock from "$lib/components/CodeBlock.svelte";
+  import SEO from "$lib/components/SEO.svelte";
 
   const heroCode = `const workspace = await fetch("/api/workspaces", {
   method: "POST",
@@ -53,18 +54,20 @@ console.log(agent.id);`;
   ];
 </script>
 
-<svelte:head>
-  <title>filepath</title>
-  <meta
-    name="description"
-    content="A personal Cloudflare-hosted development environment for bounded background agents against sandboxed git clones."
-  />
-</svelte:head>
+<SEO
+  title="filepath | Personal background agents on Cloudflare"
+  description="A personal Cloudflare-hosted development environment for bounded background agents against sandboxed git clones."
+  keywords="filepath, ai agents, background agents, cloudflare, sandboxes, workspaces"
+  path="/"
+  type="website"
+  section="Product"
+  tags="agents,cloudflare,workspaces"
+/>
 
 <div class="min-h-screen bg-gray-50 text-gray-900 dark:bg-neutral-950 dark:text-neutral-100">
   <main class="mx-auto max-w-6xl px-6 py-12 md:py-20">
-    <section class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
-      <div>
+    <section class="">
+      
         <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500 dark:text-neutral-500">
           Cloudflare Agents SDK + Sandboxes
         </div>
@@ -99,52 +102,8 @@ console.log(agent.id);`;
             </article>
           {/each}
         </div>
-      </div>
+      
 
-      <div class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[0_30px_90px_-40px_rgba(15,23,42,0.4)] dark:border-neutral-800 dark:bg-neutral-900">
-        <div class="flex items-center gap-2 border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-          <span class="h-2.5 w-2.5 rounded-full bg-rose-400/80"></span>
-          <span class="h-2.5 w-2.5 rounded-full bg-amber-400/80"></span>
-          <span class="h-2.5 w-2.5 rounded-full bg-emerald-400/80"></span>
-          <span class="ml-3 text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">api-first runtime</span>
-        </div>
-        <CodeBlock
-          code={heroCode}
-          language="typescript"
-          wrap={true}
-          className="overflow-hidden px-5 py-5 text-sm leading-7 text-gray-800 dark:text-neutral-200"
-        />
-      </div>
-    </section>
-
-    <section class="mt-16 rounded-3xl border border-gray-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900/50 md:p-8">
-      <div class="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <div>
-          <div class="text-[11px] uppercase tracking-[0.24em] text-gray-500 dark:text-neutral-500">
-            What ships in v1
-          </div>
-          <h2 class="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">
-            Workspaces, agents, and task results.
-          </h2>
-          <p class="mt-5 text-sm leading-8 text-gray-600 dark:text-neutral-400 md:text-base">
-            Create a workspace, connect a repo, add agents with file and tool scope, run tasks, and inspect results.
-          </p>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 bg-gray-50 p-5 dark:border-neutral-800 dark:bg-neutral-950/60">
-          <div class="text-xs uppercase tracking-[0.22em] text-gray-500 dark:text-neutral-500">Core loop</div>
-          <ol class="mt-4 space-y-3 text-sm leading-7 text-gray-700 dark:text-neutral-300">
-            {#each workflow as step, index}
-              <li class="flex gap-3">
-                <span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs dark:border-neutral-700">
-                  {index + 1}
-                </span>
-                <span>{step}</span>
-              </li>
-            {/each}
-          </ol>
-        </div>
-      </div>
     </section>
 
   </main>

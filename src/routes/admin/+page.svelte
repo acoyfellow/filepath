@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import SEO from '$lib/components/SEO.svelte';
   
   let users = $state<Array<{ id: string; email: string; name: string | null; role: string; createdAt: Date }>>([]);
   let isLoading = $state(true);
@@ -58,9 +59,16 @@
   }
 </script>
 
-<svelte:head>
-  <title>Admin Panel - myfilepath.com</title>
-</svelte:head>
+<SEO
+  title="Admin | filepath"
+  description="Admin controls for managing filepath users and impersonation."
+  keywords="filepath admin"
+  path="/admin"
+  type="website"
+  section="Admin"
+  tags="admin,users"
+  noindex
+/>
 
 <div class="min-h-screen bg-white p-8">
   <header class="mb-8">

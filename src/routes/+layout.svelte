@@ -1,5 +1,6 @@
 <script lang="ts">
   import "../app.css";
+  import "$lib/styles/theme.css";
   import { setContext } from 'svelte';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
@@ -29,9 +30,9 @@
   <PreloadingIndicator />
 {/if}
 
-<div class="min-h-screen flex flex-col bg-white dark:bg-neutral-950 transition-colors duration-200">
+<div class="min-h-screen flex flex-col bg-(--bg) text-(--t2) transition-colors duration-200 {isWorkspace ? 'h-dvh overflow-hidden' : ''}">
   <Nav {variant} {current} {workspaceId} />
-  <div class="flex-1 min-h-0">
+  <div class="flex-1 min-h-0 {isWorkspace ? 'overflow-hidden' : ''}">
     {@render children?.()}
   </div>
 </div>

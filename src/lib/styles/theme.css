@@ -29,6 +29,16 @@
   --modal-bg: #ffffff;
   --overlay: rgba(0, 0, 0, 0.15);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.12);
+
+  /* Sidebar (shadcn) - map to theme */
+  --sidebar: var(--bg);
+  --sidebar-foreground: var(--t2);
+  --sidebar-primary: var(--t1);
+  --sidebar-primary-foreground: var(--bg);
+  --sidebar-accent: var(--bg3);
+  --sidebar-accent-foreground: var(--t1);
+  --sidebar-border: var(--b1);
+  --sidebar-ring: var(--b2);
 }
 
 /* Dark */
@@ -55,6 +65,16 @@
   --modal-bg: #121823;
   --overlay: rgba(0, 0, 0, 0.6);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+
+  /* Sidebar (shadcn) - map to theme */
+  --sidebar: var(--bg);
+  --sidebar-foreground: var(--t2);
+  --sidebar-primary: var(--t1);
+  --sidebar-primary-foreground: var(--bg);
+  --sidebar-accent: var(--bg3);
+  --sidebar-accent-foreground: var(--t1);
+  --sidebar-border: var(--b1);
+  --sidebar-ring: var(--b2);
 }
 
 /* Scrollbar */
