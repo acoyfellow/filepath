@@ -1021,44 +1021,153 @@ function buildDiffSummary(filesTouched: readonly string[]): string | null {
     : `${filesTouched.length} files touched`;
 }
 
-async function collectWorkspacePatch(
+function quoteShell(value: string): string {
+  return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+}
+
+function normalizePatchPathPrefix(path: string): string {
+  return path.replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function rewriteSnapshotPatchPaths(
+  patch: string,
+  beforeRoot: string,
+  afterRoot: string,
+): string {
+  const beforePrefix = normalizePatchPathPrefix(beforeRoot);
+  const afterPrefix = normalizePatchPathPrefix(afterRoot);
+
+  return [
+    [`a/${beforePrefix}/`, "a/"],
+    [`b/${beforePrefix}/`, "b/"],
+    [`a/${afterPrefix}/`, "a/"],
+    [`b/${afterPrefix}/`, "b/"],
+  ].reduce(
+    (nextPatch, [from, to]) => nextPatch.split(from).join(to),
+    patch,
+  );
+}
+
+async function writeScopedSnapshot(
   sandbox: Sandbox,
   workspaceRoot: string,
-): Promise<string | null> {
-  const insideGit = await sandbox.exec("git rev-parse --is-inside-work-tree", {
+  snapshotRoot: string,
+  allowedPaths: readonly string[],
+  forbiddenPaths: readonly string[],
+): Promise<void> {
+  const command = [
+    "node <<'NODE'",
+    "const fs = require('fs');",
+    "const path = require('path');",
+    `const workspaceRoot = ${JSON.stringify(workspaceRoot)};`,
+    `const snapshotRoot = ${JSON.stringify(snapshotRoot)};`,
+    `const allowedPaths = ${JSON.stringify([...allowedPaths])};`,
+    `const forbiddenPaths = ${JSON.stringify([...forbiddenPaths])};`,
+    "const normalize = (value) => value.replaceAll('\\\\', '/').replace(/^\\.\\//, '').replace(/\\/+$/, '');",
+    "const matchesPrefix = (value, prefixes) => {",
+    "  const normalizedValue = normalize(value);",
+    "  if (prefixes.length === 0) return true;",
+    "  return prefixes.some((prefix) => {",
+    "    const normalizedPrefix = normalize(prefix);",
+    "    if (!normalizedPrefix || normalizedPrefix === '.') return true;",
+    "    return normalizedValue === normalizedPrefix || normalizedValue.startsWith(`${normalizedPrefix}/`);",
+    "  });",
+    "};",
+    "const shouldCopy = (relativePath) => {",
+    "  const normalizedPath = normalize(relativePath);",
+    "  if (!matchesPrefix(normalizedPath, allowedPaths)) return false;",
+    "  return !forbiddenPaths.some((prefix) => matchesPrefix(normalizedPath, [prefix]));",
+    "};",
+    "const ensureInsideWorkspace = (candidate) => {",
+    "  const relativePath = normalize(path.relative(workspaceRoot, candidate));",
+    "  if (relativePath === '' || (!relativePath.startsWith('../') && relativePath !== '..')) return;",
+    "  throw new Error(`Scoped snapshot path escapes workspace: ${candidate}`);",
+    "};",
+    "const copyRecursive = (source, destination, relativePath) => {",
+    "  ensureInsideWorkspace(source);",
+    "  if (!shouldCopy(relativePath)) return;",
+    "  const stat = fs.lstatSync(source);",
+    "  if (stat.isDirectory()) {",
+    "    fs.mkdirSync(destination, { recursive: true });",
+    "    for (const entry of fs.readdirSync(source)) {",
+    "      const childSource = path.join(source, entry);",
+    "      const childDestination = path.join(destination, entry);",
+    "      const childRelativePath = relativePath ? `${relativePath}/${entry}` : entry;",
+    "      copyRecursive(childSource, childDestination, childRelativePath);",
+    "    }",
+    "    return;",
+    "  }",
+    "  fs.mkdirSync(path.dirname(destination), { recursive: true });",
+    "  if (stat.isSymbolicLink()) {",
+    "    const linkTarget = fs.readlinkSync(source);",
+    "    try { fs.unlinkSync(destination); } catch {}",
+    "    fs.symlinkSync(linkTarget, destination);",
+    "    return;",
+    "  }",
+    "  fs.copyFileSync(source, destination);",
+    "};",
+    "fs.rmSync(snapshotRoot, { recursive: true, force: true });",
+    "fs.mkdirSync(snapshotRoot, { recursive: true });",
+    "const uniqueAllowedPaths = [...new Set(allowedPaths.map((value) => {",
+    "  const normalized = normalize(value);",
+    "  return normalized || '.';",
+    "}))];",
+    "for (const allowedPath of uniqueAllowedPaths) {",
+    "  const relativePath = allowedPath === '.' ? '' : allowedPath;",
+    "  const source = relativePath ? path.resolve(workspaceRoot, relativePath) : workspaceRoot;",
+    "  ensureInsideWorkspace(source);",
+    "  if (!fs.existsSync(source)) continue;",
+    "  if (!relativePath) {",
+    "    for (const entry of fs.readdirSync(source)) {",
+    "      copyRecursive(path.join(source, entry), path.join(snapshotRoot, entry), entry);",
+    "    }",
+    "    continue;",
+    "  }",
+    "  copyRecursive(source, path.resolve(snapshotRoot, relativePath), relativePath);",
+    "}",
+    "NODE",
+  ].join("\n");
+
+  const result = await sandbox.exec(command, {
     cwd: workspaceRoot,
   }).catch(() => null);
-  const insideGitExitCode = (insideGit as { code?: number; exitCode?: number } | null)?.code
-    ?? (insideGit as { code?: number; exitCode?: number } | null)?.exitCode
+  const exitCode = (result as { code?: number; exitCode?: number } | null)?.code
+    ?? (result as { code?: number; exitCode?: number } | null)?.exitCode
     ?? null;
 
-  if (!insideGit || insideGitExitCode !== 0 || insideGit.stdout.trim() !== "true") {
-    return null;
+  if (!result || exitCode !== 0) {
+    const stderr = (result as { stderr?: string } | null)?.stderr?.trim() || "unknown error";
+    throw new RuntimeTaskError(
+      "PATCH_SNAPSHOT_FAILED",
+      `Could not snapshot scoped workspace state: ${stderr}`,
+    );
   }
+}
 
+async function collectScopedWorkspacePatch(
+  sandbox: Sandbox,
+  workspaceRoot: string,
+  beforeRoot: string,
+  afterRoot: string,
+): Promise<string | null> {
   const result = await sandbox.exec(
-    [
-      "tracked=$(git diff --binary --relative HEAD -- 2>/dev/null || true)",
-      "untracked=$(git ls-files --others --exclude-standard | while IFS= read -r file; do",
-      "  [ -n \"$file\" ] || continue",
-      "  git diff --binary --no-index -- /dev/null \"$file\" 2>/dev/null || true",
-      "done)",
-      "printf '%s%s' \"$tracked\" \"$untracked\"",
-    ].join("\n"),
+    `git diff --binary --no-index ${quoteShell(beforeRoot)} ${quoteShell(afterRoot)} || true`,
     {
       cwd: workspaceRoot,
     },
   ).catch(() => null);
-  const resultExitCode = (result as { code?: number; exitCode?: number } | null)?.code
-    ?? (result as { code?: number; exitCode?: number } | null)?.exitCode
-    ?? null;
 
-  if (!result || resultExitCode !== 0) {
+  if (!result) {
     return null;
   }
 
-  const patch = result.stdout.trim();
-  return patch.length > 0 ? `${patch}\n` : null;
+  const patch = ((result as { stdout?: string }).stdout ?? "").trim();
+  if (!patch) {
+    return null;
+  }
+
+  const rewritten = rewriteSnapshotPatchPaths(patch, beforeRoot, afterRoot).trim();
+  return rewritten.length > 0 ? `${rewritten}\n` : null;
 }
 
 async function persistAssistantText(
@@ -1844,8 +1953,12 @@ async function runSandboxTask(
 ): Promise<AgentTaskCompletion> {
   const processId = `task-${taskId}`;
   const startedAt = now();
+  const workspaceRoot = resolveWorkspaceRoot(config.gitRepoUrl);
+  const snapshotBase = `/tmp/filepath-task-snapshots/${taskId}`;
+  const beforeSnapshotRoot = `${snapshotBase}/before`;
+  const afterSnapshotRoot = `${snapshotBase}/after`;
   let process: Process | null = null;
-  let sandbox: Sandbox;
+  let sandbox: Sandbox | null = null;
 
   try {
     sandbox = await withSandboxStartupRetry(env, taskId, agentId, {
@@ -1858,6 +1971,13 @@ async function runSandboxTask(
       await nextSandbox.mkdir(config.executionRoot, { recursive: true });
       return nextSandbox;
     });
+    await writeScopedSnapshot(
+      sandbox,
+      workspaceRoot,
+      beforeSnapshotRoot,
+      config.policy.allowedPaths,
+      config.policy.forbiddenPaths,
+    );
   } catch (error) {
     const runtimeError = classifySandboxStartupError(error);
     const failed = await finalizeTaskFailure(env, {
@@ -1970,7 +2090,19 @@ async function runSandboxTask(
       startedAt,
       finishedAt,
     );
-    result.patch = await collectWorkspacePatch(sandbox, resolveWorkspaceRoot(config.gitRepoUrl));
+    await writeScopedSnapshot(
+      sandbox,
+      workspaceRoot,
+      afterSnapshotRoot,
+      config.policy.allowedPaths,
+      config.policy.forbiddenPaths,
+    );
+    result.patch = await collectScopedWorkspacePatch(
+      sandbox,
+      workspaceRoot,
+      beforeSnapshotRoot,
+      afterSnapshotRoot,
+    );
     if (!result.diffSummary) {
       result.diffSummary = buildDiffSummary(result.filesTouched);
     }
@@ -2063,6 +2195,9 @@ async function runSandboxTask(
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
     }
+    await sandbox?.exec(`rm -rf ${quoteShell(snapshotBase)}`, {
+      cwd: workspaceRoot,
+    }).catch(() => {});
     await updateAgentExecutionState(env, agentId, {
       activeProcessId: null,
       cancelRequested: false,
