@@ -171,7 +171,7 @@
     <div class="flex items-center justify-between mb-10">
       <div>
         <h1 class="text-xl font-medium mb-1 text-gray-900 dark:text-neutral-100">API keys</h1>
-        <p class="text-sm text-gray-500 dark:text-neutral-500">Manage access keys for your agents</p>
+        <p class="text-sm text-gray-500 dark:text-neutral-500">Manage filepath API keys for programmatic access</p>
       </div>
       <div class="flex gap-3">
 			<a href="/dashboard" class="px-4 py-2 text-sm border rounded transition-colors text-gray-600 border-gray-200 hover:border-gray-400 dark:text-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600">Back</a>
@@ -190,6 +190,14 @@
         <button onclick={() => error = null} class="text-red-500 text-xs mt-1 hover:underline cursor-pointer">dismiss</button>
       </div>
     {/if}
+
+    <div class="mb-6 border rounded p-4 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
+      <p class="text-sm text-gray-600 dark:text-neutral-400">
+        These keys authenticate calls into filepath itself. They do not provide model access for live agent runs.
+        Save OpenRouter or OpenCode Zen keys in
+        <a href="/settings/account" class="ml-1 underline hover:text-gray-700 dark:hover:text-neutral-200">Settings → Account</a>.
+      </p>
+    </div>
 
     {#if isLoading}
       <div class="text-center py-16">

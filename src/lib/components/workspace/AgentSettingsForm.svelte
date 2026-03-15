@@ -198,7 +198,7 @@
 
   let setupSummary = $derived.by(() => {
     if (accountKeysStateError) {
-      return "Re-save your router key to unlock live models and agent execution.";
+      return "Re-save your model provider key to unlock live models and agent execution.";
     }
     if (!hasSelectedProviderKey) {
       return `Save a ${activeProviderDefinition.label} key, then choose a model and confirm the scope.`;
@@ -214,7 +214,7 @@
     if (harnessesLoading) return "Loading harnesses...";
     if (harnessesError) return harnessesError;
     if (!harnessId) return "Choose a harness";
-    if (accountKeysStateError) return "Re-save your router key before continuing";
+    if (accountKeysStateError) return "Re-save your model provider key before continuing";
     if (!hasSelectedProviderKey) return `Add a ${activeProviderDefinition.label} key to continue`;
     if (modelsLoading) return "Loading live models...";
     if (modelsError) return modelsError;
@@ -293,7 +293,7 @@
       });
     } catch {
       accountKeys = cloneMaskedKeys(EMPTY_KEYS);
-      accountKeysStateError = "Unable to load saved router keys.";
+      accountKeysStateError = "Unable to load saved model provider keys.";
       onkeyschange({
         keys: cloneMaskedKeys(EMPTY_KEYS),
         error: accountKeysStateError,
@@ -489,7 +489,7 @@
     <div class={metaClass}>{selectedHarness.description}</div>
   {/if}
 
-  <div class={labelClass}>router access</div>
+  <div class={labelClass}>model provider access</div>
   {#if accountKeysStateError}
     <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{accountKeysStateError}</div>
   {/if}

@@ -58,6 +58,9 @@
     if (result.diffSummary) {
       items.push("diff");
     }
+    if (result.patch) {
+      items.push("patch");
+    }
     if (result.commit) {
       items.push(`commit ${result.commit.sha.slice(0, 7)}`);
     }
@@ -70,6 +73,7 @@
           result.filesTouched.length > 0 ||
           result.violations.length > 0 ||
           result.diffSummary ||
+          result.patch ||
           result.commit),
     ),
   );
@@ -216,6 +220,12 @@
               {/if}
               {#if result.diffSummary}
                 <div>{result.diffSummary}</div>
+              {/if}
+              {#if result.patch}
+                <div class="space-y-1">
+                  <div class="font-medium uppercase tracking-[0.08em] text-(--t5)">Patch</div>
+                  <pre class="max-h-72 overflow-auto rounded-lg border border-(--b1) bg-(--bg2) p-2 font-mono text-[11px] leading-5 text-(--t3) whitespace-pre-wrap break-all">{result.patch}</pre>
+                </div>
               {/if}
               {#if result.commit}
                 <div>{result.commit.sha.slice(0, 7)} · {result.commit.message}</div>

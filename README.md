@@ -31,16 +31,17 @@ Then open:
 ### First agent
 
 1. Create a workspace.
-2. Add an account router key in Settings.
-3. Open the workspace.
-4. Create an agent with:
+2. Save a model provider key in Settings -> Account.
+3. If you need programmatic access to filepath itself, create a filepath API key in Settings -> API Keys.
+4. Open the workspace.
+5. Create an agent with:
    - `harness`
    - `model`
    - `allowedPaths`
    - `forbiddenPaths`
    - `toolPermissions`
    - `writableRoot`
-5. Send the first task from the agent panel.
+6. Send the first task from the agent panel.
 
 ## How-to
 
@@ -93,7 +94,7 @@ filepath v1 is:
 - a personal Better Auth-protected dashboard
 - backed by one Cloudflare worker gateway
 - built on stable published Cloudflare npm APIs
-- centered on flat background agents running against a sandboxed git clone
+- centered on flat background agents running against sandboxed repo clones
 
 filepath v1 is not:
 
@@ -123,6 +124,7 @@ At minimum:
 
 - `status`
 - `summary`
+- `events` for `/run`
 - `commands`
 - `filesTouched`
 - `violations`
@@ -134,7 +136,13 @@ At minimum:
 
 ### Programmatic run API
 
-`POST /api/workspaces/:id/run` runs one bounded task and returns a structured result (sync). Useful for external tools (e.g. proof engines) that need a direct execution surface.
+`POST /api/workspaces/:id/run` runs one bounded task and returns a structured result (sync). Useful for external tools that need a direct execution surface.
+
+Execution model:
+
+- omit `agentId` to create a new agent and a new agent sandbox clone for that run
+- include `agentId` to continue on the existing agent sandbox and its current clone state
+- `patch` is always the delta from task-start state to task-end state inside that bounded run, not a diff against repo `HEAD`
 
 **Input:**
 
@@ -159,6 +167,36 @@ At minimum:
 - `agentId`, `runId`, `startedAt`, `finishedAt`
 
 **Auth:** session or API key (`Authorization: Bearer <key>`). User must own the workspace.
+
+### Programmatic script run API
+
+`POST /api/workspaces/:id/run/script` runs one deterministic script and returns the same stable result fields used for bounded agent runs.
+
+Execution model:
+
+- runs without an LLM
+- uses the workspace's dedicated script sandbox clone
+- repeated script runs reuse that script sandbox for the workspace
+- `patch` is the task-start to task-end delta left behind by that script run
+
+**Input:**
+
+```json
+{
+  "script": "printf 'hello\\n' > notes.txt",
+  "scope": {
+    "allowedPaths": ["."],
+    "forbiddenPaths": [".git", "node_modules"],
+    "toolPermissions": ["run", "write"],
+    "writableRoot": "."
+  }
+}
+```
+
+**Response (200):** machine-stable contract
+
+- `status`, `summary`, `events`, `filesTouched`, `violations`, `diffSummary`, `patch`, `commit`
+- `agentId`, `runId`, `startedAt`, `finishedAt`
 
 ### API surface
 
@@ -190,6 +228,7 @@ Better Auth is the only supported auth boundary in v1.
 - sign up and sign in through the app
 - dashboard and API both use the Better Auth session
 - programmatic access: create an API key in Settings; use `Authorization: Bearer <key>` or `X-Api-Key: <key>`
+- model provider keys for live agent execution are separate and live in Settings -> Account
 - no public unauthenticated product surface
 - local dev may use the placeholder secret from `.env.example`
 - production must use a random 32+ character `BETTER_AUTH_SECRET`
@@ -200,6 +239,8 @@ Better Auth is the only supported auth boundary in v1.
 - humans create agents directly
 - agents do not spawn child agents in v1
 - task input is agent work input, not a general product chat protocol
+- each agent reuses its own sandboxed repo clone between tasks
+- script runs use a separate dedicated script sandbox clone per workspace
 
 ### Runtime contract (Jido-inspired hardening)
 
@@ -221,7 +262,7 @@ Allowed transitions:
 
 **3. Events and failures** – FAP events from the harness are schema-validated. A line that looks like JSON (starts with `{`) and fails `AgentEvent.safeParse` fails the run with a protocol error. Process crash or unexpected exit always transitions the task to a terminal state (`failed` or `stalled`); the task is never left in `running`.
 
-**4. Script-only runs** – Optional execution mode: run a fixed script (or command list) in the workspace with full scope enforcement; no harness/LLM; deterministic. Invoked via `POST /api/workspaces/:id/run/script` with `{ script: string, scope?: {...} }`. Returns the same structured result shape as agent runs where applicable.
+**4. Script-only runs** – Optional execution mode: run a fixed script (or command list) in the workspace with full scope enforcement; no harness/LLM; deterministic. Invoked via `POST /api/workspaces/:id/run/script` with `{ script: string, scope?: {...} }`. Script runs reuse a dedicated script sandbox for the workspace and return the same stable result fields (`filesTouched`, `diffSummary`, `patch`, and timing metadata) as `/run`.
 
 ## Explanation
 

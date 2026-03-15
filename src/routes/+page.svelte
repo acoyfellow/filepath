@@ -56,7 +56,7 @@ console.log(agent.id);`;
 
 <SEO
   title="filepath | Personal background agents on Cloudflare"
-  description="A personal Cloudflare-hosted development environment for bounded background agents against sandboxed git clones."
+  description="A personal Cloudflare-hosted development environment for bounded background agents against sandboxed repo clones."
   keywords="filepath, ai agents, background agents, cloudflare, sandboxes, workspaces"
   path="/"
   type="website"
@@ -75,7 +75,7 @@ console.log(agent.id);`;
           Your own background agent environment on Cloudflare.
         </h1>
         <p class="mt-6 max-w-2xl text-base leading-8 text-gray-600 dark:text-neutral-400 md:text-lg">
-          filepath is a personal dashboard for spawning bounded background agents against a sandboxed git clone.
+          filepath is a personal dashboard for spawning bounded background agents against sandboxed repo clones.
           Agents stay configurable, long-running, and scoped by file and tool permissions instead of broad repo access.
         </p>
 

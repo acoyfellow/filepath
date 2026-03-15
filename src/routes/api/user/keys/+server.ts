@@ -2,16 +2,21 @@ import { json, error } from "@sveltejs/kit";
 import { getDrizzle } from "$lib/auth";
 import { user } from "$lib/schema";
 import { eq } from "drizzle-orm";
-import { encryptApiKey, decryptApiKey, maskApiKey } from "$lib/crypto";
+import { encryptApiKey, decryptApiKey } from "$lib/crypto";
 import type { RequestHandler } from "@sveltejs/kit";
 import {
   deserializeStoredProviderKeys,
   isProviderId,
   maskProviderKeys,
+  type ProviderId,
   type ProviderKeyMap,
   serializeStoredProviderKeys,
   validateProviderApiKey,
 } from "$lib/provider-keys";
+import {
+  buildProviderKeysEnvelope,
+  PROVIDER_KEYS_UNREADABLE_MESSAGE,
+} from "$lib/provider-key-state";
 
 function getBetterAuthSecret(platform: App.Platform | undefined): string | undefined {
   const secret =
@@ -35,7 +40,7 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 
   const row = rows[0];
   if (!row?.openrouterApiKey) {
-    return json({ keys: { openrouter: null, zen: null } });
+    return json(buildProviderKeysEnvelope({ keys: { openrouter: null, zen: null } }));
   }
 
   const secret = getBetterAuthSecret(platform);
@@ -43,14 +48,17 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 
   try {
     const plainValue = await decryptApiKey(row.openrouterApiKey, secret);
-    return json({ keys: maskProviderKeys(deserializeStoredProviderKeys(plainValue)) });
+    return json(
+      buildProviderKeysEnvelope({
+        keys: maskProviderKeys(deserializeStoredProviderKeys(plainValue)),
+      }),
+    );
   } catch {
     return json(
-      {
+      buildProviderKeysEnvelope({
         keys: { openrouter: null, zen: null },
-        error: "Stored provider keys are unreadable. Remove them or re-save them.",
-      },
-      { status: 409 },
+        unreadable: true,
+      }),
     );
   }
 };
@@ -63,13 +71,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
   if (!locals.user) throw error(401, "Unauthorized");
 
   const body = (await request.json()) as {
-    provider: string;
-    key: string | null;
+    provider?: string;
+    key?: string | null;
+    clearAll?: boolean;
   };
 
-  if (!isProviderId(body.provider)) {
-    return json({ message: "Unsupported provider" }, { status: 400 });
+  if (!body.clearAll && !isProviderId(body.provider ?? "")) {
+    return json({ status: "invalid", message: "Unsupported provider" }, { status: 400 });
   }
+  const provider = body.provider as ProviderId | undefined;
 
   const db = getDrizzle();
   const secret = getBetterAuthSecret(platform);
@@ -91,25 +101,41 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
     }
   }
 
+  if (body.clearAll) {
+    await db
+      .update(user)
+      .set({ openrouterApiKey: null })
+      .where(eq(user.id, locals.user.id));
+    return json(
+      buildProviderKeysEnvelope({
+        keys: { openrouter: null, zen: null },
+        message: "Stored model provider keys were cleared.",
+      }),
+    );
+  }
+
   if (!body.key) {
-    const nextKeys = existingBlobUnreadable ? {} : { ...keyMap, [body.provider]: undefined };
+    const nextKeys = existingBlobUnreadable ? {} : { ...keyMap, [provider!]: undefined };
     const serialized = serializeStoredProviderKeys(nextKeys);
     await db
       .update(user)
       .set({ openrouterApiKey: serialized ? await encryptApiKey(serialized, secret) : null })
       .where(eq(user.id, locals.user.id));
-    return json({
-      ok: true,
-      provider: body.provider,
-      masked: null,
-      keys: maskProviderKeys(nextKeys),
-    });
+    return json(
+      buildProviderKeysEnvelope({
+        keys: maskProviderKeys(nextKeys),
+        message: existingBlobUnreadable
+          ? "Unreadable provider keys were cleared."
+          : `${provider} key removed.`,
+      }),
+    );
   }
 
   if (existingBlobUnreadable) {
     return json(
       {
-        message: "Stored provider keys are unreadable. Remove them first, then save a new key.",
+        status: "unreadable",
+        message: PROVIDER_KEYS_UNREADABLE_MESSAGE,
       },
       { status: 409 },
     );
@@ -117,17 +143,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
   const trimmed = body.key.trim();
   try {
-    await validateProviderApiKey(body.provider, trimmed);
+    await validateProviderApiKey(provider!, trimmed);
   } catch (validationError) {
     const message =
       validationError instanceof Error ? validationError.message : "API key validation failed";
-    return json({ message }, { status: 400 });
+    return json({ status: "invalid", message }, { status: 400 });
   }
 
-  const nextKeys = { ...keyMap, [body.provider]: trimmed };
+  const nextKeys = { ...keyMap, [provider!]: trimmed };
   const serialized = serializeStoredProviderKeys(nextKeys);
   if (!serialized) {
-    return json({ message: "Failed to serialize provider keys" }, { status: 500 });
+    return json({ status: "error", message: "Failed to serialize provider keys" }, { status: 500 });
   }
 
   const encrypted = await encryptApiKey(serialized, secret);
@@ -136,10 +162,10 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
     .set({ openrouterApiKey: encrypted })
     .where(eq(user.id, locals.user.id));
 
-  return json({
-    ok: true,
-    provider: body.provider,
-    masked: maskApiKey(trimmed),
-    keys: maskProviderKeys(nextKeys),
-  });
+  return json(
+    buildProviderKeysEnvelope({
+      keys: maskProviderKeys(nextKeys),
+      message: `${provider} key saved.`,
+    }),
+  );
 };

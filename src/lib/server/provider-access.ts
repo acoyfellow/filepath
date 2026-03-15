@@ -1,5 +1,6 @@
 import { getDrizzle } from "$lib/auth";
 import { decryptApiKey } from "$lib/crypto";
+import { PROVIDER_KEYS_UNREADABLE_MESSAGE } from "$lib/provider-key-state";
 import { deserializeStoredProviderKeys, getProviderForModel, PROVIDERS } from "$lib/provider-keys";
 import { user } from "$lib/schema";
 import { eq } from "drizzle-orm";
@@ -51,7 +52,7 @@ export async function ensureProviderKeyForModel(input: {
   } catch {
     return {
       status: 409,
-      error: "Stored account router keys are unreadable. Re-save them before changing the model.",
+      error: PROVIDER_KEYS_UNREADABLE_MESSAGE,
     };
   }
 

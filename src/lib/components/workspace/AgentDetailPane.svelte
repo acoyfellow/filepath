@@ -68,13 +68,19 @@
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <div class="sticky top-0 z-10 flex shrink-0 flex-col gap-1.5 border-b border-(--b1) bg-(--bg2) px-4 py-2.5 max-[900px]:px-3">
       <div class="flex items-center justify-between gap-3 max-[900px]:flex-col max-[900px]:items-start">
-        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <Sidebar.Trigger class="-ms-1 size-8 shrink-0 md:hidden" />
-          <StatusDot status={agent.status} size={7} />
-          <span class="min-w-0 truncate font-(family-name:--f) text-base font-[650] tracking-[-0.02em] text-(--t1) max-[640px]:text-[15px]">
-            {agent.name}
-          </span>
-          <StatusGlyph status={agent.status} compact />
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <Sidebar.Trigger class="-ms-1 size-8 shrink-0 md:hidden" />
+            <StatusDot status={agent.status} size={7} />
+            <span class="min-w-0 truncate font-(family-name:--f) text-base font-[650] tracking-[-0.02em] text-(--t1) max-[640px]:text-[15px]">
+              {agent.name}
+            </span>
+            <StatusGlyph status={agent.status} compact />
+          </div>
+          <div class="mt-1 pl-9 text-[11px] leading-5 text-(--t5) max-[640px]:pl-0">
+            {summaryLine}
+            <span class="ml-1">· this agent reuses its own sandboxed repo clone between tasks.</span>
+          </div>
         </div>
         <div class="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 min-[901px]:w-auto">
           <Button

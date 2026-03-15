@@ -5,6 +5,8 @@
   import { onMount } from 'svelte';
   import SEO from '$lib/components/SEO.svelte';
   import { PROVIDER_IDS, PROVIDERS, type ProviderId } from '$lib/provider-keys';
+  type ProviderKeyStateStatus = 'saved' | 'missing' | 'unreadable';
+  type ProviderKeysStatus = 'ready' | 'missing' | 'unreadable';
   // ─── Delete account state ───
   let showDeleteDialog = $state(false);
   let password = $state('');
@@ -17,34 +19,64 @@
   // ─── Provider API Keys state ───
   let keyLoading = $state(true);
   let keysLoadError = $state('');
+  let keysStatus = $state<ProviderKeysStatus>('missing');
+  let keysMessage = $state('');
   const providerList = PROVIDER_IDS.map((id) => PROVIDERS[id]);
   let providerStates = $state<Record<ProviderId, {
     masked: string | null;
+    status: ProviderKeyStateStatus;
+    message: string;
     draft: string;
     saving: boolean;
     error: string;
     success: string;
     showInput: boolean;
   }>>({
-    openrouter: { masked: null, draft: '', saving: false, error: '', success: '', showInput: false },
-    zen: { masked: null, draft: '', saving: false, error: '', success: '', showInput: false },
+    openrouter: { masked: null, status: 'missing', message: '', draft: '', saving: false, error: '', success: '', showInput: false },
+    zen: { masked: null, status: 'missing', message: '', draft: '', saving: false, error: '', success: '', showInput: false },
   });
+
+  function applyKeysPayload(data: {
+    status?: ProviderKeysStatus;
+    message?: string | null;
+    error?: string;
+    keys?: Record<ProviderId, string | null>;
+    states?: Record<ProviderId, {
+      masked: string | null;
+      status: ProviderKeyStateStatus;
+      message: string;
+    }>;
+  }) {
+    keysStatus = data.status ?? 'missing';
+    keysMessage = data.message ?? '';
+    keysLoadError = data.error ?? '';
+
+    const keys = data.keys ?? { openrouter: null, zen: null };
+    const states = data.states ?? {
+      openrouter: {
+        masked: keys.openrouter ?? null,
+        status: keys.openrouter ? 'saved' : 'missing',
+        message: keys.openrouter ? 'OpenRouter is ready for live runs.' : 'No OpenRouter key saved yet.',
+      },
+      zen: {
+        masked: keys.zen ?? null,
+        status: keys.zen ? 'saved' : 'missing',
+        message: keys.zen ? 'OpenCode Zen is ready for live runs.' : 'No OpenCode Zen key saved yet.',
+      },
+    };
+
+    for (const provider of PROVIDER_IDS) {
+      providerStates[provider].masked = states[provider]?.masked ?? null;
+      providerStates[provider].status = states[provider]?.status ?? 'missing';
+      providerStates[provider].message = states[provider]?.message ?? '';
+    }
+  }
 
   onMount(async () => {
     try {
       const res = await fetch('/api/user/keys');
-      const data = await res.json().catch(() => ({})) as {
-        error?: string;
-        keys?: Record<ProviderId, string | null>;
-      };
-      if (!res.ok) {
-        keysLoadError = data.error || 'Failed to load provider keys';
-        return;
-      }
-      const keys = data.keys ?? { openrouter: null, zen: null };
-      for (const provider of PROVIDER_IDS) {
-        providerStates[provider].masked = keys[provider] ?? null;
-      }
+      const data = await res.json().catch(() => ({})) as Parameters<typeof applyKeysPayload>[0];
+      applyKeysPayload(data);
     } catch {
       keysLoadError = 'Failed to load provider keys';
     } finally {
@@ -71,16 +103,11 @@
         return;
       }
 
-      const data = await res.json() as {
-        keys?: Record<ProviderId, string | null>;
-      };
-      const keys = data.keys ?? { openrouter: null, zen: null };
-      for (const id of PROVIDER_IDS) {
-        providerStates[id].masked = keys[id] ?? null;
-      }
+      const data = await res.json() as Parameters<typeof applyKeysPayload>[0];
+      applyKeysPayload(data);
       state.draft = '';
       state.showInput = false;
-      state.success = state.masked ? 'Key saved' : 'Key removed';
+      state.success = data.message || 'Key saved';
       setTimeout(() => { state.success = ''; }, 3000);
     } catch (err) {
       state.error = err instanceof Error ? err.message : 'Failed to save key';
@@ -103,15 +130,10 @@
       });
 
       if (res.ok) {
-        const data = await res.json() as {
-          keys?: Record<ProviderId, string | null>;
-        };
-        const keys = data.keys ?? { openrouter: null, zen: null };
-        for (const id of PROVIDER_IDS) {
-          providerStates[id].masked = keys[id] ?? null;
-        }
+        const data = await res.json() as Parameters<typeof applyKeysPayload>[0];
+        applyKeysPayload(data);
         state.showInput = false;
-        state.success = 'Key removed';
+        state.success = data.message || 'Key removed';
         setTimeout(() => { state.success = ''; }, 3000);
       } else {
         const errData = await res.json().catch(() => null) as { message?: string } | null;
@@ -121,6 +143,43 @@
       state.error = 'Failed to remove key';
     } finally {
       state.saving = false;
+    }
+  }
+
+  async function clearStoredKeys() {
+    keysLoadError = '';
+    keysMessage = '';
+    for (const provider of PROVIDER_IDS) {
+      providerStates[provider].saving = true;
+      providerStates[provider].error = '';
+      providerStates[provider].success = '';
+    }
+
+    try {
+      const res = await fetch('/api/user/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clearAll: true }),
+      });
+      const data = await res.json().catch(() => ({})) as Parameters<typeof applyKeysPayload>[0] & { message?: string };
+      if (!res.ok) {
+        keysLoadError = data.message || 'Failed to clear provider keys';
+        return;
+      }
+      applyKeysPayload(data);
+      keysMessage = data.message || 'Stored model provider keys were cleared.';
+      for (const provider of PROVIDER_IDS) {
+        providerStates[provider].draft = '';
+        providerStates[provider].showInput = false;
+        providerStates[provider].success = keysMessage;
+        setTimeout(() => { providerStates[provider].success = ''; }, 3000);
+      }
+    } catch {
+      keysLoadError = 'Failed to clear provider keys';
+    } finally {
+      for (const provider of PROVIDER_IDS) {
+        providerStates[provider].saving = false;
+      }
     }
   }
 
@@ -215,15 +274,35 @@
     </section>
 
     <section class="mb-10">
-      <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Provider Router Keys</h2>
+      <h2 class="text-xs uppercase tracking-wide mb-4 text-gray-500 dark:text-neutral-500">Model Provider Keys</h2>
       <div class="border rounded p-5 transition-colors duration-200 bg-gray-100 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800">
         <p class="text-sm mb-4 text-gray-600 dark:text-neutral-400">
-          Bring your own router key. Your key is encrypted at rest and never shared.
+          Save the model provider keys that power live agent runs here. filepath API keys for programmatic access live in
+          <a href="/settings/api-keys" class="ml-1 underline hover:text-gray-700 dark:hover:text-neutral-200">Settings → API Keys</a>.
         </p>
 
         {#if keysLoadError}
           <div class="mb-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300">
             {keysLoadError}
+          </div>
+        {/if}
+
+        {#if keysMessage}
+          <div class="mb-4 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300">
+            {keysMessage}
+          </div>
+        {/if}
+
+        {#if keysStatus === 'unreadable'}
+          <div class="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+            <div class="font-medium">Saved provider keys need repair</div>
+            <div class="mt-1">filepath can’t decrypt the stored model provider keys. Clear them, then re-save the keys you want to keep.</div>
+            <button
+              onclick={clearStoredKeys}
+              class="mt-3 px-3 py-1.5 text-xs border rounded transition-colors cursor-pointer text-amber-900 border-amber-300 hover:bg-amber-100 dark:text-amber-100 dark:border-amber-800 dark:hover:bg-amber-950/60"
+            >
+              clear saved provider keys
+            </button>
           </div>
         {/if}
 
@@ -235,8 +314,20 @@
               <div class="border rounded p-4 bg-gray-50 border-gray-200 dark:bg-neutral-950 dark:border-neutral-800">
                 <div class="flex items-start justify-between gap-4 mb-3">
                   <div>
-                    <label for={`${provider.id}-key`} class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">{provider.label}</label>
+                    <div class="flex items-center gap-2">
+                      <label for={`${provider.id}-key`} class="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">{provider.label}</label>
+                      <span class={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                        providerStates[provider.id].status === 'saved'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : providerStates[provider.id].status === 'unreadable'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200'
+                            : 'bg-gray-200 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400'
+                      }`}>
+                        {providerStates[provider.id].status}
+                      </span>
+                    </div>
                     <p class="text-xs mt-1 text-gray-400 dark:text-neutral-600">{provider.helpText}</p>
+                    <p class="text-xs mt-1 text-gray-500 dark:text-neutral-500">{providerStates[provider.id].message}</p>
                   </div>
                   <a
                     href={provider.docsUrl}
@@ -248,7 +339,7 @@
                   </a>
                 </div>
 
-                {#if providerStates[provider.id].masked && !providerStates[provider.id].showInput}
+                {#if providerStates[provider.id].status === 'saved' && providerStates[provider.id].masked && !providerStates[provider.id].showInput}
                   <div class="flex items-center gap-3">
                     <code class="text-sm px-3 py-2 rounded border font-mono transition-colors duration-200 text-gray-600 bg-white border-gray-200 dark:text-neutral-400 dark:bg-neutral-900 dark:border-neutral-800">
                       {providerStates[provider.id].masked}
@@ -271,6 +362,10 @@
                       remove
                     </button>
                   </div>
+                {:else if providerStates[provider.id].status === 'unreadable'}
+                  <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+                    Clear the unreadable provider keys above, then save a fresh {provider.label} key here.
+                  </div>
                 {:else}
                   <div class="flex gap-2">
                     <input
@@ -278,11 +373,12 @@
                       type="password"
                       placeholder={provider.keyPlaceholder}
                       bind:value={providerStates[provider.id].draft}
+                      disabled={keysStatus === 'unreadable'}
                       class="flex-1 px-3 py-2 border rounded text-sm font-mono focus:outline-none transition-colors duration-200 bg-white border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-400 dark:bg-neutral-900 dark:border-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-700 dark:focus:border-neutral-600"
                     />
                     <button
                       onclick={() => saveKey(provider.id)}
-                      disabled={providerStates[provider.id].saving || !providerStates[provider.id].draft.trim()}
+                      disabled={keysStatus === 'unreadable' || providerStates[provider.id].saving || !providerStates[provider.id].draft.trim()}
                       class="px-4 py-2 text-sm border rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-gray-800 bg-gray-200 border-gray-300 hover:bg-gray-300 dark:text-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:hover:bg-neutral-700"
                     >
                       {providerStates[provider.id].saving ? 'saving...' : 'save'}

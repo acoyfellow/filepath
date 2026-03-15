@@ -10,7 +10,7 @@
  */
 
 import { proxyToSandbox } from '@cloudflare/sandbox';
-import { Sandbox } from './index';
+export { Sandbox } from '@cloudflare/sandbox';
 import type { Env } from '../src/types';
 import {
   acceptAgentTask,
@@ -31,8 +31,6 @@ function toRuntimeEnv(env: Env): RuntimeEnv {
     BETTER_AUTH_URL: env.BETTER_AUTH_URL,
   };
 }
-
-export { Sandbox };
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

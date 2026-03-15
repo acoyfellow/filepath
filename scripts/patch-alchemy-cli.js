@@ -57,7 +57,7 @@ function patchContainerBinding(filePath) {
   const updated = current.replace(
     pattern,
     (_, prefix, indent) =>
-      `${prefix}${indent}name: bindingName,\n${indent}/* ${CONTAINER_BINDING_MARKER} */ script_name: binding.scriptName,\n`,
+      `${prefix}${indent}name: bindingName,\n${indent}/* ${CONTAINER_BINDING_MARKER} */ script_name: binding.scriptName === props.workerName ? undefined : binding.scriptName,\n`,
   );
   fs.writeFileSync(filePath, updated);
 }

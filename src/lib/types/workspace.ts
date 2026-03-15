@@ -95,9 +95,9 @@ export interface AgentResult {
   commands: Array<{ command: string; exitCode: number | null }>;
   filesTouched: string[];
   violations: string[];
-  diffSummary?: string | null;
-  patch?: string | null;
-  commit?: { sha: string; message: string } | null;
+  diffSummary: string | null;
+  patch: string | null;
+  commit: { sha: string; message: string } | null;
   startedAt: number;
   finishedAt: number;
 }

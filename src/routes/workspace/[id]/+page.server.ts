@@ -4,6 +4,7 @@ import { workspace, agent, user } from "$lib/schema";
 import { eq, and, asc } from "drizzle-orm";
 import type { ServerLoadEvent } from "@sveltejs/kit";
 import { decryptApiKey } from "$lib/crypto";
+import { PROVIDER_KEYS_UNREADABLE_MESSAGE } from "$lib/provider-key-state";
 import {
   deserializeStoredProviderKeys,
   maskProviderKeys,
@@ -62,8 +63,7 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
       );
     } catch {
       accountKeysMasked = { openrouter: null, zen: null };
-      accountKeysError =
-        "Stored provider keys are unreadable. Re-save them in Settings -> Account.";
+      accountKeysError = PROVIDER_KEYS_UNREADABLE_MESSAGE;
     }
   }
 

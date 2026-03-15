@@ -12,6 +12,7 @@ import type {
 } from "$lib/types/workspace";
 import {
   getRuntimePolicyViolation,
+  isPathAllowed,
   normalizeAgentScope,
   resolveScopedWorkspaceRoot,
   validateAgentScope,
@@ -26,6 +27,10 @@ import {
   normalizeModelForProvider,
   PROVIDERS,
 } from "$lib/provider-keys";
+import {
+  hasWriteIntentEvents,
+  normalizeChangeMetadata,
+} from "$lib/runtime/change-metadata";
 import type { D1Database } from "@cloudflare/workers-types";
 
 export interface RuntimeEnv {
@@ -87,6 +92,7 @@ interface TaskRow {
   files_touched: string;
   violations: string;
   diff_summary: string | null;
+  patch: string | null;
   commit_json: string | null;
   attempt: number | null;
   request_id: string | null;
@@ -105,6 +111,7 @@ interface ResultRow {
   files_touched: string;
   violations: string;
   diff_summary: string | null;
+  patch: string | null;
   commit_json: string | null;
   started_at: number;
   finished_at: number;
@@ -245,6 +252,19 @@ function logTaskEvent(
   console[level](JSON.stringify(entry));
 }
 
+function humanizeRuntimeFailureMessage(message: string): string {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  if (/EISDIR|illegal operation on a directory/i.test(trimmed)) {
+    return "A write target resolved to a directory instead of a file. Pick a file path inside the allowed scope.";
+  }
+
+  return trimmed;
+}
+
 function toRuntimeTaskError(
   error: unknown,
   fallbackCode: string,
@@ -255,9 +275,17 @@ function toRuntimeTaskError(
     return error;
   }
   if (error instanceof Error) {
-    return new RuntimeTaskError(fallbackCode, error.message || fallbackMessage, retryable);
+    return new RuntimeTaskError(
+      fallbackCode,
+      humanizeRuntimeFailureMessage(error.message || fallbackMessage),
+      retryable,
+    );
   }
-  return new RuntimeTaskError(fallbackCode, fallbackMessage, retryable);
+  return new RuntimeTaskError(
+    fallbackCode,
+    humanizeRuntimeFailureMessage(fallbackMessage),
+    retryable,
+  );
 }
 
 function classifySandboxStartupError(error: unknown): RuntimeTaskError {
@@ -301,6 +329,7 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
       files_touched TEXT NOT NULL,
       violations TEXT NOT NULL,
       diff_summary TEXT,
+      patch TEXT,
       commit_json TEXT,
       started_at INTEGER NOT NULL,
       finished_at INTEGER NOT NULL
@@ -319,6 +348,7 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
       files_touched TEXT NOT NULL DEFAULT '[]',
       violations TEXT NOT NULL DEFAULT '[]',
       diff_summary TEXT,
+      patch TEXT,
       commit_json TEXT,
       attempt INTEGER NOT NULL DEFAULT 0,
       request_id TEXT,
@@ -341,6 +371,8 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
   await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN error_detail TEXT`).run().catch(() => {});
   await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN accepted_at INTEGER`).run().catch(() => {});
   await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN heartbeat_at INTEGER`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN patch TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_result ADD COLUMN patch TEXT`).run().catch(() => {});
 
   await env.DB.prepare(`ALTER TABLE agent ADD COLUMN active_process_id TEXT`).run().catch(() => {});
   await env.DB.prepare(
@@ -446,8 +478,8 @@ async function upsertAgentResultProjection(
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO agent_result
-      (agent_id, status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (agent_id, status, summary, commands, files_touched, violations, diff_summary, patch, commit_json, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(agent_id) DO UPDATE SET
       status = excluded.status,
       summary = excluded.summary,
@@ -455,6 +487,7 @@ async function upsertAgentResultProjection(
       files_touched = excluded.files_touched,
       violations = excluded.violations,
       diff_summary = excluded.diff_summary,
+      patch = excluded.patch,
       commit_json = excluded.commit_json,
       started_at = excluded.started_at,
       finished_at = excluded.finished_at`,
@@ -466,6 +499,7 @@ async function upsertAgentResultProjection(
     JSON.stringify(result.filesTouched),
     JSON.stringify(result.violations),
     result.diffSummary ?? null,
+    result.patch ?? null,
     result.commit ? JSON.stringify(result.commit) : null,
     result.startedAt,
     result.finishedAt,
@@ -479,7 +513,7 @@ async function loadAgentResult(
   await ensureRuntimeSchema(env);
 
   const projectionRow = await env.DB.prepare(
-    `SELECT status as result_status, summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at
+    `SELECT status as result_status, summary, commands, files_touched, violations, diff_summary, patch, commit_json, started_at, finished_at
        FROM agent_result
       WHERE agent_id = ?
       LIMIT 1`,
@@ -489,7 +523,7 @@ async function loadAgentResult(
     projectionRow ??
     (await env.DB.prepare(
       `SELECT COALESCE(result_status, status) as result_status,
-              summary, commands, files_touched, violations, diff_summary, commit_json, started_at, finished_at
+              summary, commands, files_touched, violations, diff_summary, patch, commit_json, started_at, finished_at
          FROM agent_task
         WHERE agent_id = ?
           AND (result_status IS NOT NULL OR status IN ('success', 'error', 'aborted', 'policy_error'))
@@ -506,6 +540,7 @@ async function loadAgentResult(
     filesTouched: JSON.parse(row.files_touched) as string[],
     violations: JSON.parse(row.violations) as string[],
     diffSummary: row.diff_summary,
+    patch: row.patch,
     commit: row.commit_json
       ? (JSON.parse(row.commit_json) as NonNullable<AgentResult["commit"]>)
       : null,
@@ -848,40 +883,83 @@ export async function runWorkspaceScript(
   await sandbox.mkdir(executionRoot, { recursive: true });
 
   const startedAt = now();
-  let result: { stdout: string; stderr: string; exitCode: number };
+  const snapshotBase = `${workspaceRoot}/.filepath-script-${crypto.randomUUID()}`;
+  const beforeSnapshotRoot = `${snapshotBase}/before`;
+  const afterSnapshotRoot = `${snapshotBase}/after`;
   try {
-    const exec = await sandbox.exec(trimmed, { cwd: executionRoot });
-    const exitCode = (exec as { code?: number; exitCode?: number })?.code
-      ?? (exec as { code?: number; exitCode?: number })?.exitCode ?? 0;
-    result = {
-      stdout: (exec as { stdout?: string })?.stdout ?? "",
-      stderr: (exec as { stderr?: string })?.stderr ?? "",
-      exitCode,
+    const beforeDirtyPaths = await collectWorkspaceDirtyPaths(sandbox, workspaceRoot);
+    await writeScopedSnapshot(
+      sandbox,
+      workspaceRoot,
+      beforeSnapshotRoot,
+      policy.allowedPaths,
+      policy.forbiddenPaths,
+    );
+
+    let result: { stdout: string; stderr: string; exitCode: number };
+    try {
+      const exec = await sandbox.exec(trimmed, { cwd: executionRoot });
+      const exitCode = (exec as { code?: number; exitCode?: number })?.code
+        ?? (exec as { code?: number; exitCode?: number })?.exitCode ?? 0;
+      result = {
+        stdout: (exec as { stdout?: string })?.stdout ?? "",
+        stderr: (exec as { stderr?: string })?.stderr ?? "",
+        exitCode,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result = { stdout: "", stderr: humanizeRuntimeFailureMessage(message), exitCode: 1 };
+    }
+    const finishedAt = now();
+    await writeScopedSnapshot(
+      sandbox,
+      workspaceRoot,
+      afterSnapshotRoot,
+      policy.allowedPaths,
+      policy.forbiddenPaths,
+    );
+    const afterDirtyPaths = await collectWorkspaceDirtyPaths(sandbox, workspaceRoot);
+    const patch = await collectScopedWorkspacePatch(
+      sandbox,
+      workspaceRoot,
+      beforeSnapshotRoot,
+      afterSnapshotRoot,
+    );
+    const metadata = normalizeChangeMetadata({ patch });
+    const violations = describeScopeViolations(
+      policy,
+      collectNewDirtyPaths(beforeDirtyPaths, afterDirtyPaths),
+    );
+
+    const status: AgentResult["status"] = violations.length > 0
+      ? "policy_error"
+      : result.exitCode === 0
+        ? "success"
+        : "error";
+    const summary =
+      violations.length > 0
+        ? violations[0]
+        : result.exitCode === 0
+        ? (result.stdout.trim() || "Script completed.")
+        : (result.stderr.trim() || result.stdout.trim() || "Script failed.");
+
+    return {
+      status,
+      summary,
+      commands: [{ command: trimmed, exitCode: result.exitCode }],
+      filesTouched: violations.length > 0 ? [] : metadata.filesTouched,
+      violations,
+      diffSummary: violations.length > 0 ? null : metadata.diffSummary,
+      patch: violations.length > 0 ? null : patch,
+      commit: null,
+      startedAt,
+      finishedAt,
     };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    result = { stdout: "", stderr: message, exitCode: 1 };
+  } finally {
+    await sandbox.exec(`rm -rf ${quoteShell(snapshotBase)}`, {
+      cwd: workspaceRoot,
+    }).catch(() => {});
   }
-  const finishedAt = now();
-
-  const status: AgentResult["status"] = result.exitCode === 0 ? "success" : "error";
-  const summary =
-    result.exitCode === 0
-      ? (result.stdout.trim() || "Script completed.")
-      : (result.stderr.trim() || result.stdout.trim() || "Script failed.");
-
-  return {
-    status,
-    summary,
-    commands: [{ command: trimmed, exitCode: result.exitCode }],
-    filesTouched: [],
-    violations: [],
-    diffSummary: null,
-    patch: null,
-    commit: null,
-    startedAt,
-    finishedAt,
-  };
 }
 
 function createExecRelay(): ExecRelay {
@@ -1009,16 +1087,6 @@ function buildAgentResultFromEvents(
     startedAt,
     finishedAt,
   };
-}
-
-function buildDiffSummary(filesTouched: readonly string[]): string | null {
-  if (filesTouched.length === 0) {
-    return null;
-  }
-
-  return filesTouched.length === 1
-    ? `1 file touched: ${filesTouched[0]}`
-    : `${filesTouched.length} files touched`;
 }
 
 function quoteShell(value: string): string {
@@ -1158,7 +1226,10 @@ async function collectScopedWorkspacePatch(
   ).catch(() => null);
 
   if (!result) {
-    return null;
+    throw new RuntimeTaskError(
+      "PATCH_COLLECTION_FAILED",
+      "filepath could not derive a patch from the sandbox state.",
+    );
   }
 
   const patch = ((result as { stdout?: string }).stdout ?? "").trim();
@@ -1168,6 +1239,52 @@ async function collectScopedWorkspacePatch(
 
   const rewritten = rewriteSnapshotPatchPaths(patch, beforeRoot, afterRoot).trim();
   return rewritten.length > 0 ? `${rewritten}\n` : null;
+}
+
+function parseNullSeparatedPaths(output: string): string[] {
+  return output
+    .split("\0")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+async function collectWorkspaceDirtyPaths(
+  sandbox: Sandbox,
+  workspaceRoot: string,
+): Promise<Set<string>> {
+  const commands = [
+    "git diff --name-only -z",
+    "git diff --cached --name-only -z",
+    "git ls-files --others --exclude-standard -z",
+  ];
+  const dirtyPaths = new Set<string>();
+
+  for (const command of commands) {
+    const result = await sandbox.exec(command, {
+      cwd: workspaceRoot,
+    }).catch(() => null);
+
+    if (!result) {
+      continue;
+    }
+
+    const stdout = (result as { stdout?: string }).stdout ?? "";
+    for (const path of parseNullSeparatedPaths(stdout)) {
+      dirtyPaths.add(path);
+    }
+  }
+
+  return dirtyPaths;
+}
+
+function collectNewDirtyPaths(before: ReadonlySet<string>, after: ReadonlySet<string>): string[] {
+  return [...after].filter((path) => !before.has(path));
+}
+
+function describeScopeViolations(scope: AgentScope, changedPaths: readonly string[]): string[] {
+  return changedPaths
+    .filter((path) => !isPathAllowed(path, scope))
+    .map((path) => `This run changed files outside scope: ${path}.`);
 }
 
 async function persistAssistantText(
@@ -1220,8 +1337,8 @@ async function insertQueuedTask(
   const acceptedAt = now();
   await env.DB.prepare(
     `INSERT INTO agent_task
-      (id, agent_id, content, status, result_status, summary, commands, files_touched, violations, diff_summary, commit_json, attempt, request_id, error_code, error_detail, accepted_at, started_at, heartbeat_at, finished_at)
-     VALUES (?, ?, ?, ?, NULL, '', '[]', '[]', '[]', NULL, NULL, 0, ?, NULL, NULL, ?, ?, ?, ?)`,
+      (id, agent_id, content, status, result_status, summary, commands, files_touched, violations, diff_summary, patch, commit_json, attempt, request_id, error_code, error_detail, accepted_at, started_at, heartbeat_at, finished_at)
+     VALUES (?, ?, ?, ?, NULL, '', '[]', '[]', '[]', NULL, NULL, NULL, 0, ?, NULL, NULL, ?, ?, ?, ?)`,
   ).bind(
     taskId,
     agentId,
@@ -1259,6 +1376,7 @@ async function patchTaskRow(
     filesTouched?: string[];
     violations?: string[];
     diffSummary?: string | null;
+    patchText?: string | null;
     commit?: AgentResult["commit"];
     attempt?: number;
     errorCode?: string | null;
@@ -1312,6 +1430,10 @@ async function patchTaskRow(
     clauses.push("diff_summary = ?");
     values.push(patch.diffSummary);
   }
+  if (patch.patchText !== undefined) {
+    clauses.push("patch = ?");
+    values.push(patch.patchText);
+  }
   if (patch.commit !== undefined) {
     clauses.push("commit_json = ?");
     values.push(patch.commit ? JSON.stringify(patch.commit) : null);
@@ -1360,7 +1482,7 @@ async function loadTaskRow(
   await ensureRuntimeSchema(env);
   return env.DB.prepare(
     `SELECT id, agent_id, content, status, result_status, summary, commands, files_touched, violations,
-            diff_summary, commit_json, attempt, request_id, error_code, error_detail,
+            diff_summary, patch, commit_json, attempt, request_id, error_code, error_detail,
             accepted_at, started_at, heartbeat_at, finished_at
        FROM agent_task
       WHERE id = ?
@@ -1375,7 +1497,7 @@ async function loadLatestActiveTaskRow(
   await ensureRuntimeSchema(env);
   return env.DB.prepare(
     `SELECT id, agent_id, content, status, result_status, summary, commands, files_touched, violations,
-            diff_summary, commit_json, attempt, request_id, error_code, error_detail,
+            diff_summary, patch, commit_json, attempt, request_id, error_code, error_detail,
             accepted_at, started_at, heartbeat_at, finished_at
        FROM agent_task
       WHERE agent_id = ?
@@ -1456,6 +1578,7 @@ async function finalizeTaskOutcome(
     filesTouched: params.result.filesTouched,
     violations: params.result.violations,
     diffSummary: params.result.diffSummary ?? null,
+    patchText: params.result.patch ?? null,
     commit: params.result.commit ?? null,
     errorCode: params.errorCode ?? null,
     errorDetail: params.errorDetail ?? null,
@@ -1697,6 +1820,7 @@ async function runLocalWaitTask(
     filesTouched: [],
     violations: [],
     diffSummary: null,
+    patch: null,
     commit: null,
     startedAt,
     finishedAt,
@@ -1770,6 +1894,7 @@ async function runDirectExecutionTask(
         filesTouched: [],
         violations: [],
         diffSummary: null,
+        patch: null,
         commit: null,
         startedAt,
         finishedAt,
@@ -1959,6 +2084,7 @@ async function runSandboxTask(
   const afterSnapshotRoot = `${snapshotBase}/after`;
   let process: Process | null = null;
   let sandbox: Sandbox | null = null;
+  let beforeDirtyPaths = new Set<string>();
 
   try {
     sandbox = await withSandboxStartupRetry(env, taskId, agentId, {
@@ -1978,6 +2104,7 @@ async function runSandboxTask(
       config.policy.allowedPaths,
       config.policy.forbiddenPaths,
     );
+    beforeDirtyPaths = await collectWorkspaceDirtyPaths(sandbox, workspaceRoot);
   } catch (error) {
     const runtimeError = classifySandboxStartupError(error);
     const failed = await finalizeTaskFailure(env, {
@@ -2103,9 +2230,23 @@ async function runSandboxTask(
       beforeSnapshotRoot,
       afterSnapshotRoot,
     );
-    if (!result.diffSummary) {
-      result.diffSummary = buildDiffSummary(result.filesTouched);
+    const normalizedChangeMetadata = normalizeChangeMetadata({ patch: result.patch });
+    const afterDirtyPaths = await collectWorkspaceDirtyPaths(sandbox, workspaceRoot);
+    const scopeViolations = describeScopeViolations(
+      config.policy,
+      collectNewDirtyPaths(beforeDirtyPaths, afterDirtyPaths),
+    );
+    if (scopeViolations.length > 0) {
+      throw new RuntimeTaskError("POLICY_VIOLATION", scopeViolations[0]);
     }
+    if (!result.patch && !result.commit && hasWriteIntentEvents(relay.events())) {
+      throw new RuntimeTaskError(
+        "PATCH_MISSING",
+        "The task reported file edits, but filepath could not derive a patch from the bounded run.",
+      );
+    }
+    result.filesTouched = normalizedChangeMetadata.filesTouched;
+    result.diffSummary = normalizedChangeMetadata.diffSummary;
     const terminalStatus = relay.events().some((event) => event.type === "handoff")
       ? "exhausted"
       : "done";
@@ -2228,6 +2369,7 @@ export async function processAcceptedAgentTask(
         filesTouched: [],
         violations: [],
         diffSummary: null,
+        patch: null,
         commit: null,
         startedAt: persistedTask.started_at,
         finishedAt: persistedTask.finished_at,

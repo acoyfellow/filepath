@@ -129,7 +129,7 @@
       <div>
         <h1 class="text-2xl font-[650] tracking-[-0.03em] text-(--t1)">Workspaces</h1>
         <p class="mt-1.5 max-w-2xl text-sm leading-6 text-(--t4)">
-          Your personal background agents, each scoped to a sandboxed git clone.
+          Your personal background agents, each scoped to a sandboxed repo clone.
         </p>
       </div>
       <Button

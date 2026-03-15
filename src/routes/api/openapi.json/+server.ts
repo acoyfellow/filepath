@@ -23,6 +23,20 @@ export const GET: RequestHandler = async ({ url }) => {
           description:
             "Authenticate with a Better Auth session cookie created through the dashboard sign-in flow.",
         },
+        bearerApiKey: {
+          type: "apiKey",
+          in: "header",
+          name: "Authorization",
+          description:
+            "Authenticate with a filepath API key using `Authorization: Bearer <key>`.",
+        },
+        xApiKey: {
+          type: "apiKey",
+          in: "header",
+          name: "X-Api-Key",
+          description:
+            "Authenticate with a filepath API key using `X-Api-Key: <key>`.",
+        },
       },
       schemas: {
         Workspace: {
@@ -154,6 +168,7 @@ export const GET: RequestHandler = async ({ url }) => {
             filesTouched: { type: "array", items: { type: "string" } },
             violations: { type: "array", items: { type: "string" } },
             diffSummary: { type: ["string", "null"] },
+            patch: { type: ["string", "null"] },
             commit: {
               oneOf: [
                 { type: "null" },
@@ -176,6 +191,8 @@ export const GET: RequestHandler = async ({ url }) => {
             "commands",
             "filesTouched",
             "violations",
+            "diffSummary",
+            "patch",
             "startedAt",
             "finishedAt",
           ],
@@ -234,7 +251,7 @@ export const GET: RequestHandler = async ({ url }) => {
         },
       },
     },
-    security: [{ betterAuthSession: [] }],
+    security: [{ betterAuthSession: [] }, { bearerApiKey: [] }, { xApiKey: [] }],
     paths: {
       "/api/workspaces": {
         get: {
@@ -457,6 +474,8 @@ export const GET: RequestHandler = async ({ url }) => {
         post: {
           tags: ["Agents"],
           summary: "Run one bounded task in a workspace",
+          description:
+            "Runs a task through an agent sandbox. Omit `agentId` to create a new agent and sandboxed repo clone for this run. Include `agentId` to continue on that agent's existing sandbox state.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -479,6 +498,40 @@ export const GET: RequestHandler = async ({ url }) => {
           responses: {
             "200": {
               description: "Structured worker run result",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WorkerRunResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/workspaces/{id}/run/script": {
+        post: {
+          tags: ["Agents"],
+          summary: "Run one deterministic script in a workspace",
+          description:
+            "Runs a fixed script without an LLM inside the workspace's dedicated script sandbox clone. Repeated script runs reuse that script sandbox for the workspace, and the response includes the bounded run patch when the script leaves file changes behind.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    script: { type: "string" },
+                    scope: { $ref: "#/components/schemas/AgentScope" },
+                  },
+                  required: ["script"],
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Structured script run result",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/WorkerRunResponse" },
