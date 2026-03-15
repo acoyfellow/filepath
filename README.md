@@ -201,7 +201,7 @@ Better Auth is the only supported auth boundary in v1.
 - agents do not spawn child agents in v1
 - task input is agent work input, not a general product chat protocol
 
-### Runtime contract (Jido-inspired hardening)
+### Runtime contract
 
 Technical spec for the deterministic, testable core. Implement against this; revise when learnings expose the need.
 

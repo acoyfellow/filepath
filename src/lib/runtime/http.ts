@@ -34,7 +34,7 @@ async function dispatchLocalRuntime(
   const [pathname, search] = normalizedPath.split("?", 2);
   const searchParams = search ? new URLSearchParams(search) : new URLSearchParams();
   const match = pathname.match(
-    /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/health)?$/,
+    /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/run\/script|\/health)?$/,
   );
   if (!match) {
     return new Response(JSON.stringify({ error: "Not found" }), {
@@ -49,6 +49,54 @@ async function dispatchLocalRuntime(
     return new Response(JSON.stringify({ ok: true, workspaceId }), {
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  if ((init?.method ?? "GET") === "POST" && suffix === "/run/script") {
+    const body = await readJsonBody(init) as {
+      script?: string;
+      scope?: {
+        allowedPaths?: unknown;
+        forbiddenPaths?: unknown;
+        toolPermissions?: unknown;
+        writableRoot?: unknown;
+      };
+    };
+    const script = typeof body.script === "string" ? body.script : "";
+    const sc = body.scope;
+    const scopeInput =
+      sc && typeof sc === "object"
+        ? {
+            allowedPaths: Array.isArray(sc.allowedPaths) ? sc.allowedPaths : undefined,
+            forbiddenPaths: Array.isArray(sc.forbiddenPaths) ? sc.forbiddenPaths : undefined,
+            toolPermissions: Array.isArray(sc.toolPermissions) ? sc.toolPermissions : undefined,
+            writableRoot:
+              sc.writableRoot !== undefined
+                ? (sc.writableRoot as string | null)
+                : undefined,
+          }
+        : undefined;
+    try {
+      const result = await runtime.runWorkspaceScript(
+        runtimeEnv,
+        workspaceId,
+        script,
+        scopeInput,
+      );
+      return new Response(
+        JSON.stringify({ ok: true, result }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    } catch (error) {
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "Script run failed.",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
   }
 
   const taskMatch = suffix.match(/^\/agents\/([^/]+)\/tasks$/);
