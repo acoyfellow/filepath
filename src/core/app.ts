@@ -133,6 +133,21 @@ export const AgentTaskInputSchema = Schema.Struct({
 });
 export type AgentTaskInput = Schema.Schema.Type<typeof AgentTaskInputSchema>;
 
+export const WorkerRunScopeInputSchema = Schema.Struct({
+  allowedPaths: Schema.optional(Schema.Array(Schema.String)),
+  forbiddenPaths: Schema.optional(Schema.Array(Schema.String)),
+  toolPermissions: Schema.optional(Schema.Array(Schema.String)),
+  writableRoot: Schema.optional(Schema.NullOr(Schema.String)),
+});
+export const WorkerRunInputSchema = Schema.Struct({
+  content: Schema.String,
+  harnessId: Schema.String,
+  model: Schema.String,
+  scope: Schema.optional(WorkerRunScopeInputSchema),
+  agentId: Schema.optional(Schema.String),
+});
+export type WorkerRunInput = Schema.Schema.Type<typeof WorkerRunInputSchema>;
+
 function decodePolicy(input: {
   allowedPaths?: readonly string[];
   forbiddenPaths?: readonly string[];
@@ -551,6 +566,67 @@ export function createAgent(
           }),
         "Failed to create agent",
       ).pipe(Effect.as({ id: agentId, name: trimmedName }));
+    }),
+  );
+}
+
+export function createAgentForRun(
+  ctx: AppContext,
+  workspaceId: string,
+  input: WorkerRunInput,
+) {
+  return ensureBuiltinHarnesses(ctx).pipe(
+    Effect.flatMap(() => ensureWorkspaceAccess(ctx, workspaceId)),
+    Effect.flatMap(() =>
+      fromPromise(
+        () =>
+          ctx.db
+            .select({ id: harness.id, enabled: harness.enabled })
+            .from(harness)
+            .where(eq(harness.id, input.harnessId)),
+        "Failed to load harness",
+      ),
+    ),
+    Effect.flatMap((harnessRows) => {
+      if (harnessRows.length === 0) {
+        return Effect.fail(new BadRequest({ message: "Harness not found" }));
+      }
+      if (!harnessRows[0].enabled) {
+        return Effect.fail(new BadRequest({ message: "Harness is disabled" }));
+      }
+      return Effect.void;
+    }),
+    Effect.flatMap(() =>
+      decodePolicy({
+        allowedPaths: input.scope?.allowedPaths ?? ["."],
+        forbiddenPaths: input.scope?.forbiddenPaths ?? [".git", "node_modules"],
+        toolPermissions: input.scope?.toolPermissions ?? ["search", "run", "write", "commit"],
+        writableRoot: input.scope?.writableRoot ?? ".",
+      }),
+    ),
+    Effect.flatMap((policy): Effect.Effect<{ id: string; name: string }, AppError> => {
+      const agentId = generateId();
+      const name = `run-${generateId(8)}`;
+      if (!input.model.trim()) {
+        return Effect.fail(new BadRequest({ message: "Model is required" }));
+      }
+
+      return fromPromise(
+        () =>
+          ctx.db.insert(agent).values({
+            id: agentId,
+            workspaceId,
+            name,
+            harnessId: input.harnessId,
+            model: input.model.trim(),
+            config: JSON.stringify({}),
+            allowedPaths: JSON.stringify(policy.allowedPaths),
+            forbiddenPaths: JSON.stringify(policy.forbiddenPaths),
+            toolPermissions: JSON.stringify(policy.toolPermissions),
+            writableRoot: policy.writableRoot,
+          }),
+        "Failed to create agent",
+      ).pipe(Effect.as({ id: agentId, name }));
     }),
   );
 }

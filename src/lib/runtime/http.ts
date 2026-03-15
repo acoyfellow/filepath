@@ -31,7 +31,9 @@ async function dispatchLocalRuntime(
   if (!runtimeEnv) return null;
 
   const runtime = await import("$lib/runtime/agent-runtime");
-  const match = normalizedPath.match(
+  const [pathname, search] = normalizedPath.split("?", 2);
+  const searchParams = search ? new URLSearchParams(search) : new URLSearchParams();
+  const match = pathname.match(
     /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/health)?$/,
   );
   if (!match) {
@@ -65,8 +67,26 @@ async function dispatchLocalRuntime(
       });
     }
 
+    const wait =
+      searchParams.get("wait") === "1" ||
+      (init?.headers instanceof Headers && init.headers.get("x-filepath-wait") === "true");
+
     try {
       const accepted = await runtime.acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId);
+      if (wait) {
+        const { result, events } = await runtime.processAcceptedAgentTask(
+          runtimeEnv,
+          workspaceId,
+          agentId,
+          accepted.taskId,
+          content,
+          requestId,
+        );
+        return new Response(
+          JSON.stringify({ ok: true, result, events, taskId: accepted.taskId }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
       runtime.scheduleAcceptedAgentTask(runtimeEnv, null, {
         workspaceId,
         agentId,

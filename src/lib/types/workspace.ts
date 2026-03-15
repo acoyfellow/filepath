@@ -1,4 +1,4 @@
-import type { AgentStatus as AgentStatusType } from "$lib/protocol";
+import type { AgentStatus as AgentStatusType, AgentEventType } from "$lib/protocol";
 import type { AgentScope, ToolPermission } from "$lib/runtime/authority";
 
 export type HarnessId = string;
@@ -131,4 +131,33 @@ export interface AgentRuntimeSnapshot {
     createdAt: number;
   }>;
   result: AgentResult | null;
+}
+
+export interface WorkerRunScopeInput {
+  allowedPaths?: readonly string[] | null;
+  forbiddenPaths?: readonly string[] | null;
+  toolPermissions?: readonly string[] | null;
+  writableRoot?: string | null;
+}
+
+export interface WorkerRunInput {
+  content: string;
+  harnessId: HarnessId;
+  model: string;
+  scope?: WorkerRunScopeInput;
+  agentId?: string;
+}
+
+export interface WorkerRunResponse {
+  status: AgentResult["status"];
+  summary: string;
+  events: AgentEventType[];
+  filesTouched: string[];
+  violations: string[];
+  diffSummary: string | null;
+  commit: { sha: string; message: string } | null;
+  agentId: string;
+  runId: string;
+  startedAt: number;
+  finishedAt: number;
 }

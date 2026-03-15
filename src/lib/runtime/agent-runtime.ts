@@ -63,6 +63,11 @@ interface DirectModelResponse {
   summary: string;
 }
 
+export interface AgentTaskCompletion {
+  result: AgentResult;
+  events: AgentEventType[];
+}
+
 interface MessageRow {
   id: string;
   role: string;
@@ -1330,7 +1335,7 @@ async function runLocalWaitTask(
   content: string,
   directive: { delayMs: number; reply: string },
   logContext: Omit<TaskLogContext, "phase">,
-): Promise<AgentResult> {
+): Promise<AgentTaskCompletion> {
   const startedAt = now();
   await setTaskState(env, {
     taskId,
@@ -1387,7 +1392,7 @@ async function runLocalWaitTask(
     durationMs: finishedAt - startedAt,
     state: "succeeded",
   });
-  return result;
+  return { result, events: [] };
 }
 
 async function runDirectExecutionTask(
@@ -1399,7 +1404,7 @@ async function runDirectExecutionTask(
   taskPrompt: string,
   config: AgentExecutionConfig,
   logBase: Omit<TaskLogContext, "phase">,
-): Promise<AgentResult> {
+): Promise<AgentTaskCompletion> {
   const startedAt = now();
   await setTaskState(env, {
     taskId,
@@ -1464,7 +1469,7 @@ async function runDirectExecutionTask(
         durationMs: finishedAt - startedAt,
         state: "succeeded",
       });
-      return result;
+      return { result, events: [] };
     } catch (error) {
       const runtimeError = classifyProviderError(error);
       if (runtimeError.code === "TASK_CANCELED") {
@@ -1526,7 +1531,7 @@ async function runDirectExecutionTask(
         errorCode: runtimeError.code,
         errorDetail: runtimeError.message,
       });
-      return failed;
+      return { result: failed, events: [] };
     }
   }
 
@@ -1551,7 +1556,7 @@ async function runDirectExecutionTask(
     errorCode: "TASK_CANCELED",
     errorDetail: canceled.summary,
   });
-  return canceled;
+  return { result: canceled, events: [] };
 }
 
 async function withSandboxStartupRetry<T>(
@@ -1614,7 +1619,7 @@ async function runSandboxTask(
   content: string,
   config: AgentExecutionConfig,
   logBase: Omit<TaskLogContext, "phase">,
-): Promise<AgentResult> {
+): Promise<AgentTaskCompletion> {
   const processId = `task-${taskId}`;
   const startedAt = now();
   let process: Process | null = null;
@@ -1665,7 +1670,7 @@ async function runSandboxTask(
       errorCode: runtimeError.code,
       errorDetail: runtimeError.message,
     });
-    return failed;
+    return { result: failed, events: [] };
   }
 
   const relay = createExecRelay();
@@ -1784,7 +1789,7 @@ async function runSandboxTask(
       processId: process.id,
       state: "succeeded",
     });
-    return result;
+    return { result, events: relay.events() };
   } catch (error) {
     const runtimeError = toRuntimeTaskError(
       error,
@@ -1835,7 +1840,7 @@ async function runSandboxTask(
       errorCode: runtimeError.code,
       errorDetail: runtimeError.message,
     });
-    return failed;
+    return { result: failed, events: [] };
   } finally {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -1847,24 +1852,24 @@ async function runSandboxTask(
   }
 }
 
-async function processAcceptedAgentTask(
+export async function processAcceptedAgentTask(
   env: RuntimeEnv,
   workspaceId: string,
   agentId: string,
   taskId: string,
   content: string,
   requestId: string,
-): Promise<AgentResult> {
+): Promise<AgentTaskCompletion> {
   const acceptedAt = now();
   const persistedTask = await loadTaskRow(env, taskId);
   if (!persistedTask) {
     throw new RuntimeTaskError("TASK_NOT_FOUND", `Task ${taskId} not found.`);
   }
   if (isTerminalTaskState(persistedTask.status)) {
-    return (
+    const result =
       (await loadAgentResult(env, agentId)) ??
       {
-        status: persistedTask.result_status ?? "aborted",
+        status: (persistedTask.result_status ?? "aborted") as AgentResult["status"],
         summary: persistedTask.summary || "The task is already finished.",
         commands: [],
         filesTouched: [],
@@ -1873,8 +1878,8 @@ async function processAcceptedAgentTask(
         commit: null,
         startedAt: persistedTask.started_at,
         finishedAt: persistedTask.finished_at,
-      }
-    );
+      };
+    return { result, events: [] };
   }
 
   logTaskEvent("log", {
@@ -1989,7 +1994,7 @@ async function processAcceptedAgentTask(
       errorCode: runtimeError.code,
       errorDetail: runtimeError.message,
     });
-    return result;
+    return { result, events: [] };
   }
 }
 

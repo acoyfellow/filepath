@@ -17,6 +17,7 @@ import {
   cancelAgentTask,
   deleteAgentRuntime,
   getAgentRuntimeSnapshot,
+  processAcceptedAgentTask,
   scheduleAcceptedAgentTask,
   type RuntimeEnv,
 } from '../src/lib/runtime/agent-runtime';
@@ -65,6 +66,7 @@ export default {
         const body = (await request.json().catch(() => ({}))) as { content?: string };
         const content = body.content?.trim();
         const requestId = request.headers.get("x-filepath-request-id") || crypto.randomUUID();
+        const wait = url.searchParams.get("wait") === "1" || request.headers.get("x-filepath-wait") === "true";
         if (!content) {
           return new Response(JSON.stringify({ error: "Task content is required." }), {
             status: 400,
@@ -74,6 +76,20 @@ export default {
 
         try {
           const accepted = await acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId);
+          if (wait) {
+            const { result, events } = await processAcceptedAgentTask(
+              runtimeEnv,
+              workspaceId,
+              agentId,
+              accepted.taskId,
+              content,
+              requestId,
+            );
+            return new Response(
+              JSON.stringify({ ok: true, result, events, taskId: accepted.taskId }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
           scheduleAcceptedAgentTask(runtimeEnv, ctx, {
             workspaceId,
             agentId,

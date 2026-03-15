@@ -131,6 +131,34 @@ At minimum:
 - `startedAt`
 - `finishedAt`
 
+### Programmatic run API
+
+`POST /api/workspaces/:id/run` runs one bounded task and returns a structured result (sync). Useful for external tools (e.g. proof engines) that need a direct execution surface.
+
+**Input:**
+
+```json
+{
+  "content": "Task description",
+  "harnessId": "filepath",
+  "model": "anthropic/claude-3.5-sonnet",
+  "scope": {
+    "allowedPaths": ["."],
+    "forbiddenPaths": [".git", "node_modules"],
+    "toolPermissions": ["search", "run", "write", "commit"],
+    "writableRoot": "."
+  },
+  "agentId": "optional – omit for new run, include to continue a thread"
+}
+```
+
+**Response (200):** machine-stable contract
+
+- `status`, `summary`, `events`, `filesTouched`, `violations`, `diffSummary`, `commit`
+- `agentId`, `runId`, `startedAt`, `finishedAt`
+
+**Auth:** session or API key (`Authorization: Bearer <key>`). User must own the workspace.
+
 ### API surface
 
 Core routes:
@@ -147,6 +175,7 @@ Core routes:
 - `DELETE /api/workspaces/:id/agents/:agentId`
 - `POST /api/workspaces/:id/agents/:agentId/tasks`
 - `POST /api/workspaces/:id/agents/:agentId/cancel`
+- `POST /api/workspaces/:id/run` – programmatic run (new or continue thread; returns structured result + events)
 
 Machine-readable reference:
 
@@ -158,6 +187,7 @@ Better Auth is the only supported auth boundary in v1.
 
 - sign up and sign in through the app
 - dashboard and API both use the Better Auth session
+- programmatic access: create an API key in Settings; use `Authorization: Bearer <key>` or `X-Api-Key: <key>`
 - no public unauthenticated product surface
 - local dev may use the placeholder secret from `.env.example`
 - production must use a random 32+ character `BETTER_AUTH_SECRET`
