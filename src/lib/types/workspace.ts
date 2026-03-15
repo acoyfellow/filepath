@@ -96,6 +96,7 @@ export interface AgentResult {
   filesTouched: string[];
   violations: string[];
   diffSummary?: string | null;
+  patch?: string | null;
   commit?: { sha: string; message: string } | null;
   startedAt: number;
   finishedAt: number;
@@ -155,6 +156,7 @@ export interface WorkerRunResponse {
   filesTouched: string[];
   violations: string[];
   diffSummary: string | null;
+  patch: string | null;
   commit: { sha: string; message: string } | null;
   agentId: string;
   runId: string;

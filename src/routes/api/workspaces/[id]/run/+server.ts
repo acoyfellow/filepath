@@ -20,6 +20,7 @@ function toWorkerRunResponse(
     filesTouched?: string[];
     violations?: string[];
     diffSummary?: string | null;
+    patch?: string | null;
     commit?: { sha: string; message: string } | null;
     startedAt: number;
     finishedAt: number;
@@ -35,6 +36,7 @@ function toWorkerRunResponse(
     filesTouched: result.filesTouched ?? [],
     violations: result.violations ?? [],
     diffSummary: result.diffSummary ?? null,
+    patch: result.patch ?? null,
     commit: result.commit ?? null,
     agentId,
     runId,
@@ -88,6 +90,7 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
       filesTouched?: string[];
       violations?: string[];
       diffSummary?: string | null;
+      patch?: string | null;
       commit?: { sha: string; message: string } | null;
       startedAt: number;
       finishedAt: number;

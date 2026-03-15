@@ -180,6 +180,58 @@ export const GET: RequestHandler = async ({ url }) => {
             "finishedAt",
           ],
         },
+        WorkerRunResponse: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["success", "error", "aborted", "policy_error"],
+            },
+            summary: { type: "string" },
+            events: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: true,
+              },
+            },
+            filesTouched: { type: "array", items: { type: "string" } },
+            violations: { type: "array", items: { type: "string" } },
+            diffSummary: { type: ["string", "null"] },
+            patch: { type: ["string", "null"] },
+            commit: {
+              oneOf: [
+                { type: "null" },
+                {
+                  type: "object",
+                  properties: {
+                    sha: { type: "string" },
+                    message: { type: "string" },
+                  },
+                  required: ["sha", "message"],
+                },
+              ],
+            },
+            agentId: { type: "string" },
+            runId: { type: "string" },
+            startedAt: { type: "integer" },
+            finishedAt: { type: "integer" },
+          },
+          required: [
+            "status",
+            "summary",
+            "events",
+            "filesTouched",
+            "violations",
+            "diffSummary",
+            "patch",
+            "commit",
+            "agentId",
+            "runId",
+            "startedAt",
+            "finishedAt",
+          ],
+        },
       },
     },
     security: [{ betterAuthSession: [] }],
@@ -397,6 +449,41 @@ export const GET: RequestHandler = async ({ url }) => {
           responses: {
             "200": {
               description: "Cancellation result",
+            },
+          },
+        },
+      },
+      "/api/workspaces/{id}/run": {
+        post: {
+          tags: ["Agents"],
+          summary: "Run one bounded task in a workspace",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    content: { type: "string" },
+                    harnessId: { type: "string" },
+                    model: { type: "string" },
+                    agentId: { type: "string" },
+                    scope: { $ref: "#/components/schemas/AgentScope" },
+                  },
+                  required: ["content", "harnessId", "model"],
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Structured worker run result",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WorkerRunResponse" },
+                },
+              },
             },
           },
         },

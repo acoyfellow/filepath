@@ -18,6 +18,7 @@ import {
   deleteAgentRuntime,
   getAgentRuntimeSnapshot,
   processAcceptedAgentTask,
+  runWorkspaceScript,
   scheduleAcceptedAgentTask,
   type RuntimeEnv,
 } from '../src/lib/runtime/agent-runtime';
@@ -50,10 +51,45 @@ export default {
     }
 
     const runtimeMatch = url.pathname.match(
-      /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/health)?$/,
+      /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/run\/script|\/health)?$/,
     );
     if (runtimeMatch) {
       const [, workspaceId, suffix = ""] = runtimeMatch;
+      if (request.method === "POST" && suffix === "/run/script") {
+        const body = (await request.json().catch(() => ({}))) as {
+          script?: string;
+          scope?: {
+            allowedPaths?: string[];
+            forbiddenPaths?: string[];
+            toolPermissions?: string[];
+            writableRoot?: string | null;
+          };
+        };
+        const script = typeof body.script === "string" ? body.script : "";
+        const scopeInput = body.scope;
+        try {
+          const result = await runWorkspaceScript(
+            runtimeEnv,
+            workspaceId,
+            script,
+            scopeInput,
+          );
+          return new Response(JSON.stringify({ ok: true, result }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (error) {
+          return new Response(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : "Script run failed.",
+            }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+      }
       if (request.method === "GET" && suffix === "/health") {
         return new Response(JSON.stringify({ ok: true, workspaceId }), {
           headers: { "Content-Type": "application/json" },

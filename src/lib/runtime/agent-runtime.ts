@@ -53,6 +53,7 @@ interface AgentExecutionConfig {
 interface ExecRelay {
   onOutput: (stream: "stdout" | "stderr", data: string) => void;
   flush: () => void;
+  checkProtocolError: () => void;
   events: () => AgentEventType[];
   fallbackText: () => string;
   stderrSummary: () => string;
@@ -162,6 +163,22 @@ const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
 
 function now(): number {
   return Date.now();
+}
+
+const TASK_TRANSITIONS: Record<AgentTaskState, readonly AgentTaskState[]> = {
+  queued: ["starting", "canceled"],
+  starting: ["running", "retrying", "failed", "canceled"],
+  running: ["succeeded", "failed", "canceled", "stalled"],
+  retrying: ["running", "failed", "canceled"],
+  succeeded: [],
+  failed: [],
+  canceled: [],
+  stalled: [],
+};
+
+function isValidTaskTransition(from: AgentTaskState, to: AgentTaskState): boolean {
+  const allowed = TASK_TRANSITIONS[from];
+  return allowed ? (allowed as readonly string[]).includes(to) : false;
 }
 
 function isActiveTaskState(state: string): state is Extract<AgentTaskState, (typeof ACTIVE_TASK_STATES)[number]> {
@@ -739,16 +756,154 @@ async function ensureContainer(
   return sandbox;
 }
 
+async function ensureWorkspaceSandbox(
+  env: RuntimeEnv,
+  workspaceId: string,
+  gitRepoUrl: string | null,
+): Promise<Sandbox> {
+  const sandboxEnv = requireSandbox(env);
+  const { getSandbox } = await import("@cloudflare/sandbox");
+  const { cloneRepo } = await import("$lib/agents/container");
+  const sandboxId = `script-${workspaceId}`;
+  const sandbox = getSandbox(sandboxEnv as never, sandboxId);
+  const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
+
+  if (gitRepoUrl) {
+    const workspaceExists = await sandbox.exists(workspaceRoot);
+    if (!workspaceExists.exists) {
+      await cloneRepo(
+        { Sandbox: sandboxEnv as never },
+        sandboxId,
+        gitRepoUrl,
+        workspaceRoot,
+      );
+    }
+  } else {
+    await sandbox.mkdir(workspaceRoot, { recursive: true });
+  }
+
+  return sandbox;
+}
+
+async function loadWorkspaceForScript(
+  env: RuntimeEnv,
+  workspaceId: string,
+): Promise<{ gitRepoUrl: string | null }> {
+  await ensureRuntimeSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT git_repo_url FROM workspace WHERE id = ? LIMIT 1`,
+  ).bind(workspaceId).first<{ git_repo_url: string | null }>();
+
+  if (!row) {
+    throw new RuntimeTaskError("WORKSPACE_NOT_FOUND", `Workspace ${workspaceId} not found.`);
+  }
+
+  return { gitRepoUrl: row.git_repo_url };
+}
+
+export interface ScriptRunResult {
+  status: AgentResult["status"];
+  summary: string;
+  commands: AgentResult["commands"];
+  filesTouched: string[];
+  violations: string[];
+  diffSummary: string | null;
+  patch: string | null;
+  commit: AgentResult["commit"];
+  startedAt: number;
+  finishedAt: number;
+}
+
+export async function runWorkspaceScript(
+  env: RuntimeEnv,
+  workspaceId: string,
+  script: string,
+  scopeInput?: {
+    allowedPaths?: readonly string[];
+    forbiddenPaths?: readonly string[];
+    toolPermissions?: readonly string[];
+    writableRoot?: string | null;
+  },
+): Promise<ScriptRunResult> {
+  const trimmed = script.trim();
+  if (!trimmed) {
+    throw new RuntimeTaskError("SCRIPT_REQUIRED", "Script content is required.");
+  }
+
+  const { gitRepoUrl } = await loadWorkspaceForScript(env, workspaceId);
+  const policy = normalizeAgentScope({
+    allowedPaths: scopeInput?.allowedPaths ?? ["."],
+    forbiddenPaths: scopeInput?.forbiddenPaths ?? [".git", "node_modules"],
+    toolPermissions: scopeInput?.toolPermissions ?? ["search", "run", "write", "commit"],
+    writableRoot: scopeInput?.writableRoot ?? ".",
+  });
+  const policyError = validateAgentScope(policy);
+  if (policyError) {
+    throw new RuntimeTaskError("POLICY_INVALID", policyError);
+  }
+
+  const sandbox = await ensureWorkspaceSandbox(env, workspaceId, gitRepoUrl);
+  const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
+  const executionRoot = resolveScopedWorkspaceRoot(workspaceRoot, policy.writableRoot);
+  await sandbox.mkdir(executionRoot, { recursive: true });
+
+  const startedAt = now();
+  let result: { stdout: string; stderr: string; exitCode: number };
+  try {
+    const exec = await sandbox.exec(trimmed, { cwd: executionRoot });
+    const exitCode = (exec as { code?: number; exitCode?: number })?.code
+      ?? (exec as { code?: number; exitCode?: number })?.exitCode ?? 0;
+    result = {
+      stdout: (exec as { stdout?: string })?.stdout ?? "",
+      stderr: (exec as { stderr?: string })?.stderr ?? "",
+      exitCode,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result = { stdout: "", stderr: message, exitCode: 1 };
+  }
+  const finishedAt = now();
+
+  const status: AgentResult["status"] = result.exitCode === 0 ? "success" : "error";
+  const summary =
+    result.exitCode === 0
+      ? (result.stdout.trim() || "Script completed.")
+      : (result.stderr.trim() || result.stdout.trim() || "Script failed.");
+
+  return {
+    status,
+    summary,
+    commands: [{ command: trimmed, exitCode: result.exitCode }],
+    filesTouched: [],
+    violations: [],
+    diffSummary: null,
+    patch: null,
+    commit: null,
+    startedAt,
+    finishedAt,
+  };
+}
+
 function createExecRelay(): ExecRelay {
   let stdoutBuffer = "";
+  let protocolError: RuntimeTaskError | null = null;
   const parsedEvents: AgentEventType[] = [];
   const rawStdoutLines: string[] = [];
   const stderrChunks: string[] = [];
 
   const handleLine = (line: string) => {
-    const event = parseAgentEvent(line);
-    if (event) {
-      parsedEvents.push(event);
+    if (protocolError) return;
+    const trimmed = line.trim();
+    if (trimmed.startsWith("{")) {
+      const event = parseAgentEvent(trimmed);
+      if (event) {
+        parsedEvents.push(event);
+      } else {
+        protocolError = new RuntimeTaskError(
+          "FAP_PROTOCOL_ERROR",
+          `Invalid FAP event (schema validation failed): ${trimmed.slice(0, 200)}`,
+        );
+      }
     } else {
       rawStdoutLines.push(line);
     }
@@ -773,6 +928,9 @@ function createExecRelay(): ExecRelay {
       const trimmed = stdoutBuffer.trim();
       stdoutBuffer = "";
       if (trimmed) handleLine(trimmed);
+    },
+    checkProtocolError: () => {
+      if (protocolError) throw protocolError;
     },
     events: () => parsedEvents,
     fallbackText: () => rawStdoutLines.join("\n").trim(),
@@ -846,10 +1004,61 @@ function buildAgentResultFromEvents(
     filesTouched: [...filesTouched],
     violations: [],
     diffSummary: null,
+    patch: null,
     commit,
     startedAt,
     finishedAt,
   };
+}
+
+function buildDiffSummary(filesTouched: readonly string[]): string | null {
+  if (filesTouched.length === 0) {
+    return null;
+  }
+
+  return filesTouched.length === 1
+    ? `1 file touched: ${filesTouched[0]}`
+    : `${filesTouched.length} files touched`;
+}
+
+async function collectWorkspacePatch(
+  sandbox: Sandbox,
+  workspaceRoot: string,
+): Promise<string | null> {
+  const insideGit = await sandbox.exec("git rev-parse --is-inside-work-tree", {
+    cwd: workspaceRoot,
+  }).catch(() => null);
+  const insideGitExitCode = (insideGit as { code?: number; exitCode?: number } | null)?.code
+    ?? (insideGit as { code?: number; exitCode?: number } | null)?.exitCode
+    ?? null;
+
+  if (!insideGit || insideGitExitCode !== 0 || insideGit.stdout.trim() !== "true") {
+    return null;
+  }
+
+  const result = await sandbox.exec(
+    [
+      "tracked=$(git diff --binary --relative HEAD -- 2>/dev/null || true)",
+      "untracked=$(git ls-files --others --exclude-standard | while IFS= read -r file; do",
+      "  [ -n \"$file\" ] || continue",
+      "  git diff --binary --no-index -- /dev/null \"$file\" 2>/dev/null || true",
+      "done)",
+      "printf '%s%s' \"$tracked\" \"$untracked\"",
+    ].join("\n"),
+    {
+      cwd: workspaceRoot,
+    },
+  ).catch(() => null);
+  const resultExitCode = (result as { code?: number; exitCode?: number } | null)?.code
+    ?? (result as { code?: number; exitCode?: number } | null)?.exitCode
+    ?? null;
+
+  if (!result || resultExitCode !== 0) {
+    return null;
+  }
+
+  const patch = result.stdout.trim();
+  return patch.length > 0 ? `${patch}\n` : null;
 }
 
 async function persistAssistantText(
@@ -955,6 +1164,18 @@ async function patchTaskRow(
   const values: Array<string | number | null> = [];
 
   if (patch.status !== undefined) {
+    const current = await loadTaskRow(env, taskId);
+    if (!current) {
+      throw new RuntimeTaskError("TASK_NOT_FOUND", `Task ${taskId} not found.`);
+    }
+    const from = current.status as AgentTaskState;
+    const to = patch.status;
+    if (!isValidTaskTransition(from, to)) {
+      throw new RuntimeTaskError(
+        "INVALID_TASK_TRANSITION",
+        `Invalid task transition from ${from} to ${to}.`,
+      );
+    }
     clauses.push("status = ?");
     values.push(patch.status);
   }
@@ -1093,6 +1314,7 @@ async function buildFailureResult(
     filesTouched: [],
     violations,
     diffSummary: null,
+    patch: null,
     commit: null,
     startedAt,
     finishedAt,
@@ -1725,11 +1947,13 @@ async function runSandboxTask(
 
     const waitResult = await process.waitForExit();
     relay.flush();
+    relay.checkProtocolError();
     const exitCode = waitResult.exitCode;
     const logs = await process.getLogs().catch(() => ({ stdout: "", stderr: "" }));
     if (logs.stdout) relay.onOutput("stdout", logs.stdout);
     if (logs.stderr) relay.onOutput("stderr", logs.stderr);
     relay.flush();
+    relay.checkProtocolError();
 
     await ensureNotCancelled(env, workspaceId, agentId);
 
@@ -1756,6 +1980,10 @@ async function runSandboxTask(
       startedAt,
       finishedAt,
     );
+    result.patch = await collectWorkspacePatch(sandbox, resolveWorkspaceRoot(config.gitRepoUrl));
+    if (!result.diffSummary) {
+      result.diffSummary = buildDiffSummary(result.filesTouched);
+    }
     const terminalStatus = relay.events().some((event) => event.type === "handoff")
       ? "exhausted"
       : "done";

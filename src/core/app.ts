@@ -148,6 +148,12 @@ export const WorkerRunInputSchema = Schema.Struct({
 });
 export type WorkerRunInput = Schema.Schema.Type<typeof WorkerRunInputSchema>;
 
+export const WorkerScriptRunInputSchema = Schema.Struct({
+  script: Schema.String,
+  scope: Schema.optional(WorkerRunScopeInputSchema),
+});
+export type WorkerScriptRunInput = Schema.Schema.Type<typeof WorkerScriptRunInputSchema>;
+
 function decodePolicy(input: {
   allowedPaths?: readonly string[];
   forbiddenPaths?: readonly string[];

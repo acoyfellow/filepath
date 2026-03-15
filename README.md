@@ -127,6 +127,7 @@ At minimum:
 - `filesTouched`
 - `violations`
 - `diffSummary`
+- `patch`
 - `commit`
 - `startedAt`
 - `finishedAt`
@@ -154,7 +155,7 @@ At minimum:
 
 **Response (200):** machine-stable contract
 
-- `status`, `summary`, `events`, `filesTouched`, `violations`, `diffSummary`, `commit`
+- `status`, `summary`, `events`, `filesTouched`, `violations`, `diffSummary`, `patch`, `commit`
 - `agentId`, `runId`, `startedAt`, `finishedAt`
 
 **Auth:** session or API key (`Authorization: Bearer <key>`). User must own the workspace.
@@ -176,6 +177,7 @@ Core routes:
 - `POST /api/workspaces/:id/agents/:agentId/tasks`
 - `POST /api/workspaces/:id/agents/:agentId/cancel`
 - `POST /api/workspaces/:id/run` – programmatic run (new or continue thread; returns structured result + events)
+- `POST /api/workspaces/:id/run/script` – script-only run (deterministic; no LLM; scope enforcement)
 
 Machine-readable reference:
 
@@ -198,6 +200,28 @@ Better Auth is the only supported auth boundary in v1.
 - humans create agents directly
 - agents do not spawn child agents in v1
 - task input is agent work input, not a general product chat protocol
+
+### Runtime contract (Jido-inspired hardening)
+
+Technical spec for the deterministic, testable core. Implement against this; revise when learnings expose the need.
+
+**1. Scope layer** – The authority/scope module (`src/lib/runtime/authority.ts`) is the deterministic core. Path normalization, path-in-scope checks, and policy violation checks are pure and testable; no LLM. Same inputs, same outputs.
+
+**2. Task lifecycle** – Task states and allowed transitions are explicit; invalid transitions are rejected.
+
+States: `queued` | `starting` | `running` | `retrying` | `succeeded` | `failed` | `canceled` | `stalled`
+
+Allowed transitions:
+
+- `queued` -> `starting`, `canceled`
+- `starting` -> `running`, `retrying`, `failed`, `canceled`
+- `running` -> `succeeded`, `failed`, `canceled`, `stalled`
+- `retrying` -> `running`, `failed`, `canceled`
+- `succeeded`, `failed`, `canceled`, `stalled` -> (terminal; no transitions)
+
+**3. Events and failures** – FAP events from the harness are schema-validated. A line that looks like JSON (starts with `{`) and fails `AgentEvent.safeParse` fails the run with a protocol error. Process crash or unexpected exit always transitions the task to a terminal state (`failed` or `stalled`); the task is never left in `running`.
+
+**4. Script-only runs** – Optional execution mode: run a fixed script (or command list) in the workspace with full scope enforcement; no harness/LLM; deterministic. Invoked via `POST /api/workspaces/:id/run/script` with `{ script: string, scope?: {...} }`. Returns the same structured result shape as agent runs where applicable.
 
 ## Explanation
 
@@ -288,6 +312,7 @@ That means:
 bun install
 bun run dev
 bun run check
+bun run test
 bun run build
 bun run smoke:local
 ```
