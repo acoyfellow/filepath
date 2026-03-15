@@ -1847,16 +1847,6 @@ async function runSandboxTask(
   let process: Process | null = null;
   let sandbox: Sandbox;
 
-  await setTaskState(env, {
-    taskId,
-    agentId,
-    state: "starting",
-    attempt: 0,
-    startedAt,
-    heartbeatAt: startedAt,
-    processId: null,
-  });
-
   try {
     sandbox = await withSandboxStartupRetry(env, taskId, agentId, {
       ...logBase,
