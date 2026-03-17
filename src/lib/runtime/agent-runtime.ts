@@ -17,6 +17,7 @@ import {
   resolveScopedWorkspaceRoot,
   validateAgentScope,
   type AgentScope,
+  type ToolPermission,
 } from "$lib/runtime/authority";
 import { decryptApiKey } from "$lib/crypto";
 import { resolveBetterAuthSecret } from "$lib/better-auth-secret";
@@ -38,6 +39,8 @@ export interface RuntimeEnv {
   Sandbox?: unknown;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  DEJA_ENDPOINT?: string;
+  DEJA_API_KEY?: string;
 }
 
 export interface RuntimeExecutionContext {
@@ -69,6 +72,18 @@ interface DirectModelResponse {
   summary: string;
 }
 
+interface DejaInjectResponse {
+  prompt?: string;
+  learnings?: ReadonlyArray<{ trigger?: string; learning?: string }>;
+  state?: {
+    state?: {
+      goal?: string;
+      next_actions?: ReadonlyArray<string>;
+      decisions?: ReadonlyArray<{ text?: string }>;
+    };
+  };
+}
+
 export interface AgentTaskCompletion {
   result: AgentResult;
   events: AgentEventType[];
@@ -94,6 +109,9 @@ interface TaskRow {
   diff_summary: string | null;
   patch: string | null;
   commit_json: string | null;
+  trace_id: string | null;
+  proof_run_id: string | null;
+  proof_iteration_id: string | null;
   attempt: number | null;
   request_id: string | null;
   error_code: string | null;
@@ -102,6 +120,34 @@ interface TaskRow {
   started_at: number;
   heartbeat_at: number | null;
   finished_at: number;
+}
+
+interface InterruptionRow {
+  id: string;
+  workspace_id: string;
+  agent_id: string;
+  run_id: string | null;
+  trace_id: string | null;
+  proof_run_id: string | null;
+  proof_iteration_id: string | null;
+  kind: "approval" | "pause";
+  status: "pending" | "approved" | "rejected" | "resumed";
+  summary: string;
+  requested_permission: ToolPermission | null;
+  payload_json: string;
+  created_at: number;
+  updated_at: number;
+  resolved_at: number | null;
+}
+
+function parsePayloadJson(value: string | null): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 interface ResultRow {
@@ -167,6 +213,13 @@ const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
   shelley:
     "You are Shelley, filepath's full-stack engineering harness running inside a sandbox. Respond directly to the latest user request. Keep responses plain text unless the user asks otherwise.",
 };
+
+function parseRequestedPermission(
+  message: string,
+): ToolPermission | null {
+  const match = message.match(/\bnot allowed to (inspect|search|run|write|commit)\b/i);
+  return (match?.[1]?.toLowerCase() as ToolPermission | undefined) ?? null;
+}
 
 function now(): number {
   return Date.now();
@@ -350,6 +403,9 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
       diff_summary TEXT,
       patch TEXT,
       commit_json TEXT,
+      trace_id TEXT,
+      proof_run_id TEXT,
+      proof_iteration_id TEXT,
       attempt INTEGER NOT NULL DEFAULT 0,
       request_id TEXT,
       error_code TEXT,
@@ -373,11 +429,40 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
   await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN heartbeat_at INTEGER`).run().catch(() => {});
   await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN patch TEXT`).run().catch(() => {});
   await env.DB.prepare(`ALTER TABLE agent_result ADD COLUMN patch TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN trace_id TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN proof_run_id TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent_task ADD COLUMN proof_iteration_id TEXT`).run().catch(() => {});
 
   await env.DB.prepare(`ALTER TABLE agent ADD COLUMN active_process_id TEXT`).run().catch(() => {});
   await env.DB.prepare(
     `ALTER TABLE agent ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0`,
   ).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE agent ADD COLUMN closed_at INTEGER`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE workspace ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 0`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE workspace ADD COLUMN memory_scope TEXT`).run().catch(() => {});
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS agent_interruption (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      run_id TEXT,
+      trace_id TEXT,
+      proof_run_id TEXT,
+      proof_iteration_id TEXT,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      requested_permission TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch('subsecond') * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch('subsecond') * 1000),
+      resolved_at INTEGER
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS agent_interruption_agent_id_idx ON agent_interruption (agent_id)`).run().catch(() => {});
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS agent_interruption_workspace_id_idx ON agent_interruption (workspace_id)`).run().catch(() => {});
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS agent_interruption_status_idx ON agent_interruption (status)`).run().catch(() => {});
 
   runtimeSchemaReady = true;
 }
@@ -602,10 +687,11 @@ async function getAgentExecutionState(
   status: AgentStatusType;
   activeProcessId: string | null;
   cancelRequested: boolean;
+  closedAt: number | null;
 }> {
   await ensureRuntimeSchema(env);
   const row = await env.DB.prepare(
-    `SELECT status, active_process_id, cancel_requested
+    `SELECT status, active_process_id, cancel_requested, closed_at
        FROM agent
       WHERE id = ? AND workspace_id = ?
       LIMIT 1`,
@@ -613,6 +699,7 @@ async function getAgentExecutionState(
     status: AgentStatusType;
     active_process_id: string | null;
     cancel_requested: number | null;
+    closed_at: number | null;
   }>();
 
   if (!row) {
@@ -623,6 +710,7 @@ async function getAgentExecutionState(
     status: row.status,
     activeProcessId: row.active_process_id,
     cancelRequested: Boolean(row.cancel_requested),
+    closedAt: row.closed_at ?? null,
   };
 }
 
@@ -639,22 +727,195 @@ async function getAgentTranscript(
     .join("\n\n");
 }
 
-async function buildTaskPrompt(
+async function loadWorkspaceMemoryConfig(
   env: RuntimeEnv,
+  workspaceId: string,
+): Promise<{ memoryEnabled: boolean; memoryScope: string | null }> {
+  await ensureRuntimeSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT memory_enabled, memory_scope
+       FROM workspace
+      WHERE id = ?
+      LIMIT 1`,
+  ).bind(workspaceId).first<{ memory_enabled: number | null; memory_scope: string | null }>();
+
+  return {
+    memoryEnabled: Boolean(row?.memory_enabled),
+    memoryScope: row?.memory_scope?.trim() || null,
+  };
+}
+
+function buildDejaHeaders(env: RuntimeEnv): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    ...(env.DEJA_API_KEY ? { Authorization: `Bearer ${env.DEJA_API_KEY}` } : {}),
+  };
+}
+
+function summarizeDejaRecall(payload: DejaInjectResponse | null): string | null {
+  if (!payload) return null;
+
+  const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
+  const stateGoal = payload.state?.state?.goal?.trim() ?? "";
+  const nextActions = payload.state?.state?.next_actions?.filter(Boolean).join("; ") ?? "";
+  const decisions =
+    payload.state?.state?.decisions
+      ?.map((entry) => entry.text?.trim() ?? "")
+      .filter(Boolean)
+      .join("; ") ?? "";
+  const learningLines = (payload.learnings ?? [])
+    .map((entry) => {
+      const trigger = typeof entry.trigger === "string" ? entry.trigger.trim() : "";
+      const learning = typeof entry.learning === "string" ? entry.learning.trim() : "";
+      if (!trigger && !learning) return "";
+      return trigger ? `When ${trigger}, ${learning}` : learning;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const parts = [
+    prompt,
+    stateGoal ? `Current goal: ${stateGoal}` : "",
+    decisions ? `Prior decisions: ${decisions}` : "",
+    nextActions ? `Next actions: ${nextActions}` : "",
+    learningLines,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+async function loadDejaRecall(
+  env: RuntimeEnv,
+  workspaceId: string,
   agentId: string,
   content: string,
+  task: TaskRow | null,
+): Promise<string | null> {
+  if (!env.DEJA_ENDPOINT) {
+    return null;
+  }
+
+  const memory = await loadWorkspaceMemoryConfig(env, workspaceId);
+  if (!memory.memoryEnabled || !memory.memoryScope) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${env.DEJA_ENDPOINT.replace(/\/+$/, "")}/inject`, {
+      method: "POST",
+      headers: buildDejaHeaders(env),
+      body: JSON.stringify({
+        scopes: [memory.memoryScope],
+        context: content,
+        limit: 3,
+        format: "prompt",
+        includeState: true,
+        runId: task?.proof_run_id ?? task?.id ?? "",
+        identity: {
+          traceId: task?.trace_id ?? null,
+          workspaceId,
+          conversationId: agentId,
+          runId: task?.id ?? null,
+          proofRunId: task?.proof_run_id ?? null,
+          proofIterationId: task?.proof_iteration_id ?? null,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json().catch(() => null)) as DejaInjectResponse | null;
+    return summarizeDejaRecall(payload);
+  } catch {
+    return null;
+  }
+}
+
+async function buildTaskPrompt(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+  content: string,
+  task: TaskRow | null,
 ): Promise<string> {
   const transcript = await getAgentTranscript(env, agentId, 12);
-  return transcript
+  const recall = await loadDejaRecall(env, workspaceId, agentId, content, task);
+  return transcript || recall
     ? [
         "Continue this filepath agent task from the transcript below.",
         "Reply only as the selected harness running in the sandbox.",
         "",
+        ...(recall
+          ? [
+            "Relevant recall from earlier work:",
+            recall,
+            "",
+          ]
+          : []),
         transcript,
         "",
         "Respond to the latest human task in context.",
       ].join("\n")
     : content;
+}
+
+async function persistDejaRuntimeSummary(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+  taskId: string,
+  content: string,
+  result: AgentResult,
+): Promise<void> {
+  if (!env.DEJA_ENDPOINT) {
+    return;
+  }
+
+  const memory = await loadWorkspaceMemoryConfig(env, workspaceId);
+  if (!memory.memoryEnabled || !memory.memoryScope) {
+    return;
+  }
+
+  const task = await loadTaskRow(env, taskId);
+  const summaryParts = [
+    `Conversation run result: ${result.summary}.`,
+    result.diffSummary ? `Changes: ${result.diffSummary}.` : "",
+    result.commit ? `Commit: ${result.commit.sha} ${result.commit.message}.` : "",
+  ].filter(Boolean);
+
+  try {
+    await fetch(`${env.DEJA_ENDPOINT.replace(/\/+$/, "")}/learn`, {
+      method: "POST",
+      headers: buildDejaHeaders(env),
+      body: JSON.stringify({
+        scope: memory.memoryScope,
+        trigger:
+          (content.trim().length > 240 ? `${content.trim().slice(0, 239)}…` : content.trim())
+          || "filepath conversation run",
+        learning: summaryParts.join(" "),
+        confidence:
+          result.status === "success"
+            ? 0.85
+            : result.status === "policy_error"
+              ? 0.7
+              : 0.6,
+        reason: "Stored from a filepath conversation run.",
+        source: `filepath:${taskId}`,
+        identity: {
+          traceId: task?.trace_id ?? null,
+          workspaceId,
+          conversationId: agentId,
+          runId: taskId,
+          proofRunId: task?.proof_run_id ?? null,
+          proofIterationId: task?.proof_iteration_id ?? null,
+        },
+      }),
+    });
+  } catch {
+    // best-effort only
+  }
 }
 
 async function loadAgentExecutionConfig(
@@ -1332,18 +1593,26 @@ async function insertQueuedTask(
   agentId: string,
   content: string,
   requestId: string,
+  identity?: {
+    traceId?: string | null;
+    proofRunId?: string | null;
+    proofIterationId?: string | null;
+  },
 ): Promise<AgentRuntimeActiveTask> {
   const taskId = crypto.randomUUID();
   const acceptedAt = now();
   await env.DB.prepare(
     `INSERT INTO agent_task
-      (id, agent_id, content, status, result_status, summary, commands, files_touched, violations, diff_summary, patch, commit_json, attempt, request_id, error_code, error_detail, accepted_at, started_at, heartbeat_at, finished_at)
-     VALUES (?, ?, ?, ?, NULL, '', '[]', '[]', '[]', NULL, NULL, NULL, 0, ?, NULL, NULL, ?, ?, ?, ?)`,
+      (id, agent_id, content, status, result_status, summary, commands, files_touched, violations, diff_summary, patch, commit_json, trace_id, proof_run_id, proof_iteration_id, attempt, request_id, error_code, error_detail, accepted_at, started_at, heartbeat_at, finished_at)
+     VALUES (?, ?, ?, ?, NULL, '', '[]', '[]', '[]', NULL, NULL, NULL, ?, ?, ?, 0, ?, NULL, NULL, ?, ?, ?, ?)`,
   ).bind(
     taskId,
     agentId,
     content,
     "queued",
+    identity?.traceId ?? requestId,
+    identity?.proofRunId ?? null,
+    identity?.proofIterationId ?? null,
     requestId,
     acceptedAt,
     acceptedAt,
@@ -1355,7 +1624,7 @@ async function insertQueuedTask(
     id: taskId,
     state: "queued",
     attempt: 0,
-    requestId,
+    requestId: identity?.traceId ?? requestId,
     acceptedAt,
     startedAt: null,
     heartbeatAt: acceptedAt,
@@ -1363,6 +1632,123 @@ async function insertQueuedTask(
     errorCode: null,
     errorDetail: null,
   };
+}
+
+async function loadLatestPendingInterruption(
+  env: RuntimeEnv,
+  agentId: string,
+): Promise<InterruptionRow | null> {
+  await ensureRuntimeSchema(env);
+  return env.DB.prepare(
+    `SELECT id, workspace_id, agent_id, run_id, trace_id, proof_run_id, proof_iteration_id, kind, status, summary,
+            requested_permission, payload_json, created_at, updated_at, resolved_at
+       FROM agent_interruption
+      WHERE agent_id = ?
+        AND status = 'pending'
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 1`,
+  ).bind(agentId).first<InterruptionRow>();
+}
+
+async function createInterruption(
+  env: RuntimeEnv,
+  params: {
+    workspaceId: string;
+    agentId: string;
+    runId: string | null;
+    traceId: string | null;
+    proofRunId: string | null;
+    proofIterationId: string | null;
+    kind: "approval" | "pause";
+    summary: string;
+    requestedPermission?: ToolPermission | null;
+    payload?: Record<string, unknown>;
+  },
+): Promise<InterruptionRow> {
+  const existing = await loadLatestPendingInterruption(env, params.agentId);
+  if (existing) {
+    return existing;
+  }
+
+  const id = crypto.randomUUID();
+  const createdAt = now();
+  const payloadJson = JSON.stringify(params.payload ?? {});
+  await env.DB.prepare(
+    `INSERT INTO agent_interruption
+      (id, workspace_id, agent_id, run_id, trace_id, proof_run_id, proof_iteration_id, kind, status, summary, requested_permission, payload_json, created_at, updated_at, resolved_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULL)`,
+  ).bind(
+    id,
+    params.workspaceId,
+    params.agentId,
+    params.runId,
+    params.traceId,
+    params.proofRunId,
+    params.proofIterationId,
+    params.kind,
+    params.summary,
+    params.requestedPermission ?? null,
+    payloadJson,
+    createdAt,
+    createdAt,
+  ).run();
+
+  return {
+    id,
+    workspace_id: params.workspaceId,
+    agent_id: params.agentId,
+    run_id: params.runId,
+    trace_id: params.traceId,
+    proof_run_id: params.proofRunId,
+    proof_iteration_id: params.proofIterationId,
+    kind: params.kind,
+    status: "pending",
+    summary: params.summary,
+    requested_permission: params.requestedPermission ?? null,
+    payload_json: payloadJson,
+    created_at: createdAt,
+    updated_at: createdAt,
+    resolved_at: null,
+  };
+}
+
+async function resolveInterruption(
+  env: RuntimeEnv,
+  interruptionId: string,
+  status: "approved" | "rejected" | "resumed",
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE agent_interruption
+        SET status = ?, resolved_at = unixepoch('subsecond') * 1000, updated_at = unixepoch('subsecond') * 1000
+      WHERE id = ?`,
+  ).bind(status, interruptionId).run();
+}
+
+async function appendAgentPermission(
+  env: RuntimeEnv,
+  agentId: string,
+  permission: ToolPermission,
+): Promise<void> {
+  const row = await env.DB.prepare(
+    `SELECT tool_permissions
+       FROM agent
+      WHERE id = ?
+      LIMIT 1`,
+  ).bind(agentId).first<{ tool_permissions: string | null }>();
+
+  const current = normalizeAgentScope({
+    toolPermissions: row?.tool_permissions ? parseJsonArray(row.tool_permissions) : undefined,
+  }).toolPermissions;
+  if (current.includes(permission)) {
+    return;
+  }
+
+  const next = [...current, permission];
+  await env.DB.prepare(
+    `UPDATE agent
+        SET tool_permissions = ?, updated_at = unixepoch('subsecond') * 1000
+      WHERE id = ?`,
+  ).bind(JSON.stringify(next), agentId).run();
 }
 
 async function patchTaskRow(
@@ -1482,7 +1868,7 @@ async function loadTaskRow(
   await ensureRuntimeSchema(env);
   return env.DB.prepare(
     `SELECT id, agent_id, content, status, result_status, summary, commands, files_touched, violations,
-            diff_summary, patch, commit_json, attempt, request_id, error_code, error_detail,
+            diff_summary, patch, commit_json, trace_id, proof_run_id, proof_iteration_id, attempt, request_id, error_code, error_detail,
             accepted_at, started_at, heartbeat_at, finished_at
        FROM agent_task
       WHERE id = ?
@@ -1497,7 +1883,7 @@ async function loadLatestActiveTaskRow(
   await ensureRuntimeSchema(env);
   return env.DB.prepare(
     `SELECT id, agent_id, content, status, result_status, summary, commands, files_touched, violations,
-            diff_summary, patch, commit_json, attempt, request_id, error_code, error_detail,
+            diff_summary, patch, commit_json, trace_id, proof_run_id, proof_iteration_id, attempt, request_id, error_code, error_detail,
             accepted_at, started_at, heartbeat_at, finished_at
        FROM agent_task
       WHERE agent_id = ?
@@ -2291,11 +2677,29 @@ async function runSandboxTask(
       status: "error" as AgentStatusType,
       activeProcessId: null,
       cancelRequested: false,
+      closedAt: null,
     }));
     const canceled = runtimeError.code === "TASK_CANCELED" || executionState.cancelRequested;
     const policy = runtimeError.code === "POLICY_VIOLATION";
+    const requestedPermission = policy ? parseRequestedPermission(runtimeError.message) : null;
+    const currentTask = requestedPermission ? await loadTaskRow(env, taskId).catch(() => null) : null;
+    if (policy && requestedPermission) {
+      await createInterruption(env, {
+        workspaceId,
+        agentId,
+        runId: taskId,
+        traceId: currentTask?.trace_id ?? logBase.requestId,
+        proofRunId: currentTask?.proof_run_id ?? null,
+        proofIterationId: currentTask?.proof_iteration_id ?? null,
+        kind: "approval",
+        summary: `Approval needed: allow ${requestedPermission} to continue this conversation.`,
+        requestedPermission,
+        payload: { content },
+      });
+    }
     const taskState: Extract<AgentTaskState, "failed" | "canceled"> = canceled ? "canceled" : "failed";
-    const runtimeStatus: AgentStatusType = canceled ? "idle" : "error";
+    const runtimeStatus: AgentStatusType =
+      canceled || (policy && requestedPermission) ? "idle" : "error";
     const resultStatus: AgentResult["status"] = canceled
       ? "aborted"
       : policy
@@ -2304,7 +2708,9 @@ async function runSandboxTask(
     const summary = canceled
       ? "The agent task was cancelled."
       : policy
-        ? runtimeError.message
+        ? requestedPermission
+          ? `Blocked pending approval for ${requestedPermission}.`
+          : runtimeError.message
         : `The sandbox runtime failed while handling this task: ${runtimeError.message}`;
     const failed = await finalizeTaskFailure(env, {
       taskId,
@@ -2317,7 +2723,7 @@ async function runSandboxTask(
       errorCode: runtimeError.code,
       errorDetail: runtimeError.message,
       startedAt,
-      violations: policy ? [runtimeError.message] : [],
+      violations: policy && !requestedPermission ? [runtimeError.message] : [],
     });
     logTaskEvent(canceled ? "warn" : "error", {
       ...logBase,
@@ -2404,7 +2810,7 @@ export async function processAcceptedAgentTask(
     });
 
     if (localWaitDirective) {
-      return await runLocalWaitTask(
+      const completion = await runLocalWaitTask(
         env,
         workspaceId,
         taskId,
@@ -2413,9 +2819,11 @@ export async function processAcceptedAgentTask(
         localWaitDirective,
         { requestId, taskId, workspaceId, agentId },
       );
+      await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, completion.result);
+      return completion;
     }
 
-    const taskPrompt = await buildTaskPrompt(env, agentId, content);
+    const taskPrompt = await buildTaskPrompt(env, workspaceId, agentId, content, persistedTask);
     const config = await loadAgentExecutionConfig(env, agentId, workspaceId, taskPrompt);
 
     logTaskEvent("log", {
@@ -2431,7 +2839,7 @@ export async function processAcceptedAgentTask(
     });
 
     if (!env.Sandbox) {
-      return await runDirectExecutionTask(
+      const completion = await runDirectExecutionTask(
         env,
         workspaceId,
         taskId,
@@ -2441,9 +2849,11 @@ export async function processAcceptedAgentTask(
         config,
         { requestId, taskId, workspaceId, agentId },
       );
+      await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, completion.result);
+      return completion;
     }
 
-    return await runSandboxTask(
+    const completion = await runSandboxTask(
       env,
       workspaceId,
       taskId,
@@ -2452,6 +2862,8 @@ export async function processAcceptedAgentTask(
       config,
       { requestId, taskId, workspaceId, agentId },
     );
+    await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, completion.result);
+    return completion;
   } catch (error) {
     const runtimeError = toRuntimeTaskError(
       error,
@@ -2489,6 +2901,7 @@ export async function processAcceptedAgentTask(
       errorCode: runtimeError.code,
       errorDetail: runtimeError.message,
     });
+    await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, result);
     return { result, events: [] };
   }
 }
@@ -2499,10 +2912,23 @@ export async function acceptAgentTask(
   agentId: string,
   content: string,
   requestId: string = crypto.randomUUID(),
+  identity?: {
+    traceId?: string | null;
+    proofRunId?: string | null;
+    proofIterationId?: string | null;
+  },
+  persistUserMessage = true,
 ): Promise<AgentTaskAcceptedResponse> {
   await ensureRuntimeSchema(env);
   await maybeMarkStalledTask(env, workspaceId, agentId);
   const currentState = await getAgentExecutionState(env, workspaceId, agentId);
+
+  if (currentState.closedAt) {
+    throw new RuntimeTaskError(
+      "CONVERSATION_CLOSED",
+      "This conversation is closed. Reopen it to continue.",
+    );
+  }
 
   if (currentState.status === "exhausted") {
     throw new RuntimeTaskError(
@@ -2519,8 +2945,18 @@ export async function acceptAgentTask(
     );
   }
 
-  await saveAgentMessage(env, agentId, "user", content);
-  const task = await insertQueuedTask(env, agentId, content, requestId);
+  const pendingInterruption = await loadLatestPendingInterruption(env, agentId);
+  if (pendingInterruption) {
+    throw new RuntimeTaskError(
+      "CONVERSATION_BLOCKED",
+      "This conversation is blocked. Resolve the pending interruption before continuing.",
+    );
+  }
+
+  if (persistUserMessage) {
+    await saveAgentMessage(env, agentId, "user", content);
+  }
+  const task = await insertQueuedTask(env, agentId, content, requestId, identity);
   await updateAgentExecutionState(env, agentId, {
     status: "queued",
     activeProcessId: null,
@@ -2540,6 +2976,7 @@ export async function acceptAgentTask(
     ok: true,
     taskId: task.id,
     state: "queued",
+    traceId: identity?.traceId ?? requestId,
   };
 }
 
@@ -2645,6 +3082,123 @@ export async function cancelAgentTask(
 
   await heartbeatTask(env, activeTask.id);
   return { cancelled: true, taskId: activeTask.id };
+}
+
+export async function pauseAgentTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+): Promise<{ paused: boolean; taskId: string | null; interruptionId: string | null }> {
+  await ensureRuntimeSchema(env);
+  await maybeMarkStalledTask(env, workspaceId, agentId);
+  const activeTask = await loadLatestActiveTaskRow(env, agentId);
+  if (!activeTask || !isActiveTaskState(activeTask.status)) {
+    return { paused: false, taskId: null, interruptionId: null };
+  }
+
+  const interruption = await createInterruption(env, {
+    workspaceId,
+    agentId,
+    runId: activeTask.id,
+    traceId: activeTask.trace_id ?? activeTask.request_id,
+    proofRunId: activeTask.proof_run_id,
+    proofIterationId: activeTask.proof_iteration_id,
+    kind: "pause",
+    summary: "Paused. Resume to rerun the last task from this conversation.",
+    payload: { content: activeTask.content },
+  });
+  await cancelAgentTask(env, workspaceId, agentId);
+  return { paused: true, taskId: activeTask.id, interruptionId: interruption.id };
+}
+
+async function continueFromInterruption(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+  interruption: InterruptionRow,
+  status: "approved" | "resumed",
+): Promise<{ accepted: AgentTaskAcceptedResponse | null; content: string | null }> {
+  const payload = parsePayloadJson(interruption.payload_json);
+  const content = typeof payload.content === "string" ? payload.content.trim() : "";
+  await resolveInterruption(env, interruption.id, status);
+  if (!content) {
+    return { accepted: null, content: null };
+  }
+
+  return {
+    accepted: await acceptAgentTask(
+      env,
+      workspaceId,
+      agentId,
+      content,
+      interruption.trace_id ?? crypto.randomUUID(),
+      {
+        traceId: interruption.trace_id,
+        proofRunId: interruption.proof_run_id,
+        proofIterationId: interruption.proof_iteration_id,
+      },
+      false,
+    ),
+    content,
+  };
+}
+
+export async function approveAgentInterruption(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+): Promise<{ approved: boolean; taskId: string | null; traceId: string | null; content: string | null }> {
+  await ensureRuntimeSchema(env);
+  const interruption = await loadLatestPendingInterruption(env, agentId);
+  if (!interruption || interruption.kind !== "approval") {
+    return { approved: false, taskId: null, traceId: null, content: null };
+  }
+
+  if (interruption.requested_permission) {
+    await appendAgentPermission(env, agentId, interruption.requested_permission);
+  }
+
+  const accepted = await continueFromInterruption(env, workspaceId, agentId, interruption, "approved");
+  return {
+    approved: true,
+    taskId: accepted.accepted?.taskId ?? null,
+    traceId: accepted.accepted?.traceId ?? interruption.trace_id ?? null,
+    content: accepted.content,
+  };
+}
+
+export async function rejectAgentInterruption(
+  env: RuntimeEnv,
+  agentId: string,
+): Promise<{ rejected: boolean; interruptionId: string | null }> {
+  await ensureRuntimeSchema(env);
+  const interruption = await loadLatestPendingInterruption(env, agentId);
+  if (!interruption) {
+    return { rejected: false, interruptionId: null };
+  }
+
+  await resolveInterruption(env, interruption.id, "rejected");
+  return { rejected: true, interruptionId: interruption.id };
+}
+
+export async function resumeAgentTask(
+  env: RuntimeEnv,
+  workspaceId: string,
+  agentId: string,
+): Promise<{ resumed: boolean; taskId: string | null; traceId: string | null; content: string | null }> {
+  await ensureRuntimeSchema(env);
+  const interruption = await loadLatestPendingInterruption(env, agentId);
+  if (!interruption || interruption.kind !== "pause") {
+    return { resumed: false, taskId: null, traceId: null, content: null };
+  }
+
+  const accepted = await continueFromInterruption(env, workspaceId, agentId, interruption, "resumed");
+  return {
+    resumed: true,
+    taskId: accepted.accepted?.taskId ?? null,
+    traceId: accepted.accepted?.traceId ?? interruption.trace_id ?? null,
+    content: accepted.content,
+  };
 }
 
 export async function deleteAgentRuntime(

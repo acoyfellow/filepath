@@ -1,6 +1,6 @@
-# filepath
+# filepath 0.05
 
-> filepath is a personal Cloudflare-hosted development environment for spawning bounded background agents against a sandboxed git clone.
+> filepath is a personal Cloudflare-hosted development environment. Work lives in conversations, not terminal tabs.
 
 [Deploy to Cloudflare](https://github.com/acoyfellow/filepath) · [OpenAPI](./src/routes/api/openapi.json/+server.ts)
 
@@ -12,8 +12,8 @@
 2. Set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`.
 3. Open the app, sign in, and land on `/dashboard`.
 4. Create a workspace with an optional git repo URL.
-5. Create an agent with a harness, model, file scope, and tool permissions.
-6. Submit a task and inspect the live result stream.
+5. Start a conversation with a harness, model, file scope, and tool permissions.
+6. Submit a bounded task and inspect the live result stream.
 
 Local development:
 
@@ -28,28 +28,34 @@ Then open:
 - `http://localhost:5173/signup`
 - `http://localhost:5173/dashboard`
 
-### First agent
+### First conversation
 
 1. Create a workspace.
-2. Save a model provider key in Settings -> Account.
-3. If you need programmatic access to filepath itself, create a filepath API key in Settings -> API Keys.
-4. Open the workspace.
-5. Create an agent with:
+2. Add an account router key in Settings.
+3. Open the workspace.
+4. Create a conversation with:
    - `harness`
    - `model`
    - `allowedPaths`
    - `forbiddenPaths`
    - `toolPermissions`
    - `writableRoot`
-6. Send the first task from the agent panel.
+5. Send the first task from the conversation panel.
+
+filepath 0.05 opens to a global inbox. Each conversation is always in one clear state:
+
+- `Ready`
+- `Running`
+- `Blocked`
+- `Closed`
 
 ## How-to
 
-### Restrict an agent to one part of a repo
+### Restrict a conversation to one part of a repo
 
 Use:
 
-- `allowedPaths` for directories the agent may touch
+- `allowedPaths` for directories the conversation may touch
 - `forbiddenPaths` for extra blocks inside that scope
 - `writableRoot` for the working directory commands should run from
 
@@ -75,7 +81,7 @@ Available values:
 - `write`
 - `commit`
 
-If an agent is not allowed to write or commit, filepath should reject that action at runtime instead of relying on prompt wording.
+If a conversation is not allowed to write or commit, filepath rejects that action at runtime instead of relying on prompt wording. In 0.05, tool-permission escalation creates a real approval interruption instead of silently continuing.
 
 ### Switch harnesses or models
 
@@ -89,14 +95,15 @@ Harness and model are runtime configuration, not architecture.
 
 ### What filepath is
 
-filepath v1 is:
+filepath 0.05 is:
 
 - a personal Better Auth-protected dashboard
-- backed by one Cloudflare worker gateway
-- built on stable published Cloudflare npm APIs
-- centered on flat background agents running against sandboxed repo clones
+- a global inbox of conversations across workspaces
+- bounded execution against sandboxed repo clones
+- explicit human control: close, reopen, pause, resume, approve, reject
+- optionally memory-aware when a workspace enables Deja-backed recall
 
-filepath v1 is not:
+filepath 0.05 is not:
 
 - a proof engine
 - a multi-user platform
@@ -105,9 +112,10 @@ filepath v1 is not:
 ### Public concepts
 
 - `workspace`: a repo-backed sandbox environment
-- `agent`: a bounded background agent inside a workspace
+- `conversation`: the user-facing thread of bounded work inside a workspace
 - `scope`: allowed paths, forbidden paths, tool permissions, writable root
 - `result`: structured output from an agent run
+- `inbox`: the derived view of open, running, blocked, and closed conversations
 
 ### Agent scope fields
 
@@ -124,7 +132,6 @@ At minimum:
 
 - `status`
 - `summary`
-- `events` for `/run`
 - `commands`
 - `filesTouched`
 - `violations`
@@ -136,13 +143,7 @@ At minimum:
 
 ### Programmatic run API
 
-`POST /api/workspaces/:id/run` runs one bounded task and returns a structured result (sync). Useful for external tools that need a direct execution surface.
-
-Execution model:
-
-- omit `agentId` to create a new agent and a new agent sandbox clone for that run
-- include `agentId` to continue on the existing agent sandbox and its current clone state
-- `patch` is always the delta from task-start state to task-end state inside that bounded run, not a diff against repo `HEAD`
+`POST /api/workspaces/:id/run` runs one bounded task and returns a structured result (sync). Useful for external tools (e.g. proof engines) that need a direct execution surface.
 
 **Input:**
 
@@ -157,38 +158,11 @@ Execution model:
     "toolPermissions": ["search", "run", "write", "commit"],
     "writableRoot": "."
   },
-  "agentId": "optional – omit for new run, include to continue a thread"
-}
-```
-
-**Response (200):** machine-stable contract
-
-- `status`, `summary`, `events`, `filesTouched`, `violations`, `diffSummary`, `patch`, `commit`
-- `agentId`, `runId`, `startedAt`, `finishedAt`
-
-**Auth:** session or API key (`Authorization: Bearer <key>`). User must own the workspace.
-
-### Programmatic script run API
-
-`POST /api/workspaces/:id/run/script` runs one deterministic script and returns the same stable result fields used for bounded agent runs.
-
-Execution model:
-
-- runs without an LLM
-- uses the workspace's dedicated script sandbox clone
-- repeated script runs reuse that script sandbox for the workspace
-- `patch` is the task-start to task-end delta left behind by that script run
-
-**Input:**
-
-```json
-{
-  "script": "printf 'hello\\n' > notes.txt",
-  "scope": {
-    "allowedPaths": ["."],
-    "forbiddenPaths": [".git", "node_modules"],
-    "toolPermissions": ["run", "write"],
-    "writableRoot": "."
+  "agentId": "optional – omit for a new conversation, include to continue one",
+  "identity": {
+    "traceId": "optional",
+    "proofRunId": "optional",
+    "proofIterationId": "optional"
   }
 }
 ```
@@ -196,7 +170,9 @@ Execution model:
 **Response (200):** machine-stable contract
 
 - `status`, `summary`, `events`, `filesTouched`, `violations`, `diffSummary`, `patch`, `commit`
-- `agentId`, `runId`, `startedAt`, `finishedAt`
+- `agentId`, `runId`, `traceId`, `workspaceId`, `conversationId`, `proofRunId`, `proofIterationId`, `startedAt`, `finishedAt`
+
+**Auth:** session or API key (`Authorization: Bearer <key>`). User must own the workspace.
 
 ### API surface
 
@@ -214,6 +190,12 @@ Core routes:
 - `DELETE /api/workspaces/:id/agents/:agentId`
 - `POST /api/workspaces/:id/agents/:agentId/tasks`
 - `POST /api/workspaces/:id/agents/:agentId/cancel`
+- `POST /api/workspaces/:id/agents/:agentId/close`
+- `POST /api/workspaces/:id/agents/:agentId/reopen`
+- `POST /api/workspaces/:id/agents/:agentId/pause`
+- `POST /api/workspaces/:id/agents/:agentId/resume`
+- `POST /api/workspaces/:id/agents/:agentId/approve`
+- `POST /api/workspaces/:id/agents/:agentId/reject`
 - `POST /api/workspaces/:id/run` – programmatic run (new or continue thread; returns structured result + events)
 - `POST /api/workspaces/:id/run/script` – script-only run (deterministic; no LLM; scope enforcement)
 
@@ -228,21 +210,20 @@ Better Auth is the only supported auth boundary in v1.
 - sign up and sign in through the app
 - dashboard and API both use the Better Auth session
 - programmatic access: create an API key in Settings; use `Authorization: Bearer <key>` or `X-Api-Key: <key>`
-- model provider keys for live agent execution are separate and live in Settings -> Account
 - no public unauthenticated product surface
 - local dev may use the placeholder secret from `.env.example`
 - production must use a random 32+ character `BETTER_AUTH_SECRET`
 
 ### Current stable runtime contract
 
-- the dashboard shows a flat agent list inside a workspace
-- humans create agents directly
-- agents do not spawn child agents in v1
-- task input is agent work input, not a general product chat protocol
-- each agent reuses its own sandboxed repo clone between tasks
-- script runs use a separate dedicated script sandbox clone per workspace
+- the dashboard opens to a global inbox of conversations
+- each workspace shows the same conversations filtered to that workspace
+- task input is conversation work input, not a general product chat protocol
+- closed conversations reject new turns
+- blocked conversations require a real human decision before they continue
+- memory is optional and workspace-scoped
 
-### Runtime contract (Jido-inspired hardening)
+### Runtime contract
 
 Technical spec for the deterministic, testable core. Implement against this; revise when learnings expose the need.
 
@@ -262,7 +243,7 @@ Allowed transitions:
 
 **3. Events and failures** – FAP events from the harness are schema-validated. A line that looks like JSON (starts with `{`) and fails `AgentEvent.safeParse` fails the run with a protocol error. Process crash or unexpected exit always transitions the task to a terminal state (`failed` or `stalled`); the task is never left in `running`.
 
-**4. Script-only runs** – Optional execution mode: run a fixed script (or command list) in the workspace with full scope enforcement; no harness/LLM; deterministic. Invoked via `POST /api/workspaces/:id/run/script` with `{ script: string, scope?: {...} }`. Script runs reuse a dedicated script sandbox for the workspace and return the same stable result fields (`filesTouched`, `diffSummary`, `patch`, and timing metadata) as `/run`.
+**4. Script-only runs** – Optional execution mode: run a fixed script (or command list) in the workspace with full scope enforcement; no harness/LLM; deterministic. Invoked via `POST /api/workspaces/:id/run/script` with `{ script: string, scope?: {...} }`. Returns the same structured result shape as agent runs where applicable.
 
 ## Explanation
 

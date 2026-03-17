@@ -75,6 +75,11 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
     commit: result.commit ?? null,
     agentId: "",
     runId,
+    traceId: runId,
+    workspaceId,
+    conversationId: "",
+    proofRunId: null,
+    proofIterationId: null,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt,
   };

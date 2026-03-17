@@ -92,8 +92,8 @@
 <Sidebar.Root class="top-(--header-height)! bottom-auto! h-[calc(100svh-var(--header-height))]!">
   <Sidebar.Header>
     <div class="flex items-center justify-between gap-3 px-2 py-2">
-      <div class="flex items-center gap-1.5 font-(family-name:--f) text-[10px] font-[550] uppercase tracking-[0.14em] text-(--t4) sm:text-[11px]">
-        <span>agents</span>
+        <div class="flex items-center gap-1.5 font-(family-name:--f) text-[10px] font-[550] uppercase tracking-[0.14em] text-(--t4) sm:text-[11px]">
+        <span>conversations</span>
         {#if isRefreshing}
           <span
             class="size-2.5 animate-spin rounded-full border-2 border-(--b2) border-t-(--accent)"
@@ -106,12 +106,12 @@
         size="sm"
         class="h-7 gap-1.5 rounded-full px-2.5 font-(family-name:--f) text-[11px] font-[540] text-(--t3) shadow-none hover:bg-(--bg3) hover:text-(--t1)"
         onclick={oncreate}
-        aria-label="Create agent"
-        title="Create agent"
+        aria-label="Create conversation"
+        title="Create conversation"
         data-testid="open-create-agent"
       >
         <PlusIcon size={14} />
-        <span class="max-[640px]:hidden">new agent</span>
+        <span class="max-[640px]:hidden">new conversation</span>
       </Button>
     </div>
   </Sidebar.Header>
@@ -133,7 +133,7 @@
         </div>
       </Sidebar.Group>
     {:else}
-      <div class="px-3 py-4 font-(family-name:--f) text-xs text-(--t5)">No agents yet</div>
+      <div class="px-3 py-4 font-(family-name:--f) text-xs text-(--t5)">No conversations yet</div>
     {/if}
   </Sidebar.Content>
 </Sidebar.Root>
@@ -146,7 +146,7 @@
 >
   <Dialog.Content class="max-w-md border-(--b1) bg-(--bg) text-(--t2)">
     <Dialog.Header>
-      <Dialog.Title class="dialog-title">Rename agent</Dialog.Title>
+      <Dialog.Title class="dialog-title">Rename conversation</Dialog.Title>
       <Dialog.Description class="dialog-description">
         {#if dialogAgent}
           Update the display name for <strong>{dialogAgent.name}</strong>.

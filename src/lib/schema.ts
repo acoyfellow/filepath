@@ -221,6 +221,8 @@ export const workspace = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     gitRepoUrl: text("git_repo_url"),
+    memoryEnabled: integer("memory_enabled", { mode: "boolean" }).notNull().default(false),
+    memoryScope: text("memory_scope"),
     status: text("status").notNull().default("draft"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -283,6 +285,7 @@ export const agent = sqliteTable(
     containerId: text("container_id"),
     activeProcessId: text("active_process_id"),
     cancelRequested: integer("cancel_requested", { mode: "boolean" }).notNull().default(false),
+    closedAt: integer("closed_at", { mode: "timestamp_ms" }),
     tokens: integer("tokens").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -348,6 +351,9 @@ export const agentTask = sqliteTable(
     diffSummary: text("diff_summary"),
     patch: text("patch"),
     commitJson: text("commit_json"),
+    traceId: text("trace_id"),
+    proofRunId: text("proof_run_id"),
+    proofIterationId: text("proof_iteration_id"),
     attempt: integer("attempt").notNull().default(0),
     requestId: text("request_id"),
     errorCode: text("error_code"),
@@ -364,12 +370,48 @@ export const agentTask = sqliteTable(
   ],
 );
 
+export const agentInterruption = sqliteTable(
+  "agent_interruption",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agent.id, { onDelete: "cascade" }),
+    runId: text("run_id"),
+    traceId: text("trace_id"),
+    proofRunId: text("proof_run_id"),
+    proofIterationId: text("proof_iteration_id"),
+    kind: text("kind").notNull(),
+    status: text("status").notNull(),
+    summary: text("summary").notNull(),
+    requestedPermission: text("requested_permission"),
+    payloadJson: text("payload_json").notNull().default("{}"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+    resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("agent_interruption_agent_id_idx").on(table.agentId),
+    index("agent_interruption_workspace_id_idx").on(table.workspaceId),
+    index("agent_interruption_status_idx").on(table.status),
+  ],
+);
+
 export const workspaceRelations = relations(workspace, ({ one, many }) => ({
   user: one(user, {
     fields: [workspace.userId],
     references: [user.id],
   }),
   agents: many(agent),
+  interruptions: many(agentInterruption),
 }));
 
 export const harnessRelations = relations(harness, ({ many }) => ({
