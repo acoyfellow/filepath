@@ -52,7 +52,7 @@
       class={`inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent p-0 text-(--t5) transition-all hover:border-(--b1) hover:bg-(--bg3) hover:text-(--t2) ${
         isSelected ? "opacity-100" : "opacity-70"
       } data-[state=open]:border-(--b1) data-[state=open]:bg-(--bg3) data-[state=open]:text-(--t1)`}
-      aria-label={`Agent actions for ${agent.name}`}
+      aria-label={`Conversation actions for ${agent.name}`}
       onclick={(event) => {
         event.stopPropagation();
       }}
@@ -72,7 +72,7 @@
         onclick={() => onrequestaction({ agentId: agent.id, action: "rename" })}
       >
         <PencilIcon />
-        Rename
+        Rename conversation
       </DropdownMenu.Item>
       <DropdownMenu.Separator class="bg-(--b1) my-1" />
       <DropdownMenu.Item
@@ -81,7 +81,7 @@
         onclick={() => onrequestaction({ agentId: agent.id, action: "delete" })}
       >
         <Trash2Icon />
-        Delete agent
+        Delete conversation
       </DropdownMenu.Item>
     </DropdownMenu.Content>
   </DropdownMenu.Root>

@@ -1,5 +1,10 @@
 import type { AgentStatus as AgentStatusType, AgentEventType } from "$lib/protocol";
 import type { AgentScope, ToolPermission } from "$lib/runtime/authority";
+import type {
+  ConversationInterruption,
+  ConversationState,
+  SharedRunIdentity,
+} from "$lib/conversations";
 
 export type HarnessId = string;
 
@@ -41,6 +46,10 @@ export interface AgentRecord {
   writableRoot: string | null;
   containerId?: string;
   activeProcessId?: string | null;
+  closedAt?: number | null;
+  conversationState?: ConversationState;
+  latestInterruption?: ConversationInterruption | null;
+  activeIdentity?: SharedRunIdentity | null;
   tokens: number;
   createdAt: number;
   updatedAt: number;
@@ -51,6 +60,8 @@ export interface WorkspaceRecord {
   userId: string;
   name: string;
   gitRepoUrl?: string | null;
+  memoryEnabled?: boolean;
+  memoryScope?: string | null;
   status: WorkspaceStatus;
   startedAt?: number | null;
   createdAt: number;
@@ -119,6 +130,7 @@ export interface AgentTaskAcceptedResponse {
   ok: true;
   taskId: string;
   state: Extract<AgentTaskState, "queued" | "starting" | "running" | "retrying">;
+  traceId?: string | null;
 }
 
 export interface AgentRuntimeSnapshot {
@@ -147,6 +159,7 @@ export interface WorkerRunInput {
   model: string;
   scope?: WorkerRunScopeInput;
   agentId?: string;
+  identity?: Partial<Omit<SharedRunIdentity, "workspaceId" | "conversationId">> | null;
 }
 
 export interface WorkerRunResponse {
@@ -160,6 +173,11 @@ export interface WorkerRunResponse {
   commit: { sha: string; message: string } | null;
   agentId: string;
   runId: string;
+  traceId: string | null;
+  workspaceId: string;
+  conversationId: string;
+  proofRunId: string | null;
+  proofIterationId: string | null;
   startedAt: number;
   finishedAt: number;
 }

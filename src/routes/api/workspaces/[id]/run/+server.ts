@@ -28,6 +28,13 @@ function toWorkerRunResponse(
   events: unknown[],
   agentId: string,
   runId: string,
+  identity: {
+    traceId: string | null;
+    workspaceId: string;
+    conversationId: string;
+    proofRunId: string | null;
+    proofIterationId: string | null;
+  },
 ): WorkerRunResponse {
   return {
     status: result.status as WorkerRunResponse["status"],
@@ -40,6 +47,11 @@ function toWorkerRunResponse(
     commit: result.commit ?? null,
     agentId,
     runId,
+    traceId: identity.traceId,
+    workspaceId: identity.workspaceId,
+    conversationId: identity.conversationId,
+    proofRunId: identity.proofRunId,
+    proofIterationId: identity.proofIterationId,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt,
   };
@@ -77,7 +89,10 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
         "Content-Type": "application/json",
         "x-filepath-request-id": crypto.randomUUID(),
       },
-      body: JSON.stringify({ content: input.content }),
+      body: JSON.stringify({
+        content: input.content,
+        identity: input.identity,
+      }),
     },
   );
 
@@ -115,6 +130,13 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
     accepted.events ?? [],
     agentId,
     runId,
+    {
+      traceId: input.identity?.traceId ?? runId,
+      workspaceId,
+      conversationId: agentId,
+      proofRunId: input.identity?.proofRunId ?? null,
+      proofIterationId: input.identity?.proofIterationId ?? null,
+    },
   );
 
   return json(body, { status: 200 });

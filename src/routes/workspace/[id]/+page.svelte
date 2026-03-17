@@ -35,6 +35,10 @@
     writableRoot: string | null;
     containerId: string | null;
     activeProcessId?: string | null;
+    closedAt?: string | number | Date | null;
+    conversationState?: AgentRecord["conversationState"];
+    latestInterruption?: AgentRecord["latestInterruption"];
+    activeIdentity?: AgentRecord["activeIdentity"];
     tokens: number;
     createdAt: string | number | Date;
     updatedAt: string | number | Date;
@@ -102,6 +106,10 @@
       writableRoot: row.writableRoot,
       containerId: row.containerId ?? undefined,
       activeProcessId: row.activeProcessId ?? null,
+      closedAt: row.closedAt ? normalizeTimestamp(row.closedAt) : null,
+      conversationState: row.conversationState ?? "ready",
+      latestInterruption: row.latestInterruption ?? null,
+      activeIdentity: row.activeIdentity ?? null,
       tokens: Number(row.tokens ?? 0),
       createdAt: normalizeTimestamp(row.createdAt),
       updatedAt: normalizeTimestamp(row.updatedAt),
@@ -127,7 +135,7 @@
 
   $effect(() => {
     if (!selectedId && agents.length > 0) {
-      selectedId = agents[0].id;
+      selectedId = page.url.searchParams.get("conversation") ?? agents[0].id;
     } else if (selectedId && !agents.some((entry) => entry.id === selectedId)) {
       selectedId = agents[0]?.id ?? null;
     }
@@ -341,6 +349,24 @@
 
   async function handleUpdateAgent(payload: AgentUpdateRequest) {
     if (!selectedAgent) return;
+    if (selectedAgent.closedAt) {
+      setAgentNotice(selectedAgent.id, {
+        tone: "warning",
+        title: "Conversation closed",
+        message: "Reopen this conversation before sending another turn.",
+        blocking: true,
+      });
+      return;
+    }
+    if (selectedAgent.latestInterruption?.status === "pending") {
+      setAgentNotice(selectedAgent.id, {
+        tone: "warning",
+        title: "Conversation blocked",
+        message: selectedAgent.latestInterruption.summary,
+        blocking: true,
+      });
+      return;
+    }
 
     const response = await fetch(`/api/workspaces/${workspaceId}/agents/${selectedAgent.id}`, {
       method: "PATCH",
@@ -457,8 +483,29 @@
     showSpawn = false;
   }
 
+  async function postConversationAction(
+    agentId: string,
+    action: "close" | "reopen" | "pause" | "resume" | "approve" | "reject",
+  ) {
+    const response = await fetch(`/api/workspaces/${workspaceId}/agents/${agentId}/${action}`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      throw new Error(data.error || data.message || `Unable to ${action} conversation`);
+    }
+
+    await refreshWorkspace();
+    await refreshAgentRuntime(agentId);
+  }
+
   onMount(() => {
     startPolling();
+    selectedId = page.url.searchParams.get("conversation") ?? selectedId;
     if (selectedId) {
       void refreshAgentRuntime(selectedId);
     } else if (agents[0]) {
@@ -478,11 +525,11 @@
 <SEO
   title={selectedAgent ? `${selectedAgent.name} | ${data.workspace.name}` : `${data.workspace.name}`}
   description={`Manage ${data.workspace.name} and its bounded background agents, tasks, results, and settings.`}
-  keywords="filepath workspace, agents, tasks, results"
+  keywords="filepath workspace, conversations, tasks, results"
   path={`/workspace/${workspaceId}`}
   type="website"
   section="Workspace"
-  tags="workspace,agents,tasks"
+  tags="workspace,conversations,tasks"
   noindex
   breadcrumbs={[
     { name: "Dashboard", item: "/dashboard" },
@@ -517,6 +564,30 @@
             if (!selectedAgent) return;
             void handleCancelAgent(selectedAgent.id);
           }}
+          onpause={() => {
+            if (!selectedAgent) return;
+            void postConversationAction(selectedAgent.id, "pause");
+          }}
+          onresume={() => {
+            if (!selectedAgent) return;
+            void postConversationAction(selectedAgent.id, "resume");
+          }}
+          onapprove={() => {
+            if (!selectedAgent) return;
+            void postConversationAction(selectedAgent.id, "approve");
+          }}
+          onreject={() => {
+            if (!selectedAgent) return;
+            void postConversationAction(selectedAgent.id, "reject");
+          }}
+          onclose={() => {
+            if (!selectedAgent) return;
+            void postConversationAction(selectedAgent.id, "close");
+          }}
+          onreopen={() => {
+            if (!selectedAgent) return;
+            void postConversationAction(selectedAgent.id, "reopen");
+          }}
           onopensettings={() => {
             if (!selectedAgent) return;
             showSettings = true;
@@ -530,7 +601,7 @@
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8 text-center">
         <p class="text-sm text-(--t2)">{data.workspace.name}</p>
         <p class="max-w-md text-xs leading-6 text-(--t4)">
-          No agents yet. Create a scoped background agent to start using this workspace.
+          No conversations yet. Create a scoped background conversation to start using this workspace.
         </p>
         <button
           onclick={() => {
@@ -539,7 +610,7 @@
           data-testid="open-create-agent"
           class="rounded-xl bg-(--accent) px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
         >
-          + new agent
+          + new conversation
         </button>
     </div>
   {/if}

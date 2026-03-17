@@ -1,5 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { ServerLoadEvent } from '@sveltejs/kit';
+import { createUserContextFromParts, runOrThrow } from '../../core/http';
+import { listConversationInbox } from '../../core/app';
 
 export const load = async ({ locals, url }: ServerLoadEvent) => {
   if (!locals.user) {
@@ -7,7 +9,10 @@ export const load = async ({ locals, url }: ServerLoadEvent) => {
     throw redirect(302, returnTo ? `/login?redirect=${encodeURIComponent(returnTo)}` : '/login');
   }
 
+  const inbox = await runOrThrow(listConversationInbox(createUserContextFromParts(locals.user)));
+
   return {
     user: locals.user,
+    ...inbox,
   };
 };

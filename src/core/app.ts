@@ -1,7 +1,8 @@
 import { getDrizzle } from "$lib/auth";
+import { deriveConversationState, type ConversationInterruption, type SharedRunIdentity } from "$lib/conversations";
 import { normalizeAgentScope, validateAgentScope } from "$lib/runtime/authority";
 import { getBuiltinHarnessRows } from "$lib/agents/harnesses";
-import { agent, harness, workspace } from "$lib/schema";
+import { agent, agentInterruption, agentTask, harness, workspace } from "$lib/schema";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { Data, Effect, Schema } from "effect";
 
@@ -54,6 +55,8 @@ export type AppError =
 export const WorkspaceCreateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   gitRepoUrl: Schema.optional(Schema.String),
+  memoryEnabled: Schema.optional(Schema.Boolean),
+  memoryScope: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type WorkspaceCreateInput = Schema.Schema.Type<
   typeof WorkspaceCreateInputSchema
@@ -63,6 +66,8 @@ export const WorkspaceUpdateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   gitRepoUrl: Schema.optional(Schema.String),
+  memoryEnabled: Schema.optional(Schema.Boolean),
+  memoryScope: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type WorkspaceUpdateInput = Schema.Schema.Type<
   typeof WorkspaceUpdateInputSchema
@@ -130,6 +135,13 @@ export type AgentUpdateInput = Schema.Schema.Type<
 
 export const AgentTaskInputSchema = Schema.Struct({
   content: Schema.String,
+  identity: Schema.optional(
+    Schema.Struct({
+      traceId: Schema.optional(Schema.NullOr(Schema.String)),
+      proofRunId: Schema.optional(Schema.NullOr(Schema.String)),
+      proofIterationId: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  ),
 });
 export type AgentTaskInput = Schema.Schema.Type<typeof AgentTaskInputSchema>;
 
@@ -145,6 +157,13 @@ export const WorkerRunInputSchema = Schema.Struct({
   model: Schema.String,
   scope: Schema.optional(WorkerRunScopeInputSchema),
   agentId: Schema.optional(Schema.String),
+  identity: Schema.optional(
+    Schema.Struct({
+      traceId: Schema.optional(Schema.NullOr(Schema.String)),
+      proofRunId: Schema.optional(Schema.NullOr(Schema.String)),
+      proofIterationId: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  ),
 });
 export type WorkerRunInput = Schema.Schema.Type<typeof WorkerRunInputSchema>;
 
@@ -197,6 +216,165 @@ function generateId(length = 16): string {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+const ACTIVE_TASK_STATES = ["queued", "starting", "running", "retrying"] as const;
+
+type AgentRow = typeof agent.$inferSelect;
+
+type ConversationDecoration = {
+  closedAt: number | null;
+  conversationState: "ready" | "running" | "blocked" | "closed";
+  latestInterruption: ConversationInterruption | null;
+  activeIdentity: SharedRunIdentity | null;
+};
+
+type DecoratedAgentRow = ReturnType<typeof decorateAgentRow>;
+
+type ConversationInboxWorkspace = {
+  id: string;
+  name: string;
+  gitRepoUrl: string | null;
+  memoryEnabled: boolean;
+  memoryScope: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type ConversationInboxItem = DecoratedAgentRow & {
+  workspaceName: string;
+  workspaceGitRepoUrl: string | null;
+};
+
+type ConversationInboxResult = {
+  workspaces: ConversationInboxWorkspace[];
+  conversations: ConversationInboxItem[];
+};
+
+function parsePayloadJson(value: string | null): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function toMillis(value: Date | null | undefined): number | null {
+  return value ? value.getTime() : null;
+}
+
+async function loadConversationDecorations(
+  db: Db,
+  rows: ReadonlyArray<Pick<AgentRow, "id" | "workspaceId" | "closedAt">>,
+): Promise<Map<string, ConversationDecoration>> {
+  const map = new Map<string, ConversationDecoration>();
+  if (rows.length === 0) {
+    return map;
+  }
+
+  const agentIds = rows.map((row) => row.id);
+  const activeTasks = await db
+    .select({
+      agentId: agentTask.agentId,
+      taskId: agentTask.id,
+      traceId: agentTask.traceId,
+      proofRunId: agentTask.proofRunId,
+      proofIterationId: agentTask.proofIterationId,
+      acceptedAt: agentTask.acceptedAt,
+      startedAt: agentTask.startedAt,
+      finishedAt: agentTask.finishedAt,
+    })
+    .from(agentTask)
+    .where(
+      and(
+        inArray(agentTask.agentId, agentIds),
+        inArray(agentTask.status, [...ACTIVE_TASK_STATES]),
+      ),
+    )
+    .orderBy(desc(agentTask.acceptedAt), desc(agentTask.startedAt), desc(agentTask.finishedAt));
+
+  const pendingInterruptions = await db
+    .select()
+    .from(agentInterruption)
+    .where(
+      and(
+        inArray(agentInterruption.agentId, agentIds),
+        eq(agentInterruption.status, "pending"),
+      ),
+    )
+    .orderBy(desc(agentInterruption.updatedAt), desc(agentInterruption.createdAt));
+
+  const activeTaskByAgent = new Map<string, (typeof activeTasks)[number]>();
+  for (const entry of activeTasks) {
+    if (!activeTaskByAgent.has(entry.agentId)) {
+      activeTaskByAgent.set(entry.agentId, entry);
+    }
+  }
+
+  const interruptionByAgent = new Map<string, ConversationInterruption>();
+  for (const entry of pendingInterruptions) {
+    if (interruptionByAgent.has(entry.agentId)) continue;
+    interruptionByAgent.set(entry.agentId, {
+      id: entry.id,
+      kind: entry.kind as ConversationInterruption["kind"],
+      status: entry.status as ConversationInterruption["status"],
+      summary: entry.summary,
+      requestedPermission: (entry.requestedPermission as ConversationInterruption["requestedPermission"]) ?? null,
+      payload: parsePayloadJson(entry.payloadJson),
+      createdAt: toMillis(entry.createdAt) ?? 0,
+      updatedAt: toMillis(entry.updatedAt) ?? 0,
+      resolvedAt: toMillis(entry.resolvedAt),
+      identity: {
+        traceId: entry.traceId,
+        workspaceId: entry.workspaceId,
+        conversationId: entry.agentId,
+        runId: entry.runId,
+        proofRunId: entry.proofRunId,
+        proofIterationId: entry.proofIterationId,
+      },
+    });
+  }
+
+  for (const row of rows) {
+    const latestInterruption = interruptionByAgent.get(row.id) ?? null;
+    const activeTask = activeTaskByAgent.get(row.id) ?? null;
+    map.set(row.id, {
+      closedAt: toMillis(row.closedAt),
+      conversationState: deriveConversationState({
+        closedAt: toMillis(row.closedAt),
+        hasActiveTask: Boolean(activeTask),
+        latestInterruption,
+      }),
+      latestInterruption,
+      activeIdentity: activeTask
+        ? {
+            traceId: activeTask.traceId,
+            workspaceId: row.workspaceId,
+            conversationId: row.id,
+            runId: activeTask.taskId,
+            proofRunId: activeTask.proofRunId,
+            proofIterationId: activeTask.proofIterationId,
+          }
+        : latestInterruption?.identity ?? null,
+    });
+  }
+
+  return map;
+}
+
+function decorateAgentRow(
+  row: AgentRow,
+  decoration: ConversationDecoration | undefined,
+) {
+  return {
+    ...row,
+    closedAt: decoration?.closedAt ?? toMillis(row.closedAt),
+    conversationState: decoration?.conversationState ?? "ready",
+    latestInterruption: decoration?.latestInterruption ?? null,
+    activeIdentity: decoration?.activeIdentity ?? null,
+  };
 }
 
 function requireAdmin(ctx: AppContext): Effect.Effect<void, Forbidden> {
@@ -399,6 +577,8 @@ export function listWorkspaces(ctx: AppContext) {
               id: entry.id,
               name: entry.name,
               gitRepoUrl: entry.gitRepoUrl,
+              memoryEnabled: entry.memoryEnabled,
+              memoryScope: entry.memoryScope,
               status: entry.status,
               startedAt: entry.startedAt?.getTime() ?? null,
               createdAt: entry.createdAt?.getTime() ?? 0,
@@ -423,6 +603,8 @@ export function createWorkspace(ctx: AppContext, input: WorkspaceCreateInput) {
         userId: ctx.userId,
         name,
         gitRepoUrl: input.gitRepoUrl?.trim() || null,
+        memoryEnabled: input.memoryEnabled ?? false,
+        memoryScope: input.memoryScope?.trim() ? input.memoryScope.trim() : null,
         status: "draft",
       }),
     "Failed to create workspace",
@@ -451,10 +633,17 @@ export function getWorkspace(ctx: AppContext, id: string) {
             .orderBy(desc(agent.updatedAt), desc(agent.createdAt)),
         "Failed to load workspace agents",
       ).pipe(
-        Effect.map((agents) => ({
-          workspace: workspaceRows[0],
-          agents,
-        })),
+        Effect.flatMap((agentRows) =>
+          fromPromise(
+            () => loadConversationDecorations(ctx.db, agentRows),
+            "Failed to load conversation decorations",
+          ).pipe(
+            Effect.map((decorations) => ({
+              workspace: workspaceRows[0],
+              agents: agentRows.map((row) => decorateAgentRow(row, decorations.get(row.id))),
+            })),
+          ),
+        ),
       ),
     ),
   );
@@ -471,6 +660,10 @@ export function updateWorkspace(
       if (input.name !== undefined) updates.name = input.name;
       if (input.status !== undefined) updates.status = input.status;
       if (input.gitRepoUrl !== undefined) updates.gitRepoUrl = input.gitRepoUrl;
+      if (input.memoryEnabled !== undefined) updates.memoryEnabled = input.memoryEnabled;
+      if (input.memoryScope !== undefined) {
+        updates.memoryScope = input.memoryScope?.trim() ? input.memoryScope.trim() : null;
+      }
       if (Object.keys(updates).length === 0) {
         return Effect.succeed({ ok: true as const });
       }
@@ -495,6 +688,96 @@ export function deleteWorkspace(ctx: AppContext, id: string) {
   );
 }
 
+const CONVERSATION_STATE_ORDER: Record<string, number> = {
+  blocked: 0,
+  running: 1,
+  ready: 2,
+  closed: 3,
+};
+
+export function listConversationInbox(
+  ctx: AppContext,
+): Effect.Effect<ConversationInboxResult, AppError> {
+  return fromPromise(
+    () =>
+      ctx.db
+        .select({
+          id: workspace.id,
+          name: workspace.name,
+          gitRepoUrl: workspace.gitRepoUrl,
+          memoryEnabled: workspace.memoryEnabled,
+          memoryScope: workspace.memoryScope,
+          createdAt: workspace.createdAt,
+          updatedAt: workspace.updatedAt,
+        })
+        .from(workspace)
+        .where(eq(workspace.userId, ctx.userId))
+        .orderBy(desc(workspace.updatedAt)),
+    "Failed to list workspaces",
+  ).pipe(
+    Effect.flatMap((workspaceRows) => {
+      const workspaceIds = workspaceRows.map((row) => row.id);
+      if (workspaceIds.length === 0) {
+        return Effect.succeed<ConversationInboxResult>({
+          workspaces: [],
+          conversations: [],
+        });
+      }
+
+      return fromPromise(
+        () =>
+          ctx.db
+            .select()
+            .from(agent)
+            .where(inArray(agent.workspaceId, workspaceIds))
+            .orderBy(desc(agent.updatedAt), desc(agent.createdAt)),
+        "Failed to list conversations",
+      ).pipe(
+        Effect.flatMap((agentRows) =>
+          fromPromise(
+            () => loadConversationDecorations(ctx.db, agentRows),
+            "Failed to load conversation decorations",
+          ).pipe(
+            Effect.map((decorations) => {
+              const workspaceMap = new Map(workspaceRows.map((row) => [row.id, row]));
+              const conversations = agentRows
+                .map((row) => {
+                  const decoration = decorations.get(row.id);
+                  const currentWorkspace = workspaceMap.get(row.workspaceId);
+                  return {
+                    ...decorateAgentRow(row, decoration),
+                    workspaceName: currentWorkspace?.name ?? "Workspace",
+                    workspaceGitRepoUrl: currentWorkspace?.gitRepoUrl ?? null,
+                  };
+                })
+                .sort((left, right) => {
+                  const stateDelta =
+                    CONVERSATION_STATE_ORDER[left.conversationState] -
+                    CONVERSATION_STATE_ORDER[right.conversationState];
+                  if (stateDelta !== 0) return stateDelta;
+                  return (right.updatedAt?.getTime?.() ?? 0) - (left.updatedAt?.getTime?.() ?? 0);
+                });
+
+              return {
+                workspaces: workspaceRows.map((row) => ({
+                  id: row.id,
+                  name: row.name,
+                  gitRepoUrl: row.gitRepoUrl,
+                  memoryEnabled: row.memoryEnabled,
+                  memoryScope: row.memoryScope,
+                  createdAt: row.createdAt?.getTime() ?? 0,
+                  updatedAt: row.updatedAt?.getTime() ?? 0,
+                })),
+                conversations,
+              };
+            }),
+          ),
+        ),
+      );
+    }),
+  );
+}
+
 export function listAgents(ctx: AppContext, workspaceId: string) {
   return ensureWorkspaceAccess(ctx, workspaceId).pipe(
     Effect.flatMap(() =>
@@ -508,7 +791,16 @@ export function listAgents(ctx: AppContext, workspaceId: string) {
         "Failed to list workspace agents",
       ),
     ),
-    Effect.map((agents) => ({ agents })),
+    Effect.flatMap((rows) =>
+      fromPromise(
+        () => loadConversationDecorations(ctx.db, rows),
+        "Failed to load conversation decorations",
+      ).pipe(
+        Effect.map((decorations) => ({
+          agents: rows.map((row) => decorateAgentRow(row, decorations.get(row.id))),
+        })),
+      ),
+    ),
   );
 }
 
@@ -637,7 +929,11 @@ export function createAgentForRun(
   );
 }
 
-export function getAgent(ctx: AppContext, workspaceId: string, agentId: string) {
+export function getAgent(
+  ctx: AppContext,
+  workspaceId: string,
+  agentId: string,
+): Effect.Effect<{ agent: DecoratedAgentRow }, AppError> {
   return ensureWorkspaceAccess(ctx, workspaceId).pipe(
     Effect.flatMap(() =>
       fromPromise(
@@ -649,11 +945,21 @@ export function getAgent(ctx: AppContext, workspaceId: string, agentId: string) 
         "Failed to load agent",
       ),
     ),
-    Effect.flatMap((rows) =>
-      rows.length > 0
-        ? Effect.succeed({ agent: rows[0] })
-        : Effect.fail(new NotFound({ message: "Agent not found" })),
-    ),
+    Effect.flatMap((rows): Effect.Effect<{ agent: DecoratedAgentRow }, AppError> => {
+      if (rows.length === 0) {
+        return Effect.fail(new NotFound({ message: "Agent not found" }));
+      }
+
+      const row = rows[0];
+      return fromPromise(
+        () => loadConversationDecorations(ctx.db, rows),
+        "Failed to load conversation decorations",
+      ).pipe(
+        Effect.map((decorations) => ({
+          agent: decorateAgentRow(row, decorations.get(row.id)),
+        })),
+      );
+    }),
   );
 }
 
@@ -756,6 +1062,62 @@ export function deleteAgent(ctx: AppContext, workspaceId: string, agentId: strin
             .delete(agent)
             .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
         "Failed to delete agent",
+      ),
+    ),
+    Effect.as({ ok: true as const }),
+  );
+}
+
+export function closeAgentConversation(
+  ctx: AppContext,
+  workspaceId: string,
+  agentId: string,
+): Effect.Effect<{ ok: true }, AppError> {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
+    Effect.flatMap(() =>
+      getAgent(ctx, workspaceId, agentId).pipe(
+        Effect.flatMap(({ agent: currentAgent }): Effect.Effect<unknown, AppError> => {
+          if (currentAgent.conversationState === "running") {
+            return Effect.fail(
+              new Conflict({ message: "Cannot close a conversation while work is running" }),
+            );
+          }
+
+          if (currentAgent.conversationState === "blocked") {
+            return Effect.fail(
+              new Conflict({ message: "Resolve the blocked conversation before closing it" }),
+            );
+          }
+
+          return fromPromise(
+            () =>
+              ctx.db
+                .update(agent)
+                .set({ closedAt: new Date() })
+                .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
+            "Failed to close conversation",
+          );
+        }),
+      ),
+    ),
+    Effect.as({ ok: true as const }),
+  );
+}
+
+export function reopenAgentConversation(
+  ctx: AppContext,
+  workspaceId: string,
+  agentId: string,
+) {
+  return ensureWorkspaceAccess(ctx, workspaceId).pipe(
+    Effect.flatMap(() =>
+      fromPromise(
+        () =>
+          ctx.db
+            .update(agent)
+            .set({ closedAt: null })
+            .where(and(eq(agent.id, agentId), eq(agent.workspaceId, workspaceId))),
+        "Failed to reopen conversation",
       ),
     ),
     Effect.as({ ok: true as const }),

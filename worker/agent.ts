@@ -14,10 +14,14 @@ import { Sandbox } from './index';
 import type { Env } from '../src/types';
 import {
   acceptAgentTask,
+  approveAgentInterruption,
   cancelAgentTask,
   deleteAgentRuntime,
   getAgentRuntimeSnapshot,
+  pauseAgentTask,
   processAcceptedAgentTask,
+  rejectAgentInterruption,
+  resumeAgentTask,
   runWorkspaceScript,
   scheduleAcceptedAgentTask,
   type RuntimeEnv,
@@ -51,7 +55,7 @@ export default {
     }
 
     const runtimeMatch = url.pathname.match(
-      /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel)?|\/run\/script|\/health)?$/,
+      /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel|\/pause|\/resume|\/approve|\/reject)?|\/run\/script|\/health)?$/,
     );
     if (runtimeMatch) {
       const [, workspaceId, suffix = ""] = runtimeMatch;
@@ -99,7 +103,14 @@ export default {
       const taskMatch = suffix.match(/^\/agents\/([^/]+)\/tasks$/);
       if (request.method === "POST" && taskMatch) {
         const agentId = taskMatch[1];
-        const body = (await request.json().catch(() => ({}))) as { content?: string };
+        const body = (await request.json().catch(() => ({}))) as {
+          content?: string;
+          identity?: {
+            traceId?: string | null;
+            proofRunId?: string | null;
+            proofIterationId?: string | null;
+          };
+        };
         const content = body.content?.trim();
         const requestId = request.headers.get("x-filepath-request-id") || crypto.randomUUID();
         const wait = url.searchParams.get("wait") === "1" || request.headers.get("x-filepath-wait") === "true";
@@ -111,7 +122,7 @@ export default {
         }
 
         try {
-          const accepted = await acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId);
+          const accepted = await acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId, body.identity);
           if (wait) {
             const { result, events } = await processAcceptedAgentTask(
               runtimeEnv,
@@ -163,6 +174,60 @@ export default {
         const agentId = cancelMatch[1];
         const cancelled = await cancelAgentTask(runtimeEnv, workspaceId, agentId);
         return new Response(JSON.stringify({ ok: true, ...cancelled }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const pauseMatch = suffix.match(/^\/agents\/([^/]+)\/pause$/);
+      if (request.method === "POST" && pauseMatch) {
+        const agentId = pauseMatch[1];
+        const paused = await pauseAgentTask(runtimeEnv, workspaceId, agentId);
+        return new Response(JSON.stringify({ ok: true, ...paused }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const resumeMatch = suffix.match(/^\/agents\/([^/]+)\/resume$/);
+      if (request.method === "POST" && resumeMatch) {
+        const agentId = resumeMatch[1];
+        const resumed = await resumeAgentTask(runtimeEnv, workspaceId, agentId);
+        if (resumed.resumed && resumed.taskId && resumed.content) {
+          scheduleAcceptedAgentTask(runtimeEnv, ctx, {
+            workspaceId,
+            agentId,
+            taskId: resumed.taskId,
+            content: resumed.content,
+            requestId: resumed.traceId ?? crypto.randomUUID(),
+          });
+        }
+        return new Response(JSON.stringify({ ok: true, ...resumed }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const approveMatch = suffix.match(/^\/agents\/([^/]+)\/approve$/);
+      if (request.method === "POST" && approveMatch) {
+        const agentId = approveMatch[1];
+        const approved = await approveAgentInterruption(runtimeEnv, workspaceId, agentId);
+        if (approved.approved && approved.taskId && approved.content) {
+          scheduleAcceptedAgentTask(runtimeEnv, ctx, {
+            workspaceId,
+            agentId,
+            taskId: approved.taskId,
+            content: approved.content,
+            requestId: approved.traceId ?? crypto.randomUUID(),
+          });
+        }
+        return new Response(JSON.stringify({ ok: true, ...approved }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const rejectMatch = suffix.match(/^\/agents\/([^/]+)\/reject$/);
+      if (request.method === "POST" && rejectMatch) {
+        const agentId = rejectMatch[1];
+        const rejected = await rejectAgentInterruption(runtimeEnv, agentId);
+        return new Response(JSON.stringify({ ok: true, ...rejected }), {
           headers: { "Content-Type": "application/json" },
         });
       }
