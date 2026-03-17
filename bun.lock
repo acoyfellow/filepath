@@ -832,7 +832,7 @@
 
     "defu": ["defu@6.1.4", "", {}, "sha512-mEQCMmwJu317oSz8CwdIOdwf3xMif1ttiM8LTufzc3g6kR+9Pe236twL8j3IYT1F7GfRgGcW6MWxzZjLIkuHIg=="],
 
-    "deja": ["deja@github:acoyfellow/deja#ebd1dc5", { "dependencies": { "drizzle-orm": "^0.45.1", "hono": "^4.11.7", "zod": "^3.24.0" } }, "acoyfellow-deja-ebd1dc5", "sha512-lDislSoucx7IRf4DoBhbfifFgi31r7cRIrVLvCV8zcEgJydSev80n2jr2KztwixVp9lwaCXoyTrKYBT720nz7w=="],
+    "deja": ["deja@github:acoyfellow/deja#921df20", { "dependencies": { "drizzle-orm": "^0.45.1", "hono": "^4.11.7", "zod": "^3.24.0" } }, "acoyfellow-deja-921df20", "sha512-2pQDllvkTV9bCJwho4uyepDQEiyxkj0GcmKKkYaoR62AYy26VtteI+04EtCfe5LNfa2fWqkAN4cLyLrpFrKtaQ=="],
 
     "delayed-stream": ["delayed-stream@1.0.0", "", {}, "sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ=="],
 
