@@ -125,6 +125,8 @@
   }
 
   function generateOrganizationSchema(): OrganizationSchema {
+    const logoUrl = `${baseUrl}/logo.svg`;
+
     return {
       "@context": "https://schema.org",
       "@type": "Organization",
@@ -132,7 +134,7 @@
       url: baseUrl,
       logo: {
         "@type": "ImageObject",
-        url: `${baseUrl}/favicon.svg`,
+        url: logoUrl,
       },
       sameAs,
     };
@@ -140,6 +142,8 @@
 
   function generateArticleSchema(): ArticleSchema | null {
     if (type !== "article") return null;
+
+    const logoUrl = `${baseUrl}/logo.svg`;
 
     return {
       "@context": "https://schema.org",
@@ -157,7 +161,7 @@
         name: PLATFORM_NAME,
         logo: {
           "@type": "ImageObject",
-          url: `${baseUrl}/favicon.svg`,
+          url: logoUrl,
         },
       },
       datePublished: publishedTime,
