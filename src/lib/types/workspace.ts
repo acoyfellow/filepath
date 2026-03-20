@@ -59,7 +59,7 @@ export interface WorkspaceRecord {
   id: string;
   userId: string;
   name: string;
-  gitRepoUrl?: string | null;
+  initialSourceUrl?: string | null;
   memoryEnabled?: boolean;
   memoryScope?: string | null;
   status: WorkspaceStatus;

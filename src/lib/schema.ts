@@ -220,7 +220,7 @@ export const workspace = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    gitRepoUrl: text("git_repo_url"),
+    initialSourceUrl: text("initial_source_url"),
     memoryEnabled: integer("memory_enabled", { mode: "boolean" }).notNull().default(false),
     memoryScope: text("memory_scope"),
     status: text("status").notNull().default("draft"),

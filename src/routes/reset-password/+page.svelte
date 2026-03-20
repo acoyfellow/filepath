@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { resetPasswordEmailOTP } from '$lib/auth-client';
   import SEO from '$lib/components/SEO.svelte';
+  import Button from '$lib/components/ui/button/button.svelte';
   import { X, ArrowLeft, Lock } from '@lucide/svelte';
   let email = $state('');
   let otp = $state('');
@@ -74,7 +75,7 @@
 
 <div class="min-h-screen font-sans flex flex-col bg-gray-50 text-gray-700 dark:bg-neutral-950 dark:text-neutral-300 transition-colors duration-200">
 
-  <main class="flex-grow max-w-md mx-auto px-6 py-20">
+  <main class="grow max-w-md mx-auto px-6 py-20">
     <div class="mb-8">
       <a href="/forgot-password" class="inline-flex items-center gap-2 text-sm transition-colors text-gray-500 hover:text-gray-700 dark:text-neutral-500 dark:hover:text-neutral-300">
         <ArrowLeft class="w-4 h-4" />
@@ -167,13 +168,9 @@
             />
           </div>
           
-          <button
-            type="submit"
-            disabled={isLoading}
-            class="w-full bg-neutral-100 text-neutral-950 rounded px-4 py-3 font-medium hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <Button type="submit" variant="accentPill" class="w-full" disabled={isLoading}>
             {isLoading ? 'Resetting...' : 'Reset password'}
-          </button>
+          </Button>
         </form>
         
         <div class="mt-6 text-center text-sm">

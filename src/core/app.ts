@@ -54,7 +54,7 @@ export type AppError =
 
 export const WorkspaceCreateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
-  gitRepoUrl: Schema.optional(Schema.String),
+  initialSourceUrl: Schema.optional(Schema.String),
   memoryEnabled: Schema.optional(Schema.Boolean),
   memoryScope: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -65,7 +65,7 @@ export type WorkspaceCreateInput = Schema.Schema.Type<
 export const WorkspaceUpdateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
-  gitRepoUrl: Schema.optional(Schema.String),
+  initialSourceUrl: Schema.optional(Schema.String),
   memoryEnabled: Schema.optional(Schema.Boolean),
   memoryScope: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -234,7 +234,7 @@ type DecoratedAgentRow = ReturnType<typeof decorateAgentRow>;
 type ConversationInboxWorkspace = {
   id: string;
   name: string;
-  gitRepoUrl: string | null;
+  initialSourceUrl: string | null;
   memoryEnabled: boolean;
   memoryScope: string | null;
   createdAt: number;
@@ -243,7 +243,7 @@ type ConversationInboxWorkspace = {
 
 type ConversationInboxItem = DecoratedAgentRow & {
   workspaceName: string;
-  workspaceGitRepoUrl: string | null;
+  workspaceInitialSourceUrl: string | null;
 };
 
 type ConversationInboxResult = {
@@ -576,7 +576,7 @@ export function listWorkspaces(ctx: AppContext) {
             workspaces: workspaceRows.map((entry) => ({
               id: entry.id,
               name: entry.name,
-              gitRepoUrl: entry.gitRepoUrl,
+              initialSourceUrl: entry.initialSourceUrl,
               memoryEnabled: entry.memoryEnabled,
               memoryScope: entry.memoryScope,
               status: entry.status,
@@ -602,7 +602,7 @@ export function createWorkspace(ctx: AppContext, input: WorkspaceCreateInput) {
         id,
         userId: ctx.userId,
         name,
-        gitRepoUrl: input.gitRepoUrl?.trim() || null,
+        initialSourceUrl: input.initialSourceUrl?.trim() || null,
         memoryEnabled: input.memoryEnabled ?? false,
         memoryScope: input.memoryScope?.trim() ? input.memoryScope.trim() : null,
         status: "draft",
@@ -659,7 +659,7 @@ export function updateWorkspace(
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.status !== undefined) updates.status = input.status;
-      if (input.gitRepoUrl !== undefined) updates.gitRepoUrl = input.gitRepoUrl;
+      if (input.initialSourceUrl !== undefined) updates.initialSourceUrl = input.initialSourceUrl;
       if (input.memoryEnabled !== undefined) updates.memoryEnabled = input.memoryEnabled;
       if (input.memoryScope !== undefined) {
         updates.memoryScope = input.memoryScope?.trim() ? input.memoryScope.trim() : null;
@@ -704,7 +704,7 @@ export function listConversationInbox(
         .select({
           id: workspace.id,
           name: workspace.name,
-          gitRepoUrl: workspace.gitRepoUrl,
+          initialSourceUrl: workspace.initialSourceUrl,
           memoryEnabled: workspace.memoryEnabled,
           memoryScope: workspace.memoryScope,
           createdAt: workspace.createdAt,
@@ -747,7 +747,7 @@ export function listConversationInbox(
                   return {
                     ...decorateAgentRow(row, decoration),
                     workspaceName: currentWorkspace?.name ?? "Workspace",
-                    workspaceGitRepoUrl: currentWorkspace?.gitRepoUrl ?? null,
+                    workspaceInitialSourceUrl: currentWorkspace?.initialSourceUrl ?? null,
                   };
                 })
                 .sort((left, right) => {
@@ -762,7 +762,7 @@ export function listConversationInbox(
                 workspaces: workspaceRows.map((row) => ({
                   id: row.id,
                   name: row.name,
-                  gitRepoUrl: row.gitRepoUrl,
+                  initialSourceUrl: row.initialSourceUrl,
                   memoryEnabled: row.memoryEnabled,
                   memoryScope: row.memoryScope,
                   createdAt: row.createdAt?.getTime() ?? 0,

@@ -20,8 +20,7 @@
 
   const path = $derived(page.url.pathname);
   const isWorkspace = $derived(/^\/workspace\/[^/]+/.test(path));
-  const isCentered = $derived(['/', '/login', '/signup', '/forgot-password', '/reset-password'].includes(path));
-  const variant = $derived(isWorkspace ? 'workspace' : isCentered ? 'centered' : 'dashboard');
+  const isPublicRoute = $derived(['/', '/login', '/signup', '/forgot-password', '/reset-password'].includes(path));
   const current = $derived(path.match(/^\/([^/]+)/)?.[1] ?? null);
   const workspaceId = $derived(isWorkspace ? path.split('/')[2] ?? null : null);
 </script>
@@ -31,7 +30,7 @@
 {/if}
 
 <div class="min-h-screen flex flex-col bg-(--bg) text-(--t2) transition-colors duration-200 {isWorkspace ? 'h-dvh overflow-hidden' : ''}">
-  <Nav {variant} {current} {workspaceId} />
+  <Nav current={current} workspaceId={workspaceId} isWorkspace={isWorkspace} showAuthedControls={!isPublicRoute} />
   <div class="flex-1 min-h-0 {isWorkspace ? 'overflow-hidden' : ''}">
     {@render children?.()}
   </div>

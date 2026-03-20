@@ -117,6 +117,19 @@
     return !lastAssistantText;
   });
 
+  /** Same copy often arrives as both `text` and `done.summary`; show one bubble. */
+  function doneSummaryRedundant(idx: number, summary: string): boolean {
+    const t = summary.trim();
+    if (!t) return true;
+    for (let i = idx - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.from !== "a") continue;
+      if (m.event.type === "text") return m.event.content.trim() === t;
+      if (m.event.type === "done" && m.event.summary) return m.event.summary.trim() === t;
+    }
+    return false;
+  }
+
   function autoscroll(
     node: HTMLDivElement,
     _deps: { messageCount: number; showTyping: boolean },
@@ -180,7 +193,7 @@
         </div>
       {:else if message.event.type === "handoff"}
         <TextMessage from="a" text={`Exhausted: ${message.event.summary}`} />
-      {:else if message.event.type === "done" && message.event.summary}
+      {:else if message.event.type === "done" && message.event.summary && !doneSummaryRedundant(index, message.event.summary)}
         <TextMessage from="a" text={message.event.summary} />
       {/if}
     {/each}

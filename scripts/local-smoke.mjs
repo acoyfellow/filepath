@@ -272,6 +272,27 @@ try {
   await page.reload({ waitUntil: "networkidle" });
   await waitForText(page, "No agents yet", 10_000);
 
+  if (process.env.FILEPATH_SMOKE_CUSTOM === "1") {
+    const customHarnessBtn = page.locator('[data-testid="agent-settings-drawer"] [data-harness-id="custom"]').first();
+    const customVisible = (await customHarnessBtn.count()) > 0;
+    if (customVisible) {
+      await createAgent(page, `custom-smoke-${now}`);
+      await openAgentSettings(page);
+      await customHarnessBtn.click();
+      await saveAgentSettings(page);
+      await waitForText(page, "Settings saved", 10_000);
+      await page.getByRole("textbox", { name: /Start the first task|Describe the next task/i }).fill(
+        "Reply with exactly: CUSTOM_HARNESS_OK",
+      );
+      await page.getByRole("button", { name: "Run task" }).click();
+      await waitForText(page, "CUSTOM_HARNESS_OK", 90_000);
+      await deleteRemainingAgentsViaApi(page);
+      console.log("Custom harness smoke passed");
+    } else {
+      console.log("Custom harness not available (disabled). Skip FILEPATH_SMOKE_CUSTOM or enable custom in Harness registry.");
+    }
+  }
+
   console.log(JSON.stringify({
     ok: true,
     email,

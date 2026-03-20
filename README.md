@@ -44,74 +44,16 @@ Then open `http://localhost:5173/signup`.
 ### First conversation
 
 1. Sign in and land on the dashboard (a global inbox).
-2. Create a workspace with an optional git repo URL.
+2. Create a workspace (optionally with an initial source URL).
 3. Add a provider router key in Settings.
 4. Open the workspace and create a conversation with a harness, model, file scope, and tool permissions.
 5. Send a task.
 
 Each conversation is always in one state: **Ready**, **Running**, **Blocked**, or **Closed**.
 
-## How to enable memory (Deja)
-
-filepath can optionally use [Deja](https://github.com/acoyfellow/deja) for persistent memory across runs. When enabled, workspaces recall relevant learnings before each task and store new learnings after.
-
-### Setup
-
-1. Add Deja as a dependency:
-
-```bash
-bun add github:acoyfellow/deja
-```
-
-2. Add the following to `alchemy.run.ts` (after the `Sandbox` definition, before the `WORKER`):
-
-```ts
-import { Ai, DurableObjectNamespace, VectorizeIndex } from "alchemy/cloudflare";
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-
-// Deja: persistent memory
-const dejaPrefix = isProd ? "deja" : `${app.stage}-deja`;
-
-const DEJA_VECTORIZE = await VectorizeIndex(`${dejaPrefix}-embeddings`, {
-  name: `${dejaPrefix}-embeddings`,
-  dimensions: 384,
-  metric: "cosine",
-  adopt: true,
-});
-
-const DEJA_DO = DurableObjectNamespace("deja-do", {
-  className: "DejaDO",
-  scriptName: `${dejaPrefix}-worker`,
-  sqlite: true,
-});
-
-const DEJA_WORKER = await Worker(`${dejaPrefix}-worker`, {
-  name: `${dejaPrefix}-worker`,
-  entrypoint: require.resolve("deja"),
-  compatibilityDate: "2025-11-15",
-  compatibilityFlags: ["nodejs_compat"],
-  adopt: true,
-  bindings: {
-    DEJA: DEJA_DO,
-    VECTORIZE: DEJA_VECTORIZE,
-    AI: Ai(),
-  },
-  url: true,
-});
-```
-
-3. Add `DEJA_ENDPOINT: DEJA_WORKER.url ?? ""` to the `env` block of both the `WORKER` and `APP` definitions.
-
-4. Deploy. Alchemy provisions the Deja worker, vectorize index, and durable object automatically.
-
-5. Enable memory on a workspace by setting `memoryEnabled: true` and `memoryScope` to any string (e.g. the workspace name). Tasks in that workspace will recall and learn via Deja.
-
-Optionally set `DEJA_API_KEY` in your `.env` to require auth on the Deja instance.
-
 ## How-to
 
-### Restrict a conversation to one part of a repo
+### Restrict a conversation to specific paths
 
 - `allowedPaths` — directories the conversation may touch
 - `forbiddenPaths` — blocks inside that scope
@@ -135,15 +77,22 @@ If a conversation lacks `write` or `commit` permission, filepath rejects the act
 
 Change `harnessId` or `model` on a conversation. Same workspace, same scope, different runtime.
 
+### Custom harness (Hermes)
+
+The `custom` harness runs [Hermes Agent](https://github.com/NousResearch/hermes-agent) inside the sandbox. filepath bootstraps Hermes at runtime (download + cache), so you don't need to rebuild the sandbox image for Hermes updates.
+
+- **Version pinning** — Set `hermesVersion` in the harness config (Admin → Harness registry → Edit custom). Use `main` for latest, or a git ref (e.g. `v0.1.0`) for a pinned release.
+- **Scope + tool gates** — filepath derives FAP events from git diffs after Hermes runs. Only changes inside `allowedPaths` and outside `forbiddenPaths` are allowed. `commit` events require the `commit` tool permission.
+- **Runtime bootstrap** — Hermes is installed via pip into a sandbox cache on first use. The sandbox image needs `python3`, `python3-venv`, and `python3-pip`.
+
 ## Reference
 
 ### What filepath is
 
 - A personal Better Auth-protected dashboard
 - A global inbox of conversations across workspaces
-- Bounded execution against sandboxed repo clones
+- Bounded execution against sandboxed workspaces
 - Explicit human control: close, reopen, pause, resume, approve, reject
-- Optionally memory-aware via Deja
 
 ### What filepath is not
 
@@ -153,7 +102,7 @@ Change `harnessId` or `model` on a conversation. Same workspace, same scope, dif
 
 ### Concepts
 
-- **workspace** — a repo-backed sandbox environment
+- **workspace** — a sandboxed filesystem environment
 - **conversation** — a thread of bounded work inside a workspace
 - **scope** — allowed paths, forbidden paths, tool permissions, writable root
 - **result** — structured output from an agent run
@@ -240,7 +189,7 @@ Better Auth is the auth boundary.
 
 ### Why filepath exists
 
-Models and harnesses change fast. The durable value is the runtime boundary: clone a repo, scope agents to files and tools, return structured results.
+Models and harnesses change fast. The durable value is the runtime boundary: a sandboxed workspace, scoped agents, and structured results.
 
 ### Why Alchemy
 
@@ -269,7 +218,7 @@ Push to `main` triggers: typecheck, build, gate checks, then production deploy v
 - `src/core/app.ts` — workspace/agent CRUD
 - `src/lib/schema.ts` — D1 database schema
 - `src/lib/runtime/authority.ts` — scope enforcement (deterministic)
-- `src/lib/runtime/agent-runtime.ts` — task execution, Deja integration
+- `src/lib/runtime/agent-runtime.ts` — task execution
 - `src/routes/dashboard/+page.svelte` — inbox UI
 - `src/routes/workspace/[id]/+page.svelte` — workspace UI
 - `src/routes/api/workspaces/` — API routes

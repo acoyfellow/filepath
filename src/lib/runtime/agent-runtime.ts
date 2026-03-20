@@ -39,8 +39,6 @@ export interface RuntimeEnv {
   Sandbox?: unknown;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
-  DEJA_ENDPOINT?: string;
-  DEJA_API_KEY?: string;
 }
 
 export interface RuntimeExecutionContext {
@@ -52,7 +50,7 @@ interface AgentExecutionConfig {
   model: string;
   policy: AgentScope;
   workspaceId: string;
-  gitRepoUrl: string | null;
+  initialSourceUrl: string | null;
   entryCommand: string;
   executionRoot: string;
   envVars: Record<string, string>;
@@ -70,18 +68,6 @@ interface ExecRelay {
 interface DirectModelResponse {
   assistantText: string;
   summary: string;
-}
-
-interface DejaInjectResponse {
-  prompt?: string;
-  learnings?: ReadonlyArray<{ trigger?: string; learning?: string }>;
-  state?: {
-    state?: {
-      goal?: string;
-      next_actions?: ReadonlyArray<string>;
-      decisions?: ReadonlyArray<{ text?: string }>;
-    };
-  };
 }
 
 export interface AgentTaskCompletion {
@@ -182,12 +168,15 @@ interface TaskLogContext {
 class RuntimeTaskError extends Error {
   readonly code: string;
   readonly retryable: boolean;
+  /** Unredacted detail for structured server logs only; never show to clients. */
+  readonly rawDetail: string | null;
 
-  constructor(code: string, message: string, retryable = false) {
+  constructor(code: string, message: string, retryable = false, rawDetail: string | null = null) {
     super(message);
     this.name = "RuntimeTaskError";
     this.code = code;
     this.retryable = retryable;
+    this.rawDetail = rawDetail;
   }
 }
 
@@ -318,6 +307,74 @@ function humanizeRuntimeFailureMessage(message: string): string {
   return trimmed;
 }
 
+const USER_RUNTIME_DETAIL_MAX = 480;
+
+function tryParseProviderJsonMessage(s: string): string | null {
+  const idx = s.search(/\{\s*"error"\s*:/);
+  if (idx === -1) return null;
+  let depth = 0;
+  let end = -1;
+  for (let i = idx; i < s.length; i++) {
+    const c = s[i];
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end === -1) return null;
+  try {
+    const j = JSON.parse(s.slice(idx, end)) as { error?: { message?: string } };
+    const msg = j?.error?.message;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function truncateUserRuntimeDetail(s: string, max: number): string {
+  const flat = s.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  return `${flat.slice(0, max - 1)}…`;
+}
+
+/** Strip paths, stacks, and overly verbose provider payloads before UI / API / D1. */
+function redactSandboxStderrForUser(text: string): string {
+  let s = text.replace(/\r\n/g, "\n").trim();
+  if (!s) return "";
+
+  const jsonMsg = tryParseProviderJsonMessage(s);
+  if (jsonMsg) return truncateUserRuntimeDetail(jsonMsg, USER_RUNTIME_DETAIL_MAX);
+
+  const lines = s.split("\n");
+  const kept: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    if (/^at\s+/.test(t)) continue;
+    if (/process\.processTicksAndRejections/.test(t)) continue;
+    if (/node:internal\//.test(t)) continue;
+    if (/^\^/.test(t)) continue;
+    if (/^Node\.js\s+v\d/i.test(t)) continue;
+    kept.push(line);
+  }
+  s = kept.join("\n").trim();
+
+  s = s.replace(/file:\/\/[^\s)\]]+/gi, "[redacted]");
+  s = s.replace(/\/opt\/filepath\/[^\s)\]]+/g, "[redacted]");
+  s = s.replace(/(\[redacted\][\s/]*)+/g, "[redacted] ").trim();
+
+  return truncateUserRuntimeDetail(s, USER_RUNTIME_DETAIL_MAX);
+}
+
+function runtimeErrorLogDetail(err: RuntimeTaskError): string {
+  return err.rawDetail ?? err.message;
+}
+
 function toRuntimeTaskError(
   error: unknown,
   fallbackCode: string,
@@ -328,30 +385,50 @@ function toRuntimeTaskError(
     return error;
   }
   if (error instanceof Error) {
+    const raw = error.message || fallbackMessage;
+    const human = humanizeRuntimeFailureMessage(raw);
+    const safe = redactSandboxStderrForUser(human);
     return new RuntimeTaskError(
       fallbackCode,
-      humanizeRuntimeFailureMessage(error.message || fallbackMessage),
+      safe.trim() ? safe : fallbackMessage,
       retryable,
+      raw,
     );
   }
+  const raw = String(error);
+  const safe = redactSandboxStderrForUser(raw);
   return new RuntimeTaskError(
     fallbackCode,
-    humanizeRuntimeFailureMessage(fallbackMessage),
+    safe.trim() ? safe : fallbackMessage,
     retryable,
+    raw,
   );
 }
 
 function classifySandboxStartupError(error: unknown): RuntimeTaskError {
-  const message = serializeErrorDetail(error);
-  const retryable = /timeout|tempor|reset|econn|503|502|504|429|unavailable|network/i.test(message);
-  return new RuntimeTaskError("SANDBOX_START_FAILED", message, retryable);
+  const raw = serializeErrorDetail(error);
+  const retryable = /timeout|tempor|reset|econn|503|502|504|429|unavailable|network/i.test(raw);
+  const safe = redactSandboxStderrForUser(raw);
+  return new RuntimeTaskError(
+    "SANDBOX_START_FAILED",
+    safe.trim() ? safe : "Sandbox failed to start.",
+    retryable,
+    raw,
+  );
 }
 
 function classifyProviderError(error: unknown): RuntimeTaskError {
   if (error instanceof RuntimeTaskError) {
     return error;
   }
-  return new RuntimeTaskError("PROVIDER_REQUEST_FAILED", serializeErrorDetail(error), false);
+  const raw = serializeErrorDetail(error);
+  const safe = redactSandboxStderrForUser(raw);
+  return new RuntimeTaskError(
+    "PROVIDER_REQUEST_FAILED",
+    safe.trim() ? safe : "Provider request failed.",
+    false,
+    raw,
+  );
 }
 
 function retryDelayMs(attempt: number): number {
@@ -482,6 +559,16 @@ function parseJsonArray(value: string): string[] {
   }
 }
 
+function parseHarnessConfig(value: string | null | undefined): Record<string, unknown> {
+  if (!value?.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function requireSandbox(env: RuntimeEnv): NonNullable<RuntimeEnv["Sandbox"]> {
   if (!env.Sandbox) {
     throw new RuntimeTaskError("SANDBOX_UNAVAILABLE", "Sandbox runtime is unavailable.");
@@ -489,19 +576,33 @@ function requireSandbox(env: RuntimeEnv): NonNullable<RuntimeEnv["Sandbox"]> {
   return env.Sandbox;
 }
 
-function deriveRepoDirectoryName(repoUrl: string): string {
-  const trimmed = repoUrl.trim().replace(/[#?].*$/, "").replace(/\/+$/, "");
+// Cloudflare Sandbox containers are keyed by an id passed to `getSandbox()`.
+// If the underlying Docker image changes (e.g. python version), older cached
+// containers can keep the old filesystem. Bump this revision to force fresh
+// containers.
+const SANDBOX_RUNTIME_REVISION = "py311-v1";
+
+function sandboxKeyForAgent(agentId: string): string {
+  return `${agentId}__rt-${SANDBOX_RUNTIME_REVISION}`;
+}
+
+function sandboxKeyForWorkspaceScript(workspaceId: string): string {
+  return `script-${workspaceId}__rt-${SANDBOX_RUNTIME_REVISION}`;
+}
+
+function deriveSourceDirectoryName(sourceUrl: string): string {
+  const trimmed = sourceUrl.trim().replace(/[#?].*$/, "").replace(/\/+$/, "");
   const lastSegment = trimmed.split("/").pop() || "";
   const withoutGitSuffix = lastSegment.replace(/\.git$/i, "");
   const safeName = withoutGitSuffix.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
-  return safeName || "repo";
+  return safeName || "workspace";
 }
 
-function resolveWorkspaceRoot(repoUrl?: string | null): string {
-  if (!repoUrl) {
+function resolveWorkspaceRoot(sourceUrl?: string | null): string {
+  if (!sourceUrl) {
     return "/workspace";
   }
-  return `/workspace/${deriveRepoDirectoryName(repoUrl)}`;
+  return `/workspace/${deriveSourceDirectoryName(sourceUrl)}`;
 }
 
 function extractAssistantText(value: unknown): string {
@@ -727,133 +828,18 @@ async function getAgentTranscript(
     .join("\n\n");
 }
 
-async function loadWorkspaceMemoryConfig(
-  env: RuntimeEnv,
-  workspaceId: string,
-): Promise<{ memoryEnabled: boolean; memoryScope: string | null }> {
-  await ensureRuntimeSchema(env);
-  const row = await env.DB.prepare(
-    `SELECT memory_enabled, memory_scope
-       FROM workspace
-      WHERE id = ?
-      LIMIT 1`,
-  ).bind(workspaceId).first<{ memory_enabled: number | null; memory_scope: string | null }>();
-
-  return {
-    memoryEnabled: Boolean(row?.memory_enabled),
-    memoryScope: row?.memory_scope?.trim() || null,
-  };
-}
-
-function buildDejaHeaders(env: RuntimeEnv): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    ...(env.DEJA_API_KEY ? { Authorization: `Bearer ${env.DEJA_API_KEY}` } : {}),
-  };
-}
-
-function summarizeDejaRecall(payload: DejaInjectResponse | null): string | null {
-  if (!payload) return null;
-
-  const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
-  const stateGoal = payload.state?.state?.goal?.trim() ?? "";
-  const nextActions = payload.state?.state?.next_actions?.filter(Boolean).join("; ") ?? "";
-  const decisions =
-    payload.state?.state?.decisions
-      ?.map((entry) => entry.text?.trim() ?? "")
-      .filter(Boolean)
-      .join("; ") ?? "";
-  const learningLines = (payload.learnings ?? [])
-    .map((entry) => {
-      const trigger = typeof entry.trigger === "string" ? entry.trigger.trim() : "";
-      const learning = typeof entry.learning === "string" ? entry.learning.trim() : "";
-      if (!trigger && !learning) return "";
-      return trigger ? `When ${trigger}, ${learning}` : learning;
-    })
-    .filter(Boolean)
-    .join("\n");
-
-  const parts = [
-    prompt,
-    stateGoal ? `Current goal: ${stateGoal}` : "",
-    decisions ? `Prior decisions: ${decisions}` : "",
-    nextActions ? `Next actions: ${nextActions}` : "",
-    learningLines,
-  ].filter(Boolean);
-
-  return parts.length > 0 ? parts.join("\n") : null;
-}
-
-async function loadDejaRecall(
-  env: RuntimeEnv,
-  workspaceId: string,
-  agentId: string,
-  content: string,
-  task: TaskRow | null,
-): Promise<string | null> {
-  if (!env.DEJA_ENDPOINT) {
-    return null;
-  }
-
-  const memory = await loadWorkspaceMemoryConfig(env, workspaceId);
-  if (!memory.memoryEnabled || !memory.memoryScope) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${env.DEJA_ENDPOINT.replace(/\/+$/, "")}/inject`, {
-      method: "POST",
-      headers: buildDejaHeaders(env),
-      body: JSON.stringify({
-        scopes: [memory.memoryScope],
-        context: content,
-        limit: 3,
-        format: "prompt",
-        includeState: true,
-        runId: task?.proof_run_id ?? task?.id ?? "",
-        identity: {
-          traceId: task?.trace_id ?? null,
-          workspaceId,
-          conversationId: agentId,
-          runId: task?.id ?? null,
-          proofRunId: task?.proof_run_id ?? null,
-          proofIterationId: task?.proof_iteration_id ?? null,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload = (await response.json().catch(() => null)) as DejaInjectResponse | null;
-    return summarizeDejaRecall(payload);
-  } catch {
-    return null;
-  }
-}
-
 async function buildTaskPrompt(
   env: RuntimeEnv,
   workspaceId: string,
   agentId: string,
   content: string,
-  task: TaskRow | null,
 ): Promise<string> {
   const transcript = await getAgentTranscript(env, agentId, 12);
-  const recall = await loadDejaRecall(env, workspaceId, agentId, content, task);
-  return transcript || recall
+  return transcript
     ? [
         "Continue this filepath agent task from the transcript below.",
         "Reply only as the selected harness running in the sandbox.",
         "",
-        ...(recall
-          ? [
-            "Relevant recall from earlier work:",
-            recall,
-            "",
-          ]
-          : []),
         transcript,
         "",
         "Respond to the latest human task in context.",
@@ -861,64 +847,17 @@ async function buildTaskPrompt(
     : content;
 }
 
-async function persistDejaRuntimeSummary(
+export async function getAgentWorkspaceId(
   env: RuntimeEnv,
-  workspaceId: string,
   agentId: string,
-  taskId: string,
-  content: string,
-  result: AgentResult,
-): Promise<void> {
-  if (!env.DEJA_ENDPOINT) {
-    return;
-  }
-
-  const memory = await loadWorkspaceMemoryConfig(env, workspaceId);
-  if (!memory.memoryEnabled || !memory.memoryScope) {
-    return;
-  }
-
-  const task = await loadTaskRow(env, taskId);
-  const summaryParts = [
-    `Conversation run result: ${result.summary}.`,
-    result.diffSummary ? `Changes: ${result.diffSummary}.` : "",
-    result.commit ? `Commit: ${result.commit.sha} ${result.commit.message}.` : "",
-  ].filter(Boolean);
-
-  try {
-    await fetch(`${env.DEJA_ENDPOINT.replace(/\/+$/, "")}/learn`, {
-      method: "POST",
-      headers: buildDejaHeaders(env),
-      body: JSON.stringify({
-        scope: memory.memoryScope,
-        trigger:
-          (content.trim().length > 240 ? `${content.trim().slice(0, 239)}…` : content.trim())
-          || "filepath conversation run",
-        learning: summaryParts.join(" "),
-        confidence:
-          result.status === "success"
-            ? 0.85
-            : result.status === "policy_error"
-              ? 0.7
-              : 0.6,
-        reason: "Stored from a filepath conversation run.",
-        source: `filepath:${taskId}`,
-        identity: {
-          traceId: task?.trace_id ?? null,
-          workspaceId,
-          conversationId: agentId,
-          runId: taskId,
-          proofRunId: task?.proof_run_id ?? null,
-          proofIterationId: task?.proof_iteration_id ?? null,
-        },
-      }),
-    });
-  } catch {
-    // best-effort only
-  }
+): Promise<string | null> {
+  const row = await env.DB.prepare(
+    `SELECT workspace_id FROM agent WHERE id = ? LIMIT 1`,
+  ).bind(agentId).first<{ workspace_id: string }>();
+  return row?.workspace_id ?? null;
 }
 
-async function loadAgentExecutionConfig(
+export async function loadAgentExecutionConfig(
   env: RuntimeEnv,
   agentId: string,
   workspaceId: string,
@@ -926,8 +865,9 @@ async function loadAgentExecutionConfig(
 ): Promise<AgentExecutionConfig> {
   const row = await env.DB.prepare(
     `SELECT a.harness_id, a.model, a.allowed_paths, a.forbidden_paths,
-            a.tool_permissions, a.writable_root, w.id as workspace_id, w.git_repo_url,
-            u.openrouter_api_key as user_key, h.entry_command as entry_command
+            a.tool_permissions, a.writable_root, w.id as workspace_id, w.initial_source_url,
+            u.openrouter_api_key as user_key, h.entry_command as entry_command,
+            h.config as harness_config
        FROM agent a
        JOIN workspace w ON a.workspace_id = w.id
        JOIN user u ON w.user_id = u.id
@@ -941,9 +881,10 @@ async function loadAgentExecutionConfig(
     tool_permissions: string;
     writable_root: string | null;
     workspace_id: string;
-    git_repo_url: string | null;
+    initial_source_url: string | null;
     user_key: string | null;
     entry_command: string;
+    harness_config: string;
   }>();
 
   if (!row) {
@@ -974,7 +915,7 @@ async function loadAgentExecutionConfig(
     );
   }
 
-  const workspaceRoot = resolveWorkspaceRoot(row.git_repo_url);
+  const workspaceRoot = resolveWorkspaceRoot(row.initial_source_url);
   const policy = normalizeAgentScope({
     allowedPaths: parseJsonArray(row.allowed_paths),
     forbiddenPaths: parseJsonArray(row.forbidden_paths),
@@ -987,6 +928,7 @@ async function loadAgentExecutionConfig(
   }
 
   const executionRoot = resolveScopedWorkspaceRoot(workspaceRoot, policy.writableRoot);
+  const harnessConfig = parseHarnessConfig(row.harness_config);
   const envVars: Record<string, string> = {
     ...buildAgentEnv({
       harnessId: row.harness_id as HarnessId,
@@ -998,7 +940,12 @@ async function loadAgentExecutionConfig(
       forbiddenPaths: policy.forbiddenPaths,
       toolPermissions: policy.toolPermissions,
       writableRoot: policy.writableRoot,
+      harnessConfig,
     }),
+    // Ensure in-container adapters (e.g. Hermes) use the same Python version.
+    // The sandbox process runs with an explicit `env` object, so image ENV values
+    // (like those from the sandbox Dockerfile) do not automatically propagate.
+    FILEPATH_PYTHON: "/usr/bin/python3.11",
     FILEPATH_AGENT_ID: agentId,
     FILEPATH_WORKSPACE_ID: row.workspace_id,
   };
@@ -1012,7 +959,7 @@ async function loadAgentExecutionConfig(
     model: row.model,
     policy,
     workspaceId: row.workspace_id,
-    gitRepoUrl: row.git_repo_url,
+    initialSourceUrl: row.initial_source_url,
     entryCommand: row.entry_command,
     executionRoot,
     envVars,
@@ -1022,21 +969,22 @@ async function loadAgentExecutionConfig(
 async function ensureContainer(
   env: RuntimeEnv,
   agentId: string,
-  gitRepoUrl: string | null,
+  initialSourceUrl: string | null,
 ): Promise<Sandbox> {
   const sandboxEnv = requireSandbox(env);
   const { getSandbox } = await import("@cloudflare/sandbox");
-  const { cloneRepo } = await import("$lib/agents/container");
-  const sandbox = getSandbox(sandboxEnv as never, agentId);
-  const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
+  const { cloneSource } = await import("$lib/agents/container");
+  const sandboxKey = sandboxKeyForAgent(agentId);
+  const sandbox = getSandbox(sandboxEnv as never, sandboxKey);
+  const workspaceRoot = resolveWorkspaceRoot(initialSourceUrl);
 
-  if (gitRepoUrl) {
+  if (initialSourceUrl) {
     const workspaceExists = await sandbox.exists(workspaceRoot);
     if (!workspaceExists.exists) {
-      await cloneRepo(
+      await cloneSource(
         { Sandbox: sandboxEnv as never },
         agentId,
-        gitRepoUrl,
+        initialSourceUrl,
         workspaceRoot,
       );
     }
@@ -1048,29 +996,29 @@ async function ensureContainer(
     `UPDATE agent
         SET container_id = ?, updated_at = unixepoch('subsecond') * 1000
       WHERE id = ?`,
-  ).bind(agentId, agentId).run();
+  ).bind(sandboxKey, agentId).run();
   return sandbox;
 }
 
 async function ensureWorkspaceSandbox(
   env: RuntimeEnv,
   workspaceId: string,
-  gitRepoUrl: string | null,
+  initialSourceUrl: string | null,
 ): Promise<Sandbox> {
   const sandboxEnv = requireSandbox(env);
   const { getSandbox } = await import("@cloudflare/sandbox");
-  const { cloneRepo } = await import("$lib/agents/container");
-  const sandboxId = `script-${workspaceId}`;
+  const { cloneSource } = await import("$lib/agents/container");
+  const sandboxId = sandboxKeyForWorkspaceScript(workspaceId);
   const sandbox = getSandbox(sandboxEnv as never, sandboxId);
-  const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
+  const workspaceRoot = resolveWorkspaceRoot(initialSourceUrl);
 
-  if (gitRepoUrl) {
+  if (initialSourceUrl) {
     const workspaceExists = await sandbox.exists(workspaceRoot);
     if (!workspaceExists.exists) {
-      await cloneRepo(
+      await cloneSource(
         { Sandbox: sandboxEnv as never },
         sandboxId,
-        gitRepoUrl,
+        initialSourceUrl,
         workspaceRoot,
       );
     }
@@ -1084,17 +1032,17 @@ async function ensureWorkspaceSandbox(
 async function loadWorkspaceForScript(
   env: RuntimeEnv,
   workspaceId: string,
-): Promise<{ gitRepoUrl: string | null }> {
+): Promise<{ initialSourceUrl: string | null }> {
   await ensureRuntimeSchema(env);
   const row = await env.DB.prepare(
-    `SELECT git_repo_url FROM workspace WHERE id = ? LIMIT 1`,
-  ).bind(workspaceId).first<{ git_repo_url: string | null }>();
+    `SELECT initial_source_url FROM workspace WHERE id = ? LIMIT 1`,
+  ).bind(workspaceId).first<{ initial_source_url: string | null }>();
 
   if (!row) {
     throw new RuntimeTaskError("WORKSPACE_NOT_FOUND", `Workspace ${workspaceId} not found.`);
   }
 
-  return { gitRepoUrl: row.git_repo_url };
+  return { initialSourceUrl: row.initial_source_url };
 }
 
 export interface ScriptRunResult {
@@ -1126,7 +1074,7 @@ export async function runWorkspaceScript(
     throw new RuntimeTaskError("SCRIPT_REQUIRED", "Script content is required.");
   }
 
-  const { gitRepoUrl } = await loadWorkspaceForScript(env, workspaceId);
+  const { initialSourceUrl } = await loadWorkspaceForScript(env, workspaceId);
   const policy = normalizeAgentScope({
     allowedPaths: scopeInput?.allowedPaths ?? ["."],
     forbiddenPaths: scopeInput?.forbiddenPaths ?? [".git", "node_modules"],
@@ -1138,8 +1086,8 @@ export async function runWorkspaceScript(
     throw new RuntimeTaskError("POLICY_INVALID", policyError);
   }
 
-  const sandbox = await ensureWorkspaceSandbox(env, workspaceId, gitRepoUrl);
-  const workspaceRoot = resolveWorkspaceRoot(gitRepoUrl);
+  const sandbox = await ensureWorkspaceSandbox(env, workspaceId, initialSourceUrl);
+  const workspaceRoot = resolveWorkspaceRoot(initialSourceUrl);
   const executionRoot = resolveScopedWorkspaceRoot(workspaceRoot, policy.writableRoot);
   await sandbox.mkdir(executionRoot, { recursive: true });
 
@@ -1169,7 +1117,12 @@ export async function runWorkspaceScript(
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      result = { stdout: "", stderr: humanizeRuntimeFailureMessage(message), exitCode: 1 };
+      const human = humanizeRuntimeFailureMessage(message);
+      result = {
+        stdout: "",
+        stderr: redactSandboxStderrForUser(human),
+        exitCode: 1,
+      };
     }
     const finishedAt = now();
     await writeScopedSnapshot(
@@ -1223,12 +1176,13 @@ export async function runWorkspaceScript(
   }
 }
 
-function createExecRelay(): ExecRelay {
+function createExecRelay(opts?: { onEvent?: (e: AgentEventType) => void }): ExecRelay {
   let stdoutBuffer = "";
   let protocolError: RuntimeTaskError | null = null;
   const parsedEvents: AgentEventType[] = [];
   const rawStdoutLines: string[] = [];
   const stderrChunks: string[] = [];
+  const onEvent = opts?.onEvent;
 
   const handleLine = (line: string) => {
     if (protocolError) return;
@@ -1237,10 +1191,14 @@ function createExecRelay(): ExecRelay {
       const event = parseAgentEvent(trimmed);
       if (event) {
         parsedEvents.push(event);
+        onEvent?.(event);
       } else {
+        const rawFap = `Invalid FAP event (schema validation failed): ${trimmed.slice(0, 2000)}`;
         protocolError = new RuntimeTaskError(
           "FAP_PROTOCOL_ERROR",
-          `Invalid FAP event (schema validation failed): ${trimmed.slice(0, 200)}`,
+          redactSandboxStderrForUser(rawFap),
+          false,
+          rawFap,
         );
       }
     } else {
@@ -1555,9 +1513,13 @@ async function persistAssistantText(
   fallbackText: string,
 ): Promise<void> {
   let saved = false;
+  let lastAssistantText = "";
   for (const event of events) {
     if (event.type === "text") {
+      const chunk = event.content.trim();
+      if (!chunk || chunk === lastAssistantText) continue;
       await saveAgentMessage(env, agentId, "assistant", event.content);
+      lastAssistantText = chunk;
       saved = true;
     }
   }
@@ -1578,7 +1540,7 @@ async function stopContainer(env: RuntimeEnv, agentId: string): Promise<void> {
 
   if (row?.active_process_id && row.active_process_id !== LOCAL_WAIT_PROCESS_ID) {
     const { getSandbox } = await import("@cloudflare/sandbox");
-    const sandbox = getSandbox(requireSandbox(env) as never, agentId);
+    const sandbox = getSandbox(requireSandbox(env) as never, sandboxKeyForAgent(agentId));
     await sandbox.killProcess(row.active_process_id).catch(() => {});
   }
 
@@ -2336,7 +2298,7 @@ async function runDirectExecutionTask(
           durationMs: delayMs,
           state: "retrying",
           errorCode: runtimeError.code,
-          errorDetail: runtimeError.message,
+          errorDetail: runtimeErrorLogDetail(runtimeError),
         });
         await sleep(delayMs);
         await setTaskState(env, {
@@ -2371,7 +2333,7 @@ async function runDirectExecutionTask(
         durationMs: failed.finishedAt - startedAt,
         state: "failed",
         errorCode: runtimeError.code,
-        errorDetail: runtimeError.message,
+        errorDetail: runtimeErrorLogDetail(runtimeError),
       });
       return { result: failed, events: [] };
     }
@@ -2436,7 +2398,7 @@ async function withSandboxStartupRetry<T>(
         durationMs: delayMs,
         state: "retrying",
         errorCode: runtimeError.code,
-        errorDetail: runtimeError.message,
+        errorDetail: runtimeErrorLogDetail(runtimeError),
       });
       await sleep(delayMs);
       await setTaskState(env, {
@@ -2453,6 +2415,11 @@ async function withSandboxStartupRetry<T>(
   throw lastError ?? new RuntimeTaskError("SANDBOX_START_FAILED", "Sandbox failed to start.");
 }
 
+interface StreamOpts {
+  onEvent?: (e: AgentEventType) => void;
+  isCancelled?: () => boolean;
+}
+
 async function runSandboxTask(
   env: RuntimeEnv,
   workspaceId: string,
@@ -2461,10 +2428,11 @@ async function runSandboxTask(
   content: string,
   config: AgentExecutionConfig,
   logBase: Omit<TaskLogContext, "phase">,
+  streamOpts?: StreamOpts,
 ): Promise<AgentTaskCompletion> {
   const processId = `task-${taskId}`;
   const startedAt = now();
-  const workspaceRoot = resolveWorkspaceRoot(config.gitRepoUrl);
+  const workspaceRoot = resolveWorkspaceRoot(config.initialSourceUrl);
   const snapshotBase = `/tmp/filepath-task-snapshots/${taskId}`;
   const beforeSnapshotRoot = `${snapshotBase}/before`;
   const afterSnapshotRoot = `${snapshotBase}/after`;
@@ -2472,14 +2440,18 @@ async function runSandboxTask(
   let sandbox: Sandbox | null = null;
   let beforeDirtyPaths = new Set<string>();
 
+  const isCancelled = streamOpts?.isCancelled;
   try {
     sandbox = await withSandboxStartupRetry(env, taskId, agentId, {
       ...logBase,
       harnessId: config.harnessId,
       model: config.model,
     }, async () => {
+      if (isCancelled?.()) {
+        throw new RuntimeTaskError("TASK_CANCELED", "The agent task was cancelled.");
+      }
       await ensureNotCancelled(env, workspaceId, agentId);
-      const nextSandbox = await ensureContainer(env, agentId, config.gitRepoUrl);
+      const nextSandbox = await ensureContainer(env, agentId, config.initialSourceUrl);
       await nextSandbox.mkdir(config.executionRoot, { recursive: true });
       return nextSandbox;
     });
@@ -2513,12 +2485,12 @@ async function runSandboxTask(
       durationMs: failed.finishedAt - startedAt,
       state: "failed",
       errorCode: runtimeError.code,
-      errorDetail: runtimeError.message,
+      errorDetail: runtimeErrorLogDetail(runtimeError),
     });
     return { result: failed, events: [] };
   }
 
-  const relay = createExecRelay();
+  const relay = createExecRelay({ onEvent: streamOpts?.onEvent });
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   try {
@@ -2578,16 +2550,18 @@ async function runSandboxTask(
     relay.flush();
     relay.checkProtocolError();
 
+    if (isCancelled?.()) {
+      throw new RuntimeTaskError("TASK_CANCELED", "The agent task was cancelled.");
+    }
     await ensureNotCancelled(env, workspaceId, agentId);
 
     if (exitCode !== 0) {
-      const stderrSummary = relay.stderrSummary().trim() || logs.stderr.trim();
-      throw new RuntimeTaskError(
-        "SANDBOX_EXEC_FAILED",
-        stderrSummary
-          ? `Sandbox command failed (${exitCode}): ${stderrSummary}`
-          : `Sandbox command failed (${exitCode}).`,
-      );
+      const stderrRaw = relay.stderrSummary().trim() || logs.stderr.trim();
+      const stderrUser = redactSandboxStderrForUser(stderrRaw);
+      const msg = stderrUser
+        ? `Sandbox command failed (${exitCode}): ${stderrUser}`
+        : `Sandbox command failed (${exitCode}).`;
+      throw new RuntimeTaskError("SANDBOX_EXEC_FAILED", msg, false, stderrRaw || null);
     }
 
     const policyViolation = getRuntimePolicyViolation(config.policy, relay.events());
@@ -2735,7 +2709,7 @@ async function runSandboxTask(
       processId: process?.id ?? null,
       state: taskState,
       errorCode: runtimeError.code,
-      errorDetail: runtimeError.message,
+      errorDetail: runtimeErrorLogDetail(runtimeError),
     });
     return { result: failed, events: [] };
   } finally {
@@ -2752,6 +2726,11 @@ async function runSandboxTask(
   }
 }
 
+export interface AgentTaskStreamOpts {
+  onEvent?: (e: AgentEventType) => void;
+  isCancelled?: () => boolean;
+}
+
 export async function processAcceptedAgentTask(
   env: RuntimeEnv,
   workspaceId: string,
@@ -2759,6 +2738,7 @@ export async function processAcceptedAgentTask(
   taskId: string,
   content: string,
   requestId: string,
+  streamOpts?: AgentTaskStreamOpts,
 ): Promise<AgentTaskCompletion> {
   const acceptedAt = now();
   const persistedTask = await loadTaskRow(env, taskId);
@@ -2819,11 +2799,10 @@ export async function processAcceptedAgentTask(
         localWaitDirective,
         { requestId, taskId, workspaceId, agentId },
       );
-      await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, completion.result);
       return completion;
     }
 
-    const taskPrompt = await buildTaskPrompt(env, workspaceId, agentId, content, persistedTask);
+    const taskPrompt = await buildTaskPrompt(env, workspaceId, agentId, content);
     const config = await loadAgentExecutionConfig(env, agentId, workspaceId, taskPrompt);
 
     logTaskEvent("log", {
@@ -2849,7 +2828,6 @@ export async function processAcceptedAgentTask(
         config,
         { requestId, taskId, workspaceId, agentId },
       );
-      await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, completion.result);
       return completion;
     }
 
@@ -2861,8 +2839,8 @@ export async function processAcceptedAgentTask(
       content,
       config,
       { requestId, taskId, workspaceId, agentId },
+      streamOpts,
     );
-    await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, completion.result);
     return completion;
   } catch (error) {
     const runtimeError = toRuntimeTaskError(
@@ -2899,9 +2877,8 @@ export async function processAcceptedAgentTask(
       durationMs: result.finishedAt - acceptedAt,
       state: taskState,
       errorCode: runtimeError.code,
-      errorDetail: runtimeError.message,
+      errorDetail: runtimeErrorLogDetail(runtimeError),
     });
-    await persistDejaRuntimeSummary(env, workspaceId, agentId, taskId, content, result);
     return { result, events: [] };
   }
 }
@@ -3076,7 +3053,7 @@ export async function cancelAgentTask(
   const executionState = await getAgentExecutionState(env, workspaceId, agentId);
   if (executionState.activeProcessId && executionState.activeProcessId !== LOCAL_WAIT_PROCESS_ID) {
     const { getSandbox } = await import("@cloudflare/sandbox");
-    const sandbox = getSandbox(requireSandbox(env) as never, agentId);
+    const sandbox = getSandbox(requireSandbox(env) as never, sandboxKeyForAgent(agentId));
     await sandbox.killProcess(executionState.activeProcessId).catch(() => {});
   }
 

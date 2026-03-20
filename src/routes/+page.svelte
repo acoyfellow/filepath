@@ -6,8 +6,7 @@
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    name: "my-repo",
-    gitRepoUrl: "https://github.com/acme/my-repo"
+    name: "my-project"
   })
 }).then((res) => res.json());
 
@@ -48,7 +47,7 @@ console.log(agent.id);`;
   const workflow = [
     "Deploy filepath to your own Cloudflare account.",
     "Sign in with Better Auth and open your dashboard.",
-    "Connect a repo into a sandboxed git workspace.",
+    "Create a sandboxed workspace.",
     "Create an agent with a harness, model, file scope, and tool permissions.",
     "Review logs, diffs, and results from the dashboard or API.",
   ];
@@ -56,7 +55,7 @@ console.log(agent.id);`;
 
 <SEO
   title="filepath | Personal background agents on Cloudflare"
-  description="A personal Cloudflare-hosted development environment for bounded background agents against sandboxed repo clones."
+  description="A personal Cloudflare-hosted development environment for bounded background agents against sandboxed workspaces."
   keywords="filepath, ai agents, background agents, cloudflare, sandboxes, workspaces"
   path="/"
   type="website"
@@ -75,8 +74,8 @@ console.log(agent.id);`;
           Your own background agent environment on Cloudflare.
         </h1>
         <p class="mt-6 max-w-2xl text-base leading-8 text-gray-600 dark:text-neutral-400 md:text-lg">
-          filepath is a personal dashboard for spawning bounded background agents against sandboxed repo clones.
-          Agents stay configurable, long-running, and scoped by file and tool permissions instead of broad repo access.
+          filepath is a personal dashboard for spawning bounded background agents against sandboxed workspaces.
+          Agents stay configurable, long-running, and scoped by file and tool permissions instead of broad filesystem access.
         </p>
 
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">

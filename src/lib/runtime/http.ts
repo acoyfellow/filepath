@@ -12,14 +12,11 @@ type RuntimeIdentityInput = {
 function getLocalRuntimeEnv(event: RuntimeEvent) {
   const env = event.platform?.env;
   if (!env?.DB) return null;
-  const extraEnv = env as Record<string, unknown>;
   return {
     DB: env.DB,
     Sandbox: env.Sandbox as unknown as RuntimeEnv["Sandbox"],
     BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: env.BETTER_AUTH_URL,
-    DEJA_ENDPOINT: typeof extraEnv.DEJA_ENDPOINT === "string" ? extraEnv.DEJA_ENDPOINT : undefined,
-    DEJA_API_KEY: typeof extraEnv.DEJA_API_KEY === "string" ? extraEnv.DEJA_API_KEY : undefined,
   };
 }
 

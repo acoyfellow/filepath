@@ -20,16 +20,18 @@ export interface AdapterConfig {
   apiKey: string;
   /** Initial task (first user message) */
   task?: string;
-  /** Workspace path (cloned repo) */
+  /** Workspace path */
   workspacePath: string;
-  /** Allowed repo paths */
+  /** Allowed paths */
   allowedPaths: string[];
-  /** Forbidden repo paths */
+  /** Forbidden paths */
   forbiddenPaths: string[];
   /** Allowed tools/capabilities */
   toolPermissions: ToolPermission[];
   /** Writable sub-root for agent execution */
   writableRoot: string | null;
+  /** Harness config (e.g. hermesVersion for custom) */
+  harnessConfig?: Record<string, unknown>;
   /** Additional env vars */
   envVars?: Record<string, string>;
 }
@@ -49,6 +51,7 @@ export function buildAgentEnv(config: AdapterConfig): Record<string, string> {
     FILEPATH_FORBIDDEN_PATHS: JSON.stringify(config.forbiddenPaths),
     FILEPATH_TOOL_PERMISSIONS: JSON.stringify(config.toolPermissions),
     FILEPATH_WRITABLE_ROOT: config.writableRoot ?? "",
+    FILEPATH_HARNESS_CONFIG: JSON.stringify(config.harnessConfig ?? {}),
     ...config.envVars,
   };
 }

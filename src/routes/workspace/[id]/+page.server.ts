@@ -1,7 +1,8 @@
 import { redirect, error } from "@sveltejs/kit";
+import { resolveRuntimeBaseUrl } from "$lib/runtime/http";
 import { getDrizzle } from "$lib/auth";
 import { workspace, agent, user } from "$lib/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import type { ServerLoadEvent } from "@sveltejs/kit";
 import { decryptApiKey } from "$lib/crypto";
 import { PROVIDER_KEYS_UNREADABLE_MESSAGE } from "$lib/provider-key-state";
@@ -20,7 +21,7 @@ function getBetterAuthSecret(
   return typeof secret === "string" ? secret : undefined;
 }
 
-export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
+export const load = async ({ params, locals, platform, url }: ServerLoadEvent) => {
   if (!locals.user) throw redirect(302, "/");
 
   const db = getDrizzle();
@@ -40,7 +41,7 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
     .select()
     .from(agent)
     .where(eq(agent.workspaceId, params.id as string))
-    .orderBy(asc(agent.createdAt), asc(agent.id));
+    .orderBy(desc(agent.createdAt), desc(agent.id));
 
   const users = await db
     .select({ openrouterApiKey: user.openrouterApiKey })
@@ -67,11 +68,13 @@ export const load = async ({ params, locals, platform }: ServerLoadEvent) => {
     }
   }
 
+  const agentBaseUrl = resolveRuntimeBaseUrl({ url, platform });
   return {
     user: locals.user,
     workspace: currentWorkspace,
     agents,
     accountKeysMasked,
     accountKeysError,
+    agentBaseUrl,
   };
 };

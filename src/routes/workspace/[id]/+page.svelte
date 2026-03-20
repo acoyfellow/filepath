@@ -1,13 +1,19 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import { fly } from "svelte/transition";
   import { page } from "$app/state";
   import SEO from "$lib/components/SEO.svelte";
   import AgentDetailPane from "$lib/components/workspace/AgentDetailPane.svelte";
   import AgentSettingsDrawer from "$lib/components/workspace/AgentSettingsDrawer.svelte";
   import WorkspaceSidebar from "$lib/components/workspace/WorkspaceSidebar.svelte";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+  import { Handle as ResizableHandle, Pane, PaneGroup } from "$lib/components/ui/resizable";
   import type { TaskMessage } from "$lib/components/workspace/TaskTranscript.svelte";
+  import AgentConnection from "$lib/components/workspace/AgentConnection.svelte";
   import CreateAgentModal from "$lib/components/workspace/CreateAgentModal.svelte";
+  import Button from "$lib/components/ui/button/button.svelte";
+  import BotIcon from "@lucide/svelte/icons/bot";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import type {
     AgentConfig,
     AgentCreateRequest,
@@ -56,17 +62,27 @@
   const workspaceId = $derived(page.params.id ?? "");
   let showSpawn = $state(false);
   let showSettings = $state(false);
+  let sidebarWidthPx = $state(0);
   let accountKeysMasked = $state<{ openrouter: string | null; zen: string | null }>({
     openrouter: null,
     zen: null,
+  });
+  const sidebarProviderStyle = $derived.by(() => {
+    if (!sidebarWidthPx || Number.isNaN(sidebarWidthPx)) return "";
+    return `--sidebar-width: ${sidebarWidthPx}px;`;
   });
   let accountKeysError = $state<string | null>(null);
   let taskMessagesByAgent = $state<Record<string, TaskMessage[]>>({});
   let resultsByAgent = $state<Record<string, AgentResult | null>>({});
   let agentNotices = $state<Record<string, AgentNotice | null>>({});
-  let selectedId = $state<string | null>(null);
   let isRefreshing = $state(false);
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Transcript hydration: avoid empty / “Ready” flash before first runtime fetch. */
+  let runtimeLoadingByAgent = $state<Record<string, boolean>>({});
+  let runtimeLoadedByAgent = $state<Record<string, boolean>>({});
+  let agentConnectionRef = $state<{
+    runTask: (content: string) => Promise<{ taskId: string; ok: boolean }>;
+    cancelTask: () => void;
+  } | null>(null);
 
   function normalizeTimestamp(value: string | number | Date): number {
     if (typeof value === "number") return value;
@@ -116,29 +132,65 @@
     };
   }
 
+  /** Newest conversations first (sidebar + default selection). */
   function orderAgentsByCreatedAt(entries: AgentRecord[]): AgentRecord[] {
     return [...entries].sort(
-      (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+      (left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id),
     );
   }
 
-  let agents = $state<AgentRecord[]>([]);
+  function mapRowsToAgents(rows: unknown): AgentRecord[] {
+    return orderAgentsByCreatedAt((rows as AgentRow[]).map(toAgent));
+  }
+
+  function pickSelectedId(rows: AgentRecord[], conversationParam: string | null): string | null {
+    if (rows.length === 0) return null;
+    if (conversationParam && rows.some((r) => r.id === conversationParam)) return conversationParam;
+    return rows[0].id;
+  }
+
+  // svelte-ignore state_referenced_locally -- deliberate SSR/first-paint seed; workspace $effect reapplies on route change
+  const seedAgents = mapRowsToAgents(data.agents);
+  let agents = $state<AgentRecord[]>(seedAgents);
+  let selectedId = $state<string | null>(
+    pickSelectedId(seedAgents, page.url.searchParams.get("conversation")),
+  );
+
+  /** Only replace agent list from SSR when switching workspace — avoids empty flash + refreshWorkspace clobbering. */
+  let lastWorkspaceRouteId = $state<string | null>(null);
 
   $effect(() => {
-    agents = orderAgentsByCreatedAt((data.agents as AgentRow[]).map(toAgent));
+    const wid = workspaceId;
+    if (!wid) return;
+    if (lastWorkspaceRouteId === wid) return;
+    lastWorkspaceRouteId = wid;
+    const next = mapRowsToAgents(data.agents);
+    agents = next;
+    selectedId = pickSelectedId(next, page.url.searchParams.get("conversation"));
+  });
+
+  /** Deep link / history: ?conversation= */
+  $effect(() => {
+    const q = page.url.searchParams.get("conversation");
+    if (!q) return;
+    if (!agents.some((a) => a.id === q)) return;
+    if (selectedId !== q) selectedId = q;
+  });
+
+  /** Selection must point at a row in `agents` (e.g. after delete). */
+  $effect(() => {
+    if (agents.length === 0) {
+      if (selectedId !== null) selectedId = null;
+      return;
+    }
+    if (!selectedId || !agents.some((r) => r.id === selectedId)) {
+      selectedId = agents[0].id;
+    }
   });
 
   $effect(() => {
     accountKeysMasked = data.accountKeysMasked;
     accountKeysError = data.accountKeysError;
-  });
-
-  $effect(() => {
-    if (!selectedId && agents.length > 0) {
-      selectedId = page.url.searchParams.get("conversation") ?? agents[0].id;
-    } else if (selectedId && !agents.some((entry) => entry.id === selectedId)) {
-      selectedId = agents[0]?.id ?? null;
-    }
   });
 
   let selectedAgent = $derived(
@@ -156,6 +208,12 @@
   let dataActiveTaskByAgent = $state<Record<string, AgentRuntimeActiveTask | null>>({});
   let selectedActiveTask = $derived(
     selectedAgent ? (dataActiveTaskByAgent[selectedAgent.id] ?? null) : null,
+  );
+  let transcriptLoading = $derived(
+    Boolean(
+      selectedAgent &&
+        (!runtimeLoadedByAgent[selectedAgent.id] || runtimeLoadingByAgent[selectedAgent.id]),
+    ),
   );
 
   $effect(() => {
@@ -177,8 +235,38 @@
 
   function setAgentStatus(agentId: string, status: AgentRecord["status"]) {
     agents = agents.map((entry) =>
-      entry.id === agentId ? { ...entry, status, updatedAt: Date.now() } : entry,
+      entry.id === agentId
+        ? {
+            ...entry,
+            status,
+            conversationState:
+              entry.conversationState === "blocked" || entry.conversationState === "closed"
+                ? entry.conversationState
+                : status === "queued" ||
+                      status === "starting" ||
+                      status === "running" ||
+                      status === "retrying"
+                  ? "running"
+                  : "ready",
+            updatedAt: Date.now(),
+          }
+        : entry,
     );
+  }
+
+  /** DB may contain back-to-back duplicate assistant rows (legacy / adapters); collapse for display. */
+  function dedupeConsecutiveAssistantDupes<
+    T extends { role: string; content: string },
+  >(rows: T[]): T[] {
+    const out: T[] = [];
+    for (const entry of rows) {
+      if (entry.role === "assistant" && out.length > 0) {
+        const prev = out[out.length - 1];
+        if (prev.role === "assistant" && prev.content.trim() === entry.content.trim()) continue;
+      }
+      out.push(entry);
+    }
+    return out;
   }
 
   function dropAgentState(agentId: string) {
@@ -193,6 +281,14 @@
     const nextTasks = { ...dataActiveTaskByAgent };
     delete nextTasks[agentId];
     dataActiveTaskByAgent = nextTasks;
+
+    const nextLoading = { ...runtimeLoadingByAgent };
+    delete nextLoading[agentId];
+    runtimeLoadingByAgent = nextLoading;
+    const nextLoaded = { ...runtimeLoadedByAgent };
+    delete nextLoaded[agentId];
+    runtimeLoadedByAgent = nextLoaded;
+
     clearAgentNotice(agentId);
   }
 
@@ -204,14 +300,24 @@
         ? {
             ...entry,
             status: runtime.status as AgentRecord["status"],
+            conversationState:
+              entry.conversationState === "blocked" || entry.conversationState === "closed"
+                ? entry.conversationState
+                : runtime.status === "queued" ||
+                      runtime.status === "starting" ||
+                      runtime.status === "running" ||
+                      runtime.status === "retrying"
+                  ? "running"
+                  : "ready",
             activeProcessId: runtime.activeProcessId ?? null,
             updatedAt: Date.now(),
           }
         : entry,
     );
+    const thread = dedupeConsecutiveAssistantDupes(runtime.messages);
     taskMessagesByAgent = {
       ...taskMessagesByAgent,
-      [agentId]: runtime.messages.map((entry) => ({
+      [agentId]: thread.map((entry) => ({
         from: entry.role === "user" ? "u" : "a",
         event: { type: "text", content: entry.content },
       })),
@@ -250,6 +356,16 @@
       return;
     }
 
+    if (runtime.status === "error") {
+      setAgentNotice(agentId, {
+        tone: "error",
+        title: "Task failed",
+        message: "Something went wrong while running this task.",
+        blocking: true,
+      });
+      return;
+    }
+
     clearAgentNotice(agentId);
   }
 
@@ -267,33 +383,30 @@
   }
 
   async function refreshAgentRuntime(agentId: string) {
-    const response = await fetch(`/api/workspaces/${workspaceId}/agents/${agentId}`);
-    if (!response.ok) return;
+    runtimeLoadingByAgent = { ...runtimeLoadingByAgent, [agentId]: true };
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/agents/${agentId}`);
+      if (!response.ok) return;
 
-    const payload = (await response.json()) as {
-      agent?: AgentRow;
-      runtime?: AgentRuntimeSnapshot | null;
-    };
+      const payload = (await response.json()) as {
+        agent?: AgentRow;
+        runtime?: AgentRuntimeSnapshot | null;
+      };
 
-    if (payload.agent) {
-      const next = toAgent(payload.agent);
-      agents = orderAgentsByCreatedAt(
-        agents.some((entry) => entry.id === next.id)
-          ? agents.map((entry) => (entry.id === next.id ? next : entry))
-          : [...agents, next],
-      );
-    }
-
-    applyRuntimeSnapshot(agentId, payload.runtime ?? null);
-  }
-
-  function startPolling() {
-    if (pollTimer) return;
-    pollTimer = setInterval(() => {
-      if (selectedId) {
-        void refreshAgentRuntime(selectedId);
+      if (payload.agent) {
+        const next = toAgent(payload.agent);
+        agents = orderAgentsByCreatedAt(
+          agents.some((entry) => entry.id === next.id)
+            ? agents.map((entry) => (entry.id === next.id ? next : entry))
+            : [...agents, next],
+        );
       }
-    }, 3000);
+
+      applyRuntimeSnapshot(agentId, payload.runtime ?? null);
+    } finally {
+      runtimeLoadingByAgent = { ...runtimeLoadingByAgent, [agentId]: false };
+      runtimeLoadedByAgent = { ...runtimeLoadedByAgent, [agentId]: true };
+    }
   }
 
   function handleSelect(id: string) {
@@ -396,6 +509,11 @@
   }
 
   async function handleCancelAgent(agentId: string) {
+    if (selectedId === agentId && agentConnectionRef) {
+      agentConnectionRef.cancelTask();
+      return;
+    }
+
     const response = await fetch(`/api/workspaces/${workspaceId}/agents/${agentId}/cancel`, {
       method: "POST",
     });
@@ -432,23 +550,11 @@
       setAgentStatus(agentId, "queued");
       clearAgentNotice(agentId);
 
-      const response = await fetch(`/api/workspaces/${workspaceId}/agents/${agentId}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        taskId?: string;
-        state?: AgentTaskAcceptedResponse["state"];
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Failed to run task");
+      if (agentConnectionRef) {
+        await agentConnectionRef.runTask(content);
+      } else {
+        throw new Error("Agent not connected. Reload the page.");
       }
-
-      await refreshAgentRuntime(agentId);
     } catch (error) {
       const text = error instanceof Error ? error.message : "Failed to send task";
       setAgentNotice(agentId, {
@@ -504,7 +610,6 @@
   }
 
   onMount(() => {
-    startPolling();
     selectedId = page.url.searchParams.get("conversation") ?? selectedId;
     if (selectedId) {
       void refreshAgentRuntime(selectedId);
@@ -513,18 +618,11 @@
       void refreshAgentRuntime(agents[0].id);
     }
   });
-
-  onDestroy(() => {
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
-  });
 </script>
 
 <SEO
   title={selectedAgent ? `${selectedAgent.name} | ${data.workspace.name}` : `${data.workspace.name}`}
-  description={`Manage ${data.workspace.name} and its bounded background agents, tasks, results, and settings.`}
+  description={`Manage ${data.workspace.name} and its bounded background conversations (agent-backed threads), tasks, results, and settings.`}
   keywords="filepath workspace, conversations, tasks, results"
   path={`/workspace/${workspaceId}`}
   type="website"
@@ -538,80 +636,231 @@
 />
 
 <div class="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2) text-(--t2) [--header-height:3.5rem]">
-  {#if agents.length > 0}
-    <Sidebar.Provider class="flex min-h-0! flex-1 flex-col">
-      <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <WorkspaceSidebar
-        isRefreshing={isRefreshing}
-        agents={agents}
-        {selectedId}
-        onselect={handleSelect}
-        onrename={handleRenameAgent}
-        ondelete={handleDeleteAgent}
-        oncreate={() => {
-          showSpawn = true;
+  {#if selectedAgent && data.agentBaseUrl}
+    {#key selectedAgent.id}
+      <AgentConnection
+        bind:this={agentConnectionRef}
+        agentId={selectedAgent.id}
+        agentBaseUrl={data.agentBaseUrl}
+        onMessages={(msgs) => {
+          // `AgentConnection` only emits *assistant* events from its websocket session.
+          // Merging prevents wiping the persisted thread (and the user message we
+          // optimistically appended) when the adapter errors or when we refresh.
+          const agentId = selectedAgent.id;
+          const existing = taskMessagesByAgent[agentId] ?? [];
+          const existingAssistant = existing.filter((m) => m.from === "a");
+
+          const eventKey = (event: unknown) => {
+            try {
+              return JSON.stringify(event);
+            } catch {
+              return String(event);
+            }
+          };
+
+          const incomingAssistant = msgs;
+          const maxOverlap = Math.min(existingAssistant.length, incomingAssistant.length);
+          let overlap = 0;
+
+          for (let k = maxOverlap; k >= 0; k -= 1) {
+            let ok = true;
+            for (let i = 0; i < k; i += 1) {
+              const left = existingAssistant[existingAssistant.length - k + i];
+              const right = incomingAssistant[i];
+              if (eventKey(left?.event) !== eventKey(right?.event)) {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) {
+              overlap = k;
+              break;
+            }
+          }
+
+          const toAppend = incomingAssistant.slice(overlap);
+          if (toAppend.length === 0) return;
+
+          taskMessagesByAgent = {
+            ...taskMessagesByAgent,
+            [agentId]: [...existing, ...toAppend],
+          };
         }}
+        onResult={(res) => {
+          resultsByAgent = { ...resultsByAgent, [selectedAgent.id]: res };
+        }}
+        onStatus={(status) => setAgentStatus(selectedAgent.id, status)}
+        onError={(msg) =>
+          (setAgentNotice(selectedAgent.id, {
+            tone: "error",
+            title: "Task failed",
+            message: msg,
+            blocking: true,
+          }),
+          // Ensure the UI re-renders the full persisted transcript after failures.
+          // Without this, some adapter errors can leave the websocket transcript incomplete until refresh.
+          setTimeout(() => {
+            void refreshAgentRuntime(selectedAgent.id);
+          }, 250))}
       />
-      <Sidebar.Inset class="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
-        <AgentDetailPane
-          agent={selectedAgent}
-          activeTask={selectedActiveTask}
-          messages={currentMessages}
-          result={selectedResult}
-          notice={selectedNotice}
-          onsend={handleSend}
-          oncancel={() => {
-            if (!selectedAgent) return;
-            void handleCancelAgent(selectedAgent.id);
+    {/key}
+  {/if}
+
+  {#if agents.length > 0}
+    <Sidebar.Provider class="flex min-h-0! flex-1 flex-col" style={sidebarProviderStyle}>
+      <!-- Desktop: use paneforge to resize the left sidebar -->
+      <div class="hidden md:flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <PaneGroup
+          direction="horizontal"
+          autoSaveId="workspace-sidebar-width"
+          class="flex h-full min-h-0 w-full min-w-0"
+          onLayoutChange={(layout) => {
+            // PaneForge returns pixel sizes for each pane.
+            const next = layout[0] ?? 0;
+            // Let the sidebar stay fluid inside the resizable pane.
+            // Only guard against negative/NaN widths.
+            sidebarWidthPx = Number.isFinite(next) ? Math.max(0, next) : 0;
           }}
-          onpause={() => {
-            if (!selectedAgent) return;
-            void postConversationAction(selectedAgent.id, "pause");
+        >
+          <Pane defaultSize={35} minSize={20} maxSize={80} class="flex min-h-0 flex-col">
+            <WorkspaceSidebar
+              isRefreshing={isRefreshing}
+              agents={agents}
+              {selectedId}
+              onselect={handleSelect}
+              onrename={handleRenameAgent}
+              ondelete={handleDeleteAgent}
+              oncreate={() => {
+                showSpawn = true;
+              }}
+            />
+          </Pane>
+          <ResizableHandle class="h-full z-30" />
+          <Pane class="flex min-h-0 flex-col">
+            <Sidebar.Inset class="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
+              <AgentDetailPane
+                agent={selectedAgent}
+                activeTask={selectedActiveTask}
+                messages={currentMessages}
+                result={selectedResult}
+                notice={selectedNotice}
+                transcriptLoading={transcriptLoading}
+                onsend={handleSend}
+                oncancel={() => {
+                  if (!selectedAgent) return;
+                  void handleCancelAgent(selectedAgent.id);
+                }}
+                onpause={() => {
+                  if (!selectedAgent) return;
+                  void postConversationAction(selectedAgent.id, "pause");
+                }}
+                onresume={() => {
+                  if (!selectedAgent) return;
+                  void postConversationAction(selectedAgent.id, "resume");
+                }}
+                onapprove={() => {
+                  if (!selectedAgent) return;
+                  void postConversationAction(selectedAgent.id, "approve");
+                }}
+                onreject={() => {
+                  if (!selectedAgent) return;
+                  void postConversationAction(selectedAgent.id, "reject");
+                }}
+                onclose={() => {
+                  if (!selectedAgent) return;
+                  void postConversationAction(selectedAgent.id, "close");
+                }}
+                onreopen={() => {
+                  if (!selectedAgent) return;
+                  void postConversationAction(selectedAgent.id, "reopen");
+                }}
+                onopensettings={() => {
+                  if (!selectedAgent) return;
+                  showSettings = true;
+                }}
+                onnavigate={handleNavigate}
+              />
+            </Sidebar.Inset>
+          </Pane>
+        </PaneGroup>
+      </div>
+
+      <!-- Mobile: keep the existing sidebar drawer behavior -->
+      <div class="md:hidden flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <WorkspaceSidebar
+          isRefreshing={isRefreshing}
+          agents={agents}
+          {selectedId}
+          onselect={handleSelect}
+          onrename={handleRenameAgent}
+          ondelete={handleDeleteAgent}
+          oncreate={() => {
+            showSpawn = true;
           }}
-          onresume={() => {
-            if (!selectedAgent) return;
-            void postConversationAction(selectedAgent.id, "resume");
-          }}
-          onapprove={() => {
-            if (!selectedAgent) return;
-            void postConversationAction(selectedAgent.id, "approve");
-          }}
-          onreject={() => {
-            if (!selectedAgent) return;
-            void postConversationAction(selectedAgent.id, "reject");
-          }}
-          onclose={() => {
-            if (!selectedAgent) return;
-            void postConversationAction(selectedAgent.id, "close");
-          }}
-          onreopen={() => {
-            if (!selectedAgent) return;
-            void postConversationAction(selectedAgent.id, "reopen");
-          }}
-          onopensettings={() => {
-            if (!selectedAgent) return;
-            showSettings = true;
-          }}
-          onnavigate={handleNavigate}
         />
-      </Sidebar.Inset>
+        <Sidebar.Inset class="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
+          <AgentDetailPane
+            agent={selectedAgent}
+            activeTask={selectedActiveTask}
+            messages={currentMessages}
+            result={selectedResult}
+            notice={selectedNotice}
+            transcriptLoading={transcriptLoading}
+            onsend={handleSend}
+            oncancel={() => {
+              if (!selectedAgent) return;
+              void handleCancelAgent(selectedAgent.id);
+            }}
+            onpause={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "pause");
+            }}
+            onresume={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "resume");
+            }}
+            onapprove={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "approve");
+            }}
+            onreject={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "reject");
+            }}
+            onclose={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "close");
+            }}
+            onreopen={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "reopen");
+            }}
+            onopensettings={() => {
+              if (!selectedAgent) return;
+              showSettings = true;
+            }}
+            onnavigate={handleNavigate}
+          />
+        </Sidebar.Inset>
       </div>
     </Sidebar.Provider>
   {:else}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8 text-center">
-        <p class="text-sm text-(--t2)">{data.workspace.name}</p>
-        <p class="max-w-md text-xs leading-6 text-(--t4)">
-          No conversations yet. Create a scoped background conversation to start using this workspace.
-        </p>
-        <button
+        <div class="flex h-16 w-16 items-center justify-center text-(--t5) opacity-60">
+          <BotIcon size={44} />
+        </div>
+        <Button
+          variant="accent"
+          type="button"
           onclick={() => {
             showSpawn = true;
           }}
+          aria-label="Create conversation"
           data-testid="open-create-agent"
-          class="rounded-xl bg-(--accent) px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+          class="h-11 w-11 rounded-xl p-0"
         >
-          + new conversation
-        </button>
+          <PlusIcon size={18} />
+        </Button>
     </div>
   {/if}
 </div>
@@ -634,18 +883,20 @@
 {/if}
 
 {#if showSettings && selectedAgent}
-  <AgentSettingsDrawer
-    agent={selectedAgent}
-    open={showSettings}
-    onclose={() => {
-      showSettings = false;
-    }}
-    onsave={handleUpdateAgent}
-    onkeyschange={({ keys, error }) => {
-      accountKeysMasked = keys;
-      accountKeysError = error;
-    }}
-    {accountKeysMasked}
-    accountKeysError={accountKeysError}
-  />
+  <div transition:fly={{ x: 24, opacity: 0, duration: 180 }}>
+    <AgentSettingsDrawer
+      agent={selectedAgent}
+      open={showSettings}
+      onclose={() => {
+        showSettings = false;
+      }}
+      onsave={handleUpdateAgent}
+      onkeyschange={({ keys, error }) => {
+        accountKeysMasked = keys;
+        accountKeysError = error;
+      }}
+      {accountKeysMasked}
+      accountKeysError={accountKeysError}
+    />
+  </div>
 {/if}

@@ -1,18 +1,12 @@
 import alchemy from "alchemy";
 
-import { createRequire } from "node:module";
-
 import {
-  Ai,
   DurableObjectNamespace,
   SvelteKit,
-  VectorizeIndex,
   Worker,
   Container,
   D1Database,
 } from "alchemy/cloudflare";
-
-const require = createRequire(import.meta.url);
 
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
 
@@ -71,55 +65,23 @@ const Sandbox = await Container(`${projectName}-sandbox`, {
   maxInstances: 15,
 });
 
-// --- Deja: persistent memory for agents ---
-const dejaPrefix = isProd ? "deja" : `${app.stage}-deja`;
-
-const DEJA_VECTORIZE = await VectorizeIndex(`${dejaPrefix}-embeddings`, {
-  name: `${dejaPrefix}-embeddings`,
-  dimensions: 384,
-  metric: "cosine",
-  adopt: true,
-});
-
-const DEJA_DO = DurableObjectNamespace("deja-do", {
-  className: "DejaDO",
-  scriptName: `${dejaPrefix}-worker`,
+const ConversationAgentDO = DurableObjectNamespace("ConversationAgent", {
+  className: "ConversationAgent",
   sqlite: true,
 });
 
-const DEJA_WORKER = await Worker(`${dejaPrefix}-worker`, {
-  name: `${dejaPrefix}-worker`,
-  entrypoint: require.resolve("deja"),
-  compatibilityDate: "2025-11-15",
-  compatibilityFlags: ["nodejs_compat"],
-  adopt: true,
-  bindings: {
-    DEJA: DEJA_DO,
-    VECTORIZE: DEJA_VECTORIZE,
-    AI: Ai(),
-  },
-  env: {
-    API_KEY: process.env.DEJA_API_KEY || "",
-  },
-  url: true,
-  observability: {
-    enabled: true,
-  },
-});
-
-// Worker using Agents SDK
+// Worker
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
   entrypoint: "./worker/agent.ts",
   compatibilityDate: "2025-11-15",
   compatibilityFlags: ["nodejs_compat"],
   adopt: true,
-  bundle: {
-  },
+  bundle: {},
   bindings: {
     Sandbox,
     DB,
-
+    ConversationAgent: ConversationAgentDO,
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
   url: true,
@@ -134,7 +96,6 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     OPENCODE_ZEN_API_KEY: process.env.OPENCODE_ZEN_API_KEY || "",
     // OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "", // BYOK: Users provide via Settings → API Keys
     CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || "",
-    DEJA_ENDPOINT: DEJA_WORKER.url ?? "",
   },
 });
 
@@ -157,7 +118,6 @@ export const APP = await SvelteKit(`${projectName}-app`, {
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
     MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
     MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
-    DEJA_ENDPOINT: DEJA_WORKER.url ?? "",
   },
   script: `
     import svelteKitHandler from './.svelte-kit/cloudflare/_worker.js';
@@ -174,7 +134,6 @@ await app.finalize();
 
 console.log(`\n✅ ${projectName} deployed`);
 console.log(`   App: ${APP.url}`);
-console.log(`   Deja: ${DEJA_WORKER.url}`);
 if (isProd) {
   console.log(`   Domain: https://myfilepath.com`);
 }

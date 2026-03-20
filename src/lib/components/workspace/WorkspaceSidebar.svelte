@@ -8,6 +8,7 @@
   import Button from "$lib/components/ui/button/button.svelte";
 
   const sidebar = Sidebar.useSidebar();
+  const isMobile = $derived.by(() => sidebar.isMobile);
 
   interface Props {
     agents: AgentRecord[];
@@ -89,10 +90,13 @@
   }
 </script>
 
-<Sidebar.Root class="top-(--header-height)! bottom-auto! h-[calc(100svh-var(--header-height))]!">
+<Sidebar.Root
+  class="top-(--header-height)! bottom-auto! h-[calc(100svh-var(--header-height))]! border-e border-(--b1) bg-(--bg)"
+  collapsible={isMobile ? "offcanvas" : "none"}
+>
   <Sidebar.Header>
-    <div class="flex items-center justify-between gap-3 px-2 py-2">
-        <div class="flex items-center gap-1.5 font-(family-name:--f) text-[10px] font-[550] uppercase tracking-[0.14em] text-(--t4) sm:text-[11px]">
+    <div class="flex items-center justify-between gap-2 px-3 py-2">
+        <div class="flex min-w-0 items-center gap-1.5 font-(family-name:--f) text-[10px] font-[550] uppercase tracking-[0.14em] text-(--t4) sm:text-[11px]">
         <span>conversations</span>
         {#if isRefreshing}
           <span
@@ -102,16 +106,15 @@
         {/if}
       </div>
       <Button
-        variant="ghost"
-        size="sm"
-        class="h-7 gap-1.5 rounded-full px-2.5 font-(family-name:--f) text-[11px] font-[540] text-(--t3) shadow-none hover:bg-(--bg3) hover:text-(--t1)"
+        variant="accentPill"
+        size="icon-sm"
+        class="shrink-0 gap-0"
         onclick={oncreate}
-        aria-label="Create conversation"
-        title="Create conversation"
+        aria-label="New conversation"
+        title="New conversation"
         data-testid="open-create-agent"
       >
-        <PlusIcon size={14} />
-        <span class="max-[640px]:hidden">new conversation</span>
+        <PlusIcon size={16} />
       </Button>
     </div>
   </Sidebar.Header>

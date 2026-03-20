@@ -45,7 +45,7 @@ export const GET: RequestHandler = async ({ url }) => {
             id: { type: "string" },
             name: { type: "string" },
             status: { type: "string" },
-            gitRepoUrl: { type: ["string", "null"] },
+            initialSourceUrl: { type: ["string", "null"] },
             agentCount: { type: "integer" },
             createdAt: { type: "integer" },
             updatedAt: { type: "integer" },
@@ -288,7 +288,7 @@ export const GET: RequestHandler = async ({ url }) => {
                   type: "object",
                   properties: {
                     name: { type: "string" },
-                    gitRepoUrl: { type: "string" },
+                    initialSourceUrl: { type: "string" },
                   },
                 },
               },
@@ -475,7 +475,7 @@ export const GET: RequestHandler = async ({ url }) => {
           tags: ["Agents"],
           summary: "Run one bounded task in a workspace",
           description:
-            "Runs a task through an agent sandbox. Omit `agentId` to create a new agent and sandboxed repo clone for this run. Include `agentId` to continue on that agent's existing sandbox state.",
+            "Runs a task through an agent sandbox. Omit `agentId` to create a new agent and workspace for this run. Include `agentId` to continue on that agent's existing sandbox state.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -512,7 +512,7 @@ export const GET: RequestHandler = async ({ url }) => {
           tags: ["Agents"],
           summary: "Run one deterministic script in a workspace",
           description:
-            "Runs a fixed script without an LLM inside the workspace's dedicated script sandbox clone. Repeated script runs reuse that script sandbox for the workspace, and the response includes the bounded run patch when the script leaves file changes behind.",
+            "Runs a fixed script without an LLM inside the workspace's dedicated script sandbox. Repeated script runs reuse that sandbox for the workspace, and the response includes the bounded run patch when the script leaves file changes behind.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,

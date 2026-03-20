@@ -3,23 +3,25 @@
  *
  * Exports:
  * - Sandbox (re-export for Container binding)
+ * - ConversationAgent (Durable Object for agent task execution)
  *
  * Routes:
+ * - /agents/* → routeAgentRequest (ConversationAgent DO)
  * - /runtime/* → internal workspace runtime bridge
  * - Everything else → 404
  */
 
-import { proxyToSandbox } from '@cloudflare/sandbox';
-export { Sandbox } from '@cloudflare/sandbox';
+import { routeAgentRequest } from "agents";
+import { proxyToSandbox } from "@cloudflare/sandbox";
+export { Sandbox } from "@cloudflare/sandbox";
+export { ConversationAgent } from "./conversation-agent";
 import type { Env } from '../src/types';
 import {
-  acceptAgentTask,
   approveAgentInterruption,
   cancelAgentTask,
   deleteAgentRuntime,
   getAgentRuntimeSnapshot,
   pauseAgentTask,
-  processAcceptedAgentTask,
   rejectAgentInterruption,
   resumeAgentTask,
   runWorkspaceScript,
@@ -39,6 +41,12 @@ function toRuntimeEnv(env: Env): RuntimeEnv {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    const agentResponse = await routeAgentRequest(request, env as Parameters<typeof routeAgentRequest>[1], { cors: true });
+    if (agentResponse) {
+      return agentResponse;
+    }
+
     const runtimeEnv = toRuntimeEnv(env);
 
     // CORS preflight
@@ -98,74 +106,7 @@ export default {
         });
       }
 
-      const taskMatch = suffix.match(/^\/agents\/([^/]+)\/tasks$/);
-      if (request.method === "POST" && taskMatch) {
-        const agentId = taskMatch[1];
-        const body = (await request.json().catch(() => ({}))) as {
-          content?: string;
-          identity?: {
-            traceId?: string | null;
-            proofRunId?: string | null;
-            proofIterationId?: string | null;
-          };
-        };
-        const content = body.content?.trim();
-        const requestId = request.headers.get("x-filepath-request-id") || crypto.randomUUID();
-        const wait = url.searchParams.get("wait") === "1" || request.headers.get("x-filepath-wait") === "true";
-        if (!content) {
-          return new Response(JSON.stringify({ error: "Task content is required." }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
-        try {
-          const accepted = await acceptAgentTask(runtimeEnv, workspaceId, agentId, content, requestId, body.identity);
-          if (wait) {
-            const { result, events } = await processAcceptedAgentTask(
-              runtimeEnv,
-              workspaceId,
-              agentId,
-              accepted.taskId,
-              content,
-              requestId,
-            );
-            return new Response(
-              JSON.stringify({ ok: true, result, events, taskId: accepted.taskId }),
-              { status: 200, headers: { "Content-Type": "application/json" } },
-            );
-          }
-          scheduleAcceptedAgentTask(runtimeEnv, ctx, {
-            workspaceId,
-            agentId,
-            taskId: accepted.taskId,
-            content,
-            requestId,
-          });
-          console.log(
-            JSON.stringify({
-              ts: new Date().toISOString(),
-              component: "runtime-worker",
-              phase: "task.enqueued",
-              requestId,
-              taskId: accepted.taskId,
-              workspaceId,
-              agentId,
-            }),
-          );
-          return new Response(JSON.stringify(accepted), {
-            status: 202,
-            headers: { "Content-Type": "application/json" },
-          });
-        } catch (error) {
-          return new Response(
-            JSON.stringify({
-              error: error instanceof Error ? error.message : "Unable to run agent task.",
-            }),
-            { status: 409, headers: { "Content-Type": "application/json" } },
-          );
-        }
-      }
+      // POST /agents/:id/tasks removed - use ConversationAgent DO runTask via WebSocket
 
       const cancelMatch = suffix.match(/^\/agents\/([^/]+)\/cancel$/);
       if (request.method === "POST" && cancelMatch) {

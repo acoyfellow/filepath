@@ -15,6 +15,7 @@
     getProviderForModel,
     type ProviderId,
   } from "$lib/provider-keys";
+  import Combobox from "$lib/components/ui/combobox/combobox.svelte";
   import { onMount } from "svelte";
   import type { AgentHarness, HarnessId } from "$lib/types/workspace";
 
@@ -114,6 +115,7 @@
   let harnessId = $state<HarnessId>(getInitialHarnessValue());
   let model = $state(getInitialModelValue());
   let modelFilter = $state("");
+  let harnessFilter = $state("");
 
   let allowedPathsInput = $state(getInitialAllowedPathsValue().join(", "));
   let forbiddenPathsInput = $state(getInitialForbiddenPathsValue().join(", "));
@@ -170,6 +172,16 @@
     ];
   });
 
+  let filteredHarnesses = $derived(
+    harnessFilter.trim()
+      ? availableHarnesses.filter((entry) =>
+          `${entry.id} ${entry.name} ${entry.description ?? ""}`
+            .toLowerCase()
+            .includes(harnessFilter.trim().toLowerCase()),
+        )
+      : availableHarnesses,
+  );
+
   let runtimePolicy = $derived(
     normalizeAgentScope({
       allowedPaths: parseDelimitedInput(allowedPathsInput),
@@ -182,13 +194,13 @@
     allowed:
       runtimePolicy.allowedPaths.length === 1 &&
       (runtimePolicy.allowedPaths[0] === "." || runtimePolicy.allowedPaths[0] === "./")
-        ? "repo root"
+        ? "workspace root"
         : runtimePolicy.allowedPaths.join(", "),
     forbidden:
       runtimePolicy.forbiddenPaths.length > 0 ? runtimePolicy.forbiddenPaths.join(", ") : "none",
     writableRoot:
       !runtimePolicy.writableRoot || runtimePolicy.writableRoot === "." || runtimePolicy.writableRoot === "./"
-        ? "repo root"
+        ? "workspace root"
         : runtimePolicy.writableRoot,
   }));
 
@@ -422,12 +434,7 @@
   onMount(async () => {
     await loadAccountKeys();
     await loadHarnesses();
-  });
-
-  $effect(() => {
-    harnessId;
-    accountKeys.openrouter;
-    accountKeys.zen;
+    // Explicit event-driven loading; avoids `$effect` while keeping the UI consistent.
     void loadModels();
   });
 </script>
@@ -440,7 +447,7 @@
     </div>
   {/if}
 
-  <div class={`${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-(--t2)`}>{setupSummary}</div>
+  <!-- <div class={`${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-(--t2)`}>{setupSummary}</div> -->
 
   {#if showNameField}
     <label class={labelClass} for="agent-name-field">name</label>
@@ -462,43 +469,45 @@
   {#if harnessesError}
     <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{harnessesError}</div>
   {/if}
-  <div class="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(110px,1fr))]">
+  <div class="relative rounded-xl border border-(--b1)">
     {#if harnessesLoading}
-      <div class="rounded-xl border border-dashed border-(--b1) px-3 py-3 text-xs text-(--t5)">Loading harnesses...</div>
+      <div class="px-4 py-3 text-xs text-(--t5)">Loading harnesses...</div>
     {:else}
-      {#each availableHarnesses as harness}
-        <button
-          class={`${optionBaseClass} ${harnessId === harness.id ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-(--t1)" : ""}`}
-          data-harness-id={harness.id}
-          data-selected={harnessId === harness.id ? "true" : "false"}
-          aria-pressed={harnessId === harness.id}
-          onclick={() => {
-            harnessId = harness.id;
-            const fallbackModel = canonicalizeStoredModel(harness.defaultModel);
-            if (availableModels.some((entry) => entry.id === fallbackModel)) {
-              model = fallbackModel;
-            }
-          }}
-        >
-          {harness.name}
-        </button>
-      {/each}
+      <Combobox
+        value={harnessId}
+        options={filteredHarnesses.map((entry) => ({
+          value: entry.id,
+          label: entry.name,
+          description: entry.description,
+        }))}
+        searchValue={harnessFilter}
+        onSearchValueChange={(next) => (harnessFilter = next)}
+        placeholder="Choose a harness"
+        disabled={Boolean(harnessesError) || availableHarnesses.length === 0}
+        inputClass={inputClass}
+        emptyText="No harnesses found"
+        onValueChange={(next) => {
+          harnessId = next as HarnessId;
+          const harness = availableHarnesses.find((entry) => entry.id === next);
+          if (!harness) return;
+          const fallbackModel = canonicalizeStoredModel(harness.defaultModel);
+          if (availableModels.some((entry) => entry.id === fallbackModel)) {
+            model = fallbackModel;
+          }
+          modelFilter = "";
+          void loadModels();
+        }}
+      />
     {/if}
   </div>
-  {#if selectedHarness}
-    <div class={metaClass}>{selectedHarness.description}</div>
-  {/if}
 
-  <div class={labelClass}>model provider access</div>
+
   {#if accountKeysStateError}
+  <div class={labelClass}>model provider access</div>
     <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{accountKeysStateError}</div>
   {/if}
-  {#if hasSelectedProviderKey}
-    <div class={`${cardClass} border-emerald-500/30 bg-emerald-500/10`}>
-      <div class="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Model access is ready</div>
-      <div class="text-[11px] leading-5 text-(--t4)">Using saved {activeProviderDefinition.label} access for this agent.</div>
-    </div>
-  {:else}
+  {#if !hasSelectedProviderKey}
+  
     <div class={cardClass}>
       <div class="mb-1 font-semibold text-(--t2)">Add {activeProviderDefinition.label} access inline</div>
       <div class="text-[11px] leading-5 text-(--t4)">
@@ -531,20 +540,24 @@
   {/if}
 
   <div class={labelClass}>model</div>
-  <input bind:value={modelFilter} class={inputClass} placeholder="Search live models..." aria-label="Search models" />
-  <div class="overflow-hidden rounded-xl border border-(--b1)">
-    <select
-      bind:value={model}
-      class={`${inputClass} appearance-none rounded-none border-0 bg-(--bg2) pr-10`}
-      aria-label="Model"
-      disabled={!hasSelectedProviderKey || modelsLoading || Boolean(modelsError)}
-    >
-      <option value="">{modelsLoading ? "Loading live models..." : "Choose a model"}</option>
-      {#each modelOptions as entry}
-        <option value={entry.id}>{entry.id}</option>
-      {/each}
-    </select>
-  </div>
+  <Combobox
+    value={model}
+    options={modelOptions.map((entry) => ({
+      value: entry.id,
+      label: entry.name,
+      description: entry.provider,
+    }))}
+    searchValue={modelFilter}
+    onSearchValueChange={(next) => (modelFilter = next)}
+    placeholder={modelsLoading ? "Loading live models..." : "Search live models..."}
+    disabled={!hasSelectedProviderKey || modelsLoading || Boolean(modelsError)}
+    inputClass={inputClass}
+    emptyText={modelsLoading ? "Loading..." : "No models found"}
+    onValueChange={(next) => {
+      model = next;
+      modelFilter = "";
+    }}
+  />
   {#if selectedModelEntry}
     <div class={metaClass}>Selected: {selectedModelEntry.name} via {selectedModelEntry.provider}</div>
   {/if}
@@ -583,22 +596,15 @@
     {/each}
   </div>
 
-  <div class="flex flex-col gap-1 rounded-xl border border-(--b1) bg-(--bg2) px-3.5 py-3 font-(family-name:--m) text-xs leading-6 text-(--t3)">
-    <div><strong>agent</strong> scope</div>
-    <div>Allowed: {scopePreview.allowed}</div>
-    <div>Forbidden: {scopePreview.forbidden}</div>
-    <div>Tools: {runtimePolicy.toolPermissions.join(", ")}</div>
-    <div>Writable root: {scopePreview.writableRoot ?? "read-only"}</div>
-  </div>
 
   {#if submitError}
     <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{submitError}</div>
   {/if}
 
   <div class="mt-1 flex justify-end gap-3 max-[720px]:sticky max-[720px]:bottom-0 max-[720px]:bg-[linear-gradient(to_top,var(--bg)_75%,transparent)] max-[720px]:pt-3">
-    <Button variant="outline" type="button" onclick={oncancel}>cancel</Button>
+    <Button variant="outline" type="button" class="rounded-xl" onclick={oncancel}>cancel</Button>
     <Button
-      class="bg-(--accent) text-white shadow-none hover:opacity-90"
+      variant="accent"
       type="button"
       disabled={Boolean(submitBlocker) || submitting}
       onclick={handleSubmit}

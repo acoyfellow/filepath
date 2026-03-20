@@ -1,6 +1,7 @@
 <script lang="ts">
   import { forgetPasswordEmailOTP } from '$lib/auth-client';
   import SEO from '$lib/components/SEO.svelte';
+  import Button from '$lib/components/ui/button/button.svelte';
   import { X, Mail, ArrowLeft } from '@lucide/svelte';
   let email = $state('');
   let isLoading = $state(false);
@@ -108,13 +109,9 @@
           />
         </div>
 
-        <button 
-          type="submit"
-          class="w-full bg-neutral-100 text-neutral-950 rounded px-4 py-3 font-medium hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isLoading}
-        >
+        <Button type="submit" variant="accentPill" class="w-full" disabled={isLoading}>
           {isLoading ? 'Sending code...' : 'Send reset code'}
-        </button>
+        </Button>
       </form>
 
       <div class="mt-6 text-center text-sm">

@@ -143,24 +143,24 @@ export async function execInContainer(
   }
 }
 
-export async function cloneRepo(
+export async function cloneSource(
   env: ContainerEnv,
   containerId: string,
-  repoUrl: string,
+  sourceUrl: string,
   workspacePath?: string
 ): Promise<void> {
-  const targetWorkspacePath = workspacePath ?? resolveWorkspaceRoot(repoUrl);
-  console.log(`[Container] Cloning ${repoUrl} to ${targetWorkspacePath}`);
+  const targetWorkspacePath = workspacePath ?? resolveWorkspaceRoot(sourceUrl);
+  console.log(`[Container] Checking out ${sourceUrl} to ${targetWorkspacePath}`);
   const sandbox = getSandbox(env.Sandbox, containerId);
   try {
     try {
-      await sandbox.gitCheckout(repoUrl, {
+      await sandbox.gitCheckout(sourceUrl, {
         targetDir: targetWorkspacePath,
         depth: 1,
       });
     } catch (error) {
       throw new ContainerError(
-        `Failed to clone the repository into the workspace: git checkout failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to check out source: git checkout failed: ${error instanceof Error ? error.message : String(error)}`,
         error,
       );
     }
@@ -173,7 +173,7 @@ export async function cloneRepo(
       });
     } catch (error) {
       throw new ContainerError(
-        `Failed to clone the repository into the workspace: post-check listing failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to check out source: post-check listing failed: ${error instanceof Error ? error.message : String(error)}`,
         error,
       );
     }
@@ -185,35 +185,35 @@ export async function cloneRepo(
     }
   } catch (error) {
     let detail =
-      error instanceof Error ? error.message : `Unknown clone failure for ${repoUrl}`;
+      error instanceof Error ? error.message : `Unknown checkout failure for ${sourceUrl}`;
     if (
-      detail.startsWith('Failed to clone the repository into the workspace:')
+      detail.startsWith('Failed to check out source:')
     ) {
       detail = detail.slice(
-        'Failed to clone the repository into the workspace:'.length,
+        'Failed to check out source:'.length,
       ).trim();
     }
-    console.error(`[Container] Clone failed: ${detail}`);
+    console.error(`[Container] Checkout failed: ${detail}`);
     throw new ContainerError(
-      `Failed to clone the repository into the workspace: ${detail}`,
+      `Failed to check out source: ${detail}`,
       error,
     );
   }
 }
 
-function deriveRepoDirectoryName(repoUrl: string): string {
-  const trimmed = repoUrl.trim().replace(/[#?].*$/, '').replace(/\/+$/, '');
+function deriveSourceDirectoryName(sourceUrl: string): string {
+  const trimmed = sourceUrl.trim().replace(/[#?].*$/, '').replace(/\/+$/, '');
   const lastSegment = trimmed.split('/').pop() || '';
   const withoutGitSuffix = lastSegment.replace(/\.git$/i, '');
   const safeName = withoutGitSuffix.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '');
-  return safeName || 'repo';
+  return safeName || 'workspace';
 }
 
-export function resolveWorkspaceRoot(repoUrl?: string | null): string {
-  if (!repoUrl) {
+export function resolveWorkspaceRoot(sourceUrl?: string | null): string {
+  if (!sourceUrl) {
     return '/workspace';
   }
-  return `/workspace/${deriveRepoDirectoryName(repoUrl)}`;
+  return `/workspace/${deriveSourceDirectoryName(sourceUrl)}`;
 }
 
 function toWorkspaceAbsolutePath(workspaceRoot: string, relativePath: string): string {

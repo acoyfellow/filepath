@@ -41,9 +41,9 @@
     {disabled}
   />
   <Button
-    variant="default"
+    variant="accent"
     size="icon"
-    class="size-[38px] shrink-0 rounded-xl bg-(--accent) text-white hover:opacity-85 max-[640px]:size-[42px]"
+    class="size-[38px] shrink-0 max-[640px]:size-[42px]"
     onclick={handleSubmit}
     disabled={disabled || !value.trim()}
     aria-label={actionLabel}

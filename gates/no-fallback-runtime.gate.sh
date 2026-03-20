@@ -33,8 +33,8 @@ else
   FAILED=1
 fi
 
-echo -n "4. Repo clone failure bubbles... "
-if rg -n "Failed to clone the session repository into the sandbox workspace" src/lib/agents/container.ts src/agent/chat-agent.ts >/dev/null 2>&1; then
+echo -n "4. Source checkout failure bubbles... "
+if rg -n "Failed to check out source" src/lib/agents/container.ts >/dev/null 2>&1; then
   echo "PASS"
 else
   echo "FAIL"

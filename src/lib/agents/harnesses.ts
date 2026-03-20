@@ -70,14 +70,14 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
   },
   {
     id: "custom",
-    name: "Custom",
-    description: "Bring your own agent. Register a harness that speaks the filepath protocol.",
+    name: "Hermes",
+    description: "Hermes Agent. Choose the model it will use below.",
     adapter: "custom",
-    entryCommand: "",
+    entryCommand: "node /opt/filepath/adapters/custom/index.mjs",
     defaultModel: DEFAULT_MODEL_FULL,
     icon: "box",
     enabled: true,
-    config: {},
+    config: { hermesVersion: "main" },
   },
 ];
 

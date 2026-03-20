@@ -152,7 +152,9 @@ body {
   font-weight: 400;
   font-size: 14px;
 }
-
+button{
+  @apply cursor-pointer;
+}
 button,
 input,
 textarea,

@@ -26,6 +26,8 @@
     messages: TaskMessage[];
     result?: AgentResult | null;
     notice?: AgentNotice | null;
+    /** True while initial runtime / transcript fetch for this conversation. */
+    transcriptLoading?: boolean;
     onsend: (message: string) => void;
     oncancel?: () => void;
     onpause?: () => void;
@@ -44,6 +46,7 @@
     messages,
     result = null,
     notice = null,
+    transcriptLoading = false,
     onsend,
     oncancel,
     onpause,
@@ -56,6 +59,20 @@
     onnavigate,
   }: Props = $props();
 
+  /** Avoid skeleton flash when runtime fetch finishes fast (<200ms). */
+  let showTranscriptSkeleton = $state(false);
+
+  $effect(() => {
+    if (!transcriptLoading) {
+      showTranscriptSkeleton = false;
+      return;
+    }
+    const t = setTimeout(() => {
+      showTranscriptSkeleton = true;
+    }, 200);
+    return () => clearTimeout(t);
+  });
+
   let isExhausted = $derived(agent?.status === "exhausted");
   let isClosed = $derived(Boolean(agent?.closedAt));
   let pendingInterruption = $derived(agent?.latestInterruption ?? null);
@@ -64,11 +81,14 @@
   let canPause = $derived(Boolean(activeTask && onpause && !isBlocked));
   let scopeLabel = $derived.by(() => {
     const raw = agent?.writableRoot ?? ".";
-    if (!raw || raw === "." || raw === "./") return "repo root";
+    if (!raw || raw === "." || raw === "./") return "workspace root";
     return raw;
   });
-  let composerDisabled = $derived(Boolean(isExhausted || isClosed || isBlocked || activeTask));
+  let composerDisabled = $derived(
+    Boolean(transcriptLoading || isExhausted || isClosed || isBlocked || activeTask),
+  );
   let composerPlaceholder = $derived.by(() => {
+    if (transcriptLoading) return "Loading conversation…";
     if (isClosed) return "Conversation closed";
     if (pendingInterruption?.kind === "approval") return "Waiting on approval";
     if (pendingInterruption?.kind === "pause") return "Conversation paused";
@@ -223,7 +243,7 @@
           <div class="mb-1 font-semibold">{notice.title}</div>
           <div>{notice.message}</div>
         </div>
-      {:else if agent.status === "idle" && messages.length === 0}
+      {:else if !transcriptLoading && agent.status === "idle" && messages.length === 0}
         <div class="mx-4 mt-3 rounded-xl border border-(--b1) bg-[color-mix(in_srgb,var(--accent)_11%,var(--bg3))] px-3 py-2.5 font-(family-name:--f) text-xs leading-6 text-(--t2) max-[900px]:mx-3">
         <div class="mb-1 font-semibold">Ready</div>
         <div>This conversation is ready for its first turn.</div>
@@ -236,7 +256,23 @@
         </div>
       {/if}
 
-      <TaskTranscript {messages} {result} status={agent.status} {onnavigate} />
+      {#if transcriptLoading && messages.length === 0}
+        {#if showTranscriptSkeleton}
+          <div
+            class="flex min-h-0 flex-1 flex-col justify-end gap-3 px-6 py-5 max-[640px]:px-3"
+            aria-busy="true"
+            aria-label="Loading conversation"
+          >
+            <div class="h-3 w-2/3 max-w-md animate-pulse rounded-md bg-(--bg3)"></div>
+            <div class="h-3 w-1/2 max-w-sm animate-pulse rounded-md bg-(--bg3)"></div>
+            <div class="h-24 w-full max-w-xl animate-pulse rounded-2xl bg-(--bg3)"></div>
+          </div>
+        {:else}
+          <div class="min-h-[min(40dvh,220px)] flex-1 shrink-0" aria-hidden="true"></div>
+        {/if}
+      {:else}
+        <TaskTranscript {messages} {result} status={agent.status} {onnavigate} />
+      {/if}
     </div>
 
     <TaskComposer
