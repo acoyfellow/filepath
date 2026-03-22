@@ -90,6 +90,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
   },
   env: {
     API_WS_HOST: isProd ? "api.myfilepath.com" : "",
+    FILEPATH_RUNTIME_PUBLIC_BASE_URL: isProd ? "https://api.myfilepath.com" : "",
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
     BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",

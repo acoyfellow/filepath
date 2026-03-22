@@ -168,7 +168,7 @@
             />
           </div>
           
-          <Button type="submit" variant="accentPill" class="w-full" disabled={isLoading}>
+          <Button type="submit" class="w-full" disabled={isLoading}>
             {isLoading ? 'Resetting...' : 'Reset password'}
           </Button>
         </form>

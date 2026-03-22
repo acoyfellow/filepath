@@ -30,7 +30,7 @@ export interface AdapterConfig {
   toolPermissions: ToolPermission[];
   /** Writable sub-root for agent execution */
   writableRoot: string | null;
-  /** Harness config (e.g. hermesVersion for custom) */
+  /** Harness config (e.g. hermesVersion for Hermes) */
   harnessConfig?: Record<string, unknown>;
   /** Additional env vars */
   envVars?: Record<string, string>;

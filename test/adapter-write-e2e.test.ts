@@ -51,7 +51,7 @@ function hasWriteToolEvent(stdout: string): boolean {
     });
 }
 
-const HARNESS_IDS = ["shelley", "pi", "claude-code", "codex", "cursor", "amp", "custom"] as const;
+const HARNESS_IDS = ["shelley", "pi", "claude-code", "codex", "cursor", "amp", "hermes"] as const;
 
 describe("adapter write E2E", () => {
   for (const harnessId of HARNESS_IDS) {

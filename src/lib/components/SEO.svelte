@@ -227,11 +227,11 @@
   <meta name="twitter:description" content={description} />
   <meta name="twitter:image" content={ogImageUrl} />
 
-  {@html `<script type="application/ld+json">${safeStringify(organizationSchema)}</script>`}
+  {@html `<script type="application/ld+json">${safeStringify(organizationSchema)}</scr` + `ipt>`}
   {#if breadcrumbsSchema}
-    {@html `<script type="application/ld+json">${safeStringify(breadcrumbsSchema)}</script>`}
+    {@html `<script type="application/ld+json">${safeStringify(breadcrumbsSchema)}</scr` + `ipt>`}
   {/if}
   {#if articleSchema}
-    {@html `<script type="application/ld+json">${safeStringify(articleSchema)}</script>`}
+    {@html `<script type="application/ld+json">${safeStringify(articleSchema)}</scr` + `ipt>`}
   {/if}
 </svelte:head>

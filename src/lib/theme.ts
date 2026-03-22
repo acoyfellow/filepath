@@ -17,5 +17,7 @@ export function toggleTheme(): void {
   const dark = document.documentElement.classList.toggle('dark');
   try {
     localStorage.setItem(THEME_KEY, dark ? '1' : '0');
-  } catch {}
+  } catch {
+    /* ignore storage failures (private mode / quota) */
+  }
 }

@@ -63,7 +63,6 @@ function patchContainerBinding(filePath) {
 }
 
 const d1DbSrcPath = path.join(alchemyRoot, "src", "cloudflare", "d1-database.ts");
-const d1DbPath = path.join(alchemyRoot, "lib", "cloudflare", "d1-database.js");
 const D1_STATE_CLEAR_MARKER = "ALCHEMY_D1_SKIP_DELETE_API";
 
 function patchD1DeleteSkipApi(filePath) {

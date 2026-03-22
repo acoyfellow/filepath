@@ -2,7 +2,7 @@
 
 import { eq } from 'drizzle-orm';
 import { getDrizzle } from '../src/lib/auth';
-import { user, session, apikey } from '../src/lib/schema';
+import { user, apikey } from '../src/lib/schema';
 
 async function testAdminApiEndpoints() {
   console.log('Testing admin API endpoints...');

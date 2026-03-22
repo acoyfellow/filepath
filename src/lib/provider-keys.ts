@@ -193,7 +193,7 @@ export async function validateProviderApiKey(provider: ProviderId, apiKey: strin
   }
 
   let response: Response;
-  let body = "";
+  let body: string;
   try {
     response = await validateOnce(primaryHeaders);
     body = await response.text().catch(() => "");

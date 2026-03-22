@@ -9,7 +9,11 @@
   };
 
   interface Props {
-    value: string;
+    /** Single-select value (ignored when `multi` is true). */
+    value?: string;
+    /** Multi-select values (used when `multi` is true). */
+    values?: string[];
+    multi?: boolean;
     options: ComboboxOption[];
     searchValue: string;
     placeholder?: string;
@@ -20,11 +24,14 @@
     optionClass?: string;
     listClass?: string;
     onSearchValueChange: (value: string) => void;
-    onValueChange: (value: string) => void;
+    onValueChange?: (value: string) => void;
+    onValuesChange?: (values: string[]) => void;
   }
 
   let {
-    value,
+    value = "",
+    values = [],
+    multi = false,
     options,
     searchValue,
     placeholder = "Choose an option",
@@ -35,12 +42,22 @@
     optionClass,
     listClass,
     onSearchValueChange,
-    onValueChange,
+    onValueChange = () => {},
+    onValuesChange = () => {},
   }: Props = $props();
 
   let open = $state(false);
 
   let selectedLabel = $derived.by(() => {
+    if (multi) {
+      const vals = values ?? [];
+      if (vals.length === 0) return "";
+      const labels = vals
+        .map((v) => options.find((o) => o.value === v)?.label ?? v)
+        .filter(Boolean);
+      if (labels.length <= 3) return labels.join(", ");
+      return `${labels.length} selected`;
+    }
     const opt = options.find((o) => o.value === value);
     return opt?.label ?? value ?? "";
   });
@@ -124,9 +141,29 @@
     close();
   });
 
+  function optionSelected(optValue: string): boolean {
+    if (multi) return (values ?? []).includes(optValue);
+    return optValue === value;
+  }
+
   function selectOptionByIndex(index: number) {
     const opt = options[index];
     if (!opt) return;
+
+    if (multi) {
+      const curr = [...(values ?? [])];
+      const pos = curr.indexOf(opt.value);
+      if (pos >= 0) {
+        curr.splice(pos, 1);
+      } else {
+        curr.push(opt.value);
+      }
+      const order = new Map(options.map((o, idx) => [o.value, idx]));
+      curr.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+      onValuesChange(curr);
+      void syncLayout();
+      return;
+    }
 
     onValueChange(opt.value);
     if (clearSearchOnSelect) onSearchValueChange("");
@@ -204,6 +241,7 @@
     )}
     style={listStyle}
     role="listbox"
+    aria-multiselectable={multi ? "true" : undefined}
   >
     {#if options.length === 0}
       <div class={cn("px-4 py-3 text-sm text-(--t5)")} aria-disabled="true">{emptyText}</div>
@@ -215,7 +253,7 @@
           class={cn(
             "w-full px-4 py-3 text-left text-sm text-(--t2) transition hover:bg-(--bg3) hover:text-(--t1)",
             idx === activeIndex ? "bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg3))] border border-(--b2) rounded-xl" : "",
-            opt.value === value ? "text-(--t1) font-semibold" : "",
+            optionSelected(opt.value) ? "text-(--t1) font-semibold" : "",
             optionClass
           )}
           onclick={(e) => {
@@ -223,7 +261,7 @@
             e.stopPropagation();
             selectOptionByIndex(idx);
           }}
-          aria-selected={opt.value === value}
+          aria-selected={optionSelected(opt.value)}
         >
           <div class="flex flex-col gap-0.5">
             <div class="truncate">{opt.label}</div>

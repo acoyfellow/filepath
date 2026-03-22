@@ -17,17 +17,25 @@ export { Sandbox } from "@cloudflare/sandbox";
 export { ConversationAgent } from "./conversation-agent";
 import type { Env } from '../src/types';
 import {
+  acceptAgentTask,
   approveAgentInterruption,
   cancelAgentTask,
   deleteAgentRuntime,
   getAgentRuntimeSnapshot,
   pauseAgentTask,
+  processAcceptedAgentTask,
   rejectAgentInterruption,
   resumeAgentTask,
   runWorkspaceScript,
   scheduleAcceptedAgentTask,
   type RuntimeEnv,
 } from '../src/lib/runtime/agent-runtime';
+import {
+  assertRuntimeBridgeCaller,
+  assertTargetThreadInWorkspace,
+  getThreadLastMessageForBridge,
+  listWorkspaceThreadsForBridge,
+} from '../src/lib/runtime/runtime-bridge';
 
 function toRuntimeEnv(env: Env): RuntimeEnv {
   return {
@@ -35,6 +43,8 @@ function toRuntimeEnv(env: Env): RuntimeEnv {
     Sandbox: env.Sandbox as unknown as RuntimeEnv["Sandbox"],
     BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+    API_WS_HOST: env.API_WS_HOST,
+    FILEPATH_RUNTIME_PUBLIC_BASE_URL: env.FILEPATH_RUNTIME_PUBLIC_BASE_URL,
   };
 }
 
@@ -55,9 +65,51 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Filepath-Runtime-Token, X-Filepath-Request-Id, X-Filepath-Wait',
         },
       });
+    }
+
+    const threadsPath = url.pathname.match(/^\/runtime\/workspaces\/([^/]+)\/threads$/);
+    if (threadsPath && request.method === "GET") {
+      const workspaceId = threadsPath[1];
+      try {
+        const token = request.headers.get("x-filepath-runtime-token");
+        await assertRuntimeBridgeCaller(runtimeEnv, token, workspaceId);
+        const data = await listWorkspaceThreadsForBridge(runtimeEnv.DB, workspaceId);
+        return new Response(JSON.stringify({ ok: true, ...data }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    const lastMessagePath = url.pathname.match(
+      /^\/runtime\/workspaces\/([^/]+)\/agents\/([^/]+)\/last-message$/,
+    );
+    if (lastMessagePath && request.method === "GET") {
+      const [, workspaceId, targetAgentId] = lastMessagePath;
+      try {
+        const token = request.headers.get("x-filepath-runtime-token");
+        await assertRuntimeBridgeCaller(runtimeEnv, token, workspaceId);
+        const message = await getThreadLastMessageForBridge(
+          runtimeEnv.DB,
+          workspaceId,
+          targetAgentId,
+        );
+        return new Response(JSON.stringify({ ok: true, message }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        );
+      }
     }
 
     const runtimeMatch = url.pathname.match(
@@ -106,7 +158,88 @@ export default {
         });
       }
 
-      // POST /agents/:id/tasks removed - use ConversationAgent DO runTask via WebSocket
+      const taskMatch = suffix.match(/^\/agents\/([^/]+)\/tasks$/);
+      if (request.method === "POST" && taskMatch) {
+        const agentId = taskMatch[1];
+        const bridgeToken = request.headers.get("x-filepath-runtime-token")?.trim() ?? null;
+        if (bridgeToken) {
+          try {
+            await assertRuntimeBridgeCaller(runtimeEnv, bridgeToken, workspaceId);
+            await assertTargetThreadInWorkspace(runtimeEnv.DB, agentId, workspaceId);
+          } catch (error) {
+            return new Response(
+              JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+              { status: 403, headers: { "Content-Type": "application/json" } },
+            );
+          }
+        }
+        const body = (await request.json().catch(() => ({}))) as {
+          content?: string;
+          identity?: {
+            traceId?: string | null;
+            proofRunId?: string | null;
+            proofIterationId?: string | null;
+          };
+        };
+        const content = typeof body.content === "string" ? body.content.trim() : "";
+        const identity = body.identity;
+        const requestId = request.headers.get("x-filepath-request-id") || crypto.randomUUID();
+        if (!content) {
+          return new Response(JSON.stringify({ error: "Task content is required." }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        const wait = request.headers.get("x-filepath-wait") === "true";
+        try {
+          const accepted = await acceptAgentTask(
+            runtimeEnv,
+            workspaceId,
+            agentId,
+            content,
+            requestId,
+            identity
+              ? {
+                  traceId: identity.traceId ?? undefined,
+                  proofRunId: identity.proofRunId ?? undefined,
+                  proofIterationId: identity.proofIterationId ?? undefined,
+                }
+              : undefined,
+          );
+          if (wait) {
+            const { result, events } = await processAcceptedAgentTask(
+              runtimeEnv,
+              workspaceId,
+              agentId,
+              accepted.taskId,
+              content,
+              requestId,
+            );
+            return new Response(
+              JSON.stringify({ ok: true, result, events, taskId: accepted.taskId }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          scheduleAcceptedAgentTask(runtimeEnv, ctx, {
+            workspaceId,
+            agentId,
+            taskId: accepted.taskId,
+            content,
+            requestId,
+          });
+          return new Response(JSON.stringify(accepted), {
+            status: 202,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (error) {
+          return new Response(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : "Unable to run agent task.",
+            }),
+            { status: 409, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
 
       const cancelMatch = suffix.match(/^\/agents\/([^/]+)\/cancel$/);
       if (request.method === "POST" && cancelMatch) {
@@ -174,6 +307,18 @@ export default {
       const agentMatch = suffix.match(/^\/agents\/([^/]+)$/);
       if (request.method === "GET" && agentMatch) {
         const agentId = agentMatch[1];
+        const bridgeToken = request.headers.get("x-filepath-runtime-token")?.trim() ?? null;
+        if (bridgeToken) {
+          try {
+            await assertRuntimeBridgeCaller(runtimeEnv, bridgeToken, workspaceId);
+            await assertTargetThreadInWorkspace(runtimeEnv.DB, agentId, workspaceId);
+          } catch (error) {
+            return new Response(
+              JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+              { status: 403, headers: { "Content-Type": "application/json" } },
+            );
+          }
+        }
         try {
           const runtime = await getAgentRuntimeSnapshot(runtimeEnv, workspaceId, agentId);
           return new Response(JSON.stringify({ ok: true, runtime }), {

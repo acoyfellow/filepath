@@ -6,7 +6,7 @@
   import Settings2Icon from "@lucide/svelte/icons/settings-2";
   import StatusDot from "$lib/components/shared/StatusDot.svelte";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import StatusGlyph from "$lib/components/shared/StatusGlyph.svelte";
+  import { STATUS_LABELS } from "$lib/protocol";
   import Button from "$lib/components/ui/button/button.svelte";
   import type { AgentRecord, AgentResult, AgentRuntimeActiveTask } from "$lib/types/workspace";
   import TaskComposer from "./TaskComposer.svelte";
@@ -79,11 +79,6 @@
   let isBlocked = $derived(pendingInterruption?.status === "pending");
   let canCancel = $derived(Boolean(activeTask && oncancel));
   let canPause = $derived(Boolean(activeTask && onpause && !isBlocked));
-  let scopeLabel = $derived.by(() => {
-    const raw = agent?.writableRoot ?? ".";
-    if (!raw || raw === "." || raw === "./") return "workspace root";
-    return raw;
-  });
   let composerDisabled = $derived(
     Boolean(transcriptLoading || isExhausted || isClosed || isBlocked || activeTask),
   );
@@ -98,12 +93,6 @@
     if (agent?.status === "idle" && messages.length === 0) return "Start the first conversation turn...";
     return "Describe the next turn...";
   });
-  let summaryLine = $derived.by(() => {
-    if (!agent) return "";
-    const parts = [agent.harnessId, agent.model, `scope ${scopeLabel}`];
-    if (agent.tokens > 0) parts.push(`${agent.tokens.toLocaleString()} tokens`);
-    return parts.join(" · ");
-  });
 </script>
 
 {#if agent}
@@ -112,13 +101,17 @@
       <div class="flex items-center justify-between gap-3 max-[900px]:flex-col max-[900px]:items-start">
       <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <Sidebar.Trigger class="-ms-1 size-8 shrink-0 md:hidden" />
-          <StatusDot status={agent.status} size={7} />
+          <span class="inline-flex shrink-0" title={STATUS_LABELS[agent.status]}>
+            <StatusDot status={agent.status} size={7} />
+          </span>
           <span class="min-w-0 truncate font-(family-name:--f) text-base font-[650] tracking-[-0.02em] text-(--t1) max-[640px]:text-[15px]">
             {agent.name}
           </span>
-          <StatusGlyph status={agent.status} compact />
           {#if agent.conversationState}
-            <span class="rounded-full border border-(--b1) bg-(--bg3) px-2 py-0.5 text-[10px] font-[650] uppercase tracking-[0.14em] text-(--t4)">
+            <span
+              class="rounded-full border border-(--b1) bg-(--bg3) px-2 py-0.5 text-[10px] font-[650] uppercase tracking-[0.14em] text-(--t4)"
+              title="Workflow: blocked / running / ready / closed (from conversation rules). Differs from runtime dot (adapter task state)."
+            >
               {agent.conversationState}
             </span>
           {/if}

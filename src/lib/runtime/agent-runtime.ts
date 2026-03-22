@@ -33,12 +33,18 @@ import {
   normalizeChangeMetadata,
 } from "$lib/runtime/change-metadata";
 import type { D1Database } from "@cloudflare/workers-types";
+import {
+  mintRuntimeBridgeToken,
+  resolveRuntimePublicBaseUrl,
+} from "$lib/runtime/runtime-bridge";
 
 export interface RuntimeEnv {
   DB: D1Database;
   Sandbox?: unknown;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  API_WS_HOST?: string;
+  FILEPATH_RUNTIME_PUBLIC_BASE_URL?: string;
 }
 
 export interface RuntimeExecutionContext {
@@ -201,6 +207,8 @@ const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
     "You are Pi, filepath's research and analysis harness running inside a sandbox. Respond directly and concisely with the best answer to the latest user request.",
   shelley:
     "You are Shelley, filepath's full-stack engineering harness running inside a sandbox. Respond directly to the latest user request. Keep responses plain text unless the user asks otherwise.",
+  hermes:
+    "You are Hermes running as a filepath harness inside a sandbox. Respond clearly to the latest user request.",
 };
 
 function parseRequestedPermission(
@@ -258,20 +266,6 @@ function mapTaskStateToAgentStatus(state: AgentTaskState): AgentStatusType {
       return "idle";
     case "stalled":
       return "stalled";
-  }
-}
-
-function mapResultStatusToTaskState(
-  status: AgentResult["status"],
-): Extract<AgentTaskState, "succeeded" | "failed" | "canceled"> {
-  switch (status) {
-    case "success":
-      return "succeeded";
-    case "aborted":
-      return "canceled";
-    case "error":
-    case "policy_error":
-      return "failed";
   }
 }
 
@@ -735,18 +729,6 @@ async function loadAgentResult(
   };
 }
 
-async function setAgentStatus(
-  env: RuntimeEnv,
-  agentId: string,
-  status: AgentStatusType,
-): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE agent
-        SET status = ?, updated_at = unixepoch('subsecond') * 1000
-      WHERE id = ?`,
-  ).bind(status, agentId).run();
-}
-
 async function updateAgentExecutionState(
   env: RuntimeEnv,
   agentId: string,
@@ -862,6 +844,7 @@ export async function loadAgentExecutionConfig(
   agentId: string,
   workspaceId: string,
   task: string,
+  bridge?: { taskId: string },
 ): Promise<AgentExecutionConfig> {
   const row = await env.DB.prepare(
     `SELECT a.harness_id, a.model, a.allowed_paths, a.forbidden_paths,
@@ -949,6 +932,30 @@ export async function loadAgentExecutionConfig(
     FILEPATH_AGENT_ID: agentId,
     FILEPATH_WORKSPACE_ID: row.workspace_id,
   };
+
+  if (policy.toolPermissions.includes("cross_thread")) {
+    const secret = env.BETTER_AUTH_SECRET?.trim();
+    if (!secret) {
+      throw new RuntimeTaskError(
+        "RUNTIME_BRIDGE_MISCONFIGURED",
+        "Cross-thread tools require BETTER_AUTH_SECRET on the worker.",
+      );
+    }
+    if (!bridge?.taskId) {
+      throw new RuntimeTaskError(
+        "RUNTIME_BRIDGE_MISCONFIGURED",
+        "Cross-thread tools require an active task id (internal error).",
+      );
+    }
+    const base = resolveRuntimePublicBaseUrl(env);
+    const token = await mintRuntimeBridgeToken(secret, {
+      workspaceId,
+      sourceAgentId: agentId,
+      taskId: bridge.taskId,
+    });
+    envVars.FILEPATH_RUNTIME_URL = base;
+    envVars.FILEPATH_RUNTIME_TOKEN = token;
+  }
 
   if (!row.entry_command) {
     throw new RuntimeTaskError("HARNESS_ENTRY_COMMAND_MISSING", `Harness ${row.harness_id} has no entry command.`);
@@ -1309,7 +1316,7 @@ function buildAgentResultFromEvents(
 }
 
 function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function normalizePatchPathPrefix(path: string): string {
@@ -2437,8 +2444,8 @@ async function runSandboxTask(
   const beforeSnapshotRoot = `${snapshotBase}/before`;
   const afterSnapshotRoot = `${snapshotBase}/after`;
   let process: Process | null = null;
-  let sandbox: Sandbox | null = null;
-  let beforeDirtyPaths = new Set<string>();
+  let sandbox!: Sandbox;
+  let beforeDirtyPaths!: Set<string>;
 
   const isCancelled = streamOpts?.isCancelled;
   try {
@@ -2803,7 +2810,9 @@ export async function processAcceptedAgentTask(
     }
 
     const taskPrompt = await buildTaskPrompt(env, workspaceId, agentId, content);
-    const config = await loadAgentExecutionConfig(env, agentId, workspaceId, taskPrompt);
+    const config = await loadAgentExecutionConfig(env, agentId, workspaceId, taskPrompt, {
+      taskId,
+    });
 
     logTaskEvent("log", {
       requestId,

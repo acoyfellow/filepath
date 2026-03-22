@@ -203,8 +203,6 @@ try {
   const context = await browser.newContext();
   page = await context.newPage();
 
-  const artifactPrefix = join(OUTPUT_DIR, `local-smoke-${now}`);
-
   await page.goto(`${BASE_URL}/signup`, { waitUntil: "networkidle" });
   await page.getByRole("textbox", { name: "Email" }).fill(email);
   await page.getByRole("textbox", { name: "Password", exact: true }).fill(PASSWORD);
@@ -272,24 +270,24 @@ try {
   await page.reload({ waitUntil: "networkidle" });
   await waitForText(page, "No agents yet", 10_000);
 
-  if (process.env.FILEPATH_SMOKE_CUSTOM === "1") {
-    const customHarnessBtn = page.locator('[data-testid="agent-settings-drawer"] [data-harness-id="custom"]').first();
-    const customVisible = (await customHarnessBtn.count()) > 0;
-    if (customVisible) {
-      await createAgent(page, `custom-smoke-${now}`);
+  if (process.env.FILEPATH_SMOKE_HERMES === "1" || process.env.FILEPATH_SMOKE_CUSTOM === "1") {
+    const hermesHarnessBtn = page.locator('[data-testid="agent-settings-drawer"] [data-harness-id="hermes"]').first();
+    const hermesVisible = (await hermesHarnessBtn.count()) > 0;
+    if (hermesVisible) {
+      await createAgent(page, `hermes-smoke-${now}`);
       await openAgentSettings(page);
-      await customHarnessBtn.click();
+      await hermesHarnessBtn.click();
       await saveAgentSettings(page);
       await waitForText(page, "Settings saved", 10_000);
       await page.getByRole("textbox", { name: /Start the first task|Describe the next task/i }).fill(
-        "Reply with exactly: CUSTOM_HARNESS_OK",
+        "Reply with exactly: HERMES_HARNESS_OK",
       );
       await page.getByRole("button", { name: "Run task" }).click();
-      await waitForText(page, "CUSTOM_HARNESS_OK", 90_000);
+      await waitForText(page, "HERMES_HARNESS_OK", 90_000);
       await deleteRemainingAgentsViaApi(page);
-      console.log("Custom harness smoke passed");
+      console.log("Hermes harness smoke passed");
     } else {
-      console.log("Custom harness not available (disabled). Skip FILEPATH_SMOKE_CUSTOM or enable custom in Harness registry.");
+      console.log("Hermes harness not available (disabled). Skip FILEPATH_SMOKE_HERMES or enable Hermes in Harness registry.");
     }
   }
 

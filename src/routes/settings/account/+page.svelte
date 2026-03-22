@@ -412,14 +412,17 @@
     </section>
 
     <section>
-      <h2 class="text-red-400/80 text-xs uppercase tracking-wide mb-4">Danger zone</h2>
-      <div class="bg-neutral-900 border border-red-900/50 rounded p-5">
-        <p class="text-sm mb-4 text-gray-600 dark:text-neutral-400">
+      <h2 class="mb-4 text-xs uppercase tracking-wide text-red-700 dark:text-red-400/80">Danger zone</h2>
+      <div
+        class="rounded border p-5 border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-neutral-900"
+      >
+        <p class="mb-4 text-sm text-gray-900 dark:text-neutral-400">
           Permanently delete your account and all associated data. This action cannot be undone.
         </p>
-        <button 
-          onclick={() => showDeleteDialog = true}
-          class="px-4 py-2 text-sm text-red-400 border border-red-900 rounded hover:bg-red-950 transition-colors cursor-pointer"
+        <button
+          type="button"
+          onclick={() => (showDeleteDialog = true)}
+          class="cursor-pointer rounded border border-red-300 bg-white px-4 py-2 text-sm text-red-700 transition-colors hover:bg-red-100 dark:border-red-900 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-950"
         >
           delete account
         </button>

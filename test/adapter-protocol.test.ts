@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseAgentEvent } from "../src/lib/protocol";
 
-const HARNESS_IDS = ["shelley", "pi", "claude-code", "codex", "cursor", "amp", "custom"] as const;
+const HARNESS_IDS = ["shelley", "pi", "claude-code", "codex", "cursor", "amp", "hermes"] as const;
 
 function runAdapter(harnessId: string, task: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const workspaceRoot = mkdtempSync(join(tmpdir(), "filepath-adapter-test-"));

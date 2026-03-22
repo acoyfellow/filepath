@@ -1,5 +1,4 @@
 <script lang="ts">
-  import PlusIcon from "@lucide/svelte/icons/plus";
   import { alert, confirm } from "$lib/components/alert";
   import AgentListItem from "./AgentListItem.svelte";
   import type { AgentRecord } from "$lib/types/workspace";
@@ -13,22 +12,12 @@
   interface Props {
     agents: AgentRecord[];
     selectedId: string | null;
-    isRefreshing?: boolean;
     onselect: (id: string) => void;
     onrename: (payload: { agentId: string; name: string }) => Promise<void>;
     ondelete: (agentId: string) => Promise<void>;
-    oncreate: () => void;
   }
 
-  let {
-    agents,
-    selectedId,
-    isRefreshing = false,
-    onselect,
-    onrename,
-    ondelete,
-    oncreate,
-  }: Props = $props();
+  let { agents, selectedId, onselect, onrename, ondelete }: Props = $props();
 
   let dialogAgentId = $state<string | null>(null);
   let renameValue = $state("");
@@ -94,31 +83,7 @@
   class="top-(--header-height)! bottom-auto! h-[calc(100svh-var(--header-height))]! border-e border-(--b1) bg-(--bg)"
   collapsible={isMobile ? "offcanvas" : "none"}
 >
-  <Sidebar.Header>
-    <div class="flex items-center justify-between gap-2 px-3 py-2">
-        <div class="flex min-w-0 items-center gap-1.5 font-(family-name:--f) text-[10px] font-[550] uppercase tracking-[0.14em] text-(--t4) sm:text-[11px]">
-        <span>conversations</span>
-        {#if isRefreshing}
-          <span
-            class="size-2.5 animate-spin rounded-full border-2 border-(--b2) border-t-(--accent)"
-            aria-hidden="true"
-          ></span>
-        {/if}
-      </div>
-      <Button
-        variant="accentPill"
-        size="icon-sm"
-        class="shrink-0 gap-0"
-        onclick={oncreate}
-        aria-label="New conversation"
-        title="New conversation"
-        data-testid="open-create-agent"
-      >
-        <PlusIcon size={16} />
-      </Button>
-    </div>
-  </Sidebar.Header>
-  <Sidebar.Content>
+  <Sidebar.Content class="pt-2">
     {#if agents.length > 0}
       <Sidebar.Group>
         <div class="py-0.5">
@@ -175,7 +140,7 @@
 
     <Dialog.Footer class="gap-2">
       <Button variant="outline" onclick={closeDialog}>Cancel</Button>
-      <Button disabled={dialogSubmitting} onclick={submitRename}>
+      <Button variant="accent" disabled={dialogSubmitting} onclick={submitRename}>
         {dialogSubmitting ? "Saving..." : "Rename"}
       </Button>
     </Dialog.Footer>

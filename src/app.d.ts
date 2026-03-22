@@ -24,6 +24,7 @@ declare global {
         DB: D1Database;
         API_WS_HOST?: string;
         API_WS_ORIGIN?: string;
+        FILEPATH_RUNTIME_PUBLIC_BASE_URL?: string;
         BETTER_AUTH_SECRET?: string;
         BETTER_AUTH_URL?: string;
 				};

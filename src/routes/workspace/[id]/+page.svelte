@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { fly } from "svelte/transition";
+  import { afterNavigate, goto } from "$app/navigation";
+  import { browser } from "$app/environment";
   import { page } from "$app/state";
   import SEO from "$lib/components/SEO.svelte";
   import AgentDetailPane from "$lib/components/workspace/AgentDetailPane.svelte";
   import AgentSettingsDrawer from "$lib/components/workspace/AgentSettingsDrawer.svelte";
   import WorkspaceSidebar from "$lib/components/workspace/WorkspaceSidebar.svelte";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import { Handle as ResizableHandle, Pane, PaneGroup } from "$lib/components/ui/resizable";
+  import { workspaceNewConversationHandler } from "$lib/workspace-nav";
   import type { TaskMessage } from "$lib/components/workspace/TaskTranscript.svelte";
   import AgentConnection from "$lib/components/workspace/AgentConnection.svelte";
   import CreateAgentModal from "$lib/components/workspace/CreateAgentModal.svelte";
-  import Button from "$lib/components/ui/button/button.svelte";
   import BotIcon from "@lucide/svelte/icons/bot";
-  import PlusIcon from "@lucide/svelte/icons/plus";
   import type {
     AgentConfig,
     AgentCreateRequest,
@@ -21,7 +21,6 @@
     AgentResult,
     AgentRuntimeActiveTask,
     AgentRuntimeSnapshot,
-    AgentTaskAcceptedResponse,
     HarnessId,
     AgentUpdateRequest,
   } from "$lib/types/workspace";
@@ -62,20 +61,14 @@
   const workspaceId = $derived(page.params.id ?? "");
   let showSpawn = $state(false);
   let showSettings = $state(false);
-  let sidebarWidthPx = $state(0);
-  let accountKeysMasked = $state<{ openrouter: string | null; zen: string | null }>({
-    openrouter: null,
-    zen: null,
-  });
-  const sidebarProviderStyle = $derived.by(() => {
-    if (!sidebarWidthPx || Number.isNaN(sidebarWidthPx)) return "";
-    return `--sidebar-width: ${sidebarWidthPx}px;`;
-  });
-  let accountKeysError = $state<string | null>(null);
+  type AccountKeysMasked = { openrouter: string | null; zen: string | null };
+
+  let accountKeysOverride = $state<{ masked: AccountKeysMasked; error: string | null } | null>(null);
+  const accountKeysMasked = $derived(accountKeysOverride?.masked ?? data.accountKeysMasked);
+  const accountKeysError = $derived(accountKeysOverride?.error ?? data.accountKeysError);
   let taskMessagesByAgent = $state<Record<string, TaskMessage[]>>({});
   let resultsByAgent = $state<Record<string, AgentResult | null>>({});
   let agentNotices = $state<Record<string, AgentNotice | null>>({});
-  let isRefreshing = $state(false);
   /** Transcript hydration: avoid empty / “Ready” flash before first runtime fetch. */
   let runtimeLoadingByAgent = $state<Record<string, boolean>>({});
   let runtimeLoadedByAgent = $state<Record<string, boolean>>({});
@@ -149,48 +142,65 @@
     return rows[0].id;
   }
 
-  // svelte-ignore state_referenced_locally -- deliberate SSR/first-paint seed; workspace $effect reapplies on route change
+  // svelte-ignore state_referenced_locally -- deliberate SSR/first-paint seed; afterNavigate reapplies on workspace change
   const seedAgents = mapRowsToAgents(data.agents);
   let agents = $state<AgentRecord[]>(seedAgents);
   let selectedId = $state<string | null>(
     pickSelectedId(seedAgents, page.url.searchParams.get("conversation")),
   );
 
-  /** Only replace agent list from SSR when switching workspace — avoids empty flash + refreshWorkspace clobbering. */
-  let lastWorkspaceRouteId = $state<string | null>(null);
+  function syncConversationUrl(id: string | null) {
+    if (!browser || !workspaceId) return;
+    const u = new URL(page.url.href);
+    if (id) u.searchParams.set("conversation", id);
+    else u.searchParams.delete("conversation");
+    const next = `${u.pathname}${u.search}`;
+    const cur = `${page.url.pathname}${page.url.search}`;
+    if (next === cur) return;
+    void goto(next, { replaceState: true, noScroll: true, keepFocus: true });
+  }
 
-  $effect(() => {
-    const wid = workspaceId;
-    if (!wid) return;
-    if (lastWorkspaceRouteId === wid) return;
-    lastWorkspaceRouteId = wid;
-    const next = mapRowsToAgents(data.agents);
-    agents = next;
-    selectedId = pickSelectedId(next, page.url.searchParams.get("conversation"));
-  });
-
-  /** Deep link / history: ?conversation= */
-  $effect(() => {
-    const q = page.url.searchParams.get("conversation");
-    if (!q) return;
-    if (!agents.some((a) => a.id === q)) return;
-    if (selectedId !== q) selectedId = q;
-  });
-
-  /** Selection must point at a row in `agents` (e.g. after delete). */
-  $effect(() => {
+  function ensureSelectionValid() {
     if (agents.length === 0) {
       if (selectedId !== null) selectedId = null;
+      showSettings = false;
+      void syncConversationUrl(null);
       return;
     }
     if (!selectedId || !agents.some((r) => r.id === selectedId)) {
-      selectedId = agents[0].id;
+      const id = agents[0].id;
+      selectedId = id;
+      void syncConversationUrl(id);
+      void refreshAgentRuntime(id);
     }
-  });
+  }
 
-  $effect(() => {
-    accountKeysMasked = data.accountKeysMasked;
-    accountKeysError = data.accountKeysError;
+  afterNavigate(({ from, to }) => {
+    if (!to?.params) return;
+    const toWid = to.params.id ?? "";
+    if (!toWid) return;
+
+    const fromWid = from?.params?.id ?? null;
+    if (fromWid !== toWid) {
+      agents = mapRowsToAgents(data.agents);
+      accountKeysOverride = null;
+      showSettings = false;
+    }
+
+    const q = to.url.searchParams.get("conversation");
+    if (agents.length === 0) {
+      selectedId = null;
+      showSettings = false;
+      return;
+    }
+
+    const pick = pickSelectedId(agents, q);
+    const needUrlFix = q === null || !agents.some((a) => a.id === q) || pick !== q;
+    if (needUrlFix && pick) void syncConversationUrl(pick);
+
+    const before = selectedId;
+    selectedId = pick;
+    if (pick && pick !== before) void refreshAgentRuntime(pick);
   });
 
   let selectedAgent = $derived(
@@ -215,12 +225,6 @@
         (!runtimeLoadedByAgent[selectedAgent.id] || runtimeLoadingByAgent[selectedAgent.id]),
     ),
   );
-
-  $effect(() => {
-    if (showSettings && !selectedAgent) {
-      showSettings = false;
-    }
-  });
 
   function setAgentNotice(agentId: string, notice: AgentNotice | null) {
     agentNotices = { ...agentNotices, [agentId]: notice };
@@ -371,15 +375,11 @@
 
   async function refreshWorkspace() {
     if (!workspaceId) return;
-    isRefreshing = true;
-    try {
-      const response = await fetch(`/api/workspaces/${workspaceId}`);
-      if (!response.ok) return;
-      const payload = (await response.json()) as { agents: AgentRow[] };
-      agents = orderAgentsByCreatedAt(payload.agents.map(toAgent));
-    } finally {
-      isRefreshing = false;
-    }
+    const response = await fetch(`/api/workspaces/${workspaceId}`);
+    if (!response.ok) return;
+    const payload = (await response.json()) as { agents: AgentRow[] };
+    agents = orderAgentsByCreatedAt(payload.agents.map(toAgent));
+    ensureSelectionValid();
   }
 
   async function refreshAgentRuntime(agentId: string) {
@@ -412,6 +412,7 @@
   function handleSelect(id: string) {
     if (selectedId === id) return;
     selectedId = id;
+    void syncConversationUrl(id);
     void refreshAgentRuntime(id);
   }
 
@@ -419,6 +420,7 @@
     const target = agents.find((entry) => entry.name === name);
     if (!target) return;
     selectedId = target.id;
+    void syncConversationUrl(target.id);
     void refreshAgentRuntime(target.id);
   }
 
@@ -585,6 +587,7 @@
     const payload = (await response.json()) as { id: string };
     await refreshWorkspace();
     selectedId = payload.id;
+    void syncConversationUrl(payload.id);
     await refreshAgentRuntime(payload.id);
     showSpawn = false;
   }
@@ -610,13 +613,15 @@
   }
 
   onMount(() => {
-    selectedId = page.url.searchParams.get("conversation") ?? selectedId;
-    if (selectedId) {
-      void refreshAgentRuntime(selectedId);
-    } else if (agents[0]) {
-      selectedId = agents[0].id;
-      void refreshAgentRuntime(agents[0].id);
-    }
+    workspaceNewConversationHandler.set(() => {
+      showSpawn = true;
+    });
+    const id = selectedId ?? agents[0]?.id ?? null;
+    if (id) void refreshAgentRuntime(id);
+  });
+
+  onDestroy(() => {
+    workspaceNewConversationHandler.set(null);
   });
 </script>
 
@@ -707,96 +712,72 @@
   {/if}
 
   {#if agents.length > 0}
-    <Sidebar.Provider class="flex min-h-0! flex-1 flex-col" style={sidebarProviderStyle}>
-      <!-- Desktop: use paneforge to resize the left sidebar -->
-      <div class="hidden md:flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <PaneGroup
-          direction="horizontal"
-          autoSaveId="workspace-sidebar-width"
-          class="flex h-full min-h-0 w-full min-w-0"
-          onLayoutChange={(layout) => {
-            // PaneForge returns pixel sizes for each pane.
-            const next = layout[0] ?? 0;
-            // Let the sidebar stay fluid inside the resizable pane.
-            // Only guard against negative/NaN widths.
-            sidebarWidthPx = Number.isFinite(next) ? Math.max(0, next) : 0;
-          }}
-        >
-          <Pane defaultSize={35} minSize={20} maxSize={80} class="flex min-h-0 flex-col">
-            <WorkspaceSidebar
-              isRefreshing={isRefreshing}
-              agents={agents}
-              {selectedId}
-              onselect={handleSelect}
-              onrename={handleRenameAgent}
-              ondelete={handleDeleteAgent}
-              oncreate={() => {
-                showSpawn = true;
-              }}
-            />
-          </Pane>
-          <ResizableHandle class="h-full z-30" />
-          <Pane class="flex min-h-0 flex-col">
-            <Sidebar.Inset class="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
-              <AgentDetailPane
-                agent={selectedAgent}
-                activeTask={selectedActiveTask}
-                messages={currentMessages}
-                result={selectedResult}
-                notice={selectedNotice}
-                transcriptLoading={transcriptLoading}
-                onsend={handleSend}
-                oncancel={() => {
-                  if (!selectedAgent) return;
-                  void handleCancelAgent(selectedAgent.id);
-                }}
-                onpause={() => {
-                  if (!selectedAgent) return;
-                  void postConversationAction(selectedAgent.id, "pause");
-                }}
-                onresume={() => {
-                  if (!selectedAgent) return;
-                  void postConversationAction(selectedAgent.id, "resume");
-                }}
-                onapprove={() => {
-                  if (!selectedAgent) return;
-                  void postConversationAction(selectedAgent.id, "approve");
-                }}
-                onreject={() => {
-                  if (!selectedAgent) return;
-                  void postConversationAction(selectedAgent.id, "reject");
-                }}
-                onclose={() => {
-                  if (!selectedAgent) return;
-                  void postConversationAction(selectedAgent.id, "close");
-                }}
-                onreopen={() => {
-                  if (!selectedAgent) return;
-                  void postConversationAction(selectedAgent.id, "reopen");
-                }}
-                onopensettings={() => {
-                  if (!selectedAgent) return;
-                  showSettings = true;
-                }}
-                onnavigate={handleNavigate}
-              />
-            </Sidebar.Inset>
-          </Pane>
-        </PaneGroup>
+    <Sidebar.Provider class="flex min-h-0! flex-1 flex-col">
+      <!-- Desktop: fixed-width sidebar + main -->
+      <div class="hidden min-h-0 min-w-0 flex-1 overflow-hidden md:flex">
+        <div class="flex h-full min-h-0 w-64 shrink-0 flex-col">
+          <WorkspaceSidebar
+            agents={agents}
+            {selectedId}
+            onselect={handleSelect}
+            onrename={handleRenameAgent}
+            ondelete={handleDeleteAgent}
+          />
+        </div>
+        <Sidebar.Inset class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
+          <AgentDetailPane
+            agent={selectedAgent}
+            activeTask={selectedActiveTask}
+            messages={currentMessages}
+            result={selectedResult}
+            notice={selectedNotice}
+            transcriptLoading={transcriptLoading}
+            onsend={handleSend}
+            oncancel={() => {
+              if (!selectedAgent) return;
+              void handleCancelAgent(selectedAgent.id);
+            }}
+            onpause={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "pause");
+            }}
+            onresume={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "resume");
+            }}
+            onapprove={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "approve");
+            }}
+            onreject={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "reject");
+            }}
+            onclose={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "close");
+            }}
+            onreopen={() => {
+              if (!selectedAgent) return;
+              void postConversationAction(selectedAgent.id, "reopen");
+            }}
+            onopensettings={() => {
+              if (!selectedAgent) return;
+              showSettings = true;
+            }}
+            onnavigate={handleNavigate}
+          />
+        </Sidebar.Inset>
       </div>
 
-      <!-- Mobile: keep the existing sidebar drawer behavior -->
-      <div class="md:hidden flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <!-- Mobile: sidebar drawer + main -->
+      <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden md:hidden">
         <WorkspaceSidebar
-          isRefreshing={isRefreshing}
           agents={agents}
           {selectedId}
           onselect={handleSelect}
           onrename={handleRenameAgent}
           ondelete={handleDeleteAgent}
-          oncreate={() => {
-            showSpawn = true;
-          }}
         />
         <Sidebar.Inset class="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--bg2)">
           <AgentDetailPane
@@ -846,21 +827,12 @@
     </Sidebar.Provider>
   {:else}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8 text-center">
-        <div class="flex h-16 w-16 items-center justify-center text-(--t5) opacity-60">
-          <BotIcon size={44} />
-        </div>
-        <Button
-          variant="accent"
-          type="button"
-          onclick={() => {
-            showSpawn = true;
-          }}
-          aria-label="Create conversation"
-          data-testid="open-create-agent"
-          class="h-11 w-11 rounded-xl p-0"
-        >
-          <PlusIcon size={18} />
-        </Button>
+      <div class="flex h-16 w-16 items-center justify-center text-(--t5) opacity-60">
+        <BotIcon size={44} />
+      </div>
+      <p class="max-w-sm text-sm text-(--t4)">
+        No conversations yet. Use <span class="font-medium text-(--t1)">+</span> next to the logo to create one.
+      </p>
     </div>
   {/if}
 </div>
@@ -872,8 +844,13 @@
     }}
     onspawn={handleCreateAgent}
     onkeyschange={({ keys, error }) => {
-      accountKeysMasked = keys;
-      accountKeysError = error;
+      accountKeysOverride = {
+        masked: {
+          openrouter: keys.openrouter ?? null,
+          zen: keys.zen ?? null,
+        },
+        error,
+      };
     }}
     lastAgent={selectedAgent?.harnessId}
     lastModel={selectedAgent?.model}
@@ -892,8 +869,13 @@
       }}
       onsave={handleUpdateAgent}
       onkeyschange={({ keys, error }) => {
-        accountKeysMasked = keys;
-        accountKeysError = error;
+        accountKeysOverride = {
+          masked: {
+            openrouter: keys.openrouter ?? null,
+            zen: keys.zen ?? null,
+          },
+          error,
+        };
       }}
       {accountKeysMasked}
       accountKeysError={accountKeysError}

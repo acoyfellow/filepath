@@ -10,7 +10,7 @@
   import Nav from "$lib/components/Nav.svelte";
   import { initTheme, toggleTheme } from '$lib/theme';
 
-  let { data, children } = $props();
+  let { children } = $props();
 
   onMount(() => {
     if (browser) initTheme();

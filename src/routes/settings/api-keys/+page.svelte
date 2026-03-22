@@ -49,7 +49,7 @@
           expiresAt: key.expiresAt ? new Date(key.expiresAt) : null
         }));
       }
-    } catch (e) {
+    } catch (_e) {
       error = 'Failed to load API keys';
     } finally {
       isLoading = false;
@@ -108,7 +108,7 @@
       } else {
         error = 'Failed to create API key';
       }
-    } catch (e) {
+    } catch (_e) {
       error = 'Failed to create API key';
     }
   }
@@ -119,7 +119,7 @@
     try {
       await apiKeysApi.delete({ keyId });
       await loadApiKeys();
-    } catch (e) {
+    } catch (_e) {
       error = 'Failed to delete API key';
     }
   }

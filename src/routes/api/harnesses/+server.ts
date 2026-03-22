@@ -1,4 +1,4 @@
-import { json, error } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
 import { createUserContext, runOrThrow } from "../../../core/http";
 import {
   createHarness,

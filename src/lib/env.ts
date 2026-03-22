@@ -127,7 +127,6 @@ export async function decryptSecret(encrypted: string): Promise<string> {
     throw new Error('Encryption not initialized. Call initEncryption() first.');
   }
   
-  const encoder = new TextEncoder();
   const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
   
   const iv = combined.slice(0, 12);

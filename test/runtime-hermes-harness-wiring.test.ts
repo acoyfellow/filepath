@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { encryptApiKey } from "../src/lib/crypto";
 import { loadAgentExecutionConfig } from "../src/lib/runtime/agent-runtime";
 
-const TEST_SECRET = "test-secret-for-custom-harness-wiring";
+const TEST_SECRET = "test-secret-for-hermes-harness-wiring";
 
 function createMockDB(row: Record<string, unknown>) {
   return {
@@ -16,15 +16,15 @@ function createMockDB(row: Record<string, unknown>) {
   };
 }
 
-describe("runtime custom harness wiring", () => {
-  test("loadAgentExecutionConfig does not throw HARNESS_ENTRY_COMMAND_MISSING for custom harness when entry_command is set", async () => {
+describe("runtime hermes harness wiring", () => {
+  test("loadAgentExecutionConfig loads Hermes harness when entry_command is set", async () => {
     const encryptedKeys = await encryptApiKey(
       JSON.stringify({ openrouter: "sk-or-test-placeholder" }),
       TEST_SECRET,
     );
 
     const mockDB = createMockDB({
-      harness_id: "custom",
+      harness_id: "hermes",
       model: "anthropic/claude-sonnet-4",
       allowed_paths: '["."]',
       forbidden_paths: "[]",
@@ -33,7 +33,7 @@ describe("runtime custom harness wiring", () => {
       workspace_id: "ws-1",
       initial_source_url: null,
       user_key: encryptedKeys,
-      entry_command: "node /opt/filepath/adapters/custom/index.mjs",
+      entry_command: "node /opt/filepath/adapters/hermes/index.mjs",
     });
 
     const env = {
@@ -44,8 +44,8 @@ describe("runtime custom harness wiring", () => {
     await expect(
       loadAgentExecutionConfig(env as never, "agent-1", "ws-1", "Test task"),
     ).resolves.toMatchObject({
-      harnessId: "custom",
-      entryCommand: "node /opt/filepath/adapters/custom/index.mjs",
+      harnessId: "hermes",
+      entryCommand: "node /opt/filepath/adapters/hermes/index.mjs",
     });
   });
 });

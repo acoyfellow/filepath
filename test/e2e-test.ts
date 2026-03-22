@@ -22,7 +22,7 @@ async function testMailgunConfiguration() {
   });
 
   try {
-    const result = await (mg as any).messages.create(domain, {
+    await mg.messages.create(domain, {
       from: `Test <test@${domain}>`,
       to: ['test@myfilepath.com'],
       subject: 'Mailgun Test',
@@ -43,9 +43,9 @@ async function testAuthPlugins() {
   // This would require a full SvelteKit environment to test properly
   // For now, we'll just check that the imports work
   try {
-    const { apiKey, mcp, multiSession, organization } = await import('better-auth/plugins');
-    const { passkey } = await import('@better-auth/passkey');
-    const { emailOTP } = await import('better-auth/plugins/email-otp');
+    await import('better-auth/plugins');
+    await import('@better-auth/passkey');
+    await import('better-auth/plugins/email-otp');
     
     console.log('✅ All auth plugins can be imported');
     return true;

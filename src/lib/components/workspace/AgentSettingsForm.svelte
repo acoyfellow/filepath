@@ -190,36 +190,9 @@
       writableRoot: writableRootInput || null,
     }),
   );
-  let scopePreview = $derived.by(() => ({
-    allowed:
-      runtimePolicy.allowedPaths.length === 1 &&
-      (runtimePolicy.allowedPaths[0] === "." || runtimePolicy.allowedPaths[0] === "./")
-        ? "workspace root"
-        : runtimePolicy.allowedPaths.join(", "),
-    forbidden:
-      runtimePolicy.forbiddenPaths.length > 0 ? runtimePolicy.forbiddenPaths.join(", ") : "none",
-    writableRoot:
-      !runtimePolicy.writableRoot || runtimePolicy.writableRoot === "." || runtimePolicy.writableRoot === "./"
-        ? "workspace root"
-        : runtimePolicy.writableRoot,
-  }));
-
   let selectedModelEntry = $derived(
     modelOptions.find((entry) => entry.id === model) ?? null,
   );
-
-  let setupSummary = $derived.by(() => {
-    if (accountKeysStateError) {
-      return "Re-save your model provider key to unlock live models and agent execution.";
-    }
-    if (!hasSelectedProviderKey) {
-      return `Save a ${activeProviderDefinition.label} key, then choose a model and confirm the scope.`;
-    }
-    if (!model) {
-      return "Choose a model, then confirm the agent scope before saving.";
-    }
-    return "This agent runs with explicit path and tool boundaries.";
-  });
 
   let submitBlocker = $derived.by(() => {
     if (showNameField && !name.trim()) return "Name is required";
@@ -244,8 +217,6 @@
   const cardClass =
     "rounded-xl border border-(--b1) px-3.5 py-3 text-xs leading-6";
   const metaClass = "text-[11px] leading-5 text-(--t5)";
-  const optionBaseClass =
-    "rounded-xl border border-(--b1) bg-(--bg2) p-3 text-left font-(family-name:--f) text-sm text-(--t2) transition hover:border-(--b2) hover:text-(--t1)";
   const bannerClass = (tone: "info" | "warning" | "success") =>
     tone === "warning"
       ? `${cardClass} border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300`
@@ -253,12 +224,16 @@
         ? `${cardClass} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300`
         : `${cardClass} bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] text-(--t2)`;
 
+  const toolPermOrder = TOOL_PERMISSION_OPTIONS.map((o) => o.id);
+
   function toggleToolPermission(permission: ToolPermission) {
     if (selectedToolPermissions.includes(permission)) {
-      selectedToolPermissions = selectedToolPermissions.filter((entry) => entry !== permission);
+      selectedToolPermissions = selectedToolPermissions.filter((e) => e !== permission);
       return;
     }
-    selectedToolPermissions = [...selectedToolPermissions, permission];
+    const next = [...selectedToolPermissions, permission];
+    next.sort((a, b) => toolPermOrder.indexOf(a) - toolPermOrder.indexOf(b));
+    selectedToolPermissions = next;
   }
 
   async function loadHarnesses() {
@@ -581,21 +556,22 @@
   <div class={metaClass}>Commands run from here. Keep it inside the allowed paths.</div>
 
   <div class={labelClass}>tool permissions</div>
-  <div class="grid grid-cols-3 gap-2 max-[720px]:grid-cols-1">
+  <div class="flex flex-col gap-2">
     {#each TOOL_PERMISSION_OPTIONS as option}
-      <button
-        class={`${optionBaseClass} ${selectedToolPermissions.includes(option.id) ? "border-[color-mix(in_srgb,var(--accent)_65%,var(--b1))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg2))] text-(--t1)" : ""}`}
-        type="button"
-        data-selected={selectedToolPermissions.includes(option.id) ? "true" : "false"}
-        aria-pressed={selectedToolPermissions.includes(option.id)}
-        onclick={() => toggleToolPermission(option.id)}
-      >
-        <span>{option.label}</span>
-        <small class="mt-1 block text-[10px] leading-5 text-(--t5)">{option.description}</small>
-      </button>
+      <label class="flex cursor-pointer gap-3 rounded-xl border border-(--b1) bg-(--bg2) px-4 py-3 text-sm text-(--t2) transition hover:border-(--b2) has-focus-visible:border-(--accent)">
+        <input
+          type="checkbox"
+          class="mt-1 h-4 w-4 shrink-0 rounded border-(--b1) accent-(--accent)"
+          checked={selectedToolPermissions.includes(option.id)}
+          onchange={() => toggleToolPermission(option.id)}
+        />
+        <span class="min-w-0">
+          <span class="block font-medium text-(--t1)">{option.label}</span>
+          <span class="mt-0.5 block text-[11px] leading-5 text-(--t5)">{option.description}</span>
+        </span>
+      </label>
     {/each}
   </div>
-
 
   {#if submitError}
     <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-xs leading-6 text-red-700 dark:text-red-300">{submitError}</div>

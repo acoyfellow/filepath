@@ -1,10 +1,14 @@
 /**
- * Custom harness adapter: Hermes Agent
+ * Hermes harness — same shape as others: `node /opt/filepath/adapters/hermes/index.mjs`.
  *
- * Bootstraps a pinned Hermes version at runtime, runs hermes chat one-shot,
- * then derives FAP events from git diffs.
+ * Bootstraps Hermes in a venv, runs `hermes chat` once, derives FAP from git diff.
+ * With cross_thread: OpenRouter preflight (shared bridge) then prepends context to `-q`.
  */
 import { execSync, execFileSync } from "node:child_process";
+import {
+  crossThreadPermissionFromEnv,
+  runCrossThreadPreflightBeforeSubprocess,
+} from "../_shared/cross-thread.mjs";
 import { mkdirSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
@@ -130,6 +134,20 @@ async function main() {
     return;
   }
 
+  let taskForHermes = task;
+  if (crossThreadPermissionFromEnv()) {
+    const prefix = await runCrossThreadPreflightBeforeSubprocess({
+      harnessId: "hermes",
+      task,
+      apiKey,
+      model,
+      emit,
+    });
+    if (prefix) {
+      taskForHermes = `${prefix}${task}`;
+    }
+  }
+
   const headBefore = getCommitInfo(workspaceRoot);
 
   const hermesBin = ensureHermesInstalled(hermesVersion);
@@ -140,7 +158,7 @@ async function main() {
   try {
     execFileSync(hermesBin, [
       "chat",
-      "-q", task,
+      "-q", taskForHermes,
       "--provider", "openrouter",
       "-m", model,
       "-Q",

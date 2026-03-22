@@ -7,10 +7,14 @@
   import LogOutIcon from "@lucide/svelte/icons/log-out";
   import MenuIcon from "@lucide/svelte/icons/menu";
   import MoonIcon from "@lucide/svelte/icons/moon";
+  import MoreVerticalIcon from "@lucide/svelte/icons/more-vertical";
   import SunMediumIcon from "@lucide/svelte/icons/sun-medium";
   import UserRoundIcon from "@lucide/svelte/icons/user-round";
   import XIcon from "@lucide/svelte/icons/x";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import Button from "$lib/components/ui/button/button.svelte";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import { workspaceNewConversationHandler } from "$lib/workspace-nav";
 
   interface Props {
     current?: string | null;
@@ -54,11 +58,6 @@
     "size-12 rounded border border-(--b1) bg-(--bg2)/90 text-(--t2) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)";
   const ghostIconButtonClass =
     "size-8 rounded-full border border-transparent bg-transparent text-(--t2) shadow-none hover:bg-(--bg3) hover:text-(--t1)";
-
-  const settingsLinks = [
-    { href: "/settings/api-keys", label: "API keys", Icon: KeyRoundIcon },
-    { href: "/settings/account", label: "Account", Icon: UserRoundIcon },
-  ] as const;
 
   const publicMobileLinks = [
     { href: "/api/openapi.json", label: "api", active: false },
@@ -150,37 +149,6 @@
   </Button>
 {/snippet}
 
-{#snippet iconLink(href: string, label: string, icon: typeof ArrowLeftIcon)}
-  {@const Icon = icon}
-  <Button href={href} variant="outline" class={iconButtonClass} aria-label={label} title={label}>
-    <Icon size={24} />
-  </Button>
-{/snippet}
-
-{#snippet signOutButton()}
-  <Button
-    type="button"
-    variant="outline"
-    
-    class={iconButtonClass}
-    onclick={signOutUser}
-    aria-label="Sign out"
-    title="Sign out"
-  >
-    <LogOutIcon size={24} />
-  </Button>
-{/snippet}
-
-{#snippet settingsDesktopButtons()}
-  {#each settingsLinks as link (link.href)}
-    {@render iconLink(link.href, link.label, link.Icon)}
-  {/each}
-  {@render themeButton()}
-  {#if showAuthedControls}
-    {@render signOutButton()}
-  {/if}
-{/snippet}
-
   <nav
     class={`border-b border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-sm relative z-50 px-6 py-3 ${
       isWorkspace ? "sticky top-0 dark:bg-neutral-950/80" : ""
@@ -207,6 +175,20 @@
           >
             {@render logoIcon(24)}
           </a>
+          {#if $workspaceNewConversationHandler}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              class={ghostIconButtonClass}
+              onclick={() => $workspaceNewConversationHandler?.()}
+              aria-label="New conversation"
+              title="New conversation"
+              data-testid="open-create-agent"
+            >
+              <PlusIcon size={18} />
+            </Button>
+          {/if}
         {:else}
           {#if showAuthedControls}
             <a href="/dashboard" class="flex items-center gap-2 shrink-0 hit-area-2">
@@ -223,8 +205,61 @@
       </div>
 
       {#if showAuthedControls}
-        <div class="hidden md:flex items-center gap-3 text-sm">
-          {@render settingsDesktopButtons()}
+        <div class="hidden md:block">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger
+              class={`inline-flex ${iconButtonClass} cursor-pointer items-center justify-center`}
+              aria-label="Account and app menu"
+              title="Account and app menu"
+            >
+              <MoreVerticalIcon size={18} />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={8}
+              class="min-w-[12rem] rounded-xl border border-(--b1) bg-(--bg) p-1.5 text-(--t2) shadow-(--shadow)"
+            >
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
+                onclick={() => goto("/settings/api-keys")}
+              >
+                <KeyRoundIcon />
+                API keys
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
+                onclick={() => goto("/settings/account")}
+              >
+                <UserRoundIcon />
+                Account
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator class="my-1 bg-(--b1)" />
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
+                onclick={() => {
+                  toggleTheme();
+                  syncThemeState();
+                }}
+              >
+                {#if isDark}
+                  <SunMediumIcon />
+                  Light mode
+                {:else}
+                  <MoonIcon />
+                  Dark mode
+                {/if}
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator class="my-1 bg-(--b1)" />
+              <DropdownMenu.Item
+                variant="destructive"
+                class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-red-600 [&_svg]:size-4 [&_svg]:text-red-500 data-highlighted:bg-red-500/10 data-highlighted:text-red-700 data-highlighted:[&_svg]:text-red-600 dark:text-red-400 dark:data-highlighted:text-red-300"
+                onclick={() => void signOutUser()}
+              >
+                <LogOutIcon />
+                Sign out
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
         </div>
       {:else}
         <div class="hidden md:flex items-center gap-3 text-sm">

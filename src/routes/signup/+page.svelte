@@ -4,7 +4,6 @@
   import { page } from '$app/state';
   import { signUp } from '$lib/auth-client';
   import SEO from '$lib/components/SEO.svelte';
-  import { X } from '@lucide/svelte';
   import Button from '$lib/components/ui/button/button.svelte';
 
   let email = $state('');
@@ -131,7 +130,7 @@
         />
       </div>
 
-      <Button type="submit" variant="accentPill" class="w-full" disabled={isLoading}>
+      <Button type="submit" class="w-full" disabled={isLoading}>
         {isLoading ? 'Creating account...' : 'Create account'}
       </Button>
     </form>

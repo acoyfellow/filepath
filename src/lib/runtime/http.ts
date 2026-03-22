@@ -17,7 +17,17 @@ function getLocalRuntimeEnv(event: RuntimeEvent) {
     Sandbox: env.Sandbox as unknown as RuntimeEnv["Sandbox"],
     BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+    API_WS_HOST: env.API_WS_HOST,
+    FILEPATH_RUNTIME_PUBLIC_BASE_URL: env.FILEPATH_RUNTIME_PUBLIC_BASE_URL,
   };
+}
+
+function getBridgeHeader(init: RequestInit | undefined, name: string): string | null {
+  if (!init?.headers) return null;
+  if (init.headers instanceof Headers) {
+    return init.headers.get(name)?.trim() ?? null;
+  }
+  return null;
 }
 
 async function readJsonBody(init?: RequestInit): Promise<Record<string, unknown>> {
@@ -48,8 +58,53 @@ async function dispatchLocalRuntime(
   if (!runtimeEnv) return null;
 
   const runtime = await import("$lib/runtime/agent-runtime");
+  const bridge = await import("$lib/runtime/runtime-bridge");
   const [pathname, search] = normalizedPath.split("?", 2);
   const searchParams = search ? new URLSearchParams(search) : new URLSearchParams();
+  const method = init?.method ?? "GET";
+
+  const threadsOnly = pathname.match(/^\/runtime\/workspaces\/([^/]+)\/threads$/);
+  if (method === "GET" && threadsOnly) {
+    const workspaceId = threadsOnly[1];
+    try {
+      const token = getBridgeHeader(init, "x-filepath-runtime-token");
+      await bridge.assertRuntimeBridgeCaller(runtimeEnv, token, workspaceId);
+      const data = await bridge.listWorkspaceThreadsForBridge(runtimeEnv.DB, workspaceId);
+      return new Response(JSON.stringify({ ok: true, ...data }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+        { status: 403, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
+
+  const lastMessagePath = pathname.match(
+    /^\/runtime\/workspaces\/([^/]+)\/agents\/([^/]+)\/last-message$/,
+  );
+  if (method === "GET" && lastMessagePath) {
+    const [, workspaceId, targetAgentId] = lastMessagePath;
+    try {
+      const token = getBridgeHeader(init, "x-filepath-runtime-token");
+      await bridge.assertRuntimeBridgeCaller(runtimeEnv, token, workspaceId);
+      const message = await bridge.getThreadLastMessageForBridge(
+        runtimeEnv.DB,
+        workspaceId,
+        targetAgentId,
+      );
+      return new Response(JSON.stringify({ ok: true, message }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+        { status: 403, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
+
   const match = pathname.match(
     /^\/runtime\/workspaces\/([^/]+)(\/agents\/[^/]+(?:\/tasks|\/cancel|\/pause|\/resume|\/approve|\/reject)?|\/run\/script|\/health)?$/,
   );
@@ -119,6 +174,18 @@ async function dispatchLocalRuntime(
   const taskMatch = suffix.match(/^\/agents\/([^/]+)\/tasks$/);
   if ((init?.method ?? "GET") === "POST" && taskMatch) {
     const agentId = taskMatch[1];
+    const bridgeToken = getBridgeHeader(init, "x-filepath-runtime-token");
+    if (bridgeToken) {
+      try {
+        await bridge.assertRuntimeBridgeCaller(runtimeEnv, bridgeToken, workspaceId);
+        await bridge.assertTargetThreadInWorkspace(runtimeEnv.DB, agentId, workspaceId);
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
     const body = await readJsonBody(init);
     const content = typeof body.content === "string" ? body.content.trim() : "";
     const identity = parseRuntimeIdentity(body.identity);
@@ -243,6 +310,18 @@ async function dispatchLocalRuntime(
   const agentMatch = suffix.match(/^\/agents\/([^/]+)$/);
   if ((init?.method ?? "GET") === "GET" && agentMatch) {
     const agentId = agentMatch[1];
+    const bridgeTokenSnapshot = getBridgeHeader(init, "x-filepath-runtime-token");
+    if (bridgeTokenSnapshot) {
+      try {
+        await bridge.assertRuntimeBridgeCaller(runtimeEnv, bridgeTokenSnapshot, workspaceId);
+        await bridge.assertTargetThreadInWorkspace(runtimeEnv.DB, agentId, workspaceId);
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ error: error instanceof Error ? error.message : "Forbidden." }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
     try {
       const snapshot = await runtime.getAgentRuntimeSnapshot(runtimeEnv, workspaceId, agentId);
       return new Response(JSON.stringify({ ok: true, runtime: snapshot }), {

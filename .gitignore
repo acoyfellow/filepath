@@ -26,6 +26,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 dist/
 
+# Playwright CLI snapshots (local)
+.playwright-cli/
+
 # Screenshots and previews
 preview/
 .sisyphus

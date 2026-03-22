@@ -4,7 +4,7 @@ import { getDrizzle } from "$lib/auth";
 import type { User } from "better-auth";
 import type { AppContext, AppError } from "./app";
 
-export function createUserContextFromParts(user: User | null, platform?: RequestEvent["platform"]): AppContext {
+export function createUserContextFromParts(user: User | null, _platform?: RequestEvent["platform"]): AppContext {
   if (!user) {
     throw error(401, "Unauthorized");
   }

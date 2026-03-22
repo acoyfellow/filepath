@@ -1,6 +1,14 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
+import {
+  CROSS_THREAD_ACTION_HELP,
+  crossThreadPermissionFromEnv,
+  executeCrossThreadInstruction,
+  parseJsonInstruction,
+} from "./cross-thread.mjs";
+
+export { parseJsonInstruction };
 
 function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}\n`);
@@ -35,24 +43,6 @@ function extractTextContent(value) {
   }
 
   return "";
-}
-
-function stripCodeFences(value) {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return match ? match[1].trim() : trimmed;
-}
-
-function parseJsonInstruction(raw) {
-  const normalized = stripCodeFences(raw);
-  const parsed = JSON.parse(normalized);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Model response was not a JSON object.");
-  }
-  if (typeof parsed.action !== "string") {
-    throw new Error("Model response did not include an action.");
-  }
-  return parsed;
 }
 
 function parseJsonArrayEnv(name) {
@@ -115,6 +105,7 @@ async function callOpenRouter({
   transcript,
   allowedPaths,
   forbiddenPaths,
+  crossThreadHelp,
 }) {
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -134,7 +125,8 @@ async function callOpenRouter({
             systemPrompt,
             "You are editing files inside a bounded filepath workspace.",
             "Respond with exactly one JSON object and no markdown fences unless asked otherwise.",
-            'Allowed actions: {"action":"read","path":"relative/path"}, {"action":"write","path":"relative/path","content":"..."}, {"action":"replace","path":"relative/path","find":"...","replace":"..."}, {"action":"done","summary":"..."}',
+            'Allowed actions: {"action":"read","path":"relative/path"}, {"action":"write","path":"relative/path","content":"..."}, {"action":"replace","path":"relative/path","find":"...","replace":"..."}, {"action":"done","summary":"..."}' +
+              (crossThreadHelp ? ` ${crossThreadHelp}` : ""),
             "Use one action at a time. Prefer the smallest possible change. Do not commit.",
             `Allowed paths: ${JSON.stringify(allowedPaths)}`,
             `Forbidden paths: ${JSON.stringify(forbiddenPaths)}`,
@@ -175,6 +167,13 @@ function parseLocalVerifyDirective(task) {
   return { delayMs, reply };
 }
 
+const CROSS_THREAD_ACTION_IDS = new Set([
+  "list_threads",
+  "thread_last",
+  "thread_snapshot",
+  "thread_send",
+]);
+
 export async function runAdapter({ harnessId, systemPrompt }) {
   const task = readRequiredEnv("FILEPATH_TASK");
   const apiKey = readRequiredEnv("FILEPATH_API_KEY");
@@ -183,6 +182,8 @@ export async function runAdapter({ harnessId, systemPrompt }) {
   const allowedPaths = parseJsonArrayEnv("FILEPATH_ALLOWED_PATHS");
   const forbiddenPaths = parseJsonArrayEnv("FILEPATH_FORBIDDEN_PATHS");
   const localVerify = parseLocalVerifyDirective(task);
+  const crossThreadEnabled = crossThreadPermissionFromEnv();
+  const crossThreadHelp = crossThreadEnabled ? CROSS_THREAD_ACTION_HELP : "";
 
   emit({ type: "status", state: "thinking" });
 
@@ -195,8 +196,9 @@ export async function runAdapter({ harnessId, systemPrompt }) {
   }
 
   const transcript = [];
+  const maxSteps = crossThreadEnabled ? 16 : 4;
 
-  for (let step = 0; step < 4; step += 1) {
+  for (let step = 0; step < maxSteps; step += 1) {
     const content = await callOpenRouter({
       harnessId,
       systemPrompt,
@@ -206,6 +208,7 @@ export async function runAdapter({ harnessId, systemPrompt }) {
       transcript,
       allowedPaths,
       forbiddenPaths,
+      crossThreadHelp,
     });
     const instruction = parseJsonInstruction(content);
     transcript.push({ role: "assistant", content });
@@ -267,6 +270,15 @@ export async function runAdapter({ harnessId, systemPrompt }) {
       transcript.push({
         role: "user",
         content: `Updated ${path}. If the task is complete, respond with {"action":"done","summary":"..."}; otherwise respond with the next JSON action.`,
+      });
+      continue;
+    }
+
+    if (CROSS_THREAD_ACTION_IDS.has(instruction.action)) {
+      const userLine = await executeCrossThreadInstruction(instruction, emit);
+      transcript.push({
+        role: "user",
+        content: userLine,
       });
       continue;
     }

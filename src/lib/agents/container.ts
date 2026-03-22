@@ -216,10 +216,6 @@ export function resolveWorkspaceRoot(sourceUrl?: string | null): string {
   return `/workspace/${deriveSourceDirectoryName(sourceUrl)}`;
 }
 
-function toWorkspaceAbsolutePath(workspaceRoot: string, relativePath: string): string {
-  return `${workspaceRoot.replace(/\/+$/, '')}/${relativePath}`;
-}
-
 // ================================================================
 // Process I/O for FAP (filepath Agent Protocol)
 // ================================================================
@@ -248,37 +244,3 @@ export async function startFAPAgent(
     "Wire real stdin/stdout streaming before calling it."
   );
 }
-
-// ================================================================
-// Explicit Artifact Transport
-// ================================================================
-
-function normalizeWorkspacePath(
-  inputPath: string,
-  label: string,
-  workspaceRoot: string = '/workspace'
-): string {
-  let normalized = inputPath.trim();
-  if (!normalized) {
-    throw new ContainerError(`${label} is required.`);
-  }
-  if (normalized === workspaceRoot || normalized === '/workspace') {
-    throw new ContainerError(`${label} must point to a file inside the agent workspace.`);
-  }
-  const rootedPrefix = `${workspaceRoot.replace(/\/+$/, '')}/`;
-  if (normalized.startsWith(rootedPrefix)) {
-    normalized = normalized.slice(rootedPrefix.length);
-  } else if (normalized.startsWith('/workspace/')) {
-    normalized = normalized.slice('/workspace/'.length);
-  } else if (normalized.startsWith('/')) {
-    normalized = normalized.slice(1);
-  }
-
-  const parts = normalized.split('/');
-  if (parts.some((part) => !part || part === '.' || part === '..')) {
-    throw new ContainerError(`${label} must stay inside the agent workspace.`);
-  }
-
-  return parts.join('/');
-}
-

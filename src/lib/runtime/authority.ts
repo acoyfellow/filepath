@@ -26,6 +26,11 @@ export const TOOL_PERMISSION_OPTIONS = [
     label: "Commit",
     description: "Create git commits.",
   },
+  {
+    id: "cross_thread",
+    label: "Cross-thread",
+    description: "List threads in the workspace, read last messages, and enqueue tasks on other threads (sandbox bridge only).",
+  },
 ] as const;
 
 export type ToolPermission = (typeof TOOL_PERMISSION_OPTIONS)[number]["id"];

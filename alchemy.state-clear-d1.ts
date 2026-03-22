@@ -14,7 +14,9 @@ import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
 for (const f of [".env", ".env.local"]) {
   try {
     process.loadEnvFile?.(f);
-  } catch {}
+  } catch {
+    /* optional env file missing */
+  }
 }
 
 const password = process.env.ALCHEMY_PASSWORD;

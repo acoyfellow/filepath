@@ -3,7 +3,7 @@ import { auth } from '$lib/auth';
 import type { RequestHandler } from './$types';
 
 // Get all users (admin only)
-export const GET: RequestHandler = async ({ request, locals }) => {
+export const GET: RequestHandler = async ({ request }) => {
   const session = await auth.api.getSession({ headers: request.headers });
   
   if (!session || (session.user as unknown as { role?: string }).role !== 'admin') {

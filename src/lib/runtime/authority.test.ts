@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  AGENT_SCOPE_PRESET,
   normalizeAgentScope,
   normalizeScopePath,
   normalizePathList,

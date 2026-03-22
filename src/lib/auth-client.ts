@@ -109,9 +109,7 @@ export const apiKeysApi = {
   },
 };
 
-// @ts-ignore - dynamic proxy methods
 export const forgetPasswordEmailOTP = (opts: { email: string }) => authClient.emailOtp.requestPasswordReset(opts);
-// @ts-ignore
 export const resetPasswordEmailOTP = (opts: { email: string; otp: string; password: string }) => authClient.emailOtp.resetPassword(opts);
 
 export const forgetPassword = forgetPasswordEmailOTP;

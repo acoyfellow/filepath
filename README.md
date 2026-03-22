@@ -2,6 +2,8 @@
 
 > A personal Cloudflare-hosted development environment. Work lives in conversations, not terminal tabs.
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/acoyfellow/filepath)
+
 [OpenAPI](./src/routes/api/openapi.json/+server.ts)
 
 ## Quickstart
@@ -41,11 +43,19 @@ bun run dev
 
 Then open `http://localhost:5173/signup`.
 
+### Development
+
+```bash
+bun run lint    # ESLint (source + Svelte)
+bun run check   # svelte-check + TypeScript
+bun test        # Bun test runner
+```
+
 ### First conversation
 
 1. Sign in and land on the dashboard (a global inbox).
 2. Create a workspace (optionally with an initial source URL).
-3. Add a provider router key in Settings.
+3. Add **model provider keys** in **Settings → Account** (e.g. OpenRouter, OpenCode Zen) if you want live model calls.
 4. Open the workspace and create a conversation with a harness, model, file scope, and tool permissions.
 5. Send a task.
 
@@ -69,21 +79,23 @@ Each conversation is always in one state: **Ready**, **Running**, **Blocked**, o
 
 ### Allow only certain tools
 
-`toolPermissions` is explicit: `inspect`, `search`, `run`, `write`, `commit`.
+`toolPermissions` is explicit: `inspect`, `search`, `run`, `write`, `commit`, `cross_thread`.
+
+**`cross_thread`** (same workspace only): agents can call the runtime bridge to **list threads** (`count` + ids), **read last message / snapshot** for another thread, and **enqueue a task** on another thread. **JSON harnesses** (`shelley`, `pi`, …) do this inside the main edit loop. **Subprocess harnesses** (e.g. the optional **`hermes`** adapter) run a short **OpenRouter preflight** on the bridge, then execute their CLI with that context prepended. Requires a configured public runtime URL (`FILEPATH_RUNTIME_PUBLIC_BASE_URL` / `API_WS_HOST` on the worker).
 
 If a conversation lacks `write` or `commit` permission, filepath rejects the action at runtime. Tool-permission escalation creates a real approval interruption.
 
 ### Switch harnesses or models
 
-Change `harnessId` or `model` on a conversation. Same workspace, same scope, different runtime.
+Change `harnessId` or `model` on a conversation. Same workspace, same scope, different runtime. **`harnessId` must match a row in the harness registry** (seeded defaults include `shelley`, `pi`, `claude-code`, `codex`, `cursor`, `amp`, `hermes`, …; admins can add more under **Settings → Harness registry** when enabled).
 
-### Custom harness (Hermes)
+### Optional: `hermes` harness ([Hermes Agent](https://github.com/NousResearch/hermes-agent))
 
-The `custom` harness runs [Hermes Agent](https://github.com/NousResearch/hermes-agent) inside the sandbox. filepath bootstraps Hermes at runtime (download + cache), so you don't need to rebuild the sandbox image for Hermes updates.
+The **`hermes`** id is a normal harness entry that runs `node /opt/filepath/adapters/hermes/index.mjs`. The adapter installs [Hermes Agent](https://github.com/NousResearch/hermes-agent) into a sandbox venv on first use (pip), so image rebuilds are not required for version bumps.
 
-- **Version pinning** — Set `hermesVersion` in the harness config (Admin → Harness registry → Edit custom). Use `main` for latest, or a git ref (e.g. `v0.1.0`) for a pinned release.
-- **Scope + tool gates** — filepath derives FAP events from git diffs after Hermes runs. Only changes inside `allowedPaths` and outside `forbiddenPaths` are allowed. `commit` events require the `commit` tool permission.
-- **Runtime bootstrap** — Hermes is installed via pip into a sandbox cache on first use. The sandbox image needs `python3`, `python3-venv`, and `python3-pip`.
+- **Version pinning** — In **Settings → Harness registry**, select the **`hermes`** harness and set `hermesVersion` in the JSON config (`main` for latest, or a git ref such as `v0.1.0`).
+- **Scope + tool gates** — Same as other harnesses: FAP events are derived from git diffs; paths must respect `allowedPaths` / `forbiddenPaths`; `commit` needs the `commit` tool permission.
+- **Sandbox image** — Needs `python3`, `python3-venv`, and `python3-pip` for the pip install path.
 
 ## Reference
 
@@ -119,7 +131,7 @@ Every run returns: `status`, `summary`, `commands`, `filesTouched`, `violations`
 ```json
 {
   "content": "Task description",
-  "harnessId": "filepath",
+  "harnessId": "shelley",
   "model": "anthropic/claude-sonnet-4",
   "scope": {
     "allowedPaths": ["."],
@@ -193,7 +205,7 @@ Models and harnesses change fast. The durable value is the runtime boundary: a s
 
 ### Why Alchemy
 
-`alchemy.run.ts` is the single deployment entrypoint. It provisions all Cloudflare resources (D1, Workers, Containers, Vectorize) declaratively. Adding Deja is a few lines in the same file.
+`alchemy.run.ts` is the single deployment entrypoint. It provisions D1, the sandbox container, the Worker, and Durable Objects (see that file for the live list).
 
 ## Engineer section
 
@@ -212,13 +224,18 @@ bun run deploy       # deploy to production
 
 Push to `main` triggers: typecheck, build, gate checks, then production deploy via Alchemy. Other branches get preview deploys.
 
-### Key files
+### Reviewer map (~7 min)
 
-- `alchemy.run.ts` — deployment entrypoint (all Cloudflare resources)
-- `src/core/app.ts` — workspace/agent CRUD
-- `src/lib/schema.ts` — D1 database schema
-- `src/lib/runtime/authority.ts` — scope enforcement (deterministic)
-- `src/lib/runtime/agent-runtime.ts` — task execution
-- `src/routes/dashboard/+page.svelte` — inbox UI
-- `src/routes/workspace/[id]/+page.svelte` — workspace UI
-- `src/routes/api/workspaces/` — API routes
+Read in order (no extra layers to learn):
+
+1. `alchemy.run.ts` — what ships to Cloudflare
+2. `src/core/app.ts` — workspace/agent CRUD backing the API
+3. `src/lib/schema.ts` — D1 shape
+4. `src/lib/runtime/authority.ts` — scope + tool policy (pure)
+5. `src/lib/runtime/agent-runtime.ts` — task lifecycle, sandbox run, D1 updates, interruptions (one big file on purpose; list exports: `rg '^export ' src/lib/runtime/agent-runtime.ts`)
+6. `src/routes/api/workspaces/` — HTTP surface
+7. `worker/agent.ts`, `worker/conversation-agent.ts` — queue/durable entry → runtime
+
+UI: `src/routes/+layout.svelte` then dashboard inbox vs `workspace/[id]`.
+
+Principle: flat modules, direct imports. Split a file only when a block is obviously separable *and* navigation pain is real.

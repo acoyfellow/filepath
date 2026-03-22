@@ -109,7 +109,7 @@
           />
         </div>
 
-        <Button type="submit" variant="accentPill" class="w-full" disabled={isLoading}>
+        <Button type="submit" class="w-full" disabled={isLoading}>
           {isLoading ? 'Sending code...' : 'Send reset code'}
         </Button>
       </form>
