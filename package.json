@@ -9,7 +9,7 @@
     "@ai-sdk/openai": "^3.0.39",
     "@better-auth/api-key": "^1.5.4",
     "@better-auth/passkey": "^1.5.4",
-    "@cloudflare/sandbox": "^0.7.13",
+    "@cloudflare/sandbox": "^0.8.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.3",
     "agents": "^0.7.5",
