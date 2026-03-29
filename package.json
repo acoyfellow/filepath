@@ -12,7 +12,7 @@
     "@cloudflare/sandbox": "^0.7.13",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.3",
-    "agents": "^0.7.5",
+    "agents": "^0.8.7",
     "bits-ui": "^2.16.2",
     "clsx": "^2.1.1",
     "cookie": "^1.1.1",
