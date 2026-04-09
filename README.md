@@ -26,6 +26,8 @@ BETTER_AUTH_SECRET=<random 32+ character string>
 BETTER_AUTH_URL=https://your-domain.com
 CLOUDFLARE_API_TOKEN=<your Cloudflare API token>
 CLOUDFLARE_ACCOUNT_ID=<your Cloudflare account ID>
+R2_ACCESS_KEY_ID=<your R2 access key ID>
+R2_SECRET_ACCESS_KEY=<your R2 secret access key>
 ```
 
 Deploy:
@@ -84,6 +86,26 @@ Each conversation is always in one state: **Ready**, **Running**, **Blocked**, o
 **`cross_thread`** (same workspace only): agents can call the runtime bridge to **list threads** (`count` + ids), **read last message / snapshot** for another thread, and **enqueue a task** on another thread. **JSON harnesses** (`shelley`, `pi`, …) do this inside the main edit loop. **Subprocess harnesses** (e.g. the optional **`hermes`** adapter) run a short **OpenRouter preflight** on the bridge, then execute their CLI with that context prepended. Requires a configured public runtime URL (`FILEPATH_RUNTIME_PUBLIC_BASE_URL` / `API_WS_HOST` on the worker).
 
 If a conversation lacks `write` or `commit` permission, filepath rejects the action at runtime. Tool-permission escalation creates a real approval interruption.
+
+### Mount an R2 bucket into a workspace
+
+Workspace creation now accepts `r2Mounts`, which mounts Cloudflare R2 buckets into the sandbox as normal filesystem paths.
+
+```json
+{
+  "name": "models",
+  "r2Mounts": [
+    {
+      "bucket": "my-models-bucket",
+      "mountPath": "/data",
+      "readonly": true,
+      "prefix": "/models"
+    }
+  ]
+}
+```
+
+This uses the Cloudflare Sandbox SDK `mountBucket()` API, so no Dockerfile or startup script changes are required.
 
 ### Switch harnesses or models
 

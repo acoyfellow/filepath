@@ -46,11 +46,25 @@ export const GET: RequestHandler = async ({ url }) => {
             name: { type: "string" },
             status: { type: "string" },
             initialSourceUrl: { type: ["string", "null"] },
+            r2Mounts: {
+              type: "array",
+              items: { $ref: "#/components/schemas/WorkspaceR2Mount" },
+            },
             agentCount: { type: "integer" },
             createdAt: { type: "integer" },
             updatedAt: { type: "integer" },
           },
           required: ["id", "name", "status", "createdAt", "updatedAt"],
+        },
+        WorkspaceR2Mount: {
+          type: "object",
+          properties: {
+            bucket: { type: "string" },
+            mountPath: { type: "string" },
+            readonly: { type: "boolean" },
+            prefix: { type: ["string", "null"] },
+          },
+          required: ["bucket", "mountPath", "readonly"],
         },
         AgentScope: {
           type: "object",
@@ -289,6 +303,10 @@ export const GET: RequestHandler = async ({ url }) => {
                   properties: {
                     name: { type: "string" },
                     initialSourceUrl: { type: "string" },
+                    r2Mounts: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/WorkspaceR2Mount" },
+                    },
                   },
                 },
               },
@@ -316,6 +334,25 @@ export const GET: RequestHandler = async ({ url }) => {
           tags: ["Workspaces"],
           summary: "Update workspace",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: false,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    status: { type: "string" },
+                    initialSourceUrl: { type: "string" },
+                    r2Mounts: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/WorkspaceR2Mount" },
+                    },
+                  },
+                },
+              },
+            },
+          },
           responses: { "200": { description: "Workspace updated" } },
         },
         delete: {

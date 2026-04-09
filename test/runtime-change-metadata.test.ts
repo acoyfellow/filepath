@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { extractFilesTouchedFromPatch, hasWriteIntentEvents, normalizeChangeMetadata } from "../src/lib/runtime/change-metadata";
+import {
+  extractFilesTouchedFromEvents,
+  extractFilesTouchedFromPatch,
+  hasWriteIntentEvents,
+  normalizeChangeMetadata,
+} from "../src/lib/runtime/change-metadata";
 import type { AgentEventType } from "../src/lib/protocol";
 
 describe("runtime change metadata", () => {
@@ -62,5 +67,30 @@ describe("runtime change metadata", () => {
         },
       ]),
     ).toBe(false);
+  });
+
+  test("extracts touched files from write-like tool events", () => {
+    expect(
+      extractFilesTouchedFromEvents([
+        {
+          type: "tool",
+          name: "write_file",
+          path: "/data/model.gguf",
+          status: "done",
+        },
+        {
+          type: "tool",
+          name: "read_file",
+          path: "src/app.ts",
+          status: "done",
+        },
+        {
+          type: "tool",
+          name: "replace_text",
+          path: "src/app.ts",
+          status: "done",
+        },
+      ]),
+    ).toEqual(["/data/model.gguf", "src/app.ts"]);
   });
 });

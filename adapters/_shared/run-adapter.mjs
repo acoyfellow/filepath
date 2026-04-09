@@ -72,8 +72,8 @@ function matchesScopedPrefix(path, prefixes) {
   }
   const normalized = normalizePath(path);
   return prefixes.some((prefix) => {
-    const candidate = normalizePath(prefix);
-    return normalized === candidate.replace(/\/$/, "") || normalized.startsWith(candidate);
+    const candidate = normalizePath(prefix).replace(/\/$/, "");
+    return normalized === candidate || normalized.startsWith(`${candidate}/`);
   });
 }
 
@@ -83,17 +83,34 @@ function ensurePathAllowed(workspaceRoot, path, allowedPaths, forbiddenPaths) {
   }
 
   const normalized = normalizePath(path);
-  if (!isPathInside(workspaceRoot, normalized)) {
+  const absolutePath = normalized.startsWith("/") ? normalized : resolve(workspaceRoot, normalized);
+  const relativePath = normalized.startsWith("/") ? null : normalizePath(relative(workspaceRoot, absolutePath));
+
+  if (!normalized.startsWith("/") && !isPathInside(workspaceRoot, normalized)) {
     throw new Error(`Path escapes the workspace: ${normalized}`);
   }
-  if (!matchesScopedPrefix(normalized, allowedPaths)) {
+
+  const isAllowed = normalized.startsWith("/")
+    ? matchesScopedPrefix(absolutePath, allowedPaths.filter((entry) => normalizePath(entry).startsWith("/")))
+    : matchesScopedPrefix(relativePath ?? normalized, allowedPaths.filter((entry) => !normalizePath(entry).startsWith("/")));
+
+  if (!isAllowed) {
     throw new Error(`Path is outside the allowed scope: ${normalized}`);
   }
-  if (forbiddenPaths.some((prefix) => matchesScopedPrefix(normalized, [prefix]))) {
+
+  const isForbidden = normalized.startsWith("/")
+    ? forbiddenPaths
+        .filter((entry) => normalizePath(entry).startsWith("/"))
+        .some((prefix) => matchesScopedPrefix(absolutePath, [prefix]))
+    : forbiddenPaths
+        .filter((entry) => !normalizePath(entry).startsWith("/"))
+        .some((prefix) => matchesScopedPrefix(relativePath ?? normalized, [prefix]));
+
+  if (isForbidden) {
     throw new Error(`Path is forbidden by scope: ${normalized}`);
   }
 
-  return resolve(workspaceRoot, normalized);
+  return absolutePath;
 }
 
 async function callOpenRouter({

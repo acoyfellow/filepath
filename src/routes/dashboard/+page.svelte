@@ -5,6 +5,7 @@
   import PlusIcon from "@lucide/svelte/icons/plus";
   import Button from "$lib/components/ui/button/button.svelte";
   import SEO from "$lib/components/SEO.svelte";
+  import R2MountFields from "$lib/components/workspace/R2MountFields.svelte";
   import type { ConversationState } from "$lib/conversations";
 
   interface WorkspaceItem {
@@ -37,6 +38,7 @@
   let errorMsg = $state<string | null>(null);
   let showNewModal = $state(false);
   let newName = $state("");
+  let newMounts = $state([{ bucket: "", mountPath: "/data", readonly: true, prefix: "" }]);
   let isCreating = $state(false);
   /** collapsed workspace ids; omitted = expanded */
   let collapsed = $state<Record<string, boolean>>({});
@@ -120,6 +122,14 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newName.trim() || undefined,
+          r2Mounts: newMounts
+            .filter((mount) => mount.bucket.trim() || mount.mountPath.trim() || mount.prefix.trim())
+            .map((mount) => ({
+              bucket: mount.bucket.trim(),
+              mountPath: mount.mountPath.trim(),
+              readonly: mount.readonly,
+              prefix: mount.prefix.trim() || undefined,
+            })),
         }),
       });
       if (!res.ok) throw new Error("Failed to create workspace");
@@ -134,6 +144,7 @@
 
   function openNewModal() {
     newName = "";
+    newMounts = [{ bucket: "", mountPath: "/data", readonly: true, prefix: "" }];
     showNewModal = true;
   }
 </script>
@@ -251,8 +262,8 @@
       }}
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="w-full max-w-sm border border-(--b1) bg-(--bg) p-5"
+        <div
+          class="w-full max-w-2xl border border-(--b1) bg-(--bg) p-5"
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => e.stopPropagation()}
       >
@@ -267,6 +278,8 @@
             bind:value={newName}
           />
         </label>
+
+        <R2MountFields bind:mounts={newMounts} disabled={isCreating} />
 
         <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Button variant="outline" class="w-full rounded-full sm:w-auto" onclick={() => (showNewModal = false)}>

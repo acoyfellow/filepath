@@ -223,6 +223,7 @@ export const workspace = sqliteTable(
     initialSourceUrl: text("initial_source_url"),
     memoryEnabled: integer("memory_enabled", { mode: "boolean" }).notNull().default(false),
     memoryScope: text("memory_scope"),
+    r2Mounts: text("r2_mounts").notNull().default("[]"),
     status: text("status").notNull().default("draft"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })

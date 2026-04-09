@@ -3,6 +3,10 @@ import { deriveConversationState, type ConversationInterruption, type SharedRunI
 import { normalizeAgentScope, validateAgentScope } from "$lib/runtime/authority";
 import { getBuiltinHarnessRows } from "$lib/agents/harnesses";
 import { agent, agentInterruption, agentTask, harness, workspace } from "$lib/schema";
+import {
+  parseWorkspaceR2Mounts,
+  serializeWorkspaceR2Mounts,
+} from "$lib/workspaces/r2-mounts";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { Data, Effect, Schema } from "effect";
 
@@ -57,6 +61,16 @@ export const WorkspaceCreateInputSchema = Schema.Struct({
   initialSourceUrl: Schema.optional(Schema.String),
   memoryEnabled: Schema.optional(Schema.Boolean),
   memoryScope: Schema.optional(Schema.NullOr(Schema.String)),
+  r2Mounts: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        bucket: Schema.String,
+        mountPath: Schema.String,
+        readonly: Schema.Boolean,
+        prefix: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+  ),
 });
 export type WorkspaceCreateInput = Schema.Schema.Type<
   typeof WorkspaceCreateInputSchema
@@ -68,6 +82,16 @@ export const WorkspaceUpdateInputSchema = Schema.Struct({
   initialSourceUrl: Schema.optional(Schema.String),
   memoryEnabled: Schema.optional(Schema.Boolean),
   memoryScope: Schema.optional(Schema.NullOr(Schema.String)),
+  r2Mounts: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        bucket: Schema.String,
+        mountPath: Schema.String,
+        readonly: Schema.Boolean,
+        prefix: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+  ),
 });
 export type WorkspaceUpdateInput = Schema.Schema.Type<
   typeof WorkspaceUpdateInputSchema
@@ -237,6 +261,7 @@ type ConversationInboxWorkspace = {
   initialSourceUrl: string | null;
   memoryEnabled: boolean;
   memoryScope: string | null;
+  r2Mounts: ReturnType<typeof parseWorkspaceR2Mounts>;
   createdAt: number;
   updatedAt: number;
 };
@@ -579,6 +604,7 @@ export function listWorkspaces(ctx: AppContext) {
               initialSourceUrl: entry.initialSourceUrl,
               memoryEnabled: entry.memoryEnabled,
               memoryScope: entry.memoryScope,
+              r2Mounts: parseWorkspaceR2Mounts(entry.r2Mounts),
               status: entry.status,
               startedAt: entry.startedAt?.getTime() ?? null,
               createdAt: entry.createdAt?.getTime() ?? 0,
@@ -605,6 +631,7 @@ export function createWorkspace(ctx: AppContext, input: WorkspaceCreateInput) {
         initialSourceUrl: input.initialSourceUrl?.trim() || null,
         memoryEnabled: input.memoryEnabled ?? false,
         memoryScope: input.memoryScope?.trim() ? input.memoryScope.trim() : null,
+        r2Mounts: serializeWorkspaceR2Mounts(input.r2Mounts),
         status: "draft",
       }),
     "Failed to create workspace",
@@ -639,7 +666,10 @@ export function getWorkspace(ctx: AppContext, id: string) {
             "Failed to load conversation decorations",
           ).pipe(
             Effect.map((decorations) => ({
-              workspace: workspaceRows[0],
+              workspace: {
+                ...workspaceRows[0],
+                r2Mounts: parseWorkspaceR2Mounts(workspaceRows[0]?.r2Mounts),
+              },
               agents: agentRows.map((row) => decorateAgentRow(row, decorations.get(row.id))),
             })),
           ),
@@ -663,6 +693,9 @@ export function updateWorkspace(
       if (input.memoryEnabled !== undefined) updates.memoryEnabled = input.memoryEnabled;
       if (input.memoryScope !== undefined) {
         updates.memoryScope = input.memoryScope?.trim() ? input.memoryScope.trim() : null;
+      }
+      if (input.r2Mounts !== undefined) {
+        updates.r2Mounts = serializeWorkspaceR2Mounts(input.r2Mounts);
       }
       if (Object.keys(updates).length === 0) {
         return Effect.succeed({ ok: true as const });
@@ -707,6 +740,7 @@ export function listConversationInbox(
           initialSourceUrl: workspace.initialSourceUrl,
           memoryEnabled: workspace.memoryEnabled,
           memoryScope: workspace.memoryScope,
+          r2Mounts: workspace.r2Mounts,
           createdAt: workspace.createdAt,
           updatedAt: workspace.updatedAt,
         })
@@ -765,6 +799,7 @@ export function listConversationInbox(
                   initialSourceUrl: row.initialSourceUrl,
                   memoryEnabled: row.memoryEnabled,
                   memoryScope: row.memoryScope,
+                  r2Mounts: parseWorkspaceR2Mounts(row.r2Mounts),
                   createdAt: row.createdAt?.getTime() ?? 0,
                   updatedAt: row.updatedAt?.getTime() ?? 0,
                 })),

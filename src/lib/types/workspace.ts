@@ -62,10 +62,18 @@ export interface WorkspaceRecord {
   initialSourceUrl?: string | null;
   memoryEnabled?: boolean;
   memoryScope?: string | null;
+  r2Mounts?: WorkspaceR2Mount[];
   status: WorkspaceStatus;
   startedAt?: number | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface WorkspaceR2Mount {
+  bucket: string;
+  mountPath: string;
+  readonly: boolean;
+  prefix?: string | null;
 }
 
 export interface AgentHarness {

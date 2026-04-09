@@ -27,6 +27,9 @@ declare global {
         FILEPATH_RUNTIME_PUBLIC_BASE_URL?: string;
         BETTER_AUTH_SECRET?: string;
         BETTER_AUTH_URL?: string;
+        CLOUDFLARE_ACCOUNT_ID?: string;
+        R2_ACCESS_KEY_ID?: string;
+        R2_SECRET_ACCESS_KEY?: string;
 				};
 		}
 	}

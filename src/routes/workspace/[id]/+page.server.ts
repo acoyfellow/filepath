@@ -10,6 +10,7 @@ import {
   deserializeStoredProviderKeys,
   maskProviderKeys,
 } from "$lib/provider-keys";
+import { parseWorkspaceR2Mounts } from "$lib/workspaces/r2-mounts";
 
 function getBetterAuthSecret(
   platform: ServerLoadEvent["platform"],
@@ -71,7 +72,10 @@ export const load = async ({ params, locals, platform, url }: ServerLoadEvent) =
   const agentBaseUrl = resolveRuntimeBaseUrl({ url, platform });
   return {
     user: locals.user,
-    workspace: currentWorkspace,
+    workspace: {
+      ...currentWorkspace,
+      r2Mounts: parseWorkspaceR2Mounts(currentWorkspace.r2Mounts),
+    },
     agents,
     accountKeysMasked,
     accountKeysError,

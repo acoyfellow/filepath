@@ -38,6 +38,8 @@ export type ToolPermission = (typeof TOOL_PERMISSION_OPTIONS)[number]["id"];
 export interface AgentScope {
   allowedPaths: string[];
   forbiddenPaths: string[];
+  mountPaths: string[];
+  readOnlyMountPaths: string[];
   toolPermissions: ToolPermission[];
   writableRoot: string | null;
 }
@@ -45,6 +47,8 @@ export interface AgentScope {
 export interface AgentScopeInput {
   allowedPaths?: readonly string[] | null;
   forbiddenPaths?: readonly string[] | null;
+  mountPaths?: readonly string[] | null;
+  readOnlyMountPaths?: readonly string[] | null;
   toolPermissions?: readonly string[] | null;
   writableRoot?: string | null;
 }
@@ -56,6 +60,8 @@ const ALL_TOOL_PERMISSIONS = new Set<ToolPermission>(
 export const AGENT_SCOPE_PRESET: AgentScope = {
   allowedPaths: ["."],
   forbiddenPaths: [".git", "node_modules"],
+  mountPaths: [],
+  readOnlyMountPaths: [],
   toolPermissions: ["search", "run", "write", "commit"],
   writableRoot: ".",
 };
@@ -87,12 +93,42 @@ export function normalizeScopePath(value: string | null | undefined): string | n
   return normalized;
 }
 
+export function normalizeAbsoluteScopePath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().replace(/\\/g, "/");
+  if (!trimmed.startsWith("/")) return null;
+  let normalized = trimmed.replace(/\/{2,}/g, "/");
+  normalized = normalized.replace(/\/$/, "") || "/";
+  if (normalized === "/" || normalized === "/." || normalized === "/..") return null;
+  if (normalized.includes("/../") || normalized.endsWith("/..")) return null;
+  if (normalized.includes("/./")) return null;
+  return normalized;
+}
+
+function normalizeAnyScopePath(value: string | null | undefined): string | null {
+  return normalizeScopePath(value) ?? normalizeAbsoluteScopePath(value);
+}
+
 export function normalizePathList(values: readonly string[] | null | undefined): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
 
   for (const value of values ?? []) {
     const path = normalizeScopePath(value);
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    normalized.push(path);
+  }
+
+  return normalized;
+}
+
+export function normalizeAbsolutePathList(values: readonly string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const value of values ?? []) {
+    const path = normalizeAbsoluteScopePath(value);
     if (!path || seen.has(path)) continue;
     seen.add(path);
     normalized.push(path);
@@ -123,14 +159,20 @@ export function normalizeAgentScope(input?: AgentScopeInput | null): AgentScope 
       : [...AGENT_SCOPE_PRESET.allowedPaths];
 
   const forbiddenPaths = normalizePathList(input?.forbiddenPaths);
+  const mountPaths = normalizeAbsolutePathList(input?.mountPaths);
+  const readOnlyMountPaths = normalizeAbsolutePathList(input?.readOnlyMountPaths).filter((path) =>
+    mountPaths.some((mountPath) => isPathWithin(path, mountPath)),
+  );
   const writableRoot =
-    normalizeScopePath(input?.writableRoot) ??
+    normalizeAnyScopePath(input?.writableRoot) ??
     allowedPaths[0] ??
     AGENT_SCOPE_PRESET.writableRoot;
 
   return {
     allowedPaths,
     forbiddenPaths,
+    mountPaths,
+    readOnlyMountPaths,
     toolPermissions: normalizeToolPermissions(
       input?.toolPermissions,
       AGENT_SCOPE_PRESET.toolPermissions,
@@ -148,7 +190,7 @@ export function validateAgentScope(scope: AgentScope): string | null {
     return "Agents need a writable root.";
   }
 
-  if (!isPathAllowed(scope.writableRoot, scope)) {
+  if (!isPathAllowed(scope.writableRoot, scope) || !isPathWritable(scope.writableRoot, scope)) {
     return "Writable root must stay inside allowed paths and outside forbidden paths.";
   }
 
@@ -156,13 +198,21 @@ export function validateAgentScope(scope: AgentScope): string | null {
 }
 
 export function isPathAllowed(path: string, scope: AgentScope): boolean {
-  const target = normalizeScopePath(path);
+  const target = normalizeAnyScopePath(path);
   if (!target) return false;
 
-  const insideAllowed = scope.allowedPaths.some((allowed) => isPathWithin(target, allowed));
+  const insideAllowed =
+    scope.allowedPaths.some((allowed) => isPathWithin(target, allowed))
+    || scope.mountPaths.some((allowed) => isPathWithin(target, allowed));
   if (!insideAllowed) return false;
 
   return !scope.forbiddenPaths.some((forbidden) => isPathWithin(target, forbidden));
+}
+
+export function isPathWritable(path: string, scope: AgentScope): boolean {
+  const target = normalizeAnyScopePath(path);
+  if (!target || !isPathAllowed(target, scope)) return false;
+  return !scope.readOnlyMountPaths.some((mountPath) => isPathWithin(target, mountPath));
 }
 
 export function resolveScopedWorkspaceRoot(
@@ -170,6 +220,7 @@ export function resolveScopedWorkspaceRoot(
   writableRoot: string | null,
 ): string {
   if (!writableRoot || writableRoot === ".") return workspaceRoot;
+  if (normalizeAbsoluteScopePath(writableRoot)) return writableRoot;
   const base = workspaceRoot.replace(/\/$/, "");
   return `${base}/${writableRoot}`;
 }
@@ -205,8 +256,13 @@ export function getRuntimePolicyViolation(
       return `This agent is not allowed to ${required}.`;
     }
 
-    if (event.type === "tool" && event.path && !isPathAllowed(event.path, scope)) {
-      return `This agent is not allowed to touch ${event.path}.`;
+    if (event.type === "tool" && event.path) {
+      if (!isPathAllowed(event.path, scope)) {
+        return `This agent is not allowed to touch ${event.path}.`;
+      }
+      if (/write|edit|patch|create|delete|move|rename/i.test(event.name) && !isPathWritable(event.path, scope)) {
+        return `This agent is not allowed to write to ${event.path}.`;
+      }
     }
   }
 

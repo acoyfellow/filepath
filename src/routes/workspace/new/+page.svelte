@@ -3,10 +3,23 @@
   import { goto } from "$app/navigation";
   import Button from "$lib/components/ui/button/button.svelte";
   import SEO from "$lib/components/SEO.svelte";
+  import R2MountFields from "$lib/components/workspace/R2MountFields.svelte";
 
   let name = $state("");
+  let mounts = $state([{ bucket: "", mountPath: "/data", readonly: true, prefix: "" }]);
   let isCreating = $state(false);
   let errorMsg = $state<string | null>(null);
+
+  function serializeMounts() {
+    return mounts
+      .filter((mount) => mount.bucket.trim() || mount.mountPath.trim() || mount.prefix.trim())
+      .map((mount) => ({
+        bucket: mount.bucket.trim(),
+        mountPath: mount.mountPath.trim(),
+        readonly: mount.readonly,
+        prefix: mount.prefix.trim() || undefined,
+      }));
+  }
 
   async function create() {
     isCreating = true;
@@ -17,6 +30,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim() || undefined,
+          r2Mounts: serializeMounts(),
         }),
       });
       if (!res.ok) throw new Error("Failed to create workspace");
@@ -45,7 +59,7 @@
 />
 
 <div class="flex min-h-screen items-center justify-center bg-(--bg2) px-4 py-10 font-(family-name:--f) text-(--t2)">
-  <div class="w-full max-w-md">
+  <div class="w-full max-w-2xl">
     <Button
       variant="ghost"
       class="mb-6 gap-2 px-0 text-[13px] text-(--t4) shadow-none hover:bg-transparent hover:text-(--t2)"
@@ -61,12 +75,14 @@
       Create a sandboxed workspace for bounded agent work
     </p>
 
-    <label class="mb-4 block text-xs font-medium uppercase tracking-[0.14em] text-(--t5)">
-      Workspace name
-      <input type="text" class="mt-2 block w-full rounded-xl border border-(--b1) bg-(--bg) px-4 py-3 text-sm normal-case tracking-normal text-(--t1) outline-none focus:border-(--accent)" placeholder="my-project" bind:value={name} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
-    </label>
+     <label class="mb-4 block text-xs font-medium uppercase tracking-[0.14em] text-(--t5)">
+       Workspace name
+       <input type="text" class="mt-2 block w-full rounded-xl border border-(--b1) bg-(--bg) px-4 py-3 text-sm normal-case tracking-normal text-(--t1) outline-none focus:border-(--accent)" placeholder="my-project" bind:value={name} onkeydown={(e) => { if (e.key === "Enter") create(); }} />
+     </label>
 
-    {#if errorMsg}
+     <R2MountFields bind:mounts disabled={isCreating} />
+
+     {#if errorMsg}
       <div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs normal-case tracking-normal text-red-700 dark:text-red-300">
         {errorMsg}
       </div>

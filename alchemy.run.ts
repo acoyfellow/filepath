@@ -93,12 +93,14 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     FILEPATH_RUNTIME_PUBLIC_BASE_URL: isProd ? "https://api.myfilepath.com" : "",
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
     BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
-    OPENCODE_ZEN_API_KEY: process.env.OPENCODE_ZEN_API_KEY || "",
-    // OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "", // BYOK: Users provide via Settings → API Keys
-    CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || "",
-  },
-});
+     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
+     OPENCODE_ZEN_API_KEY: process.env.OPENCODE_ZEN_API_KEY || "",
+     // OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "", // BYOK: Users provide via Settings → API Keys
+     CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || "",
+     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID || "",
+     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY || "",
+   },
+  });
 
 export const APP = await SvelteKit(`${projectName}-app`, {
   name: `${prefix}-app`,

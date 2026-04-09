@@ -9,6 +9,7 @@ import type {
   AgentTaskAcceptedResponse,
   AgentTaskState,
   HarnessId,
+  WorkspaceR2Mount,
 } from "$lib/types/workspace";
 import {
   getRuntimePolicyViolation,
@@ -29,9 +30,12 @@ import {
   PROVIDERS,
 } from "$lib/provider-keys";
 import {
+  buildDiffSummary,
+  extractFilesTouchedFromEvents,
   hasWriteIntentEvents,
   normalizeChangeMetadata,
 } from "$lib/runtime/change-metadata";
+import { parseWorkspaceR2Mounts } from "$lib/workspaces/r2-mounts";
 import type { D1Database } from "@cloudflare/workers-types";
 import {
   mintRuntimeBridgeToken,
@@ -45,6 +49,9 @@ export interface RuntimeEnv {
   BETTER_AUTH_URL?: string;
   API_WS_HOST?: string;
   FILEPATH_RUNTIME_PUBLIC_BASE_URL?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
 }
 
 export interface RuntimeExecutionContext {
@@ -57,6 +64,7 @@ interface AgentExecutionConfig {
   policy: AgentScope;
   workspaceId: string;
   initialSourceUrl: string | null;
+  r2Mounts: WorkspaceR2Mount[];
   entryCommand: string;
   executionRoot: string;
   envVars: Record<string, string>;
@@ -511,6 +519,7 @@ async function ensureRuntimeSchema(env: RuntimeEnv): Promise<void> {
   await env.DB.prepare(`ALTER TABLE agent ADD COLUMN closed_at INTEGER`).run().catch(() => {});
   await env.DB.prepare(`ALTER TABLE workspace ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 0`).run().catch(() => {});
   await env.DB.prepare(`ALTER TABLE workspace ADD COLUMN memory_scope TEXT`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE workspace ADD COLUMN r2_mounts TEXT NOT NULL DEFAULT '[]'`).run().catch(() => {});
 
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS agent_interruption (
@@ -543,6 +552,53 @@ function getBetterAuthSecret(env: RuntimeEnv): string | undefined {
     envSecret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
   });
+}
+
+function getMountPolicy(mounts: readonly WorkspaceR2Mount[]): Pick<
+  AgentScope,
+  "mountPaths" | "readOnlyMountPaths"
+> {
+  return {
+    mountPaths: mounts.map((mount) => mount.mountPath),
+    readOnlyMountPaths: mounts.filter((mount) => mount.readonly).map((mount) => mount.mountPath),
+  };
+}
+
+function isMountedPath(path: string, mounts: readonly WorkspaceR2Mount[]): boolean {
+  return mounts.some((mount) => path === mount.mountPath || path.startsWith(`${mount.mountPath}/`));
+}
+
+async function mountWorkspaceBuckets(
+  env: RuntimeEnv,
+  sandbox: Sandbox,
+  mounts: readonly WorkspaceR2Mount[],
+): Promise<void> {
+  if (mounts.length === 0) return;
+
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  if (!accountId) {
+    throw new RuntimeTaskError(
+      "R2_MOUNT_MISCONFIGURED",
+      "Workspace R2 mounts require CLOUDFLARE_ACCOUNT_ID on the worker.",
+    );
+  }
+
+  for (const mount of mounts) {
+    try {
+      await sandbox.mountBucket(mount.bucket, mount.mountPath, {
+        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        readOnly: mount.readonly,
+        prefix: mount.prefix ?? undefined,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/mount path already in use/i.test(message)) continue;
+      throw new RuntimeTaskError(
+        "R2_MOUNT_FAILED",
+        `Could not mount ${mount.bucket} at ${mount.mountPath}: ${message}`,
+      );
+    }
+  }
 }
 
 function parseJsonArray(value: string): string[] {
@@ -849,6 +905,7 @@ export async function loadAgentExecutionConfig(
   const row = await env.DB.prepare(
     `SELECT a.harness_id, a.model, a.allowed_paths, a.forbidden_paths,
             a.tool_permissions, a.writable_root, w.id as workspace_id, w.initial_source_url,
+            w.r2_mounts,
             u.openrouter_api_key as user_key, h.entry_command as entry_command,
             h.config as harness_config
        FROM agent a
@@ -865,6 +922,7 @@ export async function loadAgentExecutionConfig(
     writable_root: string | null;
     workspace_id: string;
     initial_source_url: string | null;
+    r2_mounts: string;
     user_key: string | null;
     entry_command: string;
     harness_config: string;
@@ -899,9 +957,13 @@ export async function loadAgentExecutionConfig(
   }
 
   const workspaceRoot = resolveWorkspaceRoot(row.initial_source_url);
+  const r2Mounts = parseWorkspaceR2Mounts(row.r2_mounts);
+  const mountPolicy = getMountPolicy(r2Mounts);
   const policy = normalizeAgentScope({
     allowedPaths: parseJsonArray(row.allowed_paths),
     forbiddenPaths: parseJsonArray(row.forbidden_paths),
+    mountPaths: mountPolicy.mountPaths,
+    readOnlyMountPaths: mountPolicy.readOnlyMountPaths,
     toolPermissions: parseJsonArray(row.tool_permissions),
     writableRoot: row.writable_root,
   });
@@ -919,7 +981,7 @@ export async function loadAgentExecutionConfig(
       apiKey: containerApiKey,
       task,
       workspacePath: workspaceRoot,
-      allowedPaths: policy.allowedPaths,
+      allowedPaths: [...policy.allowedPaths, ...policy.mountPaths],
       forbiddenPaths: policy.forbiddenPaths,
       toolPermissions: policy.toolPermissions,
       writableRoot: policy.writableRoot,
@@ -967,6 +1029,7 @@ export async function loadAgentExecutionConfig(
     policy,
     workspaceId: row.workspace_id,
     initialSourceUrl: row.initial_source_url,
+    r2Mounts,
     entryCommand: row.entry_command,
     executionRoot,
     envVars,
@@ -977,6 +1040,7 @@ async function ensureContainer(
   env: RuntimeEnv,
   agentId: string,
   initialSourceUrl: string | null,
+  r2Mounts: readonly WorkspaceR2Mount[],
 ): Promise<Sandbox> {
   const sandboxEnv = requireSandbox(env);
   const { getSandbox } = await import("@cloudflare/sandbox");
@@ -999,6 +1063,8 @@ async function ensureContainer(
     await sandbox.mkdir(workspaceRoot, { recursive: true });
   }
 
+  await mountWorkspaceBuckets(env, sandbox, r2Mounts);
+
   await env.DB.prepare(
     `UPDATE agent
         SET container_id = ?, updated_at = unixepoch('subsecond') * 1000
@@ -1011,6 +1077,7 @@ async function ensureWorkspaceSandbox(
   env: RuntimeEnv,
   workspaceId: string,
   initialSourceUrl: string | null,
+  r2Mounts: readonly WorkspaceR2Mount[],
 ): Promise<Sandbox> {
   const sandboxEnv = requireSandbox(env);
   const { getSandbox } = await import("@cloudflare/sandbox");
@@ -1033,23 +1100,28 @@ async function ensureWorkspaceSandbox(
     await sandbox.mkdir(workspaceRoot, { recursive: true });
   }
 
+  await mountWorkspaceBuckets(env, sandbox, r2Mounts);
+
   return sandbox;
 }
 
 async function loadWorkspaceForScript(
   env: RuntimeEnv,
   workspaceId: string,
-): Promise<{ initialSourceUrl: string | null }> {
+): Promise<{ initialSourceUrl: string | null; r2Mounts: WorkspaceR2Mount[] }> {
   await ensureRuntimeSchema(env);
   const row = await env.DB.prepare(
-    `SELECT initial_source_url FROM workspace WHERE id = ? LIMIT 1`,
-  ).bind(workspaceId).first<{ initial_source_url: string | null }>();
+    `SELECT initial_source_url, r2_mounts FROM workspace WHERE id = ? LIMIT 1`,
+  ).bind(workspaceId).first<{ initial_source_url: string | null; r2_mounts: string }>();
 
   if (!row) {
     throw new RuntimeTaskError("WORKSPACE_NOT_FOUND", `Workspace ${workspaceId} not found.`);
   }
 
-  return { initialSourceUrl: row.initial_source_url };
+  return {
+    initialSourceUrl: row.initial_source_url,
+    r2Mounts: parseWorkspaceR2Mounts(row.r2_mounts),
+  };
 }
 
 export interface ScriptRunResult {
@@ -1081,10 +1153,13 @@ export async function runWorkspaceScript(
     throw new RuntimeTaskError("SCRIPT_REQUIRED", "Script content is required.");
   }
 
-  const { initialSourceUrl } = await loadWorkspaceForScript(env, workspaceId);
+  const { initialSourceUrl, r2Mounts } = await loadWorkspaceForScript(env, workspaceId);
+  const mountPolicy = getMountPolicy(r2Mounts);
   const policy = normalizeAgentScope({
     allowedPaths: scopeInput?.allowedPaths ?? ["."],
     forbiddenPaths: scopeInput?.forbiddenPaths ?? [".git", "node_modules"],
+    mountPaths: mountPolicy.mountPaths,
+    readOnlyMountPaths: mountPolicy.readOnlyMountPaths,
     toolPermissions: scopeInput?.toolPermissions ?? ["search", "run", "write", "commit"],
     writableRoot: scopeInput?.writableRoot ?? ".",
   });
@@ -1093,7 +1168,7 @@ export async function runWorkspaceScript(
     throw new RuntimeTaskError("POLICY_INVALID", policyError);
   }
 
-  const sandbox = await ensureWorkspaceSandbox(env, workspaceId, initialSourceUrl);
+  const sandbox = await ensureWorkspaceSandbox(env, workspaceId, initialSourceUrl, r2Mounts);
   const workspaceRoot = resolveWorkspaceRoot(initialSourceUrl);
   const executionRoot = resolveScopedWorkspaceRoot(workspaceRoot, policy.writableRoot);
   await sandbox.mkdir(executionRoot, { recursive: true });
@@ -2458,7 +2533,7 @@ async function runSandboxTask(
         throw new RuntimeTaskError("TASK_CANCELED", "The agent task was cancelled.");
       }
       await ensureNotCancelled(env, workspaceId, agentId);
-      const nextSandbox = await ensureContainer(env, agentId, config.initialSourceUrl);
+      const nextSandbox = await ensureContainer(env, agentId, config.initialSourceUrl, config.r2Mounts);
       await nextSandbox.mkdir(config.executionRoot, { recursive: true });
       return nextSandbox;
     });
@@ -2598,6 +2673,12 @@ async function runSandboxTask(
       afterSnapshotRoot,
     );
     const normalizedChangeMetadata = normalizeChangeMetadata({ patch: result.patch });
+    const mountedFilesTouched = extractFilesTouchedFromEvents(relay.events()).filter((path) =>
+      path.startsWith("/") && isMountedPath(path, config.r2Mounts),
+    );
+    const filesTouched = [
+      ...new Set([...normalizedChangeMetadata.filesTouched, ...mountedFilesTouched]),
+    ];
     const afterDirtyPaths = await collectWorkspaceDirtyPaths(sandbox, workspaceRoot);
     const scopeViolations = describeScopeViolations(
       config.policy,
@@ -2606,14 +2687,14 @@ async function runSandboxTask(
     if (scopeViolations.length > 0) {
       throw new RuntimeTaskError("POLICY_VIOLATION", scopeViolations[0]);
     }
-    if (!result.patch && !result.commit && hasWriteIntentEvents(relay.events())) {
+    if (!result.patch && !result.commit && hasWriteIntentEvents(relay.events()) && mountedFilesTouched.length === 0) {
       throw new RuntimeTaskError(
         "PATCH_MISSING",
         "The task reported file edits, but filepath could not derive a patch from the bounded run.",
       );
     }
-    result.filesTouched = normalizedChangeMetadata.filesTouched;
-    result.diffSummary = normalizedChangeMetadata.diffSummary;
+    result.filesTouched = filesTouched;
+    result.diffSummary = buildDiffSummary(filesTouched);
     const terminalStatus = relay.events().some((event) => event.type === "handoff")
       ? "exhausted"
       : "done";

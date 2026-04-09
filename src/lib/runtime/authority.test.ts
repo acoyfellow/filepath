@@ -2,10 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import {
   normalizeAgentScope,
+  normalizeAbsoluteScopePath,
   normalizeScopePath,
+  normalizeAbsolutePathList,
   normalizePathList,
   validateAgentScope,
   isPathAllowed,
+  isPathWritable,
   getRuntimePolicyViolation,
   type AgentScope,
 } from "./authority";
@@ -44,6 +47,20 @@ describe("normalizeScopePath", () => {
   });
 });
 
+describe("normalizeAbsoluteScopePath", () => {
+  test("accepts normalized absolute paths", () => {
+    expect(normalizeAbsoluteScopePath("/data")).toBe("/data");
+    expect(normalizeAbsoluteScopePath("/data/models/")).toBe("/data/models");
+    expect(normalizeAbsoluteScopePath(" /mnt//r2 ")).toBe("/mnt/r2");
+  });
+
+  test("rejects invalid absolute paths", () => {
+    expect(normalizeAbsoluteScopePath("data")).toBe(null);
+    expect(normalizeAbsoluteScopePath("/")).toBe(null);
+    expect(normalizeAbsoluteScopePath("/data/../etc")).toBe(null);
+  });
+});
+
 describe("normalizePathList", () => {
   test("deduplicates and filters invalid", () => {
     expect(normalizePathList(["foo", "foo", "bar", "/invalid"])).toEqual(["foo", "bar"]);
@@ -55,11 +72,22 @@ describe("normalizePathList", () => {
   });
 });
 
+describe("normalizeAbsolutePathList", () => {
+  test("deduplicates and filters invalid values", () => {
+    expect(normalizeAbsolutePathList(["/data", "/data", "data", "/mnt/r2"])).toEqual([
+      "/data",
+      "/mnt/r2",
+    ]);
+  });
+});
+
 describe("normalizeAgentScope", () => {
   test("uses preset when allowedPaths empty", () => {
     const scope = normalizeAgentScope({});
     expect(scope.allowedPaths).toEqual(["."]);
     expect(scope.forbiddenPaths).toEqual([]);
+    expect(scope.mountPaths).toEqual([]);
+    expect(scope.readOnlyMountPaths).toEqual([]);
     expect(scope.writableRoot).toBe(".");
   });
 
@@ -78,6 +106,8 @@ describe("validateAgentScope", () => {
     const scope: AgentScope = {
       allowedPaths: ["."],
       forbiddenPaths: [],
+      mountPaths: [],
+      readOnlyMountPaths: [],
       toolPermissions: ["search", "run"],
       writableRoot: ".",
     };
@@ -88,6 +118,8 @@ describe("validateAgentScope", () => {
     const scope: AgentScope = {
       allowedPaths: [],
       forbiddenPaths: [],
+      mountPaths: [],
+      readOnlyMountPaths: [],
       toolPermissions: ["run"],
       writableRoot: ".",
     };
@@ -98,6 +130,8 @@ describe("validateAgentScope", () => {
     const scope: AgentScope = {
       allowedPaths: ["apps/web"],
       forbiddenPaths: [],
+      mountPaths: [],
+      readOnlyMountPaths: [],
       toolPermissions: ["run"],
       writableRoot: "packages/ui",
     };
@@ -108,6 +142,8 @@ describe("validateAgentScope", () => {
     const scope: AgentScope = {
       allowedPaths: ["apps/web"],
       forbiddenPaths: ["apps/web/dist"],
+      mountPaths: [],
+      readOnlyMountPaths: [],
       toolPermissions: ["run"],
       writableRoot: "apps/web/dist",
     };
@@ -119,6 +155,8 @@ describe("isPathAllowed", () => {
   const scope: AgentScope = {
     allowedPaths: ["apps/web", "packages"],
     forbiddenPaths: ["apps/web/.env", "packages/dist"],
+    mountPaths: ["/data"],
+    readOnlyMountPaths: ["/data"],
     toolPermissions: ["run"],
     writableRoot: "apps/web",
   };
@@ -128,11 +166,13 @@ describe("isPathAllowed", () => {
     expect(isPathAllowed("apps/web/src", scope)).toBe(true);
     expect(isPathAllowed("packages", scope)).toBe(true);
     expect(isPathAllowed("packages/ui", scope)).toBe(true);
+    expect(isPathAllowed("/data/models", scope)).toBe(true);
   });
 
   test("rejects paths outside allowed", () => {
     expect(isPathAllowed("other", scope)).toBe(false);
     expect(isPathAllowed("scripts", scope)).toBe(false);
+    expect(isPathAllowed("/mnt/other", scope)).toBe(false);
   });
 
   test("rejects paths in forbidden", () => {
@@ -147,10 +187,31 @@ describe("isPathAllowed", () => {
   });
 });
 
+describe("isPathWritable", () => {
+  const scope: AgentScope = {
+    allowedPaths: ["."],
+    forbiddenPaths: [],
+    mountPaths: ["/data"],
+    readOnlyMountPaths: ["/data"],
+    toolPermissions: ["write"],
+    writableRoot: ".",
+  };
+
+  test("rejects readonly mount paths", () => {
+    expect(isPathWritable("/data/file.txt", scope)).toBe(false);
+  });
+
+  test("allows normal workspace paths", () => {
+    expect(isPathWritable("src/app.ts", scope)).toBe(true);
+  });
+});
+
 describe("getRuntimePolicyViolation", () => {
   const scope: AgentScope = {
     allowedPaths: ["."],
     forbiddenPaths: [".git"],
+    mountPaths: ["/data"],
+    readOnlyMountPaths: ["/data"],
     toolPermissions: ["search", "run"],
     writableRoot: ".",
   };
@@ -196,6 +257,8 @@ describe("getRuntimePolicyViolation", () => {
     const scopeWithPaths: AgentScope = {
       allowedPaths: ["apps/web"],
       forbiddenPaths: [],
+      mountPaths: [],
+      readOnlyMountPaths: [],
       toolPermissions: ["write"],
       writableRoot: "apps/web",
     };
@@ -209,5 +272,27 @@ describe("getRuntimePolicyViolation", () => {
     ];
     const v = getRuntimePolicyViolation(scopeWithPaths, events);
     expect(v).toContain("packages/ui/foo.ts");
+  });
+
+  test("violates when write tool touches readonly mount", () => {
+    const v = getRuntimePolicyViolation(
+      {
+        allowedPaths: ["."],
+        forbiddenPaths: [],
+        mountPaths: ["/data"],
+        readOnlyMountPaths: ["/data"],
+        toolPermissions: ["write"],
+        writableRoot: ".",
+      },
+      [
+        {
+          type: "tool" as const,
+          name: "write_file",
+          path: "/data/model.bin",
+          status: "done" as const,
+        },
+      ],
+    );
+    expect(v).toContain("/data/model.bin");
   });
 });

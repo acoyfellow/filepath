@@ -1,6 +1,6 @@
 import type { AgentEventType } from "$lib/protocol";
 
-const WRITE_LIKE_TOOL_RE = /write|edit|patch|create|delete|move|rename/i;
+const WRITE_LIKE_TOOL_RE = /write|edit|patch|replace|create|delete|move|rename/i;
 
 export function buildDiffSummary(filesTouched: readonly string[]): string | null {
   if (filesTouched.length === 0) {
@@ -83,4 +83,15 @@ export function normalizeChangeMetadata(input: {
 
 export function hasWriteIntentEvents(events: readonly AgentEventType[]): boolean {
   return events.some((event) => event.type === "tool" && WRITE_LIKE_TOOL_RE.test(event.name));
+}
+
+export function extractFilesTouchedFromEvents(events: readonly AgentEventType[]): string[] {
+  const filesTouched = new Set<string>();
+
+  for (const event of events) {
+    if (event.type !== "tool" || !event.path || !WRITE_LIKE_TOOL_RE.test(event.name)) continue;
+    filesTouched.add(event.path);
+  }
+
+  return [...filesTouched];
 }
