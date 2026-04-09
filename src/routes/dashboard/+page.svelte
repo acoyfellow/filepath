@@ -7,6 +7,7 @@
   import SEO from "$lib/components/SEO.svelte";
   import R2MountFields from "$lib/components/workspace/R2MountFields.svelte";
   import type { ConversationState } from "$lib/conversations";
+  import { normalizeWorkspaceR2Mounts } from "$lib/workspaces/r2-mounts";
 
   interface WorkspaceItem {
     id: string;
@@ -122,14 +123,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newName.trim() || undefined,
-          r2Mounts: newMounts
-            .filter((mount) => mount.bucket.trim() || mount.mountPath.trim() || mount.prefix.trim())
-            .map((mount) => ({
-              bucket: mount.bucket.trim(),
-              mountPath: mount.mountPath.trim(),
-              readonly: mount.readonly,
-              prefix: mount.prefix.trim() || undefined,
-            })),
+          r2Mounts: normalizeWorkspaceR2Mounts(newMounts),
         }),
       });
       if (!res.ok) throw new Error("Failed to create workspace");

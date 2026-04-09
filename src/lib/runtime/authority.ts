@@ -1,4 +1,5 @@
 import type { AgentEventType } from "$lib/protocol";
+import { WRITE_LIKE_TOOL_RE } from "$lib/runtime/write-tools";
 
 export const TOOL_PERMISSION_OPTIONS = [
   {
@@ -260,7 +261,7 @@ export function getRuntimePolicyViolation(
       if (!isPathAllowed(event.path, scope)) {
         return `This agent is not allowed to touch ${event.path}.`;
       }
-      if (/write|edit|patch|create|delete|move|rename/i.test(event.name) && !isPathWritable(event.path, scope)) {
+      if (WRITE_LIKE_TOOL_RE.test(event.name) && !isPathWritable(event.path, scope)) {
         return `This agent is not allowed to write to ${event.path}.`;
       }
     }

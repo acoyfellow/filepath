@@ -2684,6 +2684,8 @@ async function runSandboxTask(
       config.policy,
       collectNewDirtyPaths(beforeDirtyPaths, afterDirtyPaths),
     );
+    // Mounted R2 paths live outside the git-scoped workspace snapshot, so write-like
+    // tool events against mounted absolute paths may be valid even when no patch exists.
     const requiresPatchForWriteIntent =
       !result.patch
       && !result.commit

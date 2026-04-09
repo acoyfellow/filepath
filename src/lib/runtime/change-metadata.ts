@@ -1,6 +1,5 @@
 import type { AgentEventType } from "$lib/protocol";
-
-const WRITE_LIKE_TOOL_RE = /write|edit|patch|replace|create|delete|move|rename/i;
+import { WRITE_LIKE_TOOL_RE } from "$lib/runtime/write-tools";
 
 export function buildDiffSummary(filesTouched: readonly string[]): string | null {
   if (filesTouched.length === 0) {

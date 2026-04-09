@@ -86,26 +86,26 @@ function ensurePathAllowed(workspaceRoot, path, allowedPaths, forbiddenPaths) {
   const isAbsolute = normalized.startsWith("/");
   const absolutePath = isAbsolute ? normalized : resolve(workspaceRoot, normalized);
   const relativePath = isAbsolute ? null : normalizePath(relative(workspaceRoot, absolutePath));
+  const absoluteAllowedPaths = allowedPaths.filter((entry) => normalizePath(entry).startsWith("/"));
+  const relativeAllowedPaths = allowedPaths.filter((entry) => !normalizePath(entry).startsWith("/"));
+  const absoluteForbiddenPaths = forbiddenPaths.filter((entry) => normalizePath(entry).startsWith("/"));
+  const relativeForbiddenPaths = forbiddenPaths.filter((entry) => !normalizePath(entry).startsWith("/"));
 
   if (!isAbsolute && !isPathInside(workspaceRoot, normalized)) {
     throw new Error(`Path escapes the workspace: ${normalized}`);
   }
 
   const isAllowed = isAbsolute
-    ? matchesScopedPrefix(absolutePath, allowedPaths.filter((entry) => normalizePath(entry).startsWith("/")))
-    : matchesScopedPrefix(relativePath ?? normalized, allowedPaths.filter((entry) => !normalizePath(entry).startsWith("/")));
+    ? matchesScopedPrefix(absolutePath, absoluteAllowedPaths)
+    : matchesScopedPrefix(relativePath ?? normalized, relativeAllowedPaths);
 
   if (!isAllowed) {
     throw new Error(`Path is outside the allowed scope: ${normalized}`);
   }
 
   const isForbidden = isAbsolute
-    ? forbiddenPaths
-        .filter((entry) => normalizePath(entry).startsWith("/"))
-        .some((prefix) => matchesScopedPrefix(absolutePath, [prefix]))
-    : forbiddenPaths
-        .filter((entry) => !normalizePath(entry).startsWith("/"))
-        .some((prefix) => matchesScopedPrefix(relativePath ?? normalized, [prefix]));
+    ? absoluteForbiddenPaths.some((prefix) => matchesScopedPrefix(absolutePath, [prefix]))
+    : relativeForbiddenPaths.some((prefix) => matchesScopedPrefix(relativePath ?? normalized, [prefix]));
 
   if (isForbidden) {
     throw new Error(`Path is forbidden by scope: ${normalized}`);

@@ -4,22 +4,12 @@
   import Button from "$lib/components/ui/button/button.svelte";
   import SEO from "$lib/components/SEO.svelte";
   import R2MountFields from "$lib/components/workspace/R2MountFields.svelte";
+  import { normalizeWorkspaceR2Mounts } from "$lib/workspaces/r2-mounts";
 
   let name = $state("");
   let mounts = $state([{ bucket: "", mountPath: "/data", readonly: true, prefix: "" }]);
   let isCreating = $state(false);
   let errorMsg = $state<string | null>(null);
-
-  function serializeMounts() {
-    return mounts
-      .filter((mount) => mount.bucket.trim() || mount.mountPath.trim() || mount.prefix.trim())
-      .map((mount) => ({
-        bucket: mount.bucket.trim(),
-        mountPath: mount.mountPath.trim(),
-        readonly: mount.readonly,
-        prefix: mount.prefix.trim() || undefined,
-      }));
-  }
 
   async function create() {
     isCreating = true;
@@ -30,7 +20,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim() || undefined,
-          r2Mounts: serializeMounts(),
+          r2Mounts: normalizeWorkspaceR2Mounts(mounts),
         }),
       });
       if (!res.ok) throw new Error("Failed to create workspace");
