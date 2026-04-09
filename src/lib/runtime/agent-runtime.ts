@@ -2684,10 +2684,15 @@ async function runSandboxTask(
       config.policy,
       collectNewDirtyPaths(beforeDirtyPaths, afterDirtyPaths),
     );
+    const requiresPatchForWriteIntent =
+      !result.patch
+      && !result.commit
+      && hasWriteIntentEvents(relay.events())
+      && mountedFilesTouched.length === 0;
     if (scopeViolations.length > 0) {
       throw new RuntimeTaskError("POLICY_VIOLATION", scopeViolations[0]);
     }
-    if (!result.patch && !result.commit && hasWriteIntentEvents(relay.events()) && mountedFilesTouched.length === 0) {
+    if (requiresPatchForWriteIntent) {
       throw new RuntimeTaskError(
         "PATCH_MISSING",
         "The task reported file edits, but filepath could not derive a patch from the bounded run.",

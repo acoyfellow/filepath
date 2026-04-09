@@ -646,10 +646,13 @@
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs font-medium uppercase tracking-[0.14em] text-(--t5)">R2 mounts</span>
         {#each data.workspace.r2Mounts as mount (`${mount.mountPath}:${mount.bucket}`)}
-          <span class="inline-flex items-center gap-2 rounded-full border border-(--b1) bg-(--bg2) px-3 py-1 text-xs text-(--t2)">
+            <span class="inline-flex items-center gap-2 rounded-full border border-(--b1) bg-(--bg2) px-3 py-1 text-xs text-(--t2)">
             <span class="font-medium text-(--t1)">{mount.mountPath}</span>
             <span class="text-(--t4)">→</span>
-            <span>{mount.bucket}{mount.prefix ? `${mount.prefix}` : ""}</span>
+            <span>{mount.bucket}</span>
+            {#if mount.prefix}
+              <span class="text-(--t4)">{mount.prefix}</span>
+            {/if}
             <span class="text-(--t4)">{mount.readonly ? "read-only" : "read/write"}</span>
           </span>
         {/each}

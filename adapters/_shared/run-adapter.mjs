@@ -83,14 +83,15 @@ function ensurePathAllowed(workspaceRoot, path, allowedPaths, forbiddenPaths) {
   }
 
   const normalized = normalizePath(path);
-  const absolutePath = normalized.startsWith("/") ? normalized : resolve(workspaceRoot, normalized);
-  const relativePath = normalized.startsWith("/") ? null : normalizePath(relative(workspaceRoot, absolutePath));
+  const isAbsolute = normalized.startsWith("/");
+  const absolutePath = isAbsolute ? normalized : resolve(workspaceRoot, normalized);
+  const relativePath = isAbsolute ? null : normalizePath(relative(workspaceRoot, absolutePath));
 
-  if (!normalized.startsWith("/") && !isPathInside(workspaceRoot, normalized)) {
+  if (!isAbsolute && !isPathInside(workspaceRoot, normalized)) {
     throw new Error(`Path escapes the workspace: ${normalized}`);
   }
 
-  const isAllowed = normalized.startsWith("/")
+  const isAllowed = isAbsolute
     ? matchesScopedPrefix(absolutePath, allowedPaths.filter((entry) => normalizePath(entry).startsWith("/")))
     : matchesScopedPrefix(relativePath ?? normalized, allowedPaths.filter((entry) => !normalizePath(entry).startsWith("/")));
 
@@ -98,7 +99,7 @@ function ensurePathAllowed(workspaceRoot, path, allowedPaths, forbiddenPaths) {
     throw new Error(`Path is outside the allowed scope: ${normalized}`);
   }
 
-  const isForbidden = normalized.startsWith("/")
+  const isForbidden = isAbsolute
     ? forbiddenPaths
         .filter((entry) => normalizePath(entry).startsWith("/"))
         .some((prefix) => matchesScopedPrefix(absolutePath, [prefix]))
