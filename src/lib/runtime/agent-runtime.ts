@@ -592,7 +592,10 @@ async function mountWorkspaceBuckets(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (/mount path already in use/i.test(message)) continue;
+      if (/mount path already in use/i.test(message)) {
+        console.info(`[runtime] reusing existing mount ${mount.mountPath} for ${mount.bucket}`);
+        continue;
+      }
       throw new RuntimeTaskError(
         "R2_MOUNT_FAILED",
         `Could not mount ${mount.bucket} at ${mount.mountPath}: ${message}`,
@@ -2673,7 +2676,7 @@ async function runSandboxTask(
       afterSnapshotRoot,
     );
     const normalizedChangeMetadata = normalizeChangeMetadata({ patch: result.patch });
-    const mountedFilesTouched = extractFilesTouchedFromEvents(relay.events()).filter((path) =>
+    const mountedFilesTouched = extractFilesTouchedFromEvents(relay.events(), (path) =>
       path.startsWith("/") && isMountedPath(path, config.r2Mounts),
     );
     const filesTouched = [

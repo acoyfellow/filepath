@@ -645,7 +645,7 @@
     <div class="border-b border-(--b1) bg-(--bg) px-4 py-3">
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs font-medium uppercase tracking-[0.14em] text-(--t5)">R2 mounts</span>
-        {#each data.workspace.r2Mounts as mount (`${mount.mountPath}:${mount.bucket}`)}
+        {#each data.workspace.r2Mounts as mount, index (index)}
             <span class="inline-flex items-center gap-2 rounded-full border border-(--b1) bg-(--bg2) px-3 py-1 text-xs text-(--t2)">
             <span class="font-medium text-(--t1)">{mount.mountPath}</span>
             <span class="text-(--t4)">→</span>

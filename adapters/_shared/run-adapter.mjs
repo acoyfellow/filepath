@@ -73,7 +73,7 @@ function matchesScopedPrefix(path, prefixes) {
   const normalized = normalizePath(path);
   return prefixes.some((prefix) => {
     const candidate = normalizePath(prefix).replace(/\/$/, "");
-    return normalized === candidate || normalized.startsWith(`${candidate}/`);
+    return candidate === "/" || normalized === candidate || normalized.startsWith(`${candidate}/`);
   });
 }
 

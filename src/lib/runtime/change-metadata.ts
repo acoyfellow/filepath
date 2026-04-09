@@ -84,11 +84,15 @@ export function hasWriteIntentEvents(events: readonly AgentEventType[]): boolean
   return events.some((event) => event.type === "tool" && WRITE_LIKE_TOOL_RE.test(event.name));
 }
 
-export function extractFilesTouchedFromEvents(events: readonly AgentEventType[]): string[] {
+export function extractFilesTouchedFromEvents(
+  events: readonly AgentEventType[],
+  predicate?: (path: string) => boolean,
+): string[] {
   const filesTouched = new Set<string>();
 
   for (const event of events) {
     if (event.type !== "tool" || !event.path || !WRITE_LIKE_TOOL_RE.test(event.name)) continue;
+    if (predicate && !predicate(event.path)) continue;
     filesTouched.add(event.path);
   }
 
