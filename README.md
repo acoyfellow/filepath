@@ -43,6 +43,12 @@ bun run dev
 
 Then open `http://localhost:5173/signup`.
 
+#### Gotchas
+
+- **First `bun run dev` on a clean clone will fail** with `AssertionError: Build ID should be set if containers are defined and enabled`. `dev-preflight.mjs` only writes the sanitized wrangler config when the source already exists, so the first `getPlatformProxy()` call in `vite.config.ts` has nothing to read. Fix: `bun run dev:stop` (or Ctrl-C), then `bun run dev` again — the sanitized file is in place now.
+- **Docker is required, not optional.** `alchemy dev` builds a Sandbox container, so the Docker daemon must be running. Adds ~70s to first startup.
+- **Shut down with `bun run dev:stop`.** Plain Ctrl-C / `kill` leaves 4+ stale processes behind.
+
 ### Development
 
 ```bash
