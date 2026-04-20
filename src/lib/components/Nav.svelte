@@ -8,6 +8,7 @@
   import MenuIcon from "@lucide/svelte/icons/menu";
   import MoonIcon from "@lucide/svelte/icons/moon";
   import MoreVerticalIcon from "@lucide/svelte/icons/more-vertical";
+  import PlugIcon from "@lucide/svelte/icons/plug";
   import SunMediumIcon from "@lucide/svelte/icons/sun-medium";
   import UserRoundIcon from "@lucide/svelte/icons/user-round";
   import XIcon from "@lucide/svelte/icons/x";
@@ -69,6 +70,7 @@
       return [
         { href: "/dashboard", label: "workspaces", active: false },
         { href: "/settings/api-keys", label: "api keys", active: false },
+        { href: "/settings/mcp", label: "mcp", active: false },
         { href: "/settings/account", label: "account", active: false },
       ];
     }
@@ -76,6 +78,7 @@
     return [
       { href: "/dashboard", label: "workspaces", active: current === "dashboard" },
       { href: "/settings/api-keys", label: "api keys", active: current === "api-keys" },
+      { href: "/settings/mcp", label: "mcp", active: current === "mcp" },
       { href: "/settings/account", label: "account", active: current === "account" },
     ];
   }
@@ -225,6 +228,13 @@
               >
                 <KeyRoundIcon />
                 API keys
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
+                onclick={() => goto("/settings/mcp")}
+              >
+                <PlugIcon />
+                MCP
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
