@@ -4,9 +4,11 @@
  * Exports:
  * - Sandbox (re-export for Container binding)
  * - ConversationAgent (Durable Object for agent task execution)
+ * - MCPAgent (Durable Object for per-user OAuth-gated MCP sessions)
  *
  * Routes:
- * - /agents/* → routeAgentRequest (ConversationAgent DO)
+ * - /agents/* → routeAgentRequest (dispatches to ConversationAgent or MCPAgent DO)
+ * - /oauth-close → popup-close helper page (MCP OAuth callback UX)
  * - /runtime/* → internal workspace runtime bridge
  * - Everything else → 404
  */
@@ -15,6 +17,7 @@ import { routeAgentRequest } from "agents";
 import { proxyToSandbox } from "@cloudflare/sandbox";
 export { Sandbox } from "@cloudflare/sandbox";
 export { ConversationAgent } from "./conversation-agent";
+export { MCPAgent } from "./mcp-agent";
 import type { Env } from '../src/types';
 import {
   acceptAgentTask,
@@ -48,9 +51,35 @@ function toRuntimeEnv(env: Env): RuntimeEnv {
   };
 }
 
+const OAUTH_CLOSE_HTML = `<!DOCTYPE html>
+<html><head><title>Connected</title><meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>body{font-family:ui-monospace,monospace;text-align:center;margin-top:4rem;color:#333}.ok{color:#2a7}.fail{color:#c33}</style>
+</head><body>
+<h2 id="msg">Finishing…</h2>
+<script>
+(function(){
+  var p = new URLSearchParams(location.search);
+  var ok = p.get("success") === "1";
+  var el = document.getElementById("msg");
+  el.textContent = ok ? "✓ Connected" : "✗ Failed";
+  el.className = ok ? "ok" : "fail";
+  try { if (window.opener) window.opener.postMessage({ type: "mcp-oauth", success: ok }, "*"); } catch(e) {}
+  try { var bc = new BroadcastChannel("mcp-oauth"); bc.postMessage({ success: ok }); bc.close(); } catch(e) {}
+  setTimeout(function(){ try { window.close(); } catch(e) {} }, 800);
+})();
+</script>
+</body></html>`;
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // MCP OAuth popup redirects here after the callback completes.
+    if (url.pathname === "/oauth-close") {
+      return new Response(OAUTH_CLOSE_HTML, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
 
     const agentResponse = await routeAgentRequest(request, env as Parameters<typeof routeAgentRequest>[1], { cors: true });
     if (agentResponse) {

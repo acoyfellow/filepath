@@ -214,7 +214,7 @@ const HARNESS_SYSTEM_PROMPTS: Record<string, string> = {
 function parseRequestedPermission(
   message: string,
 ): ToolPermission | null {
-  const match = message.match(/\bnot allowed to (inspect|search|run|write|commit)\b/i);
+  const match = message.match(/\bnot allowed to (inspect|search|run|write|commit|mcp|web)\b/i);
   return (match?.[1]?.toLowerCase() as ToolPermission | undefined) ?? null;
 }
 
