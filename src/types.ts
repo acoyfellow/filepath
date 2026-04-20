@@ -10,6 +10,7 @@ export interface Env {
   // Durable Object bindings
   Sandbox: DurableObjectNamespace;
   ConversationAgent?: DurableObjectNamespace;
+  MCPAgent?: DurableObjectNamespace;
 
   // Environment variables
   BETTER_AUTH_SECRET: string;

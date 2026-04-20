@@ -70,6 +70,11 @@ const ConversationAgentDO = DurableObjectNamespace("ConversationAgent", {
   sqlite: true,
 });
 
+const MCPAgentDO = DurableObjectNamespace("MCPAgent", {
+  className: "MCPAgent",
+  sqlite: true,
+});
+
 // Worker
 export const WORKER = await Worker(`${projectName}-worker`, {
   name: `${prefix}-worker`,
@@ -82,6 +87,7 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     Sandbox,
     DB,
     ConversationAgent: ConversationAgentDO,
+    MCPAgent: MCPAgentDO,
   },
   domains: isProd ? ["api.myfilepath.com"] : [],
   url: true,

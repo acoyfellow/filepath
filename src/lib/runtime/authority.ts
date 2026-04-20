@@ -31,6 +31,16 @@ export const TOOL_PERMISSION_OPTIONS = [
     label: "Cross-thread",
     description: "List threads in the workspace, read last messages, and enqueue tasks on other threads (sandbox bridge only).",
   },
+  {
+    id: "mcp",
+    label: "MCP",
+    description: "Call tools from connected MCP servers (e.g. cf-portal).",
+  },
+  {
+    id: "web",
+    label: "Web",
+    description: "Fetch URLs and search the web (requires unsurf harness tool).",
+  },
 ] as const;
 
 export type ToolPermission = (typeof TOOL_PERMISSION_OPTIONS)[number]["id"];
