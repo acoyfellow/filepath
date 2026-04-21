@@ -176,29 +176,40 @@
           {@const open = workspaceOpen(wid)}
           {@const hasKids = row.conversations.length > 0}
           <div class="border-b border-(--b1) last:border-b-0">
-            {#if hasKids}
-              <button
-                type="button"
-                class="flex w-full items-center gap-0.5 bg-(--bg2) px-4 py-3 text-left font-(family-name:--m) text-[13px] text-(--t1) outline-none hover:bg-(--bg3) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
-                aria-expanded={open}
-                aria-label={`${label} workspace, ${open ? "expanded" : "collapsed"}`}
-                onclick={() => toggleWorkspace(wid)}
-              >
-                <span class="flex size-6 shrink-0 items-center justify-center text-(--t5)" aria-hidden="true">
-                  {#if open}
-                    <ChevronDownIcon size={14} strokeWidth={2} />
-                  {:else}
-                    <ChevronRightIcon size={14} strokeWidth={2} />
-                  {/if}
-                </span>
-                <span class="min-w-0">{label}<span class="text-(--t4)">/</span></span>
-              </button>
-            {:else}
-              <div class="flex items-center gap-0.5 bg-(--bg2) px-4 py-3 font-(family-name:--m) text-[13px] text-(--t1)">
-                <span class="inline-block w-6 shrink-0" aria-hidden="true"></span>
-                <span>{label}<span class="text-(--t4)">/</span></span>
-              </div>
-            {/if}
+            <div class="flex items-center gap-0.5 bg-(--bg2) text-[13px] text-(--t1)">
+              {#if hasKids}
+                <button
+                  type="button"
+                  class="flex flex-1 items-center gap-0.5 px-4 py-3 text-left font-(family-name:--m) outline-none hover:bg-(--bg3) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+                  aria-expanded={open}
+                  aria-label={`${label} workspace, ${open ? "expanded" : "collapsed"}`}
+                  onclick={() => toggleWorkspace(wid)}
+                >
+                  <span class="flex size-6 shrink-0 items-center justify-center text-(--t5)" aria-hidden="true">
+                    {#if open}
+                      <ChevronDownIcon size={14} strokeWidth={2} />
+                    {:else}
+                      <ChevronRightIcon size={14} strokeWidth={2} />
+                    {/if}
+                  </span>
+                  <span class="min-w-0">{label}<span class="text-(--t4)">/</span></span>
+                </button>
+              {:else}
+                <div class="flex flex-1 items-center gap-0.5 px-4 py-3 font-(family-name:--m)">
+                  <span class="inline-block w-6 shrink-0" aria-hidden="true"></span>
+                  <span>{label}<span class="text-(--t4)">/</span></span>
+                </div>
+              {/if}
+              {#if wid}
+                <a
+                  href={`/workspace/${wid}`}
+                  class="shrink-0 px-3 py-3 font-(family-name:--m) text-xs text-(--t4) no-underline outline-none hover:text-(--accent) hover:underline focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+                  aria-label={`Open ${label}`}
+                >
+                  open
+                </a>
+              {/if}
+            </div>
 
             {#if open && hasKids}
               {#each row.conversations as entry (entry.id)}
@@ -218,15 +229,22 @@
                   </span>
                 </a>
               {/each}
-            {:else if open && !hasKids}
-              <div class="border-t border-(--b1) px-4 py-2.5 pl-11 text-(--t5)">empty</div>
+            {:else if !hasKids && wid}
+              <a
+                href={`/workspace/${wid}?new=1`}
+                class="flex items-center gap-2 border-t border-(--b1) px-4 py-2.5 pl-11 text-(--t4) no-underline outline-none hover:bg-(--bg3) hover:text-(--accent) focus-visible:bg-(--bg3) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+                aria-label={`Start first conversation in ${label}`}
+              >
+                <PlusIcon size={12} />
+                <span>Start first conversation</span>
+              </a>
             {/if}
           </div>
         {/each}
       </div>
 
       {#if totalConversations === 0 && tree.length > 0}
-        <p class="mt-4 text-sm text-(--t5)">No conversations yet. Open a workspace to start one.</p>
+        <p class="mt-4 text-sm text-(--t5)">No conversations yet — click a workspace above to start one.</p>
       {/if}
     {/if}
 

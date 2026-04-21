@@ -58,6 +58,24 @@
     }
   }
 
+  /**
+   * Poll getState every 500ms until the target server reaches a terminal state
+   * (ready | failed) or the timeout expires. Used after OAuth completes because
+   * the DO's background connection work can take a second or two to finish
+   * after the token exchange, and a single refresh() often snapshots mid-flight.
+   */
+  async function pollUntilSettled(serverId: string, timeoutMs = 10_000): Promise<void> {
+    if (!client) return;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await refresh();
+      const target = servers.find((s) => s.id === serverId);
+      if (!target) return;
+      if (target.state === "ready" || target.state === "failed") return;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
   async function addServer(): Promise<void> {
     if (!client) return;
     const name = newName.trim();
@@ -80,9 +98,10 @@
         if (!popupResult.success) {
           error = "Authentication popup did not complete.";
         }
-        await new Promise((r) => setTimeout(r, 500));
       }
-      await refresh();
+      // Poll until the DO's background connect work settles, so the UI
+      // doesn't show "authenticating" after the popup says success.
+      await pollUntilSettled(result.id);
       newName = "";
       newUrl = "";
       showAddForm = false;
@@ -110,9 +129,8 @@
         if (!popupResult.success) {
           error = "Authentication popup did not complete.";
         }
-        await new Promise((r) => setTimeout(r, 500));
       }
-      await refresh();
+      await pollUntilSettled(result.id);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {

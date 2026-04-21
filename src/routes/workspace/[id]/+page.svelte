@@ -618,6 +618,15 @@
     });
     const id = selectedId ?? agents[0]?.id ?? null;
     if (id) void refreshAgentRuntime(id);
+
+    // Deep-link: /workspace/<id>?new=1 opens the spawn modal on mount.
+    // Strip the query param so a back-nav / refresh doesn't re-trigger it.
+    if (browser && page.url.searchParams.get("new") === "1") {
+      showSpawn = true;
+      const cleaned = new URL(page.url);
+      cleaned.searchParams.delete("new");
+      void goto(cleaned.pathname + cleaned.search, { replaceState: true, noScroll: true });
+    }
   });
 
   onDestroy(() => {
