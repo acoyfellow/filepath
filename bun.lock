@@ -58,11 +58,8 @@
       },
     },
   },
-  "trustedDependencies": [
-    "@acoyfellow/ai-connect",
-  ],
   "packages": {
-    "@acoyfellow/ai-connect": ["@acoyfellow/ai-connect@github:acoyfellow/ai-connect#7c865d8", {}, "acoyfellow-ai-connect-7c865d8", "sha512-fvB3Ihhgj2cOTI3j0icnFNSyT776DBl0ulWC6vQhLQHhXbfoqUEIF3eTFzCEQHAIQp7Cev+jTZ+gfq5dFjp9nw=="],
+    "@acoyfellow/ai-connect": ["@acoyfellow/ai-connect@github:acoyfellow/ai-connect#812438d", {}, "acoyfellow-ai-connect-812438d", "sha512-R5vAblRk+rzzNi9nq9rni5RAFCbu2V6S+EWPBuPt5nr2hW0Ntj0pciFAcguKrqt0OdEJVYTMzhmB0DV7c9qMEA=="],
 
     "@ai-sdk/gateway": ["@ai-sdk/gateway@3.0.35", "", { "dependencies": { "@ai-sdk/provider": "3.0.7", "@ai-sdk/provider-utils": "4.0.13", "@vercel/oidc": "3.1.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-9aRTVM1P1u4yUIjBpco/WCF1WXr/DgWKuDYgLLHdENS8kiEuxDOPJuGbc/6+7EwQ6ZqSh0UOgeqvHfGJfU23Qg=="],
 

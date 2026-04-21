@@ -5,9 +5,6 @@
     "type": "git",
     "url": "https://github.com/acoyfellow/filepath"
   },
-  "trustedDependencies": [
-    "@acoyfellow/ai-connect"
-  ],
   "dependencies": {
     "@acoyfellow/ai-connect": "github:acoyfellow/ai-connect#main",
     "@ai-sdk/openai": "^3.0.39",
