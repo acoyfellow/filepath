@@ -123,7 +123,11 @@ export function openOAuthPopup(authUrl: string): Promise<{ success: boolean }> {
       if (settled) return;
       settled = true;
       window.removeEventListener("message", onMessage);
-      try { bc?.close(); } catch {}
+      try {
+        bc?.close();
+      } catch {
+        // channel already closed
+      }
       clearInterval(pollTimer);
       resolve({ success });
     };
