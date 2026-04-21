@@ -834,7 +834,7 @@
       <div class="flex h-16 w-16 items-center justify-center text-(--t5) opacity-60">
         <BotIcon size={44} />
       </div>
-      <p class="max-w-sm text-sm text-(--t4)">
+      <p class="max-w-sm text-(--t4) text-balance">
         No conversations yet. Use <span class="font-medium text-(--t1)">+</span> next to the logo to create one.
       </p>
     </div>
