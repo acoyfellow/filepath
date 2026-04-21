@@ -1,3 +1,37 @@
+-- "fly free" migration: this is the first migration in the filesystem after
+-- the big refactor that nuked migrations/. Prod + local D1s may have tables
+-- from the old 0000-0006 migrations still around. Drop them first so this
+-- CREATE TABLE wave lands cleanly on any existing DB. All data is discarded.
+--
+-- Safe to re-run on empty DBs (IF EXISTS is a no-op there).
+DROP TABLE IF EXISTS `agent_interruption`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `agent_message`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `agent_result`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `agent_task`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `agent`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `ai_connection`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `apikey`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `harness`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `passkey`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `session`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `verification`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `workspace`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `account`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `user`;
+--> statement-breakpoint
 CREATE TABLE `account` (
 	`id` text PRIMARY KEY NOT NULL,
 	`account_id` text NOT NULL,
