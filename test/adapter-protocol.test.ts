@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseAgentEvent } from "../src/lib/protocol";
 
-const HARNESS_IDS = ["shelley", "pi", "claude-code", "codex", "cursor", "amp", "hermes"] as const;
+const HARNESS_IDS = ["shelley", "pi", "claude-code", "codex", "cursor", "amp"] as const;
 
 function runAdapter(harnessId: string, task: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const workspaceRoot = mkdtempSync(join(tmpdir(), "filepath-adapter-test-"));
@@ -17,7 +17,9 @@ function runAdapter(harnessId: string, task: string): Promise<{ stdout: string; 
         ...process.env,
         FILEPATH_TASK: task,
         FILEPATH_API_KEY: "sk-test-placeholder",
-        FILEPATH_MODEL: "anthropic/claude-sonnet-4",
+        FILEPATH_MODEL: "claude-sonnet-4-6",
+        FILEPATH_PROVIDER: "anthropic",
+        FILEPATH_ENDPOINT: "https://api.anthropic.com/v1/messages",
         FILEPATH_WORKSPACE: workspaceRoot,
         FILEPATH_ALLOWED_PATHS: JSON.stringify(["."]),
         FILEPATH_FORBIDDEN_PATHS: JSON.stringify([".git", "node_modules"]),

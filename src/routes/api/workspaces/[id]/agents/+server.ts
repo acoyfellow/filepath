@@ -7,7 +7,7 @@ import {
   listAgents,
   AgentCreateInputSchema,
 } from "../../../../../core/app";
-import { ensureProviderKeyForModel } from "$lib/server/provider-access";
+import { getAiConnection } from "$lib/ai-connections";
 
 const DEFAULT_AGENT_SCOPE = {
   allowedPaths: ["."],
@@ -23,6 +23,8 @@ export const GET: RequestHandler = async (event: RequestEvent) => {
 
 export const POST: RequestHandler = async (event: RequestEvent) => {
   if (!event.locals.user) throw error(401, "Unauthorized");
+  const db = event.platform?.env?.DB;
+  if (!db) throw error(500, "Database not available");
   const ctx = createUserContext(event);
   const raw = await event.request.json().catch(() => ({})) as Record<string, unknown>;
 
@@ -33,13 +35,10 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
     }),
   );
 
-  const access = await ensureProviderKeyForModel({
-    userId: event.locals.user.id,
-    model: input.model,
-    platform: event.platform,
-  });
-  if (!("ok" in access)) {
-    return json({ error: access.error }, { status: access.status });
+  // Ensure the chosen connection exists and belongs to this user.
+  const connection = await getAiConnection(db, event.locals.user.id, input.aiConnectionId);
+  if (!connection) {
+    return json({ error: "AI connection not found" }, { status: 400 });
   }
 
   return json(await runOrThrow(createAgent(ctx, event.params.id!, input)), {

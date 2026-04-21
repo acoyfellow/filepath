@@ -19,15 +19,8 @@ import {
   type AgentScope,
   type ToolPermission,
 } from "$lib/runtime/authority";
-import { decryptApiKey } from "$lib/crypto";
 import { resolveBetterAuthSecret } from "$lib/better-auth-secret";
-import {
-  canonicalizeStoredModel,
-  deserializeStoredProviderKeys,
-  getProviderForModel,
-  normalizeModelForProvider,
-  PROVIDERS,
-} from "$lib/provider-keys";
+import { decryptConnectionKey } from "$lib/ai-connections";
 import {
   hasWriteIntentEvents,
   normalizeChangeMetadata,
@@ -54,6 +47,10 @@ export interface RuntimeExecutionContext {
 interface AgentExecutionConfig {
   harnessId: string;
   model: string;
+  aiConnectionId: string;
+  provider: string;
+  endpoint: string;
+  userId: string;
   policy: AgentScope;
   workspaceId: string;
   initialSourceUrl: string | null;
@@ -599,32 +596,6 @@ function resolveWorkspaceRoot(sourceUrl?: string | null): string {
   return `/workspace/${deriveSourceDirectoryName(sourceUrl)}`;
 }
 
-function extractAssistantText(value: unknown): string {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (
-          item &&
-          typeof item === "object" &&
-          "text" in item &&
-          typeof (item as { text?: unknown }).text === "string"
-        ) {
-          return (item as { text: string }).text;
-        }
-        return "";
-      })
-      .join("")
-      .trim();
-  }
-
-  return "";
-}
-
 async function saveAgentMessage(
   env: RuntimeEnv,
   agentId: string,
@@ -847,54 +818,60 @@ export async function loadAgentExecutionConfig(
   bridge?: { taskId: string },
 ): Promise<AgentExecutionConfig> {
   const row = await env.DB.prepare(
-    `SELECT a.harness_id, a.model, a.allowed_paths, a.forbidden_paths,
-            a.tool_permissions, a.writable_root, w.id as workspace_id, w.initial_source_url,
-            u.openrouter_api_key as user_key, h.entry_command as entry_command,
-            h.config as harness_config
+    `SELECT a.harness_id, a.ai_connection_id, a.allowed_paths, a.forbidden_paths,
+            a.tool_permissions, a.writable_root, w.id as workspace_id, w.user_id as user_id,
+            w.initial_source_url,
+            c.provider as conn_provider, c.endpoint as conn_endpoint, c.model as conn_model,
+            c.api_key_encrypted as conn_api_key, c.max_context_tokens as conn_max_tokens,
+            h.entry_command as entry_command, h.config as harness_config
        FROM agent a
        JOIN workspace w ON a.workspace_id = w.id
-       JOIN user u ON w.user_id = u.id
        JOIN harness h ON h.id = a.harness_id
+       JOIN ai_connection c ON c.id = a.ai_connection_id
       WHERE a.id = ? AND a.workspace_id = ?`,
   ).bind(agentId, workspaceId).first<{
     harness_id: string;
-    model: string;
+    ai_connection_id: string;
     allowed_paths: string;
     forbidden_paths: string;
     tool_permissions: string;
     writable_root: string | null;
     workspace_id: string;
+    user_id: string;
     initial_source_url: string | null;
-    user_key: string | null;
+    conn_provider: string;
+    conn_endpoint: string;
+    conn_model: string;
+    conn_api_key: string;
+    conn_max_tokens: number;
     entry_command: string;
     harness_config: string;
   }>();
 
   if (!row) {
-    throw new RuntimeTaskError("AGENT_NOT_FOUND", `Agent ${agentId} not found.`);
+    throw new RuntimeTaskError(
+      "AGENT_NOT_FOUND",
+      `Agent ${agentId} not found or has no AI connection bound to it.`,
+    );
   }
 
-  const provider = getProviderForModel(row.model);
-  const providerDefinition = PROVIDERS[provider];
-  let containerApiKey = "";
   const secret = getBetterAuthSecret(env);
-
-  if (row.user_key && secret) {
-    try {
-      const decrypted = await decryptApiKey(row.user_key, secret);
-      containerApiKey = deserializeStoredProviderKeys(decrypted)[provider] || "";
-    } catch {
-      throw new RuntimeTaskError(
-        "PROVIDER_KEY_UNREADABLE",
-        "Stored account router keys are unreadable. Re-save your account keys and try again.",
-      );
-    }
+  if (!secret) {
+    throw new RuntimeTaskError(
+      "RUNTIME_BRIDGE_MISCONFIGURED",
+      "BETTER_AUTH_SECRET is required to decrypt AI connection keys.",
+    );
   }
-
+  const containerApiKey = await decryptConnectionKey(
+    env.DB,
+    secret,
+    row.user_id,
+    row.ai_connection_id,
+  );
   if (!containerApiKey) {
     throw new RuntimeTaskError(
-      "PROVIDER_KEY_MISSING",
-      `No valid API key available for the ${providerDefinition.label} router.`,
+      "PROVIDER_KEY_UNREADABLE",
+      "Stored AI connection key is unreadable. Re-save it in Settings → AI.",
     );
   }
 
@@ -915,8 +892,10 @@ export async function loadAgentExecutionConfig(
   const envVars: Record<string, string> = {
     ...buildAgentEnv({
       harnessId: row.harness_id as HarnessId,
-      model: canonicalizeStoredModel(row.model),
+      model: row.conn_model,
       apiKey: containerApiKey,
+      provider: row.conn_provider,
+      endpoint: row.conn_endpoint,
       task,
       workspacePath: workspaceRoot,
       allowedPaths: policy.allowedPaths,
@@ -963,7 +942,11 @@ export async function loadAgentExecutionConfig(
 
   return {
     harnessId: row.harness_id,
-    model: row.model,
+    model: row.conn_model,
+    aiConnectionId: row.ai_connection_id,
+    provider: row.conn_provider,
+    endpoint: row.conn_endpoint,
+    userId: row.user_id,
     policy,
     workspaceId: row.workspace_id,
     initialSourceUrl: row.initial_source_url,
@@ -2064,76 +2047,50 @@ async function getActiveTaskSnapshot(
 }
 
 async function runDirectModelTask(
+  env: RuntimeEnv,
+  userId: string,
   config: AgentExecutionConfig,
   task: string,
 ): Promise<DirectModelResponse> {
-  const provider = getProviderForModel(config.model);
-  const providerDefinition = PROVIDERS[provider];
-
-  let response: Response;
-  try {
-    response = await fetch(providerDefinition.apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.envVars.FILEPATH_API_KEY}`,
-        ...(providerDefinition.defaultHeaders ?? {}),
-      },
-      body: JSON.stringify({
-        model: normalizeModelForProvider(config.model),
-        temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content:
-              HARNESS_SYSTEM_PROMPTS[config.harnessId] ??
-              `You are the ${config.harnessId} filepath harness. Respond directly to the latest user task.`,
-          },
-          {
-            role: "user",
-            content: task,
-          },
-        ],
-      }),
-    });
-  } catch (error) {
+  const secret = getBetterAuthSecret(env);
+  if (!secret) {
     throw new RuntimeTaskError(
-      "PROVIDER_NETWORK_ERROR",
-      `${providerDefinition.label} request failed: ${serializeErrorDetail(error)}`,
-      true,
+      "RUNTIME_BRIDGE_MISCONFIGURED",
+      "BETTER_AUTH_SECRET is required to call an AI connection.",
     );
   }
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    const retryable = response.status === 429 || response.status >= 500;
+  const { callAiModel } = await import("$lib/ai-connections");
+  try {
+    const result = await callAiModel(env.DB, secret, userId, {
+      connectionId: config.aiConnectionId,
+      messages: [
+        {
+          role: "system",
+          content:
+            HARNESS_SYSTEM_PROMPTS[config.harnessId] ??
+            `You are the ${config.harnessId} filepath harness. Respond directly to the latest user task.`,
+        },
+        { role: "user", content: task },
+      ],
+      options: { temperature: 0 },
+    });
+    if (!result.content) {
+      throw new RuntimeTaskError(
+        "PROVIDER_EMPTY_RESPONSE",
+        "AI connection responded without assistant text.",
+      );
+    }
+    return { assistantText: result.content, summary: "Agent completed the task." };
+  } catch (error) {
+    if (error instanceof RuntimeTaskError) throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    const retryable = /\b(429|5\d\d)\b/.test(detail);
     throw new RuntimeTaskError(
       retryable ? "PROVIDER_RETRYABLE" : "PROVIDER_REQUEST_FAILED",
-      `${providerDefinition.label} request failed (${response.status}): ${errorBody.slice(0, 400) || response.statusText}`,
+      detail || "AI connection request failed.",
       retryable,
     );
   }
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{
-          message?: { content?: unknown };
-        }>;
-      }
-    | null;
-
-  const assistantText = extractAssistantText(payload?.choices?.[0]?.message?.content);
-  if (!assistantText) {
-    throw new RuntimeTaskError(
-      "PROVIDER_EMPTY_RESPONSE",
-      `${providerDefinition.label} response did not include assistant text.`,
-    );
-  }
-
-  return {
-    assistantText,
-    summary: "Agent completed the task.",
-  };
 }
 
 async function runLocalWaitTask(
@@ -2238,7 +2195,7 @@ async function runDirectExecutionTask(
     await ensureNotCancelled(env, workspaceId, agentId);
     await patchTaskRow(env, taskId, { attempt, heartbeatAt: now() });
     try {
-      const response = await runDirectModelTask(config, taskPrompt);
+      const response = await runDirectModelTask(env, config.userId, config, taskPrompt);
       await ensureNotCancelled(env, workspaceId, agentId);
       const finishedAt = now();
       await saveAgentMessage(env, agentId, "assistant", response.assistantText);

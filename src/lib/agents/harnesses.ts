@@ -1,4 +1,3 @@
-import { DEFAULT_MODEL_FULL } from "$lib/config";
 import type { AgentHarness } from "$lib/types/workspace";
 
 export const BUILTIN_HARNESSES: AgentHarness[] = [
@@ -8,7 +7,6 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     description: "Full-stack engineering agent. filepath-native reference implementation.",
     adapter: "shelley",
     entryCommand: "node /opt/filepath/adapters/shelley/index.mjs",
-    defaultModel: DEFAULT_MODEL_FULL,
     icon: "shell",
     enabled: true,
     config: {},
@@ -19,7 +17,6 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     description: "Research and analysis. Deep dives into docs, APIs, codebases.",
     adapter: "pi",
     entryCommand: "node /opt/filepath/adapters/pi/index.mjs",
-    defaultModel: DEFAULT_MODEL_FULL,
     icon: "search",
     enabled: true,
     config: {},
@@ -30,7 +27,6 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     description: "Anthropic's agentic coding tool. Complex multi-file changes.",
     adapter: "claude-code",
     entryCommand: "node /opt/filepath/adapters/claude-code/index.mjs",
-    defaultModel: DEFAULT_MODEL_FULL,
     icon: "bot",
     enabled: true,
     config: {},
@@ -41,7 +37,6 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     description: "OpenAI's coding agent. Strong at Python, scripting, data.",
     adapter: "codex",
     entryCommand: "node /opt/filepath/adapters/codex/index.mjs",
-    defaultModel: "openai/gpt-5",
     icon: "scroll",
     enabled: true,
     config: {},
@@ -52,7 +47,6 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     description: "Cursor's agent mode via CLI. IDE-grade code intelligence.",
     adapter: "cursor",
     entryCommand: "node /opt/filepath/adapters/cursor/index.mjs",
-    defaultModel: DEFAULT_MODEL_FULL,
     icon: "mouse-pointer",
     enabled: true,
     config: {},
@@ -63,21 +57,9 @@ export const BUILTIN_HARNESSES: AgentHarness[] = [
     description: "Sourcegraph's agent. Large codebase navigation, cross-repo changes.",
     adapter: "amp",
     entryCommand: "node /opt/filepath/adapters/amp/index.mjs",
-    defaultModel: DEFAULT_MODEL_FULL,
     icon: "zap",
     enabled: true,
     config: {},
-  },
-  {
-    id: "hermes",
-    name: "Hermes",
-    description: "Hermes Agent. Choose the model it will use below.",
-    adapter: "hermes",
-    entryCommand: "node /opt/filepath/adapters/hermes/index.mjs",
-    defaultModel: DEFAULT_MODEL_FULL,
-    icon: "box",
-    enabled: true,
-    config: { hermesVersion: "main" },
   },
 ];
 
@@ -88,7 +70,6 @@ export function getBuiltinHarnessRows() {
     description: harness.description,
     adapter: harness.adapter,
     entryCommand: harness.entryCommand,
-    defaultModel: harness.defaultModel,
     icon: harness.icon,
     enabled: harness.enabled,
     config: JSON.stringify(harness.config),

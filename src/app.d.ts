@@ -27,6 +27,16 @@ declare global {
         FILEPATH_RUNTIME_PUBLIC_BASE_URL?: string;
         BETTER_AUTH_SECRET?: string;
         BETTER_AUTH_URL?: string;
+        /** Cloudflare Email Sending binding (env.EMAIL.send({to, from, subject, html, text})). */
+        EMAIL?: {
+          send(opts: {
+            to: string | string[];
+            from: string | { email: string; name?: string };
+            subject: string;
+            text?: string;
+            html?: string;
+          }): Promise<{ messageId: string }>;
+        };
 				};
 		}
 	}

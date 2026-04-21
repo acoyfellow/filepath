@@ -1,10 +1,7 @@
 /**
  * Shared runtime bridge for same-workspace cross-thread tools.
  * JSON harnesses use bridge actions inside `run-adapter.mjs`.
- * CLI/subprocess harnesses (e.g. Hermes) use `runCrossThreadPreflightBeforeSubprocess` first.
  */
-
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export const CROSS_THREAD_ACTION_HELP =
   'Cross-thread (same workspace only): {"action":"list_threads"}; {"action":"thread_last","agentId":"..."}; {"action":"thread_snapshot","agentId":"..."}; {"action":"thread_send","agentId":"...","content":"..."}';
@@ -123,23 +120,6 @@ export async function executeCrossThreadInstruction(instruction, emit) {
   throw new Error(`Unknown cross-thread action: ${instruction.action}`);
 }
 
-function extractTextContent(value) {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
-          return item.text;
-        }
-        return "";
-      })
-      .join("")
-      .trim();
-  }
-  return "";
-}
-
 function stripCodeFences(value) {
   const trimmed = value.trim();
   const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -158,116 +138,7 @@ export function parseJsonInstruction(raw) {
   return parsed;
 }
 
-const CROSS_THREAD_ONLY_ACTIONS = new Set([
-  "list_threads",
-  "thread_last",
-  "thread_snapshot",
-  "thread_send",
-  "done",
-]);
-
-async function callOpenRouterCrossThreadPass({ harnessId, task, apiKey, model, transcript }) {
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://myfilepath.com",
-      "X-Title": `filepath-${harnessId}-cross-thread`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content: [
-            "You are a filepath orchestration assistant.",
-            "Respond with exactly one JSON object per turn, no markdown fences.",
-            `Allowed actions only: ${CROSS_THREAD_ACTION_HELP}; {"action":"done","summary":"..."}.`,
-            "Use one action at a time. Same workspace only.",
-          ].join("\n"),
-        },
-        { role: "user", content: task },
-        ...transcript,
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(
-      `OpenRouter request failed (${response.status}): ${errorBody.slice(0, 400) || response.statusText}`,
-    );
-  }
-
-  const payload = await response.json();
-  const content = extractTextContent(payload?.choices?.[0]?.message?.content).trim();
-  if (!content) {
-    throw new Error("OpenRouter response did not include assistant text.");
-  }
-  return content;
-}
-
-/**
- * For harnesses that run a subprocess CLI (not the shared JSON loop): cross-thread only via OpenRouter, then prepend context to the real task.
- * @returns {Promise<string>} prefix (empty if cross_thread off)
- */
-export async function runCrossThreadPreflightBeforeSubprocess({
-  harnessId,
-  task,
-  apiKey,
-  model,
-  emit,
-  maxSteps = 16,
-}) {
-  if (!crossThreadPermissionFromEnv()) {
-    return "";
-  }
-
-  const transcript = [];
-  const traceLines = [];
-
-  for (let step = 0; step < maxSteps; step += 1) {
-    const raw = await callOpenRouterCrossThreadPass({
-      harnessId,
-      task,
-      apiKey,
-      model,
-      transcript,
-    });
-    const instruction = parseJsonInstruction(raw);
-    transcript.push({ role: "assistant", content: raw });
-
-    if (instruction.action === "done") {
-      const summary =
-        typeof instruction.summary === "string" && instruction.summary.trim()
-          ? instruction.summary.trim()
-          : "Cross-thread preflight complete.";
-      traceLines.push(`(done) ${summary}`);
-      return [
-        "[filepath cross-thread preflight — same workspace only]",
-        ...traceLines,
-        "",
-        "Main harness task follows after the delimiter line.",
-        "---",
-        "",
-      ].join("\n");
-    }
-
-    if (!CROSS_THREAD_ONLY_ACTIONS.has(instruction.action)) {
-      transcript.push({
-        role: "user",
-        content:
-          "Invalid action for this phase. Use only list_threads, thread_last, thread_snapshot, thread_send, or done.",
-      });
-      continue;
-    }
-
-    const userLine = await executeCrossThreadInstruction(instruction, emit);
-    traceLines.push(userLine);
-    transcript.push({ role: "user", content: userLine });
-  }
-
-  throw new Error("Cross-thread preflight exceeded step limit.");
-}
+// (Removed: runCrossThreadPreflightBeforeSubprocess + related constants.
+// They were only used by the hermes harness which was dropped with the
+// ai-connect refactor. In-loop cross-thread actions still work via
+// `executeCrossThreadInstruction` inside run-adapter.mjs.)

@@ -1,25 +1,10 @@
 import { redirect, error } from "@sveltejs/kit";
 import { resolveRuntimeBaseUrl } from "$lib/runtime/http";
 import { getDrizzle } from "$lib/auth";
-import { workspace, agent, user } from "$lib/schema";
+import { workspace, agent } from "$lib/schema";
 import { eq, and, desc } from "drizzle-orm";
 import type { ServerLoadEvent } from "@sveltejs/kit";
-import { decryptApiKey } from "$lib/crypto";
-import { PROVIDER_KEYS_UNREADABLE_MESSAGE } from "$lib/provider-key-state";
-import {
-  deserializeStoredProviderKeys,
-  maskProviderKeys,
-} from "$lib/provider-keys";
-
-function getBetterAuthSecret(
-  platform: ServerLoadEvent["platform"],
-): string | undefined {
-  const secret =
-    platform?.env && "BETTER_AUTH_SECRET" in platform.env
-      ? platform.env.BETTER_AUTH_SECRET
-      : undefined;
-  return typeof secret === "string" ? secret : undefined;
-}
+import { listAiConnections } from "$lib/ai-connections";
 
 export const load = async ({ params, locals, platform, url }: ServerLoadEvent) => {
   if (!locals.user) throw redirect(302, "/");
@@ -43,29 +28,13 @@ export const load = async ({ params, locals, platform, url }: ServerLoadEvent) =
     .where(eq(agent.workspaceId, params.id as string))
     .orderBy(desc(agent.createdAt), desc(agent.id));
 
-  const users = await db
-    .select({ openrouterApiKey: user.openrouterApiKey })
-    .from(user)
-    .where(eq(user.id, locals.user.id));
-
-  let accountKeysMasked = { openrouter: null, zen: null } as {
-    openrouter: string | null;
-    zen: string | null;
-  };
-  let accountKeysError: string | null = null;
-
-  const encryptedKeys = users[0]?.openrouterApiKey;
-  const secret = getBetterAuthSecret(platform);
-  if (encryptedKeys && secret) {
-    try {
-      const decrypted = await decryptApiKey(encryptedKeys, secret);
-      accountKeysMasked = maskProviderKeys(
-        deserializeStoredProviderKeys(decrypted),
-      );
-    } catch {
-      accountKeysMasked = { openrouter: null, zen: null };
-      accountKeysError = PROVIDER_KEYS_UNREADABLE_MESSAGE;
-    }
+  // Surface the user's configured AI connections (public shape — no keys).
+  // The workspace UI needs this to populate the connection picker when
+  // creating / editing an agent.
+  let aiConnections: Awaited<ReturnType<typeof listAiConnections>> = [];
+  const d1 = platform?.env?.DB;
+  if (d1) {
+    aiConnections = await listAiConnections(d1, locals.user.id);
   }
 
   const agentBaseUrl = resolveRuntimeBaseUrl({ url, platform });
@@ -73,8 +42,7 @@ export const load = async ({ params, locals, platform, url }: ServerLoadEvent) =
     user: locals.user,
     workspace: currentWorkspace,
     agents,
-    accountKeysMasked,
-    accountKeysError,
+    aiConnections,
     agentBaseUrl,
   };
 };

@@ -6,6 +6,7 @@ import {
   Worker,
   Container,
   D1Database,
+  EmailSender,
 } from "alchemy/cloudflare";
 
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state";
@@ -100,10 +101,17 @@ export const WORKER = await Worker(`${projectName}-worker`, {
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
     BETTER_AUTH_URL: isProd ? "https://myfilepath.com" : "http://localhost:5173",
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
-    OPENCODE_ZEN_API_KEY: process.env.OPENCODE_ZEN_API_KEY || "",
-    // OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "", // BYOK: Users provide via Settings → API Keys
+    // Inference providers are BYOK per-user via /settings/ai — no system-wide env vars.
     CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || "",
   },
+});
+
+// Cloudflare Email Sending binding — `env.EMAIL.send({to, from, subject, html, text})`.
+// One-time dashboard step: Compute → Email Service → Email Sending → Onboard myfilepath.com
+// (alchemy doesn't model the account-level enablement yet; DNS records are managed by CF).
+const EMAIL = EmailSender({
+  allowedSenderAddresses: ["noreply@myfilepath.com", "support@myfilepath.com"],
+  dev: { remote: true },
 });
 
 export const APP = await SvelteKit(`${projectName}-app`, {
@@ -113,6 +121,7 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     WORKER,
     Sandbox,
     DB,
+    EMAIL,
   },
   url: true,
   adopt: true,
@@ -120,11 +129,9 @@ export const APP = await SvelteKit(`${projectName}-app`, {
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || (() => {
       throw new Error("BETTER_AUTH_SECRET required");
     })(),
-    BETTER_AUTH_URL: isProd 
-      ? "https://myfilepath.com" 
+    BETTER_AUTH_URL: isProd
+      ? "https://myfilepath.com"
       : process.env.BETTER_AUTH_URL || "http://localhost:5173",
-    MAILGUN_API_KEY: process.env.MAILGUN_API_KEY || '',
-    MAILGUN_DOMAIN: process.env.MAILGUN_DOMAIN || '',
   },
   script: `
     import svelteKitHandler from './.svelte-kit/cloudflare/_worker.js';

@@ -79,7 +79,6 @@ export const HarnessCreateInputSchema = Schema.Struct({
   description: Schema.String,
   adapter: Schema.String,
   entryCommand: Schema.optional(Schema.String),
-  defaultModel: Schema.String,
   icon: Schema.String,
   enabled: Schema.optional(Schema.Boolean),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
@@ -93,7 +92,6 @@ export const HarnessUpdateInputSchema = Schema.Struct({
   description: Schema.String,
   adapter: Schema.String,
   entryCommand: Schema.optional(Schema.String),
-  defaultModel: Schema.String,
   icon: Schema.String,
   enabled: Schema.optional(Schema.Boolean),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
@@ -105,7 +103,7 @@ export type HarnessUpdateInput = Schema.Schema.Type<
 export const AgentCreateInputSchema = Schema.Struct({
   name: Schema.String,
   harnessId: Schema.String,
-  model: Schema.String,
+  aiConnectionId: Schema.String,
   allowedPaths: Schema.Array(Schema.String),
   forbiddenPaths: Schema.Array(Schema.String),
   toolPermissions: Schema.Array(Schema.String),
@@ -119,7 +117,7 @@ export type AgentCreateInput = Schema.Schema.Type<
 export const AgentUpdateInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   harnessId: Schema.optional(Schema.String),
-  model: Schema.optional(Schema.String),
+  aiConnectionId: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
   config: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
   allowedPaths: Schema.optional(Schema.Array(Schema.String)),
@@ -154,7 +152,7 @@ export const WorkerRunScopeInputSchema = Schema.Struct({
 export const WorkerRunInputSchema = Schema.Struct({
   content: Schema.String,
   harnessId: Schema.String,
-  model: Schema.String,
+  aiConnectionId: Schema.String,
   scope: Schema.optional(WorkerRunScopeInputSchema),
   agentId: Schema.optional(Schema.String),
   identity: Schema.optional(
@@ -423,7 +421,6 @@ export function listHarnesses(ctx: AppContext) {
         description: row.description,
         adapter: row.adapter,
         entryCommand: row.entryCommand,
-        defaultModel: row.defaultModel,
         icon: row.icon,
         enabled: row.enabled,
         config: JSON.parse(row.config) as Record<string, unknown>,
@@ -455,7 +452,6 @@ export function createHarness(ctx: AppContext, input: HarnessCreateInput) {
             description: input.description.trim(),
             adapter: input.adapter.trim(),
             entryCommand: input.entryCommand?.trim() ?? "",
-            defaultModel: input.defaultModel.trim(),
             icon: input.icon.trim(),
             enabled: input.enabled ?? true,
             config: JSON.stringify(input.config ?? {}),
@@ -491,7 +487,6 @@ export function updateHarness(ctx: AppContext, id: string, input: HarnessUpdateI
               description: input.description.trim(),
               adapter: input.adapter.trim(),
               entryCommand: input.entryCommand?.trim() ?? "",
-              defaultModel: input.defaultModel.trim(),
               icon: input.icon.trim(),
               enabled: input.enabled ?? true,
               config: JSON.stringify(input.config ?? {}),
@@ -844,8 +839,8 @@ export function createAgent(
       if (!trimmedName) {
         return Effect.fail(new BadRequest({ message: "Agent name is required" }));
       }
-      if (!input.model.trim()) {
-        return Effect.fail(new BadRequest({ message: "Choose a model before creating an agent" }));
+      if (!input.aiConnectionId.trim()) {
+        return Effect.fail(new BadRequest({ message: "Choose an AI connection before creating an agent" }));
       }
 
       return fromPromise(
@@ -855,7 +850,7 @@ export function createAgent(
             workspaceId,
             name: trimmedName,
             harnessId: input.harnessId,
-            model: input.model.trim(),
+            aiConnectionId: input.aiConnectionId.trim(),
             config: JSON.stringify(input.config ?? {}),
             allowedPaths: JSON.stringify(policy.allowedPaths),
             forbiddenPaths: JSON.stringify(policy.forbiddenPaths),
@@ -905,8 +900,8 @@ export function createAgentForRun(
     Effect.flatMap((policy): Effect.Effect<{ id: string; name: string }, AppError> => {
       const agentId = generateId();
       const name = `run-${generateId(8)}`;
-      if (!input.model.trim()) {
-        return Effect.fail(new BadRequest({ message: "Model is required" }));
+      if (!input.aiConnectionId.trim()) {
+        return Effect.fail(new BadRequest({ message: "AI connection is required" }));
       }
 
       return fromPromise(
@@ -916,7 +911,7 @@ export function createAgentForRun(
             workspaceId,
             name,
             harnessId: input.harnessId,
-            model: input.model.trim(),
+            aiConnectionId: input.aiConnectionId.trim(),
             config: JSON.stringify({}),
             allowedPaths: JSON.stringify(policy.allowedPaths),
             forbiddenPaths: JSON.stringify(policy.forbiddenPaths),
@@ -1001,7 +996,7 @@ export function updateAgent(
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.harnessId !== undefined) updates.harnessId = input.harnessId;
-      if (input.model !== undefined) updates.model = input.model;
+      if (input.aiConnectionId !== undefined) updates.aiConnectionId = input.aiConnectionId;
       if (input.status !== undefined) updates.status = input.status;
       if (input.config !== undefined) updates.config = JSON.stringify(input.config);
       if (input.containerId !== undefined) updates.containerId = input.containerId;

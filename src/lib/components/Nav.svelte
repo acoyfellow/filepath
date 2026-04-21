@@ -9,6 +9,7 @@
   import MoonIcon from "@lucide/svelte/icons/moon";
   import MoreVerticalIcon from "@lucide/svelte/icons/more-vertical";
   import PlugIcon from "@lucide/svelte/icons/plug";
+  import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import SunMediumIcon from "@lucide/svelte/icons/sun-medium";
   import UserRoundIcon from "@lucide/svelte/icons/user-round";
   import XIcon from "@lucide/svelte/icons/x";
@@ -69,6 +70,7 @@
     if (isWorkspace) {
       return [
         { href: "/dashboard", label: "workspaces", active: false },
+        { href: "/settings/ai", label: "ai", active: false },
         { href: "/settings/api-keys", label: "api keys", active: false },
         { href: "/settings/mcp", label: "mcp", active: false },
         { href: "/settings/account", label: "account", active: false },
@@ -77,6 +79,7 @@
 
     return [
       { href: "/dashboard", label: "workspaces", active: current === "dashboard" },
+      { href: "/settings/ai", label: "ai", active: current === "ai" },
       { href: "/settings/api-keys", label: "api keys", active: current === "api-keys" },
       { href: "/settings/mcp", label: "mcp", active: current === "mcp" },
       { href: "/settings/account", label: "account", active: current === "account" },
@@ -222,6 +225,13 @@
               sideOffset={8}
               class="min-w-[12rem] rounded-xl border border-(--b1) bg-(--bg) p-1.5 text-(--t2) shadow-(--shadow)"
             >
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
+                onclick={() => goto("/settings/ai")}
+              >
+                <SparklesIcon />
+                AI
+              </DropdownMenu.Item>
               <DropdownMenu.Item
                 class="cursor-pointer rounded-lg px-3 py-2 font-(family-name:--f) text-[13px] font-medium text-(--t2) [&_svg]:size-4 [&_svg]:text-(--t4) data-highlighted:bg-(--bg3) data-highlighted:text-(--t1) data-highlighted:[&_svg]:text-(--t2)"
                 onclick={() => goto("/settings/api-keys")}

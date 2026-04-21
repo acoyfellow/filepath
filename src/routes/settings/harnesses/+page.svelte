@@ -9,7 +9,6 @@
     description: string;
     adapter: string;
     entryCommand: string;
-    defaultModel: string;
     icon: string;
     enabled: boolean;
     configText: string;
@@ -22,7 +21,6 @@
       description: "",
       adapter: "",
       entryCommand: "",
-      defaultModel: "",
       icon: "",
       enabled: true,
       configText: "{}",
@@ -36,7 +34,6 @@
       description: harness.description,
       adapter: harness.adapter,
       entryCommand: harness.entryCommand,
-      defaultModel: harness.defaultModel,
       icon: harness.icon,
       enabled: harness.enabled,
       configText: JSON.stringify(harness.config, null, 2),
@@ -141,7 +138,6 @@
       description: editor.description.trim(),
       adapter: editor.adapter.trim(),
       entryCommand: editor.entryCommand.trim(),
-      defaultModel: editor.defaultModel.trim(),
       icon: editor.icon.trim(),
       enabled: editor.enabled,
       config,
@@ -360,14 +356,6 @@
               rows="3"
               class="w-full rounded border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-200"
             ></textarea>
-          </label>
-
-          <label class="block">
-            <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500">Default model</span>
-            <input
-              bind:value={editor.defaultModel}
-              class="w-full rounded border border-gray-200 bg-white px-3 py-2 font-mono text-sm text-gray-800 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-200"
-            />
           </label>
 
           <label class="flex items-center gap-2 pt-6">

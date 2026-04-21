@@ -5,7 +5,11 @@
     "type": "git",
     "url": "https://github.com/acoyfellow/filepath"
   },
+  "trustedDependencies": [
+    "@acoyfellow/ai-connect"
+  ],
   "dependencies": {
+    "@acoyfellow/ai-connect": "github:acoyfellow/ai-connect#main",
     "@ai-sdk/openai": "^3.0.39",
     "@better-auth/api-key": "^1.5.4",
     "@better-auth/passkey": "^1.5.4",
@@ -35,7 +39,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.1",
     "@types/node": "^25.3.3",
-    "alchemy": "^0.87.0",
+    "alchemy": "^0.92.0",
     "better-auth": "^1.5.4",
     "better-sqlite3": "^12.6.2",
     "bun": "^1.3.10",

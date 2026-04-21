@@ -19,8 +19,6 @@ export interface Env {
   /** Public base URL for sandbox → worker runtime bridge (e.g. https://api.myfilepath.com) */
   FILEPATH_RUNTIME_PUBLIC_BASE_URL?: string;
   OPENAI_API_KEY?: string;
-  OPENROUTER_API_KEY?: string;
-  OPENCODE_ZEN_API_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   MAILGUN_API_KEY?: string;
   MAILGUN_DOMAIN?: string;

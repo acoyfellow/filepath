@@ -19,7 +19,7 @@
     workspaceId: string;
     workspaceName: string;
     name: string;
-    model: string;
+    aiConnectionId: string;
     harnessId: string;
     conversationState: ConversationState;
     latestInterruption?: { summary: string } | null;

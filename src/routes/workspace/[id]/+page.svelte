@@ -31,7 +31,7 @@
     workspaceId: string;
     name: string;
     harnessId: string;
-    model: string;
+    aiConnectionId: string;
     status: string;
     config: string | AgentConfig | null;
     allowedPaths: string | string[] | null;
@@ -61,11 +61,7 @@
   const workspaceId = $derived(page.params.id ?? "");
   let showSpawn = $state(false);
   let showSettings = $state(false);
-  type AccountKeysMasked = { openrouter: string | null; zen: string | null };
-
-  let accountKeysOverride = $state<{ masked: AccountKeysMasked; error: string | null } | null>(null);
-  const accountKeysMasked = $derived(accountKeysOverride?.masked ?? data.accountKeysMasked);
-  const accountKeysError = $derived(accountKeysOverride?.error ?? data.accountKeysError);
+  const aiConnections = $derived(data.aiConnections ?? []);
   let taskMessagesByAgent = $state<Record<string, TaskMessage[]>>({});
   let resultsByAgent = $state<Record<string, AgentResult | null>>({});
   let agentNotices = $state<Record<string, AgentNotice | null>>({});
@@ -106,7 +102,7 @@
       workspaceId: row.workspaceId,
       name: row.name,
       harnessId: row.harnessId as HarnessId,
-      model: row.model,
+      aiConnectionId: row.aiConnectionId,
       status: row.status as AgentRecord["status"],
       config: parseAgentConfig(row.config),
       allowedPaths: parseJsonList(row.allowedPaths),
@@ -183,7 +179,6 @@
     const fromWid = from?.params?.id ?? null;
     if (fromWid !== toWid) {
       agents = mapRowsToAgents(data.agents);
-      accountKeysOverride = null;
       showSettings = false;
     }
 
@@ -852,19 +847,9 @@
       showSpawn = false;
     }}
     onspawn={handleCreateAgent}
-    onkeyschange={({ keys, error }) => {
-      accountKeysOverride = {
-        masked: {
-          openrouter: keys.openrouter ?? null,
-          zen: keys.zen ?? null,
-        },
-        error,
-      };
-    }}
     lastAgent={selectedAgent?.harnessId}
-    lastModel={selectedAgent?.model}
-    {accountKeysMasked}
-    accountKeysError={accountKeysError}
+    lastAiConnectionId={selectedAgent?.aiConnectionId}
+    {aiConnections}
   />
 {/if}
 
@@ -877,17 +862,7 @@
         showSettings = false;
       }}
       onsave={handleUpdateAgent}
-      onkeyschange={({ keys, error }) => {
-        accountKeysOverride = {
-          masked: {
-            openrouter: keys.openrouter ?? null,
-            zen: keys.zen ?? null,
-          },
-          error,
-        };
-      }}
-      {accountKeysMasked}
-      accountKeysError={accountKeysError}
+      {aiConnections}
     />
   </div>
 {/if}

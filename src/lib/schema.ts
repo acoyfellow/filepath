@@ -15,7 +15,11 @@ export const user = sqliteTable("user", {
   image: text("image"),
   banned: integer("banned", { mode: "boolean" }).default(false),
   role: text("role"),
-  openrouterApiKey: text("openrouter_api_key"),
+  /**
+   * FK to ai_connection.id — the user's preferred default. Nullable:
+   * a user with zero connections cannot run agents (gated in the UI).
+   */
+  defaultAiConnectionId: text("default_ai_connection_id"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -24,6 +28,45 @@ export const user = sqliteTable("user", {
     .$onUpdate(() => new Date())
     .notNull(),
 });
+
+// ============================================
+// AI connection — per-user inference endpoint config
+// ============================================
+
+/**
+ * A configured AI inference endpoint. Each user may have zero-to-many.
+ * Agents reference a connection by id; no hardcoded provider assumptions.
+ *
+ * Shape + encryption provided by `@acoyfellow/ai-connect` — the api key
+ * is AES-GCM encrypted at rest with BETTER_AUTH_SECRET.
+ */
+export const aiConnection = sqliteTable(
+  "ai_connection",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    /** "anthropic" | "openai-chat" | "openai-responses" | "gemini" — enforced in app code */
+    provider: text("provider").notNull(),
+    endpoint: text("endpoint").notNull(),
+    model: text("model").notNull(),
+    /** opaque ai-connect AES-GCM blob */
+    apiKeyEncrypted: text("api_key_encrypted").notNull(),
+    maxContextTokens: integer("max_context_tokens").notNull().default(128000),
+    /** JSON array of free-form string tags */
+    tags: text("tags").notNull().default("[]"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("ai_connection_user_id_idx").on(table.userId)],
+);
 
 export const session = sqliteTable(
   "session",
@@ -247,7 +290,6 @@ export const harness = sqliteTable(
     description: text("description").notNull(),
     adapter: text("adapter").notNull(),
     entryCommand: text("entry_command").notNull(),
-    defaultModel: text("default_model").notNull(),
     icon: text("icon").notNull(),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     config: text("config").notNull().default("{}"),
@@ -275,7 +317,10 @@ export const agent = sqliteTable(
     harnessId: text("harness_id")
       .notNull()
       .references(() => harness.id),
-    model: text("model").notNull(),
+    /** FK to ai_connection.id — which inference endpoint this agent uses. */
+    aiConnectionId: text("ai_connection_id")
+      .notNull()
+      .references(() => aiConnection.id),
     status: text("status").notNull().default("idle"),
     config: text("config").notNull().default("{}"),
     allowedPaths: text("allowed_paths").notNull().default("[]"),

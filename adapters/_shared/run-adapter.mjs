@@ -1,4 +1,3 @@
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import {
@@ -7,6 +6,7 @@ import {
   executeCrossThreadInstruction,
   parseJsonInstruction,
 } from "./cross-thread.mjs";
+import { callInference, readInferenceEnv } from "./inference-dispatch.mjs";
 
 export { parseJsonInstruction };
 
@@ -96,65 +96,46 @@ function ensurePathAllowed(workspaceRoot, path, allowedPaths, forbiddenPaths) {
   return resolve(workspaceRoot, normalized);
 }
 
-async function callOpenRouter({
-  harnessId,
+async function callModel({
   systemPrompt,
   task,
-  apiKey,
+  provider,
+  endpoint,
   model,
+  apiKey,
   transcript,
   allowedPaths,
   forbiddenPaths,
   crossThreadHelp,
 }) {
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://myfilepath.com",
-      "X-Title": `filepath-${harnessId}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content: [
-            systemPrompt,
-            "You are editing files inside a bounded filepath workspace.",
-            "Respond with exactly one JSON object and no markdown fences unless asked otherwise.",
-            'Allowed actions: {"action":"read","path":"relative/path"}, {"action":"write","path":"relative/path","content":"..."}, {"action":"replace","path":"relative/path","find":"...","replace":"..."}, {"action":"done","summary":"..."}' +
-              (crossThreadHelp ? ` ${crossThreadHelp}` : ""),
-            "Use one action at a time. Prefer the smallest possible change. Do not commit.",
-            `Allowed paths: ${JSON.stringify(allowedPaths)}`,
-            `Forbidden paths: ${JSON.stringify(forbiddenPaths)}`,
-          ].join("\n"),
-        },
-        {
-          role: "user",
-          content: task,
-        },
-        ...transcript,
-      ],
-    }),
+  const result = await callInference({
+    provider,
+    endpoint,
+    model,
+    apiKey,
+    messages: [
+      {
+        role: "system",
+        content: [
+          systemPrompt,
+          "You are editing files inside a bounded filepath workspace.",
+          "Respond with exactly one JSON object and no markdown fences unless asked otherwise.",
+          'Allowed actions: {"action":"read","path":"relative/path"}, {"action":"write","path":"relative/path","content":"..."}, {"action":"replace","path":"relative/path","find":"...","replace":"..."}, {"action":"done","summary":"..."}' +
+            (crossThreadHelp ? ` ${crossThreadHelp}` : ""),
+          "Use one action at a time. Prefer the smallest possible change. Do not commit.",
+          `Allowed paths: ${JSON.stringify(allowedPaths)}`,
+          `Forbidden paths: ${JSON.stringify(forbiddenPaths)}`,
+        ].join("\n"),
+      },
+      { role: "user", content: task },
+      ...transcript,
+    ],
+    options: { temperature: 0 },
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(
-      `OpenRouter request failed (${response.status}): ${errorBody.slice(0, 400) || response.statusText}`,
-    );
-  }
-
-  const payload = await response.json();
-  const content = extractTextContent(payload?.choices?.[0]?.message?.content).trim();
-
+  const content = extractTextContent(result.content).trim();
   if (!content) {
-    throw new Error("OpenRouter response did not include assistant text.");
+    throw new Error("Inference response did not include assistant text.");
   }
-
   return content;
 }
 
@@ -174,11 +155,10 @@ const CROSS_THREAD_ACTION_IDS = new Set([
   "thread_send",
 ]);
 
-export async function runAdapter({ harnessId, systemPrompt }) {
+export async function runAdapter({ harnessId: _harnessId, systemPrompt }) {
   const task = readRequiredEnv("FILEPATH_TASK");
-  const apiKey = readRequiredEnv("FILEPATH_API_KEY");
-  const model = readRequiredEnv("FILEPATH_MODEL");
   const workspaceRoot = readRequiredEnv("FILEPATH_WORKSPACE");
+  const { provider, endpoint, model, apiKey } = readInferenceEnv();
   const allowedPaths = parseJsonArrayEnv("FILEPATH_ALLOWED_PATHS");
   const forbiddenPaths = parseJsonArrayEnv("FILEPATH_FORBIDDEN_PATHS");
   const localVerify = parseLocalVerifyDirective(task);
@@ -199,12 +179,13 @@ export async function runAdapter({ harnessId, systemPrompt }) {
   const maxSteps = crossThreadEnabled ? 16 : 4;
 
   for (let step = 0; step < maxSteps; step += 1) {
-    const content = await callOpenRouter({
-      harnessId,
+    const content = await callModel({
       systemPrompt,
       task,
-      apiKey,
+      provider,
+      endpoint,
       model,
+      apiKey,
       transcript,
       allowedPaths,
       forbiddenPaths,

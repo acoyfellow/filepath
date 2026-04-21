@@ -10,9 +10,19 @@ import { user, session, account, verification, apikey, passkey as passkeyTable }
 import { and, eq, gt } from 'drizzle-orm';
 import { resolveBetterAuthSecret } from './better-auth-secret';
 import { parse as parseCookie } from 'cookie';
-// Mailgun via native fetch (CF Workers compatible — no form-data/mailgun.js)
 
 import type { D1Database } from '@cloudflare/workers-types';
+
+/** Cloudflare Email Sending binding — minimal shape we consume. */
+interface CloudflareEmailSender {
+  send(opts: {
+    to: string | string[];
+    from: string | { email: string; name?: string };
+    subject: string;
+    text?: string;
+    html?: string;
+  }): Promise<{ messageId: string }>;
+}
 
 const authInstances = new Map<string, Auth>();
 let drizzleInstance: ReturnType<typeof drizzle> | null = null;
@@ -26,8 +36,8 @@ export function getDrizzle(): ReturnType<typeof drizzle> {
 
 interface AuthEnv {
   BETTER_AUTH_SECRET?: string;
-  MAILGUN_API_KEY?: string;
-  MAILGUN_DOMAIN?: string;
+  /** Cloudflare Email Sending binding — configured via alchemy `EmailSender()`. */
+  EMAIL?: CloudflareEmailSender;
   [key: string]: unknown;
 }
 
@@ -143,61 +153,47 @@ export function initAuth(
     }),
     emailOTP({
       sendVerificationOTP: async ({ email, otp, type }) => {
-        const mgKey = env?.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '';
-        const domain = env?.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
+        const emailBinding = env?.EMAIL;
         const isLocal =
           baseURL.includes("localhost") ||
           baseURL.includes("127.0.0.1") ||
-          !mgKey ||
-          !domain;
+          !emailBinding;
 
         if (isLocal) {
-          console.log(`[better-auth] skipping email delivery for ${type} to ${email} in local dev`);
-          console.log(`[better-auth] otp: ${otp}`);
+          // Local dev: log the OTP; no real delivery.
+          console.log(`[better-auth] local dev OTP for ${email} (${type}): ${otp}`);
           return;
         }
 
-        const sendMail = async (subject: string, text: string, html: string) => {
-          const form = new FormData();
-          form.append('from', `Filepath <support@${domain}>`);
-          form.append('to', email);
-          form.append('subject', subject);
-          form.append('text', text);
-          form.append('html', html);
-
-          const resp = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-            method: 'POST',
-            headers: { Authorization: `Basic ${btoa(`api:${mgKey}`)}` },
-            body: form,
-          });
-          if (!resp.ok) {
-            const body = await resp.text();
-            throw new Error(`Mailgun ${resp.status}: ${body}`);
-          }
-        };
+        const [subject, text, html] =
+          type === "forget-password"
+            ? [
+                "Password reset for your filepath account",
+                `You requested to reset your password. Use this code: ${otp}\n\nIf you did not request this, you can ignore this email.`,
+                `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p><p>If you did not request this, you can ignore this email.</p>`,
+              ]
+            : [
+                "Welcome to filepath",
+                `Welcome to filepath! Your verification code is: ${otp}`,
+                `<h1>Welcome to filepath</h1><p>Your verification code is: <strong>${otp}</strong></p>`,
+              ];
 
         try {
-          if (type === 'forget-password') {
-            await sendMail(
-              'Password Reset Request',
-              `You requested to reset your password. Use this code: ${otp}`,
-              `<p>You requested to reset your password. Use this code: <strong>${otp}</strong></p>`,
-            );
-          } else if (type === 'email-verification') {
-            await sendMail(
-              'Welcome to Filepath!',
-              `Welcome to Filepath! Your verification code is: ${otp}\n\nFilepath is the platform for agents.`,
-              `<h1>Welcome to Filepath!</h1><p>Your verification code is: <strong>${otp}</strong></p><p>Filepath is the platform for agents.</p>`,
-            );
-          }
+          await emailBinding.send({
+            to: email,
+            from: { email: "noreply@myfilepath.com", name: "filepath" },
+            subject,
+            text,
+            html,
+          });
         } catch (error) {
-          console.error('Error sending email:', error);
+          console.error("[better-auth] Cloudflare Email send failed:", error);
           throw error;
         }
       },
       otpLength: 6,
       expiresIn: 60 * 10, // 10 minutes
-      sendVerificationOnSignUp: true, // Send welcome email on sign-up
+      sendVerificationOnSignUp: true,
     }),
     multiSession({
       maximumSessions: 5,

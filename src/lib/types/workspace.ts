@@ -37,7 +37,7 @@ export interface AgentRecord {
   workspaceId: string;
   name: string;
   harnessId: HarnessId;
-  model: string;
+  aiConnectionId: string;
   status: AgentStatus;
   config: AgentConfig;
   allowedPaths: string[];
@@ -74,7 +74,6 @@ export interface AgentHarness {
   description: string;
   adapter: string;
   entryCommand: string;
-  defaultModel: string;
   icon: string;
   enabled: boolean;
   config: Record<string, unknown>;
@@ -83,7 +82,7 @@ export interface AgentHarness {
 export interface AgentCreateRequest {
   name: string;
   harnessId: HarnessId;
-  model: string;
+  aiConnectionId: string;
   allowedPaths: AgentScope["allowedPaths"];
   forbiddenPaths: AgentScope["forbiddenPaths"];
   toolPermissions: AgentScope["toolPermissions"];
@@ -93,7 +92,7 @@ export interface AgentCreateRequest {
 export interface AgentUpdateRequest {
   name?: string;
   harnessId?: HarnessId;
-  model?: string;
+  aiConnectionId?: string;
   allowedPaths?: AgentScope["allowedPaths"];
   forbiddenPaths?: AgentScope["forbiddenPaths"];
   toolPermissions?: AgentScope["toolPermissions"];
@@ -156,7 +155,7 @@ export interface WorkerRunScopeInput {
 export interface WorkerRunInput {
   content: string;
   harnessId: HarnessId;
-  model: string;
+  aiConnectionId: string;
   scope?: WorkerRunScopeInput;
   agentId?: string;
   identity?: Partial<Omit<SharedRunIdentity, "workspaceId" | "conversationId">> | null;

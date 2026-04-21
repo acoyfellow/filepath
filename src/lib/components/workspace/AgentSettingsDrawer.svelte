@@ -3,19 +3,14 @@
   import AgentSettingsForm from "$lib/components/workspace/AgentSettingsForm.svelte";
   import Button from "$lib/components/ui/button/button.svelte";
   import type { AgentRecord, AgentUpdateRequest } from "$lib/types/workspace";
-  import type { ProviderId } from "$lib/provider-keys";
+  import type { AiConnectionPublic } from "$lib/ai-connections";
 
   interface Props {
     agent: AgentRecord;
     open: boolean;
     onclose: () => void;
     onsave: (payload: AgentUpdateRequest) => Promise<void> | void;
-    onkeyschange?: (payload: {
-      keys: Record<ProviderId, string | null>;
-      error: string | null;
-    }) => void;
-    accountKeysMasked?: Record<ProviderId, string | null>;
-    accountKeysError?: string | null;
+    aiConnections: AiConnectionPublic[];
   }
 
   let {
@@ -23,9 +18,7 @@
     open,
     onclose,
     onsave,
-    onkeyschange = () => {},
-    accountKeysMasked = { openrouter: null, zen: null },
-    accountKeysError = null,
+    aiConnections,
   }: Props = $props();
 
   let isBusy = $derived(
@@ -45,7 +38,7 @@
       : {
           tone: "info" as const,
           title: "Edit this agent",
-          message: "Harness, model, and scope changes save immediately. The next task uses the updated config.",
+          message: "Harness, connection, and scope changes save immediately. The next task uses the updated config.",
         },
   );
 </script>
@@ -53,7 +46,10 @@
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 z-[85] flex justify-end bg-black/25 max-[720px]:items-end max-[720px]:justify-stretch" onclick={(event) => event.target === event.currentTarget && onclose()}>
+  <div
+    class="fixed inset-0 z-[85] flex justify-end bg-black/25 max-[720px]:items-end max-[720px]:justify-stretch"
+    onclick={(event) => event.target === event.currentTarget && onclose()}
+  >
     <div
       class="flex h-dvh w-full max-w-[560px] flex-col border-l border-(--b1) bg-(--bg) shadow-(--shadow) max-[720px]:h-[min(92dvh,780px)] max-[720px]:max-w-none max-[720px]:rounded-t-[18px] max-[720px]:border-l-0 max-[720px]:border-t"
       data-testid="agent-settings-drawer"
@@ -74,7 +70,15 @@
           <div class="text-lg font-[650] tracking-[-0.02em] text-(--t1) max-[720px]:text-base" id="agent-settings-title">Agent settings</div>
           <div class="mt-1 text-xs text-(--t5)">{agent.name}</div>
         </div>
-        <Button variant="outline" size="icon-sm" class="size-8 rounded-full border-(--b1) bg-(--bg2) text-(--t3) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)" type="button" onclick={onclose} aria-label="Close settings" title="Close settings">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          class="size-8 rounded-full border-(--b1) bg-(--bg2) text-(--t3) shadow-none hover:border-(--t4) hover:bg-(--bg3) hover:text-(--t1)"
+          type="button"
+          onclick={onclose}
+          aria-label="Close settings"
+          title="Close settings"
+        >
           <XIcon size={15} />
         </Button>
       </header>
@@ -87,22 +91,20 @@
           onsubmit={(payload) =>
             onsave({
               harnessId: payload.harnessId,
-              model: payload.model,
+              aiConnectionId: payload.aiConnectionId,
               allowedPaths: payload.allowedPaths,
               forbiddenPaths: payload.forbiddenPaths,
               toolPermissions: payload.toolPermissions,
               writableRoot: payload.writableRoot,
             })}
           oncancel={onclose}
-          {onkeyschange}
           initialHarnessId={agent.harnessId}
-          initialModel={agent.model}
+          initialAiConnectionId={agent.aiConnectionId}
           initialAllowedPaths={agent.allowedPaths}
           initialForbiddenPaths={agent.forbiddenPaths}
           initialToolPermissions={agent.toolPermissions}
           initialWritableRoot={agent.writableRoot}
-          {accountKeysMasked}
-          accountKeysError={accountKeysError}
+          {aiConnections}
           {topNotice}
         />
       </div>
