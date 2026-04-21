@@ -62,8 +62,9 @@
 
     <div class="mt-6 text-xs text-gray-500 dark:text-neutral-500">
       <p>
-        Currently supports <code>cf-portal</code> (portal.mcp.cfdata.org). More
-        servers coming as the integration stabilises.
+        Any MCP server with OAuth 2.1 (DCR + PKCE) or no auth should work. Paste
+        the SSE or streamable-http endpoint URL — filepath handles the OAuth
+        popup automatically.
       </p>
     </div>
   </main>

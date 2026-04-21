@@ -34,7 +34,7 @@ export const TOOL_PERMISSION_OPTIONS = [
   {
     id: "mcp",
     label: "MCP",
-    description: "Call tools from connected MCP servers (e.g. cf-portal).",
+    description: "Call tools from connected MCP servers.",
   },
   {
     id: "web",

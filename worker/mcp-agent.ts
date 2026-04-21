@@ -9,8 +9,7 @@
  * No custom OAuth code written here — DCR + PKCE + refresh + storage
  * are all provided by `cloudflare/agents`.
  *
- * Scope: Phase 1 wires cf-portal (portal.mcp.cfdata.org) specifically.
- * Generic multi-server UI ships in later phases.
+ * Generic: users add any MCP server by URL. No hardcoded servers.
  */
 
 import { Agent, callable } from "agents";
@@ -20,7 +19,6 @@ export interface MCPAgentEnv {
   BETTER_AUTH_URL: string;
 }
 
-/** Shape returned by addMcpServer — narrowed from the overloaded HTTP variant. */
 export type ConnectResult =
   | { id: string; state: "ready" }
   | { id: string; state: "authenticating"; authUrl: string };
@@ -28,8 +26,30 @@ export type ConnectResult =
 export interface ServerState {
   id: string;
   name: string;
+  url: string;
   state: string;
   authUrl: string | null;
+}
+
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(`Invalid MCP server URL: ${trimmed}`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`Unsupported protocol: ${parsed.protocol}`);
+  }
+  return parsed.href;
+}
+
+function normalizeName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Server name is required.");
+  if (trimmed.length > 64) throw new Error("Server name is too long (max 64).");
+  return trimmed;
 }
 
 export class MCPAgent extends Agent<MCPAgentEnv> {
@@ -42,19 +62,22 @@ export class MCPAgent extends Agent<MCPAgentEnv> {
   }
 
   /**
-   * Connect cf-portal MCP server. Returns authUrl on first call (UI opens
-   * as popup); subsequent calls return existing ready connection.
+   * Connect (or reconnect) an MCP server by URL.
    *
-   * callbackHost must be the worker's public origin (e.g. https://api.myfilepath.com)
-   * — MUST match where /agents/m-c-p-agent/<user>/callback routes back to.
+   * @param name short friendly name the user sees in the UI (e.g. "github")
+   * @param url the MCP server URL (SSE or streamable-http endpoint)
+   * @param callbackHost worker origin — MUST match where
+   *   /agents/m-c-p-agent/<userId>/callback routes back to.
    */
-  @callable({ description: "Connect cf-portal MCP" })
-  async connectPortal(callbackHost: string): Promise<ConnectResult> {
-    const result = await this.addMcpServer(
-      "cf-portal",
-      "https://portal.mcp.cfdata.org/sse",
-      { callbackHost },
-    );
+  @callable({ description: "Connect an MCP server by URL" })
+  async connectServer(
+    name: string,
+    url: string,
+    callbackHost: string,
+  ): Promise<ConnectResult> {
+    const safeName = normalizeName(name);
+    const safeUrl = normalizeUrl(url);
+    const result = await this.addMcpServer(safeName, safeUrl, { callbackHost });
     return result as ConnectResult;
   }
 
@@ -66,6 +89,7 @@ export class MCPAgent extends Agent<MCPAgentEnv> {
       return {
         id: s.id,
         name: s.name,
+        url: s.server_url,
         state: conn?.connectionState ?? "no-connection",
         authUrl: s.auth_url ?? null,
       };

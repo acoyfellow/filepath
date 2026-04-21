@@ -14,6 +14,7 @@ import { AgentClient } from "agents/client";
 export type ServerState = {
   id: string;
   name: string;
+  url: string;
   state: string;
   authUrl: string | null;
 };
@@ -77,8 +78,13 @@ export function createMCPAgentClient(
  * Keeps invocation sites clean and gives us inference.
  */
 export const mcpRpc = {
-  async connectPortal(client: AgentClient, callbackHost: string): Promise<ConnectResult> {
-    return (await client.call("connectPortal", [callbackHost])) as ConnectResult;
+  async connectServer(
+    client: AgentClient,
+    name: string,
+    url: string,
+    callbackHost: string,
+  ): Promise<ConnectResult> {
+    return (await client.call("connectServer", [name, url, callbackHost])) as ConnectResult;
   },
 
   async getState(client: AgentClient): Promise<ServerState[]> {
