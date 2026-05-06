@@ -77,28 +77,4 @@ export class ConversationAgent extends Agent<ConversationAgentEnv, ConversationA
   cancelTask(): void {
     this.setState({ ...this.state, cancelRequested: true });
   }
-
-  @callable()
-  async searchContext(query: string): Promise<{ snippets: string[] }> {
-    const env = this.env as unknown as RuntimeEnv;
-    if (!env.DB) {
-      return { snippets: [] };
-    }
-
-    const { results = [] } = await env.DB.prepare(
-      `SELECT content FROM agent_message
-       WHERE agent_id = ? AND role IN ('user', 'assistant')
-       ORDER BY created_at DESC LIMIT 50`,
-    ).bind(this.name).all<{ content: string }>();
-
-    const q = query.trim().toLowerCase();
-    if (!q) return { snippets: results.slice(0, 5).map((r: { content: string }) => r.content) };
-
-    const snippets = results
-      .filter((r: { content: string }) => r.content.toLowerCase().includes(q))
-      .slice(0, 10)
-      .map((r: { content: string }) => r.content);
-
-    return { snippets };
-  }
 }
